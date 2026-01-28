@@ -1,6 +1,6 @@
 use axum::{
     async_trait,
-    extract::FromRequestParts,
+    extract::{FromRef, FromRequestParts},
     http::{request::Parts, StatusCode},
 };
 use axum_extra::{
@@ -8,8 +8,6 @@ use axum_extra::{
     TypedHeader,
 };
 use loco_rs::prelude::*;
-use sea_orm::EntityTrait;
-
 use crate::context::TenantContextExt;
 use crate::models::users::{self, Entity as Users};
 use rustok_core::auth::jwt::{self, JwtConfig};
@@ -32,9 +30,11 @@ where
         let ctx = AppContext::from_ref(state);
 
         // 2. Достаем TenantContext (он ОБЯЗАН быть, так как Auth идет ПОСЛЕ TenantMiddleware)
-        let tenant_ctx = parts
+        let tenant_id = parts
             .tenant_context()
-            .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "Tenant context missing"))?;
+            .ok_or((StatusCode::INTERNAL_SERVER_ERROR, "Tenant context missing"))?
+            .id
+            .to_string();
 
         // 3. Достаем Bearer token
         let TypedHeader(Authorization(bearer)) =
@@ -58,7 +58,7 @@ where
 
         // 6. ПРОВЕРКА МУЛЬТИТЕНАНТНОСТИ
         // Если токен выдан для магазина А, а запрос пришел в магазин Б - отлуп.
-        if claims.tenant != tenant_ctx.id.to_string() {
+        if claims.tenant != tenant_id {
             return Err((StatusCode::FORBIDDEN, "Token belongs to another tenant"));
         }
 

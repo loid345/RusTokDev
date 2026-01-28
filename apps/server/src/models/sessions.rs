@@ -3,7 +3,8 @@ use sea_orm::prelude::*;
 
 use rustok_core::generate_id;
 
-use super::_entities::sessions::{self, ActiveModel, Entity, Model};
+pub use super::_entities::sessions::{ActiveModel, Entity, Model};
+use super::_entities::sessions::{self};
 
 impl Model {
     pub fn is_active(&self) -> bool {
@@ -28,7 +29,7 @@ impl ActiveModel {
             ip_address: sea_orm::ActiveValue::Set(ip_address),
             user_agent: sea_orm::ActiveValue::Set(user_agent),
             last_used_at: sea_orm::ActiveValue::NotSet,
-            expires_at: sea_orm::ActiveValue::Set(expires_at),
+            expires_at: sea_orm::ActiveValue::Set(expires_at.into()),
             revoked_at: sea_orm::ActiveValue::NotSet,
             created_at: sea_orm::ActiveValue::NotSet,
             updated_at: sea_orm::ActiveValue::NotSet,
