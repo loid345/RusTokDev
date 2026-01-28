@@ -3,14 +3,15 @@ use loco_rs::{
     app::{AppContext, Hooks, Initializer},
     boot::{create_app, BootResult, StartMode},
     controller::AppRoutes,
-    db::truncate_table,
     environment::Environment,
-    task::Tasks,
+    task::{Queue, Tasks},
     Result,
 };
 use sea_orm::DatabaseConnection;
+use std::path::Path;
 
 use crate::controllers;
+use migration::Migrator;
 
 pub struct App;
 
@@ -31,7 +32,7 @@ impl Hooks for App {
     }
 
     async fn boot(mode: StartMode, environment: &Environment) -> Result<BootResult> {
-        create_app::<Self>(mode, environment).await
+        create_app::<Self, Migrator>(mode, environment).await
     }
 
     fn routes(_ctx: &AppContext) -> AppRoutes {
@@ -40,14 +41,21 @@ impl Hooks for App {
             .add_route(controllers::graphql::routes())
     }
 
-    async fn truncate(db: &DatabaseConnection) -> Result<()> {
-        truncate_table(db, "users").await?;
+    async fn truncate(_db: &DatabaseConnection) -> Result<()> {
         Ok(())
     }
 
     fn register_tasks(_tasks: &mut Tasks) {}
 
-    fn initializers() -> Vec<Box<dyn Initializer>> {
-        vec![]
+    async fn initializers(_ctx: &AppContext) -> Result<Vec<Box<dyn Initializer>>> {
+        Ok(vec![])
+    }
+
+    async fn connect_workers(_ctx: &AppContext, _queue: &Queue) -> Result<()> {
+        Ok(())
+    }
+
+    async fn seed(_db: &DatabaseConnection, _path: &Path) -> Result<()> {
+        Ok(())
     }
 }

@@ -1,9 +1,6 @@
 use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema};
 use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::{
-    routing::{get, post},
-    Extension, Router,
-};
+use axum::{routing::get, Extension};
 use loco_rs::prelude::*;
 
 #[derive(Default)]

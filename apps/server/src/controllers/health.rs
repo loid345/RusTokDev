@@ -1,4 +1,4 @@
-use axum::{routing::get, Router};
+use axum::routing::get;
 use loco_rs::prelude::*;
 
 async fn health() -> Result<Response> {
