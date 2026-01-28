@@ -51,122 +51,38 @@
 
 ```text
 rustok/
-├── Cargo.toml                      # Workspace root
-├── .cargo/config.toml
-├── rust-toolchain.toml
-│
+├── .github/
+│   └── workflows/
+│       └── ci.yml
 ├── apps/
-│   │
-│   ├── server/                     # 🚀 BACKEND (Loco.rs + Axum)
-│   │   ├── Cargo.toml              # Depends on all crates/*
+│   ├── server/                    # Loco.rs backend
+│   │   ├── Cargo.toml
 │   │   ├── src/
-│   │   │   ├── main.rs             # Entry point
-│   │   │   ├── app.rs              # Loco App configuration
-│   │   │   ├── routes/             # Route handlers
-│   │   │   └── graphql/            # GraphQL schema merger
-│   │   ├── config/                 # Environment configs
-│   │   ├── migration/              # SeaORM migrations
-│   │   └── public/                 # Static files (Admin dist)
-│   │       └── admin/              # ← Compiled from apps/admin
-│   │
-│   ├── admin/                      # 🖥️ ADMIN PANEL (Leptos CSR)
-│   │   ├── Cargo.toml              # leptos with "csr" feature
-│   │   ├── Trunk.toml              # Build config
-│   │   ├── index.html
-│   │   ├── src/
-│   │   │   ├── main.rs             # mount_to_body()
-│   │   │   ├── app.rs              # Root component
-│   │   │   ├── router.rs           # Client-side routing
-│   │   │   ├── pages/
-│   │   │   │   ├── dashboard.rs
-│   │   │   │   ├── products.rs
-│   │   │   │   ├── orders.rs
-│   │   │   │   └── modules.rs      # Feature toggles UI
-│   │   │   └── components/
-│   │   │       ├── data_table.rs
-│   │   │       ├── form.rs
-│   │   │       └── widgets/
-│   │   └── dist/                   # Build output → copy to server/public/admin
-│   │
-│   └── storefront/                 # 🛍️ STOREFRONT (Leptos SSR)
-│       ├── Cargo.toml              # leptos with "ssr" feature
-│       ├── src/
-│       │   ├── main.rs             # Axum + Leptos SSR
-│       │   ├── app.rs
-│       │   ├── pages/
-│       │   │   ├── home.rs
-│       │   │   ├── product.rs
-│       │   │   ├── cart.rs
-│       │   │   └── checkout.rs
-│       │   └── components/
-│       └── Dockerfile              # Отдельный деплой
-│
-└── crates/
-    │
-    ├── rustok-core/                # 🧠 KERNEL
-    │   ├── Cargo.toml
-    │   └── src/
-    │       ├── lib.rs
-    │       ├── config.rs           # App configuration
-    │       ├── error.rs            # Error types (thiserror)
-    │       ├── id.rs               # ULID → UUID generation
-    │       │
-    │       ├── entities/           # Core SeaORM entities
-    │       │   ├── mod.rs
-    │       │   ├── tenant.rs
-    │       │   ├── user.rs
-    │       │   └── permission.rs
-    │       │
-    │       ├── auth/               # Authentication & Authorization
-    │       │   ├── mod.rs
-    │       │   ├── jwt.rs
-    │       │   └── middleware.rs
-    │       │
-    │       ├── events/             # Event Bus (Pub/Sub)
-    │       │   ├── mod.rs
-    │       │   ├── bus.rs
-    │       │   └── types.rs
-    │       │
-    │       ├── hooks/              # Hook System (v1.1 ready)
-    │       │   ├── mod.rs
-    │       │   ├── registry.rs
-    │       │   └── traits.rs
-    │       │
-    │       └── admin/              # Admin Registry Framework
-    │           ├── mod.rs
-    │           ├── registry.rs
-    │           └── widgets.rs
-    │
-    ├── rustok-commerce/            # 🛒 COMMERCE MODULE
-    │   ├── Cargo.toml
-    │   └── src/
-    │       ├── lib.rs
-    │       ├── entities/
-    │       │   ├── product.rs
-    │       │   ├── category.rs
-    │       │   ├── order.rs
-    │       │   ├── order_item.rs
-    │       │   └── cart.rs
-    │       ├── services/
-    │       │   ├── product_service.rs
-    │       │   ├── cart_service.rs
-    │       │   └── checkout_service.rs
-    │       ├── graphql/
-    │       │   ├── query.rs
-    │       │   └── mutation.rs
-    │       ├── hooks.rs            # Implements HookProvider
-    │       └── admin.rs            # Admin resource registration
-    │
-    └── rustok-blog/                # 📝 BLOG MODULE
-        ├── Cargo.toml
-        └── src/
-            ├── lib.rs
-            ├── entities/
-            │   ├── post.rs
-            │   └── comment.rs
-            ├── services/
-            ├── graphql/
-            └── admin.rs
+│   │   │   ├── main.rs
+│   │   │   ├── lib.rs
+│   │   │   ├── app.rs
+│   │   │   └── controllers/
+│   │   │       ├── mod.rs
+│   │   │       ├── health.rs
+│   │   │       └── graphql.rs
+│   │   ├── config/
+│   │   │   ├── development.yaml
+│   │   │   └── test.yaml
+│   │   └── migration/
+│   │       ├── Cargo.toml
+│   │       └── src/
+│   │           ├── lib.rs
+│   │           ├── m20240101_000001_create_tenants.rs
+│   │           └── m20240101_000002_create_users.rs
+│   ├── admin/                     # Leptos CSR
+│   └── storefront/                # Leptos SSR
+├── crates/
+│   ├── rustok-core/
+│   ├── rustok-commerce/
+│   └── rustok-blog/
+├── Cargo.toml
+├── rust-toolchain.toml
+└── .gitignore
 ```
 
 ---
@@ -1211,61 +1127,690 @@ impl<'a> ProductService<'a> {
 
 ## 14. DEVELOPMENT WORKFLOW
 
-### 14.1 Adding a New Module
+### 14.1 Scaffolding (Loco.rs First)
 
 ```bash
-# 1. Create crate
-cargo new crates/rustok-inventory --lib
+# Install Loco CLI
+cargo install loco-cli
 
-# 2. Add to workspace
-# Edit Cargo.toml: members = [..., "crates/rustok-inventory"]
+# Create repo root
+mkdir rustok && cd rustok
+git init
 
-# 3. Add dependencies
-# Edit crates/rustok-inventory/Cargo.toml
+# Create backend (SaaS template with auth)
+mkdir apps && cd apps
+loco new server --template saas
+cd ..
 
-# 4. Implement RusToKModule trait
-
-# 5. Register in apps/server/src/app.rs
-
-# 6. Create migrations
-# apps/server/migration/
-
-# 7. Register admin resources
-# crates/rustok-inventory/src/admin.rs
+# Admin and Storefront are created manually (Leptos CSR/SSR)
 ```
 
-### 14.2 Build & Deploy
+### 14.2 Workspace Cargo.toml
+
+```toml
+# Cargo.toml
+[workspace]
+resolver = "2"
+members = [
+    "apps/server",
+    "apps/admin",
+    "apps/storefront",
+    "crates/rustok-core",
+    "crates/rustok-commerce",
+    "crates/rustok-blog",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "AGPL-3.0"
+repository = "https://github.com/RustokCMS/RusToK"
+
+[workspace.dependencies]
+# Loco Framework
+loco-rs = "0.12"
+
+# Async Runtime
+tokio = { version = "1.40", features = ["full"] }
+
+# Web
+axum = "0.7"
+tower = "0.5"
+tower-http = { version = "0.5", features = ["cors", "fs"] }
+
+# Database (Loco uses SeaORM)
+sea-orm = { version = "1.0", features = [
+    "sqlx-postgres",
+    "runtime-tokio-rustls",
+    "macros",
+    "with-uuid",
+    "with-chrono",
+    "with-json",
+] }
+
+# GraphQL
+async-graphql = { version = "7.0", features = ["uuid", "chrono"] }
+async-graphql-axum = "7.0"
+
+# IDs
+uuid = { version = "1.10", features = ["v4", "serde"] }
+ulid = "1.1"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Error Handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Leptos
+leptos = "0.6"
+leptos_axum = "0.6"
+leptos_router = "0.6"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Internal crates
+rustok-core = { path = "crates/rustok-core" }
+rustok-commerce = { path = "crates/rustok-commerce" }
+rustok-blog = { path = "crates/rustok-blog" }
+```
+
+### 14.3 Server (Loco-based)
+
+```toml
+# apps/server/Cargo.toml
+[package]
+name = "rustok-server"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+rustok-core.workspace = true
+rustok-commerce.workspace = true
+rustok-blog.workspace = true
+
+loco-rs.workspace = true
+tokio.workspace = true
+axum.workspace = true
+sea-orm.workspace = true
+async-graphql.workspace = true
+async-graphql-axum.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+
+# Loco extras
+migration = { path = "migration" }
+
+[dev-dependencies]
+loco-rs = { workspace = true, features = ["testing"] }
+serial_test = "3.1"
+```
+
+```rust
+// apps/server/src/main.rs
+use loco_rs::cli;
+use migration::Migrator;
+use rustok_server::app::App;
+
+#[tokio::main]
+async fn main() -> eyre::Result<()> {
+    cli::main::<App, Migrator>().await
+}
+```
+
+```rust
+// apps/server/src/lib.rs
+pub mod app;
+pub mod controllers;
+pub mod models;
+pub mod views;
+pub mod graphql;
+```
+
+```rust
+// apps/server/src/app.rs
+use async_trait::async_trait;
+use loco_rs::{
+    app::{AppContext, Hooks, Initializer},
+    boot::{create_app, BootResult, StartMode},
+    controller::AppRoutes,
+    db::truncate_table,
+    environment::Environment,
+    task::Tasks,
+    Result,
+};
+use sea_orm::DatabaseConnection;
+
+use crate::controllers;
+
+pub struct App;
+
+#[async_trait]
+impl Hooks for App {
+    fn app_name() -> &'static str {
+        env!("CARGO_PKG_NAME")
+    }
+
+    fn app_version() -> String {
+        format!(
+            "{} ({})",
+            env!("CARGO_PKG_VERSION"),
+            option_env!("BUILD_SHA")
+                .or(option_env!("GITHUB_SHA"))
+                .unwrap_or("dev")
+        )
+    }
+
+    async fn boot(mode: StartMode, environment: &Environment) -> Result<BootResult> {
+        create_app::<Self>(mode, environment).await
+    }
+
+    fn routes(_ctx: &AppContext) -> AppRoutes {
+        AppRoutes::with_default_routes()
+            .add_route(controllers::health::routes())
+            .add_route(controllers::graphql::routes())
+    }
+
+    async fn truncate(db: &DatabaseConnection) -> Result<()> {
+        // Очистка таблиц для тестов
+        truncate_table(db, "users").await?;
+        Ok(())
+    }
+}
+```
+
+```rust
+// apps/server/src/controllers/mod.rs
+pub mod health;
+pub mod graphql;
+```
+
+```rust
+// apps/server/src/controllers/health.rs
+use axum::{routing::get, Router};
+use loco_rs::prelude::*;
+
+async fn health() -> Result<Response> {
+    format::json(serde_json::json!({
+        "status": "ok",
+        "app": "rustok",
+    }))
+}
+
+pub fn routes() -> Routes {
+    Routes::new()
+        .prefix("health")
+        .add("/", get(health))
+}
+```
+
+```rust
+// apps/server/src/controllers/graphql.rs
+use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema};
+use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
+use axum::{routing::{get, post}, Extension, Router};
+use loco_rs::prelude::*;
+
+// Временная заглушка Query
+#[derive(Default)]
+pub struct Query;
+
+#[Object]
+impl Query {
+    async fn health(&self) -> &str {
+        "GraphQL is working!"
+    }
+
+    async fn version(&self) -> &str {
+        env!("CARGO_PKG_VERSION")
+    }
+}
+
+pub type AppSchema = Schema<Query, EmptyMutation, EmptySubscription>;
+
+fn build_schema() -> AppSchema {
+    Schema::build(Query, EmptyMutation, EmptySubscription).finish()
+}
+
+async fn graphql_handler(
+    Extension(schema): Extension<AppSchema>,
+    req: GraphQLRequest,
+) -> GraphQLResponse {
+    schema.execute(req.into_inner()).await.into()
+}
+
+async fn graphql_playground() -> impl axum::response::IntoResponse {
+    axum::response::Html(
+        async_graphql::http::playground_source(
+            async_graphql::http::GraphQLPlaygroundConfig::new("/api/graphql")
+        )
+    )
+}
+
+pub fn routes() -> Routes {
+    let schema = build_schema();
+    
+    Routes::new()
+        .prefix("api/graphql")
+        .add("/", get(graphql_playground).post(graphql_handler))
+        .layer(Extension(schema))
+}
+```
+
+```yaml
+# apps/server/config/development.yaml
+logger:
+  enable: true
+  pretty_backtrace: true
+  level: debug
+  format: compact
+
+server:
+  binding: 0.0.0.0
+  port: 3000
+
+database:
+  uri: postgres://postgres:postgres@localhost:5432/rustok_dev
+  enable_logging: true
+  min_connections: 1
+  max_connections: 5
+
+auth:
+  jwt:
+    secret: change-this-in-production
+    expiration: 604800 # 7 days
+```
+
+```yaml
+# apps/server/config/test.yaml
+logger:
+  enable: true
+  level: error
+  format: compact
+
+server:
+  binding: 0.0.0.0
+  port: 3001
+
+database:
+  uri: postgres://postgres:postgres@localhost:5432/rustok_test
+  enable_logging: false
+  min_connections: 1
+  max_connections: 2
+  auto_migrate: true
+
+auth:
+  jwt:
+    secret: test-secret
+    expiration: 3600
+```
+
+### 14.4 Migrations (Loco Style)
+
+```toml
+# apps/server/migration/Cargo.toml
+[package]
+name = "migration"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+sea-orm-migration.workspace = true
+uuid.workspace = true
+
+[dependencies.sea-orm-migration]
+version = "1.0"
+features = ["runtime-tokio-rustls", "sqlx-postgres"]
+```
+
+```rust
+// apps/server/migration/src/lib.rs
+#![allow(elided_lifetimes_in_paths)]
+
+pub use sea_orm_migration::prelude::*;
+
+mod m20240101_000001_create_tenants;
+mod m20240101_000002_create_users;
+
+pub struct Migrator;
+
+#[async_trait::async_trait]
+impl MigratorTrait for Migrator {
+    fn migrations() -> Vec<Box<dyn MigrationTrait>> {
+        vec![
+            Box::new(m20240101_000001_create_tenants::Migration),
+            Box::new(m20240101_000002_create_users::Migration),
+        ]
+    }
+}
+```
+
+```rust
+// apps/server/migration/src/m20240101_000001_create_tenants.rs
+use sea_orm_migration::prelude::*;
+
+#[derive(DeriveMigrationName)]
+pub struct Migration;
+
+#[async_trait::async_trait]
+impl MigrationTrait for Migration {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .create_table(
+                Table::create()
+                    .table(Tenants::Table)
+                    .if_not_exists()
+                    .col(ColumnDef::new(Tenants::Id).uuid().not_null().primary_key())
+                    .col(ColumnDef::new(Tenants::Name).string_len(255).not_null())
+                    .col(ColumnDef::new(Tenants::Slug).string_len(64).not_null().unique_key())
+                    .col(ColumnDef::new(Tenants::Settings).json_binary().not_null().default("{}"))
+                    .col(ColumnDef::new(Tenants::CreatedAt).timestamp_with_time_zone().not_null().default(Expr::current_timestamp()))
+                    .col(ColumnDef::new(Tenants::UpdatedAt).timestamp_with_time_zone().not_null().default(Expr::current_timestamp()))
+                    .to_owned(),
+            )
+            .await
+    }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .drop_table(Table::drop().table(Tenants::Table).to_owned())
+            .await
+    }
+}
+
+#[derive(Iden)]
+enum Tenants {
+    Table,
+    Id,
+    Name,
+    Slug,
+    Settings,
+    CreatedAt,
+    UpdatedAt,
+}
+```
+
+```rust
+// apps/server/migration/src/m20240101_000002_create_users.rs
+use sea_orm_migration::prelude::*;
+
+#[derive(DeriveMigrationName)]
+pub struct Migration;
+
+#[async_trait::async_trait]
+impl MigrationTrait for Migration {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .create_table(
+                Table::create()
+                    .table(Users::Table)
+                    .if_not_exists()
+                    .col(ColumnDef::new(Users::Id).uuid().not_null().primary_key())
+                    .col(ColumnDef::new(Users::TenantId).uuid().not_null())
+                    .col(ColumnDef::new(Users::Email).string_len(255).not_null())
+                    .col(ColumnDef::new(Users::PasswordHash).string_len(255).not_null())
+                    .col(ColumnDef::new(Users::Role).string_len(32).not_null().default("customer"))
+                    .col(ColumnDef::new(Users::Metadata).json_binary().not_null().default("{}"))
+                    .col(ColumnDef::new(Users::CreatedAt).timestamp_with_time_zone().not_null().default(Expr::current_timestamp()))
+                    .col(ColumnDef::new(Users::UpdatedAt).timestamp_with_time_zone().not_null().default(Expr::current_timestamp()))
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(Users::Table, Users::TenantId)
+                            .to(Tenants::Table, Tenants::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        // Unique constraint: email per tenant
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_users_tenant_email")
+                    .table(Users::Table)
+                    .col(Users::TenantId)
+                    .col(Users::Email)
+                    .unique()
+                    .to_owned(),
+            )
+            .await
+    }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .drop_table(Table::drop().table(Users::Table).to_owned())
+            .await
+    }
+}
+
+#[derive(Iden)]
+enum Users {
+    Table,
+    Id,
+    TenantId,
+    Email,
+    PasswordHash,
+    Role,
+    Metadata,
+    CreatedAt,
+    UpdatedAt,
+}
+
+#[derive(Iden)]
+enum Tenants {
+    Table,
+    Id,
+}
+```
+
+### 14.5 Core Crate (Updated)
+
+```toml
+# crates/rustok-core/Cargo.toml
+[package]
+name = "rustok-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+sea-orm.workspace = true
+uuid.workspace = true
+ulid.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+```
+
+```rust
+// crates/rustok-core/src/lib.rs
+pub mod error;
+pub mod id;
+
+pub use error::{RusToKError, Result};
+pub use id::generate_id;
+
+/// Re-export common types
+pub mod prelude {
+    pub use crate::error::{RusToKError, Result};
+    pub use crate::id::generate_id;
+    pub use uuid::Uuid;
+}
+```
+
+### 14.6 CI Workflow
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: "-Dwarnings"
+
+jobs:
+  fmt:
+    name: Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: Clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  build-crates:
+    name: Build Crates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p rustok-core
+      - run: cargo build -p rustok-commerce
+      - run: cargo build -p rustok-blog
+
+  build-server:
+    name: Build Server (Loco)
+    runs-on: ubuntu-latest
+    needs: build-crates
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p rustok-server
+
+  build-admin:
+    name: Build Admin (WASM)
+    runs-on: ubuntu-latest
+    needs: build-crates
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Trunk
+        run: cargo install trunk --locked
+      - name: Build Admin
+        working-directory: apps/admin
+        run: trunk build
+
+  build-storefront:
+    name: Build Storefront (SSR)
+    runs-on: ubuntu-latest
+    needs: build-crates
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - name: Install cargo-leptos
+        run: cargo install cargo-leptos --locked
+      - name: Build Storefront
+        working-directory: apps/storefront
+        run: cargo leptos build
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: build-crates
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: rustok_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/rustok_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace
+
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [fmt, clippy, build-server, build-admin, build-storefront, test]
+    if: always()
+    steps:
+      - name: Check all jobs
+        run: |
+          if [[ "${{ needs.fmt.result }}" != "success" ]] || \
+             [[ "${{ needs.clippy.result }}" != "success" ]] || \
+             [[ "${{ needs.build-server.result }}" != "success" ]] || \
+             [[ "${{ needs.build-admin.result }}" != "success" ]] || \
+             [[ "${{ needs.build-storefront.result }}" != "success" ]] || \
+             [[ "${{ needs.test.result }}" != "success" ]]; then
+            echo "One or more jobs failed"
+            exit 1
+          fi
+          echo "All checks passed!"
+```
+
+### 14.7 Local Run
 
 ```bash
-# Development
-cargo watch -x run                    # Backend
-cd apps/admin && trunk serve          # Admin (dev server)
-cd apps/storefront && cargo leptos watch  # Storefront
+# Database
+docker run -d --name rustok-db \
+  -e POSTGRES_USER=postgres \
+  -e POSTGRES_PASSWORD=postgres \
+  -e POSTGRES_DB=rustok_dev \
+  -p 5432:5432 \
+  postgres:16
 
-# Production Build
-cd apps/admin && trunk build --release
-cp -r dist/* ../server/public/admin/
+# Migrations (Loco CLI)
+cd apps/server
+cargo loco db migrate
 
-cd apps/server && cargo build --release
-# Result: target/release/rustok-server (single binary with admin)
+# Run server
+cargo loco start
 
-cd apps/storefront && cargo leptos build --release
-# Result: separate storefront binary
-```
+# Admin (separate terminal)
+cd apps/admin
+trunk serve
 
-### 14.3 Docker
-
-```dockerfile
-# apps/server/Dockerfile
-FROM rust:1.75 as builder
-WORKDIR /app
-COPY . .
-RUN cargo build --release -p rustok-server
-
-FROM debian:bookworm-slim
-COPY --from=builder /app/target/release/rustok-server /usr/local/bin/
-COPY --from=builder /app/apps/server/public /var/www/public
-CMD ["rustok-server"]
+# GraphQL Playground
+open http://localhost:3000/api/graphql
 ```
 
 ---
