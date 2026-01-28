@@ -11,7 +11,7 @@ use sea_orm::DatabaseConnection;
 use std::path::Path;
 
 use axum::middleware as axum_middleware;
-use crate::{common, controllers};
+use crate::{controllers, middleware};
 use loco_rs::prelude::Queue;
 use migration::Migrator;
 
@@ -49,7 +49,7 @@ impl Hooks for App {
     ) -> Result<axum::Router> {
         Ok(router.layer(axum_middleware::from_fn_with_state(
             ctx.clone(),
-            common::middleware::tenant::resolve,
+            middleware::tenant::resolve,
         )))
     }
 

@@ -3,7 +3,9 @@ use axum::{
     extract::FromRequestParts,
     http::{request::Parts, StatusCode},
 };
-use rustok_core::context::TenantContext;
+
+use crate::context::TenantContextExt;
+use crate::context::TenantContext;
 
 pub struct CurrentTenant(pub TenantContext);
 
@@ -15,8 +17,8 @@ where
     type Rejection = (StatusCode, &'static str);
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        if let Some(tenant) = parts.extensions.get::<TenantContext>() {
-            Ok(CurrentTenant(tenant.clone()))
+        if let Some(tenant) = parts.extensions.get::<TenantContextExt>() {
+            Ok(CurrentTenant(tenant.0.clone()))
         } else {
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
