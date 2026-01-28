@@ -1,4 +1,6 @@
 use async_trait::async_trait;
+use axum::middleware as axum_middleware;
+use axum::Router as AxumRouter;
 use loco_rs::{
     app::{AppContext, Hooks, Initializer},
     boot::{create_app, BootResult, StartMode},
@@ -10,8 +12,8 @@ use loco_rs::{
 use sea_orm::DatabaseConnection;
 use std::path::Path;
 
-use axum::middleware as axum_middleware;
-use crate::{controllers, middleware};
+use crate::controllers;
+use crate::middleware;
 use loco_rs::prelude::Queue;
 use migration::Migrator;
 
@@ -43,10 +45,7 @@ impl Hooks for App {
             .add_route(controllers::graphql::routes())
     }
 
-    async fn after_routes(
-        router: axum::Router,
-        ctx: &AppContext,
-    ) -> Result<axum::Router> {
+    async fn after_routes(router: AxumRouter, ctx: &AppContext) -> Result<AxumRouter> {
         Ok(router.layer(axum_middleware::from_fn_with_state(
             ctx.clone(),
             middleware::tenant::resolve,
