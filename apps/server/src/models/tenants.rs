@@ -26,10 +26,7 @@ impl ActiveModel {
 }
 
 impl Entity {
-    pub async fn find_by_slug(
-        db: &DatabaseConnection,
-        slug: &str,
-    ) -> Result<Option<Model>, DbErr> {
+    pub async fn find_by_slug(db: &DatabaseConnection, slug: &str) -> Result<Option<Model>, DbErr> {
         Self::find()
             .filter(tenants::Column::Slug.eq(slug))
             .one(db)

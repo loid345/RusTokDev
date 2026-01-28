@@ -62,12 +62,10 @@ impl Entity {
     ) -> Result<Vec<Model>, DbErr> {
         Self::find()
             .filter(users::Column::TenantId.eq(tenant_id))
-            .filter(
-                users::Column::Role.is_in([
-                    UserRole::Admin.to_string(),
-                    UserRole::SuperAdmin.to_string(),
-                ]),
-            )
+            .filter(users::Column::Role.is_in([
+                UserRole::Admin.to_string(),
+                UserRole::SuperAdmin.to_string(),
+            ]))
             .all(db)
             .await
     }
