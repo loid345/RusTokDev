@@ -4,13 +4,14 @@ use loco_rs::{
     boot::{create_app, BootResult, StartMode},
     controller::AppRoutes,
     environment::Environment,
-    task::{Queue, Tasks},
+    task::Tasks,
     Result,
 };
 use sea_orm::DatabaseConnection;
 use std::path::Path;
 
 use crate::controllers;
+use loco_rs::prelude::Queue;
 use migration::Migrator;
 
 pub struct App;
