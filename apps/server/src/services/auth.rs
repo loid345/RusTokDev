@@ -3,7 +3,7 @@ use sea_orm::{
     ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
 };
 
-use rustok_core::{get_role_permissions, Module, Permission, PermissionKey, UserRole};
+use rustok_core::{Action, Permission, Rbac, Resource, UserRole};
 
 use crate::models::_entities::{permissions, role_permissions, roles, user_roles};
 
@@ -13,19 +13,16 @@ impl AuthService {
     pub async fn has_permission(
         db: &DatabaseConnection,
         user_id: &uuid::Uuid,
-        required_permission: &PermissionKey,
+        required_permission: &Permission,
     ) -> Result<bool> {
         let user_permissions = Self::get_user_permissions(db, user_id).await?;
-        Ok(user_permissions.iter().any(|permission| {
-            permission.module == required_permission.module
-                && permission.action == required_permission.action
-        }))
+        Ok(user_permissions.contains(required_permission))
     }
 
     pub async fn get_user_permissions(
         db: &DatabaseConnection,
         user_id: &uuid::Uuid,
-    ) -> Result<Vec<PermissionKey>> {
+    ) -> Result<Vec<Permission>> {
         let user_role_models = user_roles::Entity::find()
             .filter(user_roles::Column::UserId.eq(user_id))
             .all(db)
@@ -61,15 +58,15 @@ impl AuthService {
 
         let mut result = Vec::new();
         for permission in permission_models {
-            let module = permission
-                .module
-                .parse::<Module>()
+            let resource = permission
+                .resource
+                .parse::<Resource>()
                 .map_err(|err| Error::BadRequest(err.into()))?;
             let action = permission
                 .action
-                .parse::<Permission>()
+                .parse::<Action>()
                 .map_err(|err| Error::BadRequest(err.into()))?;
-            result.push(PermissionKey::new(module, action));
+            result.push(Permission::new(resource, action));
         }
 
         Ok(result)
@@ -90,7 +87,7 @@ impl AuthService {
         };
         user_role.insert(db).await?;
 
-        for permission in get_role_permissions(&role).iter() {
+        for permission in Rbac::permissions_for_role(&role).iter() {
             if let Some(permission_model) =
                 Self::get_or_create_permission(db, tenant_id, permission).await?
             {
@@ -138,14 +135,14 @@ impl AuthService {
     async fn get_or_create_permission(
         db: &DatabaseConnection,
         tenant_id: &uuid::Uuid,
-        permission: &PermissionKey,
+        permission: &Permission,
     ) -> Result<Option<permissions::Model>> {
-        let module_str = permission.module.to_string();
+        let resource_str = permission.resource.to_string();
         let action_str = permission.action.to_string();
 
         if let Some(existing) = permissions::Entity::find()
             .filter(permissions::Column::TenantId.eq(tenant_id))
-            .filter(permissions::Column::Module.eq(&module_str))
+            .filter(permissions::Column::Resource.eq(&resource_str))
             .filter(permissions::Column::Action.eq(&action_str))
             .one(db)
             .await?
@@ -156,7 +153,7 @@ impl AuthService {
         let permission = permissions::ActiveModel {
             id: ActiveValue::Set(rustok_core::generate_id()),
             tenant_id: ActiveValue::Set(*tenant_id),
-            module: ActiveValue::Set(module_str),
+            resource: ActiveValue::Set(resource_str),
             action: ActiveValue::Set(action_str),
             description: ActiveValue::Set(None),
             created_at: ActiveValue::NotSet,

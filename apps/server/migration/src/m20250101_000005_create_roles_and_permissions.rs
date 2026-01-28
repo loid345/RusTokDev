@@ -63,7 +63,7 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(ColumnDef::new(Permissions::Id).uuid().not_null().primary_key())
                     .col(ColumnDef::new(Permissions::TenantId).uuid().not_null())
-                    .col(ColumnDef::new(Permissions::Module).string_len(32).not_null())
+                    .col(ColumnDef::new(Permissions::Resource).string_len(32).not_null())
                     .col(ColumnDef::new(Permissions::Action).string_len(32).not_null())
                     .col(ColumnDef::new(Permissions::Description).text().null())
                     .col(
@@ -85,14 +85,14 @@ impl MigrationTrait for Migration {
                             .name("idx_permissions_unique")
                             .table(Permissions::Table)
                             .col(Permissions::TenantId)
-                            .col(Permissions::Module)
+                            .col(Permissions::Resource)
                             .col(Permissions::Action),
                     )
                     .index(
                         Index::create()
-                            .name("idx_permissions_module")
+                            .name("idx_permissions_resource")
                             .table(Permissions::Table)
-                            .col(Permissions::Module),
+                            .col(Permissions::Resource),
                     )
                     .to_owned(),
             )
@@ -206,7 +206,7 @@ enum Permissions {
     Table,
     Id,
     TenantId,
-    Module,
+    Resource,
     Action,
     Description,
     CreatedAt,

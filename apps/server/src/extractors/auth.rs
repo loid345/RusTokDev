@@ -14,12 +14,12 @@ use axum_extra::{
     TypedHeader,
 };
 use loco_rs::prelude::*;
-use rustok_core::PermissionKey;
+use rustok_core::Permission;
 
 // Структура, которую мы будем просить в контроллерах
 pub struct CurrentUser {
     pub user: users::Model,
-    pub permissions: Vec<PermissionKey>,
+    pub permissions: Vec<Permission>,
 }
 
 #[async_trait]
