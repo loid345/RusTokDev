@@ -14,9 +14,10 @@ pub fn Login() -> impl IntoView {
     let (password, set_password) = create_signal("password123".to_string());
     let (error, set_error) = create_signal(Option::<String>::None);
 
+    let navigate_effect = navigate.clone();
     create_effect(move |_| {
         if auth.token.get().is_some() {
-            navigate("/dashboard", Default::default());
+            navigate_effect("/dashboard", Default::default());
         }
     });
 
