@@ -6,3 +6,11 @@ edition.workspace = true
 [dependencies]
 leptos = { workspace = true, features = ["csr"] }
 leptos_router = { workspace = true, features = ["csr"] }
+console_error_panic_hook = "0.1"
+console_log = "1"
+log = "0.4"
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+reqwest = { version = "0.11", features = ["json", "wasm-client"] }
+gloo-storage = "0.3"
+thiserror = { workspace = true }
