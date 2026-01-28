@@ -40,7 +40,7 @@ pub fn Dashboard() -> impl IntoView {
                         }}
                     </h1>
                     <p style="margin:8px 0 0; color:#64748b;">
-                        "Сводка системы RusToK: ключевые метрики и быстрый доступ к модулям." 
+                        "Сводка системы RusToK: ключевые метрики и быстрый доступ к модулям."
                     </p>
                 </div>
                 <div class="dashboard-actions">

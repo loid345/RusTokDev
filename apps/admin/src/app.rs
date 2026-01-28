@@ -1,5 +1,5 @@
 use leptos::*;
-use leptos_router::{Route, Router, Routes, use_navigate};
+use leptos_router::{use_navigate, Route, Router, Routes};
 
 use crate::pages::{dashboard::Dashboard, login::Login, not_found::NotFound};
 use crate::providers::auth::{provide_auth_context, use_auth};

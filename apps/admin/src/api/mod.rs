@@ -68,5 +68,6 @@ where
         }
     }
 
-    body.data.ok_or_else(|| ApiError::Graphql("No data".to_string()))
+    body.data
+        .ok_or_else(|| ApiError::Graphql("No data".to_string()))
 }
