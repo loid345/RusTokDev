@@ -32,12 +32,7 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .default(0),
                     )
-                    .col(
-                        ColumnDef::new(Nodes::Depth)
-                            .integer()
-                            .not_null()
-                            .default(0),
-                    )
+                    .col(ColumnDef::new(Nodes::Depth).integer().not_null().default(0))
                     .col(
                         ColumnDef::new(Nodes::ReplyCount)
                             .integer()
@@ -134,11 +129,7 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(ColumnDef::new(Bodies::Id).uuid().not_null().primary_key())
                     .col(ColumnDef::new(Bodies::NodeId).uuid().not_null())
-                    .col(
-                        ColumnDef::new(Bodies::Locale)
-                            .string_len(5)
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(Bodies::Locale).string_len(5).not_null())
                     .col(ColumnDef::new(Bodies::Body).text())
                     .col(
                         ColumnDef::new(Bodies::Format)

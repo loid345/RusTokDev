@@ -18,10 +18,18 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(Media::TenantId).uuid().not_null())
                     .col(ColumnDef::new(Media::UploadedBy).uuid())
                     .col(ColumnDef::new(Media::Filename).string_len(255).not_null())
-                    .col(ColumnDef::new(Media::OriginalName).string_len(255).not_null())
+                    .col(
+                        ColumnDef::new(Media::OriginalName)
+                            .string_len(255)
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(Media::MimeType).string_len(100).not_null())
                     .col(ColumnDef::new(Media::Size).big_integer().not_null())
-                    .col(ColumnDef::new(Media::StoragePath).string_len(500).not_null())
+                    .col(
+                        ColumnDef::new(Media::StoragePath)
+                            .string_len(500)
+                            .not_null(),
+                    )
                     .col(
                         ColumnDef::new(Media::StorageDriver)
                             .string_len(32)

@@ -13,7 +13,12 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(Categories::Table)
                     .if_not_exists()
-                    .col(ColumnDef::new(Categories::Id).uuid().not_null().primary_key())
+                    .col(
+                        ColumnDef::new(Categories::Id)
+                            .uuid()
+                            .not_null()
+                            .primary_key(),
+                    )
                     .col(ColumnDef::new(Categories::TenantId).uuid().not_null())
                     .col(ColumnDef::new(Categories::ParentId).uuid())
                     .col(
@@ -73,8 +78,16 @@ impl MigrationTrait for Migration {
                             .not_null()
                             .primary_key(),
                     )
-                    .col(ColumnDef::new(CategoryTranslations::CategoryId).uuid().not_null())
-                    .col(ColumnDef::new(CategoryTranslations::TenantId).uuid().not_null())
+                    .col(
+                        ColumnDef::new(CategoryTranslations::CategoryId)
+                            .uuid()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(CategoryTranslations::TenantId)
+                            .uuid()
+                            .not_null(),
+                    )
                     .col(
                         ColumnDef::new(CategoryTranslations::Locale)
                             .string_len(5)
