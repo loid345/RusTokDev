@@ -1,10 +1,16 @@
-pub mod config;
-pub mod indexers;
-pub mod stats;
+mod engine;
+mod listener;
+mod models;
+mod pg_engine;
 
 use async_trait::async_trait;
 use rustok_core::{EventListener, MigrationSource, RusToKModule};
 use sea_orm_migration::MigrationTrait;
+
+pub use engine::{SearchEngine, SearchQuery, SearchResult};
+pub use listener::IndexListener;
+pub use models::{DocumentType, IndexDocument};
+pub use pg_engine::PgSearchEngine;
 
 pub struct IndexModule;
 

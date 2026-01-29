@@ -14,6 +14,7 @@ mod m20250130_000006_create_categories;
 mod m20250130_000007_create_tags;
 mod m20250130_000008_create_meta;
 mod m20250130_000009_create_media;
+mod m20250130_000010_create_search_index;
 
 pub struct Migrator;
 
@@ -30,6 +31,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250130_000007_create_tags::Migration),
             Box::new(m20250130_000008_create_meta::Migration),
             Box::new(m20250130_000009_create_media::Migration),
+            Box::new(m20250130_000010_create_search_index::Migration),
             Box::new(m20250101_000004_create_sessions::Migration),
             Box::new(m20250101_000005_create_roles_and_permissions::Migration),
             Box::new(m20250101_000006_add_metadata_to_tenants_and_users::Migration),
