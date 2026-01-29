@@ -15,11 +15,7 @@ impl MigrationTrait for Migration {
                     .if_not_exists()
                     .col(ColumnDef::new(Meta::Id).uuid().not_null().primary_key())
                     .col(ColumnDef::new(Meta::TenantId).uuid().not_null())
-                    .col(
-                        ColumnDef::new(Meta::TargetType)
-                            .string_len(32)
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(Meta::TargetType).string_len(32).not_null())
                     .col(ColumnDef::new(Meta::TargetId).uuid().not_null())
                     .col(
                         ColumnDef::new(Meta::NoIndex)
@@ -63,16 +59,10 @@ impl MigrationTrait for Migration {
                             .not_null(),
                     )
                     .col(ColumnDef::new(MetaTranslations::Title).string_len(255))
-                    .col(
-                        ColumnDef::new(MetaTranslations::Description)
-                            .string_len(500),
-                    )
+                    .col(ColumnDef::new(MetaTranslations::Description).string_len(500))
                     .col(ColumnDef::new(MetaTranslations::Keywords).string_len(255))
                     .col(ColumnDef::new(MetaTranslations::OgTitle).string_len(255))
-                    .col(
-                        ColumnDef::new(MetaTranslations::OgDescription)
-                            .string_len(500),
-                    )
+                    .col(ColumnDef::new(MetaTranslations::OgDescription).string_len(500))
                     .col(ColumnDef::new(MetaTranslations::OgImage).string_len(500))
                     .foreign_key(
                         ForeignKey::create()

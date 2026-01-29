@@ -13,7 +13,12 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(TenantLocales::Table)
                     .if_not_exists()
-                    .col(ColumnDef::new(TenantLocales::Id).uuid().not_null().primary_key())
+                    .col(
+                        ColumnDef::new(TenantLocales::Id)
+                            .uuid()
+                            .not_null()
+                            .primary_key(),
+                    )
                     .col(ColumnDef::new(TenantLocales::TenantId).uuid().not_null())
                     .col(
                         ColumnDef::new(TenantLocales::Locale)
