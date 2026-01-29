@@ -11,12 +11,25 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(IndexContent::Table)
                     .if_not_exists()
-                    .col(ColumnDef::new(IndexContent::Id).uuid().not_null().primary_key())
+                    .col(
+                        ColumnDef::new(IndexContent::Id)
+                            .uuid()
+                            .not_null()
+                            .primary_key(),
+                    )
                     .col(ColumnDef::new(IndexContent::TenantId).uuid().not_null())
                     .col(ColumnDef::new(IndexContent::NodeId).uuid().not_null())
-                    .col(ColumnDef::new(IndexContent::Locale).string_len(5).not_null())
+                    .col(
+                        ColumnDef::new(IndexContent::Locale)
+                            .string_len(5)
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(IndexContent::Kind).string_len(32).not_null())
-                    .col(ColumnDef::new(IndexContent::Status).string_len(32).not_null())
+                    .col(
+                        ColumnDef::new(IndexContent::Status)
+                            .string_len(32)
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(IndexContent::Title).string_len(255))
                     .col(ColumnDef::new(IndexContent::Slug).string_len(255))
                     .col(ColumnDef::new(IndexContent::Excerpt).text())
@@ -40,10 +53,30 @@ impl MigrationTrait for Migration {
                     .col(ColumnDef::new(IndexContent::FeaturedImageUrl).string_len(500))
                     .col(ColumnDef::new(IndexContent::FeaturedImageAlt).string_len(255))
                     .col(ColumnDef::new(IndexContent::ParentId).uuid())
-                    .col(ColumnDef::new(IndexContent::Depth).integer().not_null().default(0))
-                    .col(ColumnDef::new(IndexContent::Position).integer().not_null().default(0))
-                    .col(ColumnDef::new(IndexContent::ReplyCount).integer().not_null().default(0))
-                    .col(ColumnDef::new(IndexContent::ViewCount).integer().not_null().default(0))
+                    .col(
+                        ColumnDef::new(IndexContent::Depth)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .col(
+                        ColumnDef::new(IndexContent::Position)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .col(
+                        ColumnDef::new(IndexContent::ReplyCount)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .col(
+                        ColumnDef::new(IndexContent::ViewCount)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
                     .col(ColumnDef::new(IndexContent::SearchVector).custom(Alias::new("tsvector")))
                     .col(ColumnDef::new(IndexContent::PublishedAt).timestamp_with_time_zone())
                     .col(

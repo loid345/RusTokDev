@@ -2,8 +2,8 @@ use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::error::IndexResult;
 use super::model::IndexProductModel;
+use crate::error::IndexResult;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ProductSortBy {

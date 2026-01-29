@@ -11,20 +11,41 @@ impl MigrationTrait for Migration {
                 Table::create()
                     .table(IndexProducts::Table)
                     .if_not_exists()
-                    .col(ColumnDef::new(IndexProducts::Id).uuid().not_null().primary_key())
+                    .col(
+                        ColumnDef::new(IndexProducts::Id)
+                            .uuid()
+                            .not_null()
+                            .primary_key(),
+                    )
                     .col(ColumnDef::new(IndexProducts::TenantId).uuid().not_null())
                     .col(ColumnDef::new(IndexProducts::ProductId).uuid().not_null())
-                    .col(ColumnDef::new(IndexProducts::Locale).string_len(5).not_null())
-                    .col(ColumnDef::new(IndexProducts::Status).string_len(32).not_null())
+                    .col(
+                        ColumnDef::new(IndexProducts::Locale)
+                            .string_len(5)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(IndexProducts::Status)
+                            .string_len(32)
+                            .not_null(),
+                    )
                     .col(
                         ColumnDef::new(IndexProducts::IsPublished)
                             .boolean()
                             .not_null()
                             .default(false),
                     )
-                    .col(ColumnDef::new(IndexProducts::Title).string_len(255).not_null())
+                    .col(
+                        ColumnDef::new(IndexProducts::Title)
+                            .string_len(255)
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(IndexProducts::Subtitle).string_len(255))
-                    .col(ColumnDef::new(IndexProducts::Handle).string_len(255).not_null())
+                    .col(
+                        ColumnDef::new(IndexProducts::Handle)
+                            .string_len(255)
+                            .not_null(),
+                    )
                     .col(ColumnDef::new(IndexProducts::Description).text())
                     .col(ColumnDef::new(IndexProducts::CategoryId).uuid())
                     .col(ColumnDef::new(IndexProducts::CategoryName).string_len(255))
