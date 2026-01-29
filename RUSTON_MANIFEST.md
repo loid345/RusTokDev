@@ -1,8 +1,19 @@
-# RusToK — System Architecture Manifest v3.0
+# RusToK — System Architecture Manifest v4.0
 
 **Target:** AI Assistants (Cursor, Windsurf, Copilot, Claude)
 **Role:** Senior Rust Architect
 **Philosophy:** "Rust is ON. WordPress is OFF."
+
+---
+
+## CHANGELOG v3.0 → v4.0
+
+- **Unified Core:** базовые таблицы контента в ядре.
+- **CQRS-lite:** разделение write/read paths.
+- **Index Module:** денормализованные индексы для поиска.
+- **Partitioning Strategy:** масштабирование таблиц.
+- **Event-Driven:** модули общаются через события.
+- **Microservice-Ready:** Index Module выносится отдельно.
 
 ---
 
@@ -19,14 +30,25 @@
 
 ---
 
-## 2. CORE PHILOSOPHY: "The Tank Strategy"
+## 2. CORE PHILOSOPHY
 
-1. **Stability First:** Мы строим "Танк", а не хрупкую экосистему плагинов.
-2. **Compile-Time Safety:** Если компилируется — работает. Никакой runtime магии в v1.0.
-3. **Monorepo:** Backend, Admin и Storefront живут вместе. Общие типы обязательны.
-4. **Laravel DX in Rust:** Опыт разработчика как в Laravel (CLI, структура), но с производительностью Rust.
-5. **No "Spaghetti Data":** Строгая реляционная схема PostgreSQL. Никакого EAV.
-6. **Headless Architecture:** Storefront физически отделён, связь только через GraphQL.
+### 2.1 The Tank Strategy
+
+- **Stability First:** Мы строим "Танк", а не хрупкую экосистему плагинов.
+- **Compile-Time Safety:** Если компилируется — работает.
+- **Monorepo:** Backend, Admin и Storefront живут вместе.
+
+### 2.2 WordPress Simplicity, Highload Performance
+
+- **Unified Core:** Базовые сущности в ядре, не раздутые.
+- **Specialized Modules:** Товары ≠ статьи, разные таблицы.
+- **Empty Tables Cost Zero:** Неиспользуемые таблицы не мешают.
+
+### 2.3 CQRS-Lite
+
+- **Write Path:** Нормализованные таблицы, быстрая запись.
+- **Read Path:** Денормализованные индексы, быстрое чтение.
+- **Event-Driven Sync:** Изменения propagate через события.
 
 ---
 
@@ -37,76 +59,107 @@
 | **Repository** | Cargo Workspace | Monorepo for all apps & crates |
 | **Runtime** | Tokio | Async runtime |
 | **Backend Framework** | Loco.rs | Axum-based, Rails-like MVC |
-| **Admin UI** | Leptos CSR | Client-Side WASM, встроена в server |
-| **Storefront** | Leptos SSR | Server-Side Rendering, отдельный деплой |
-| **Database** | PostgreSQL | Strict schema, UUID primary keys |
+| **Admin UI** | Leptos CSR | Client-Side WASM |
+| **Storefront** | Leptos SSR | Server-Side Rendering |
+| **Database** | PostgreSQL 16+ | Partitioning, JSONB |
 | **ORM** | SeaORM | Async, fully typed |
-| **API** | async-graphql | Schema Federation (MergedObject) |
+| **API** | async-graphql | Schema Federation |
 | **IDs** | ULID | Generated via `ulid` crate, stored as `Uuid` |
-| **Events** | In-Memory Channel | Pub/Sub для развязки модулей |
+| **Events** | tokio::broadcast | In-process pub/sub |
+| **Search (optional)** | Meilisearch / Tantivy | Full-text search |
 
 ---
 
-## 4. PROJECT STRUCTURE (Monorepo)
+## 4. PROJECT STRUCTURE
 
 ```text
 rustok/
-├── .github/
-│   └── workflows/
-│       └── ci.yml
 ├── apps/
-│   ├── server/                    # Loco.rs backend
-│   │   ├── Cargo.toml
+│   ├── server/                     # Loco.rs backend
 │   │   ├── src/
-│   │   │   ├── main.rs
-│   │   │   ├── lib.rs
-│   │   │   ├── app.rs
-│   │   │   └── controllers/
-│   │   │       ├── mod.rs
-│   │   │       ├── health.rs
-│   │   │       └── graphql.rs
 │   │   ├── config/
-│   │   │   ├── development.yaml
-│   │   │   └── test.yaml
 │   │   └── migration/
-│   │       ├── Cargo.toml
-│   │       └── src/
-│   │           ├── lib.rs
-│   │           ├── m20240101_000001_create_tenants.rs
-│   │           └── m20240101_000002_create_users.rs
-│   ├── admin/                     # Leptos CSR
-│   └── storefront/                # Leptos SSR
+│   ├── admin/                      # Leptos CSR
+│   └── storefront/                 # Leptos SSR
+│
 ├── crates/
-│   ├── rustok-core/
-│   ├── rustok-commerce/
-│   └── rustok-blog/
+│   ├── rustok-core/                # Универсальное ядро
+│   │   ├── src/
+│   │   │   ├── lib.rs
+│   │   │   ├── id.rs               # ULID → UUID
+│   │   │   ├── error.rs
+│   │   │   ├── events/             # Event Bus
+│   │   │   ├── entities/
+│   │   │   │   ├── mod.rs
+│   │   │   │   ├── user.rs
+│   │   │   │   ├── tenant.rs
+│   │   │   │   ├── node.rs         # Универсальный контент
+│   │   │   │   ├── body.rs         # Тяжёлый текст
+│   │   │   │   ├── category.rs     # Контентные категории
+│   │   │   │   ├── tag.rs          # Универсальные теги
+│   │   │   │   ├── taggable.rs     # Полиморфная связь
+│   │   │   │   ├── meta.rs         # SEO
+│   │   │   │   └── media.rs        # Файлы
+│   │   │   └── services/
+│   │   └── Cargo.toml
+│   │
+│   ├── rustok-commerce/            # E-commerce модуль
+│   │   ├── src/
+│   │   │   ├── entities/
+│   │   │   │   ├── product.rs
+│   │   │   │   ├── variant.rs
+│   │   │   │   ├── option.rs
+│   │   │   │   ├── price.rs
+│   │   │   │   ├── category.rs     # СВОИ категории
+│   │   │   │   ├── inventory.rs
+│   │   │   │   ├── order.rs
+│   │   │   │   └── order_item.rs
+│   │   │   ├── services/
+│   │   │   └── graphql/
+│   │   └── Cargo.toml
+│   │
+│   ├── rustok-community/           # Социальные фичи
+│   │   ├── src/
+│   │   │   ├── entities/
+│   │   │   │   ├── reaction.rs
+│   │   │   │   ├── reputation.rs
+│   │   │   │   └── follow.rs
+│   │   │   └── services/
+│   │   └── Cargo.toml
+│   │
+│   └── rustok-index/               # CQRS Read Models
+│       ├── src/
+│       │   ├── lib.rs
+│       │   ├── config.rs
+│       │   ├── indexers/
+│       │   │   ├── product_indexer.rs
+│       │   │   └── content_indexer.rs
+│       │   └── entities/
+│       │       ├── search_product.rs
+│       │       └── search_content.rs
+│       └── Cargo.toml
+│
 ├── Cargo.toml
 ├── rust-toolchain.toml
-└── .gitignore
+└── docker-compose.yml
 ```
 
 ---
 
-## 5. DATABASE SCHEMA & ID STRATEGY
+## 5. DATABASE ARCHITECTURE
 
-### 5.1 ID Generation Rule
-
-**CRITICAL:** All Primary Keys and Foreign Keys are `UUID`.
-Application generates `ULID`, converts to `UUID`, stores in PostgreSQL.
+### 5.1 ID Generation (unchanged)
 
 ```rust
 // crates/rustok-core/src/id.rs
 use ulid::Ulid;
 use uuid::Uuid;
 
-/// Generate a new ID (ULID as UUID)
 pub fn generate_id() -> Uuid {
     Uuid::from(Ulid::new())
 }
 
-/// Parse string to UUID (for API inputs)
 pub fn parse_id(s: &str) -> Result<Uuid, IdError> {
-    // Try ULID format first, then UUID format
     s.parse::<Ulid>()
         .map(Uuid::from)
         .or_else(|_| s.parse::<Uuid>())
@@ -114,11 +167,11 @@ pub fn parse_id(s: &str) -> Result<Uuid, IdError> {
 }
 ```
 
-### 5.2 Core Tables
+### 5.2 Core Tables (Unified Foundation)
 
 ```sql
 -- =============================================
--- CORE: Tenants (Multi-tenancy root)
+-- CORE: Tenants
 -- =============================================
 CREATE TABLE tenants (
     id              UUID PRIMARY KEY,
@@ -141,29 +194,204 @@ CREATE TABLE users (
     metadata        JSONB NOT NULL DEFAULT '{}',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    
+
     UNIQUE (tenant_id, email)
 );
 
-CREATE INDEX idx_users_tenant ON users(tenant_id);
-CREATE INDEX idx_users_email ON users(email);
+-- =============================================
+-- CORE: Nodes (универсальный контент)
+-- Страницы, посты, комментарии — всё здесь
+-- =============================================
+CREATE TABLE nodes (
+    id              UUID PRIMARY KEY,
+    tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    parent_id       UUID REFERENCES nodes(id) ON DELETE CASCADE,
+    author_id       UUID REFERENCES users(id) ON DELETE SET NULL,
+
+    kind            VARCHAR(32) NOT NULL,       -- 'page', 'post', 'comment'
+    title           VARCHAR(255),
+    slug            VARCHAR(255),
+    excerpt         TEXT,
+
+    category_id     UUID REFERENCES categories(id) ON DELETE SET NULL,
+    status          VARCHAR(32) NOT NULL DEFAULT 'draft',
+
+    position        INT DEFAULT 0,              -- Сортировка
+    depth           INT DEFAULT 0,              -- Уровень вложенности
+    reply_count     INT DEFAULT 0,              -- Денормализация для скорости
+
+    metadata        JSONB NOT NULL DEFAULT '{}',
+
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    published_at    TIMESTAMPTZ,
+
+    UNIQUE (tenant_id, kind, slug) WHERE slug IS NOT NULL
+);
+
+CREATE INDEX idx_nodes_tenant_kind ON nodes(tenant_id, kind, status);
+CREATE INDEX idx_nodes_parent ON nodes(parent_id);
+CREATE INDEX idx_nodes_category ON nodes(category_id);
+CREATE INDEX idx_nodes_author ON nodes(author_id);
+CREATE INDEX idx_nodes_published ON nodes(tenant_id, kind, published_at DESC)
+    WHERE status = 'published';
 
 -- =============================================
--- CORE: Module Toggles (Feature Flags)
+-- CORE: Bodies (тяжёлый контент отдельно)
+-- =============================================
+CREATE TABLE bodies (
+    node_id         UUID PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
+    body            TEXT,
+    format          VARCHAR(16) NOT NULL DEFAULT 'markdown',
+    search_vector   TSVECTOR,
+
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_bodies_search ON bodies USING GIN(search_vector);
+
+-- =============================================
+-- CORE: Categories (контентные)
+-- =============================================
+CREATE TABLE categories (
+    id              UUID PRIMARY KEY,
+    tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    parent_id       UUID REFERENCES categories(id) ON DELETE CASCADE,
+
+    name            VARCHAR(255) NOT NULL,
+    slug            VARCHAR(255) NOT NULL,
+    description     TEXT,
+
+    position        INT NOT NULL DEFAULT 0,
+    depth           INT NOT NULL DEFAULT 0,
+    node_count      INT NOT NULL DEFAULT 0,     -- Денормализация
+
+    settings        JSONB NOT NULL DEFAULT '{}', -- Права, модерация, иконка
+
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE (tenant_id, slug)
+);
+
+CREATE INDEX idx_categories_tenant ON categories(tenant_id, position);
+CREATE INDEX idx_categories_parent ON categories(parent_id);
+
+-- =============================================
+-- CORE: Tags (универсальные ярлыки)
+-- =============================================
+CREATE TABLE tags (
+    id              UUID PRIMARY KEY,
+    tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+
+    name            VARCHAR(100) NOT NULL,
+    slug            VARCHAR(100) NOT NULL,
+
+    use_count       INT NOT NULL DEFAULT 0,     -- Популярность
+
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE (tenant_id, slug)
+);
+
+CREATE INDEX idx_tags_tenant ON tags(tenant_id);
+CREATE INDEX idx_tags_popular ON tags(tenant_id, use_count DESC);
+
+-- =============================================
+-- CORE: Taggables (полиморфная связь)
+-- =============================================
+CREATE TABLE taggables (
+    tag_id          UUID NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+    target_type     VARCHAR(32) NOT NULL,       -- 'node', 'product'
+    target_id       UUID NOT NULL,
+
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    PRIMARY KEY (tag_id, target_type, target_id)
+);
+
+CREATE INDEX idx_taggables_target ON taggables(target_type, target_id);
+
+-- =============================================
+-- CORE: Meta (SEO, универсальное)
+-- =============================================
+CREATE TABLE meta (
+    id              UUID PRIMARY KEY,
+    tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+
+    target_type     VARCHAR(32) NOT NULL,       -- 'node', 'product', 'category'
+    target_id       UUID NOT NULL,
+
+    -- Basic SEO
+    title           VARCHAR(255),
+    description     VARCHAR(500),
+    keywords        VARCHAR(255),
+
+    -- Open Graph
+    og_title        VARCHAR(255),
+    og_description  VARCHAR(500),
+    og_image        VARCHAR(500),
+    og_type         VARCHAR(32),
+
+    -- Twitter
+    twitter_card    VARCHAR(32),
+
+    -- Robots
+    no_index        BOOLEAN NOT NULL DEFAULT false,
+    no_follow       BOOLEAN NOT NULL DEFAULT false,
+    canonical_url   VARCHAR(500),
+
+    -- Structured Data (JSON-LD)
+    structured_data JSONB,
+
+    UNIQUE (target_type, target_id)
+);
+
+CREATE INDEX idx_meta_target ON meta(target_type, target_id);
+
+-- =============================================
+-- CORE: Media (файлы)
+-- =============================================
+CREATE TABLE media (
+    id              UUID PRIMARY KEY,
+    tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    uploaded_by     UUID REFERENCES users(id) ON DELETE SET NULL,
+
+    filename        VARCHAR(255) NOT NULL,
+    original_name   VARCHAR(255) NOT NULL,
+    mime_type       VARCHAR(100) NOT NULL,
+    size            BIGINT NOT NULL,
+
+    storage_path    VARCHAR(500) NOT NULL,      -- S3 path или local
+    storage_driver  VARCHAR(32) NOT NULL DEFAULT 'local',
+
+    -- Image specific
+    width           INT,
+    height          INT,
+
+    alt_text        VARCHAR(255),
+    metadata        JSONB NOT NULL DEFAULT '{}',
+
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_media_tenant ON media(tenant_id);
+
+-- =============================================
+-- CORE: Module Toggles
 -- =============================================
 CREATE TABLE tenant_modules (
     id              UUID PRIMARY KEY,
     tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    module_slug     VARCHAR(64) NOT NULL,  -- 'commerce', 'blog'
+    module_slug     VARCHAR(64) NOT NULL,
     enabled         BOOLEAN NOT NULL DEFAULT true,
     settings        JSONB NOT NULL DEFAULT '{}',
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    
+
     UNIQUE (tenant_id, module_slug)
 );
 ```
 
-### 5.3 Commerce Tables
+### 5.3 Commerce Tables (Medusa-style)
 
 ```sql
 -- =============================================
@@ -172,61 +400,157 @@ CREATE TABLE tenant_modules (
 CREATE TABLE commerce_products (
     id              UUID PRIMARY KEY,
     tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    
+
     title           VARCHAR(255) NOT NULL,
-    slug            VARCHAR(255) NOT NULL,
+    subtitle        VARCHAR(255),
+    handle          VARCHAR(255) NOT NULL,
     description     TEXT,
-    sku             VARCHAR(64),
-    
-    price           BIGINT NOT NULL DEFAULT 0,      -- In cents
-    compare_price   BIGINT,                          -- Original price (for sales)
-    currency        CHAR(3) NOT NULL DEFAULT 'USD',
-    
-    stock_qty       INT NOT NULL DEFAULT 0,
-    track_inventory BOOLEAN NOT NULL DEFAULT true,
-    
-    status          VARCHAR(32) NOT NULL DEFAULT 'draft', -- draft, active, archived
-    
+
+    status          VARCHAR(32) NOT NULL DEFAULT 'draft',
+    discountable    BOOLEAN NOT NULL DEFAULT true,
+
     metadata        JSONB NOT NULL DEFAULT '{}',
-    
+
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    published_at    TIMESTAMPTZ,
-    
-    UNIQUE (tenant_id, slug),
-    UNIQUE (tenant_id, sku) WHERE sku IS NOT NULL
+
+    UNIQUE (tenant_id, handle)
 );
 
-CREATE INDEX idx_products_tenant ON commerce_products(tenant_id);
-CREATE INDEX idx_products_status ON commerce_products(tenant_id, status);
+CREATE INDEX idx_commerce_products_tenant ON commerce_products(tenant_id, status);
 
 -- =============================================
--- COMMERCE: Categories
+-- COMMERCE: Variants
+-- =============================================
+CREATE TABLE commerce_variants (
+    id              UUID PRIMARY KEY,
+    product_id      UUID NOT NULL REFERENCES commerce_products(id) ON DELETE CASCADE,
+
+    title           VARCHAR(255) NOT NULL,
+    sku             VARCHAR(64),
+    barcode         VARCHAR(64),
+
+    manage_inventory BOOLEAN NOT NULL DEFAULT true,
+    allow_backorder  BOOLEAN NOT NULL DEFAULT false,
+
+    weight          INT,
+    length          INT,
+    height          INT,
+    width           INT,
+
+    position        INT NOT NULL DEFAULT 0,
+    metadata        JSONB NOT NULL DEFAULT '{}',
+
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_commerce_variants_product ON commerce_variants(product_id);
+CREATE UNIQUE INDEX idx_commerce_variants_sku ON commerce_variants(sku) WHERE sku IS NOT NULL;
+
+-- =============================================
+-- COMMERCE: Options (Size, Color, etc.)
+-- =============================================
+CREATE TABLE commerce_options (
+    id              UUID PRIMARY KEY,
+    product_id      UUID NOT NULL REFERENCES commerce_products(id) ON DELETE CASCADE,
+    title           VARCHAR(255) NOT NULL,
+    position        INT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE commerce_option_values (
+    id              UUID PRIMARY KEY,
+    option_id       UUID NOT NULL REFERENCES commerce_options(id) ON DELETE CASCADE,
+    value           VARCHAR(255) NOT NULL,
+    position        INT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE commerce_variant_options (
+    variant_id      UUID NOT NULL REFERENCES commerce_variants(id) ON DELETE CASCADE,
+    option_value_id UUID NOT NULL REFERENCES commerce_option_values(id) ON DELETE CASCADE,
+    PRIMARY KEY (variant_id, option_value_id)
+);
+
+-- =============================================
+-- COMMERCE: Prices (мультивалютность)
+-- =============================================
+CREATE TABLE commerce_prices (
+    id              UUID PRIMARY KEY,
+    variant_id      UUID NOT NULL REFERENCES commerce_variants(id) ON DELETE CASCADE,
+
+    amount          BIGINT NOT NULL,
+    currency_code   CHAR(3) NOT NULL,
+
+    price_list_id   UUID,                       -- Для разных прайсов
+    min_quantity    INT NOT NULL DEFAULT 1,
+
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE (variant_id, currency_code, price_list_id, min_quantity)
+);
+
+CREATE INDEX idx_commerce_prices_variant ON commerce_prices(variant_id);
+
+-- =============================================
+-- COMMERCE: Categories (своя иерархия)
 -- =============================================
 CREATE TABLE commerce_categories (
     id              UUID PRIMARY KEY,
     tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
     parent_id       UUID REFERENCES commerce_categories(id) ON DELETE SET NULL,
-    
-    title           VARCHAR(255) NOT NULL,
-    slug            VARCHAR(255) NOT NULL,
+
+    name            VARCHAR(255) NOT NULL,
+    handle          VARCHAR(255) NOT NULL,
     description     TEXT,
-    position        INT NOT NULL DEFAULT 0,
-    
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    
-    UNIQUE (tenant_id, slug)
+
+    is_active       BOOLEAN NOT NULL DEFAULT true,
+    is_internal     BOOLEAN NOT NULL DEFAULT false,
+    rank            INT NOT NULL DEFAULT 0,
+
+    metadata        JSONB NOT NULL DEFAULT '{}',
+
+    UNIQUE (tenant_id, handle)
 );
 
--- =============================================
--- COMMERCE: Product-Category (Many-to-Many)
--- =============================================
 CREATE TABLE commerce_product_categories (
     product_id      UUID NOT NULL REFERENCES commerce_products(id) ON DELETE CASCADE,
     category_id     UUID NOT NULL REFERENCES commerce_categories(id) ON DELETE CASCADE,
-    position        INT NOT NULL DEFAULT 0,
-    
     PRIMARY KEY (product_id, category_id)
+);
+
+-- =============================================
+-- COMMERCE: Inventory
+-- =============================================
+CREATE TABLE commerce_inventory_items (
+    id              UUID PRIMARY KEY,
+    sku             VARCHAR(64),
+    requires_shipping BOOLEAN NOT NULL DEFAULT true,
+    metadata        JSONB NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE commerce_stock_locations (
+    id              UUID PRIMARY KEY,
+    tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+    name            VARCHAR(255) NOT NULL,
+    address         JSONB,
+    metadata        JSONB NOT NULL DEFAULT '{}'
+);
+
+CREATE TABLE commerce_inventory_levels (
+    id              UUID PRIMARY KEY,
+    inventory_item_id UUID NOT NULL REFERENCES commerce_inventory_items(id) ON DELETE CASCADE,
+    location_id     UUID NOT NULL REFERENCES commerce_stock_locations(id) ON DELETE CASCADE,
+
+    stocked_quantity  INT NOT NULL DEFAULT 0,
+    reserved_quantity INT NOT NULL DEFAULT 0,
+    incoming_quantity INT NOT NULL DEFAULT 0,
+
+    UNIQUE (inventory_item_id, location_id)
+);
+
+CREATE TABLE commerce_variant_inventory (
+    variant_id        UUID NOT NULL REFERENCES commerce_variants(id) ON DELETE CASCADE,
+    inventory_item_id UUID NOT NULL REFERENCES commerce_inventory_items(id) ON DELETE CASCADE,
+    PRIMARY KEY (variant_id, inventory_item_id)
 );
 
 -- =============================================
@@ -235,1600 +559,1016 @@ CREATE TABLE commerce_product_categories (
 CREATE TABLE commerce_orders (
     id              UUID PRIMARY KEY,
     tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    user_id         UUID REFERENCES users(id) ON DELETE SET NULL,
-    
-    order_number    VARCHAR(32) NOT NULL,           -- Human-readable: ORD-2025-00001
+    customer_id     UUID REFERENCES users(id) ON DELETE SET NULL,
+
+    display_id      SERIAL,                     -- Human-readable #1001
     status          VARCHAR(32) NOT NULL DEFAULT 'pending',
-    
+
+    email           VARCHAR(255),
+    currency_code   CHAR(3) NOT NULL,
+
     subtotal        BIGINT NOT NULL,
-    tax             BIGINT NOT NULL DEFAULT 0,
-    shipping        BIGINT NOT NULL DEFAULT 0,
-    discount        BIGINT NOT NULL DEFAULT 0,
+    tax_total       BIGINT NOT NULL DEFAULT 0,
+    shipping_total  BIGINT NOT NULL DEFAULT 0,
+    discount_total  BIGINT NOT NULL DEFAULT 0,
     total           BIGINT NOT NULL,
-    currency        CHAR(3) NOT NULL DEFAULT 'USD',
-    
+
     shipping_address JSONB,
     billing_address  JSONB,
-    
+
     metadata        JSONB NOT NULL DEFAULT '{}',
-    
+
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    
-    UNIQUE (tenant_id, order_number)
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_orders_tenant ON commerce_orders(tenant_id);
-CREATE INDEX idx_orders_user ON commerce_orders(user_id);
-CREATE INDEX idx_orders_status ON commerce_orders(tenant_id, status);
+CREATE INDEX idx_commerce_orders_tenant ON commerce_orders(tenant_id, created_at DESC);
+CREATE INDEX idx_commerce_orders_customer ON commerce_orders(customer_id);
+CREATE INDEX idx_commerce_orders_status ON commerce_orders(tenant_id, status);
 
--- =============================================
--- COMMERCE: Order Items
--- =============================================
 CREATE TABLE commerce_order_items (
     id              UUID PRIMARY KEY,
     order_id        UUID NOT NULL REFERENCES commerce_orders(id) ON DELETE CASCADE,
-    product_id      UUID REFERENCES commerce_products(id) ON DELETE SET NULL,
-    
-    title           VARCHAR(255) NOT NULL,          -- Snapshot at purchase time
+    variant_id      UUID REFERENCES commerce_variants(id) ON DELETE SET NULL,
+
+    title           VARCHAR(255) NOT NULL,
     sku             VARCHAR(64),
     quantity        INT NOT NULL,
     unit_price      BIGINT NOT NULL,
     total           BIGINT NOT NULL,
-    
+
     metadata        JSONB NOT NULL DEFAULT '{}'
 );
 
-CREATE INDEX idx_order_items_order ON commerce_order_items(order_id);
+CREATE INDEX idx_commerce_order_items_order ON commerce_order_items(order_id);
 ```
 
-### 5.4 Blog Tables
+### 5.4 Index Tables (CQRS Read Models)
 
 ```sql
 -- =============================================
--- BLOG: Posts
+-- INDEX: Денормализованные продукты для поиска
 -- =============================================
-CREATE TABLE blog_posts (
+CREATE TABLE index_products (
     id              UUID PRIMARY KEY,
-    tenant_id       UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
-    author_id       UUID REFERENCES users(id) ON DELETE SET NULL,
-    
+    tenant_id       UUID NOT NULL,
+    product_id      UUID NOT NULL,
+
+    -- Денормализованные данные
     title           VARCHAR(255) NOT NULL,
-    slug            VARCHAR(255) NOT NULL,
-    excerpt         TEXT,
-    content         TEXT NOT NULL,
-    
-    status          VARCHAR(32) NOT NULL DEFAULT 'draft',
-    
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    published_at    TIMESTAMPTZ,
-    
-    UNIQUE (tenant_id, slug)
+    subtitle        VARCHAR(255),
+    handle          VARCHAR(255) NOT NULL,
+    description     TEXT,
+    status          VARCHAR(32) NOT NULL,
+
+    -- Агрегированные варианты
+    min_price       BIGINT,
+    max_price       BIGINT,
+    currencies      CHAR(3)[],
+    total_stock     INT,
+    has_stock       BOOLEAN,
+
+    -- Агрегированные связи
+    categories      JSONB,                      -- [{id, name, handle}]
+    tags            TEXT[],
+
+    -- SEO
+    meta_title      VARCHAR(255),
+    meta_description VARCHAR(500),
+
+    -- Поиск
+    search_vector   TSVECTOR,
+
+    -- Синхронизация
+    indexed_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE (product_id)
 );
+
+CREATE INDEX idx_index_products_tenant ON index_products(tenant_id);
+CREATE INDEX idx_index_products_search ON index_products USING GIN(search_vector);
+CREATE INDEX idx_index_products_price ON index_products(tenant_id, min_price);
+CREATE INDEX idx_index_products_stock ON index_products(tenant_id, has_stock);
+
+-- =============================================
+-- INDEX: Денормализованный контент для поиска
+-- =============================================
+CREATE TABLE index_content (
+    id              UUID PRIMARY KEY,
+    tenant_id       UUID NOT NULL,
+    node_id         UUID NOT NULL,
+
+    -- Денормализованные данные
+    kind            VARCHAR(32) NOT NULL,
+    title           VARCHAR(255),
+    slug            VARCHAR(255),
+    excerpt         TEXT,
+    body_preview    TEXT,                       -- Первые N символов
+    status          VARCHAR(32) NOT NULL,
+
+    -- Автор
+    author_id       UUID,
+    author_name     VARCHAR(255),
+
+    -- Категория
+    category_id     UUID,
+    category_name   VARCHAR(255),
+    category_slug   VARCHAR(255),
+
+    -- Связи
+    tags            TEXT[],
+    parent_id       UUID,
+    reply_count     INT,
+
+    -- SEO
+    meta_title      VARCHAR(255),
+    meta_description VARCHAR(500),
+
+    -- Поиск
+    search_vector   TSVECTOR,
+
+    -- Даты
+    published_at    TIMESTAMPTZ,
+    indexed_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+    UNIQUE (node_id)
+);
+
+CREATE INDEX idx_index_content_tenant ON index_content(tenant_id, kind, status);
+CREATE INDEX idx_index_content_search ON index_content USING GIN(search_vector);
+CREATE INDEX idx_index_content_published ON index_content(tenant_id, kind, published_at DESC);
+CREATE INDEX idx_index_content_category ON index_content(category_id);
+```
+
+### 5.5 Partitioning Strategy
+
+```sql
+-- =============================================
+-- PARTITIONING: Orders по дате (highload)
+-- =============================================
+
+-- Основная таблица с партиционированием
+CREATE TABLE commerce_orders_partitioned (
+    id              UUID NOT NULL,
+    tenant_id       UUID NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL,
+    -- ... остальные поля
+    PRIMARY KEY (id, created_at)
+) PARTITION BY RANGE (created_at);
+
+-- Партиции по кварталам
+CREATE TABLE commerce_orders_2025_q1
+    PARTITION OF commerce_orders_partitioned
+    FOR VALUES FROM ('2025-01-01') TO ('2025-04-01');
+
+CREATE TABLE commerce_orders_2025_q2
+    PARTITION OF commerce_orders_partitioned
+    FOR VALUES FROM ('2025-04-01') TO ('2025-07-01');
+
+-- Партиция для будущих данных (default)
+CREATE TABLE commerce_orders_future
+    PARTITION OF commerce_orders_partitioned
+    DEFAULT;
+
+-- =============================================
+-- PARTITIONING: Nodes по tenant (multi-tenant highload)
+-- =============================================
+
+CREATE TABLE nodes_partitioned (
+    id              UUID NOT NULL,
+    tenant_id       UUID NOT NULL,
+    -- ... остальные поля
+    PRIMARY KEY (id, tenant_id)
+) PARTITION BY HASH (tenant_id);
+
+-- 8 партиций для распределения нагрузки
+CREATE TABLE nodes_p0 PARTITION OF nodes_partitioned FOR VALUES WITH (MODULUS 8, REMAINDER 0);
+CREATE TABLE nodes_p1 PARTITION OF nodes_partitioned FOR VALUES WITH (MODULUS 8, REMAINDER 1);
+CREATE TABLE nodes_p2 PARTITION OF nodes_partitioned FOR VALUES WITH (MODULUS 8, REMAINDER 2);
+CREATE TABLE nodes_p3 PARTITION OF nodes_partitioned FOR VALUES WITH (MODULUS 8, REMAINDER 3);
+CREATE TABLE nodes_p4 PARTITION OF nodes_partitioned FOR VALUES WITH (MODULUS 8, REMAINDER 4);
+CREATE TABLE nodes_p5 PARTITION OF nodes_partitioned FOR VALUES WITH (MODULUS 8, REMAINDER 5);
+CREATE TABLE nodes_p6 PARTITION OF nodes_partitioned FOR VALUES WITH (MODULUS 8, REMAINDER 6);
+CREATE TABLE nodes_p7 PARTITION OF nodes_partitioned FOR VALUES WITH (MODULUS 8, REMAINDER 7);
 ```
 
 ---
 
-## 6. MODULE ARCHITECTURE
+## 6. EVENT SYSTEM
 
-### 6.1 Module Definition
-
-Each module is a Cargo crate that implements `RusToKModule` trait.
-
-```rust
-// crates/rustok-core/src/module.rs
-
-use async_trait::async_trait;
-
-#[async_trait]
-pub trait RusToKModule: Send + Sync {
-    /// Unique identifier (e.g., "commerce", "blog")
-    fn slug(&self) -> &'static str;
-    
-    /// Human-readable name
-    fn name(&self) -> &'static str;
-    
-    /// Module version
-    fn version(&self) -> &'static str;
-    
-    /// Dependencies on other modules
-    fn dependencies(&self) -> &[&'static str] {
-        &[]
-    }
-    
-    /// Called when module is enabled for a tenant
-    async fn on_enable(&self, ctx: &Context, tenant_id: Uuid) -> Result<()> {
-        Ok(())
-    }
-    
-    /// Called when module is disabled for a tenant
-    async fn on_disable(&self, ctx: &Context, tenant_id: Uuid) -> Result<()> {
-        Ok(())
-    }
-    
-    /// Register GraphQL schema fragment
-    fn graphql_schema(&self) -> Option<Box<dyn GraphQLModule>> {
-        None
-    }
-    
-    /// Register Admin UI resources
-    fn admin_resources(&self, registry: &mut AdminRegistry) {}
-    
-    /// Register hooks
-    fn hooks(&self) -> Option<Box<dyn HookProvider>> {
-        None
-    }
-}
-```
-
-### 6.2 Module Registration (Server)
-
-```rust
-// apps/server/src/app.rs
-
-use rustok_core::RusToKModule;
-use rustok_commerce::CommerceModule;
-use rustok_blog::BlogModule;
-
-pub fn register_modules() -> Vec<Box<dyn RusToKModule>> {
-    vec![
-        Box::new(CommerceModule),
-        Box::new(BlogModule),
-        // Add new modules here
-    ]
-}
-```
-
-### 6.3 Feature Toggles
-
-Modules are compiled into binary but can be toggled per-tenant via `tenant_modules` table.
-
-```rust
-// crates/rustok-core/src/module.rs
-
-impl ModuleRegistry {
-    /// Check if module is enabled for tenant
-    pub async fn is_enabled(&self, tenant_id: Uuid, module_slug: &str) -> Result<bool> {
-        let result = tenant_modules::Entity::find()
-            .filter(tenant_modules::Column::TenantId.eq(tenant_id))
-            .filter(tenant_modules::Column::ModuleSlug.eq(module_slug))
-            .one(&self.db)
-            .await?;
-        
-        Ok(result.map(|m| m.enabled).unwrap_or(false))
-    }
-    
-    /// Toggle module for tenant
-    pub async fn set_enabled(
-        &self, 
-        tenant_id: Uuid, 
-        module_slug: &str, 
-        enabled: bool
-    ) -> Result<()> {
-        // Upsert logic
-        let model = tenant_modules::ActiveModel {
-            id: Set(generate_id()),
-            tenant_id: Set(tenant_id),
-            module_slug: Set(module_slug.to_string()),
-            enabled: Set(enabled),
-            ..Default::default()
-        };
-        
-        tenant_modules::Entity::insert(model)
-            .on_conflict(
-                OnConflict::columns([
-                    tenant_modules::Column::TenantId,
-                    tenant_modules::Column::ModuleSlug,
-                ])
-                .update_column(tenant_modules::Column::Enabled)
-                .to_owned()
-            )
-            .exec(&self.db)
-            .await?;
-        
-        Ok(())
-    }
-}
-```
-
----
-
-## 7. HOOKS API (Future-Proofing)
-
-Hooks allow modules to react to events without direct dependencies.
-
-```rust
-// crates/rustok-core/src/hooks/traits.rs
-
-use async_trait::async_trait;
-
-#[async_trait]
-pub trait HookProvider: Send + Sync {
-    // ============ Commerce Hooks ============
-    
-    /// Called when a new order is placed
-    async fn on_order_placed(&self, _ctx: &Context, _order_id: Uuid) -> Result<()> {
-        Ok(())
-    }
-    
-    /// Called when order status changes
-    async fn on_order_status_changed(
-        &self, 
-        _ctx: &Context, 
-        _order_id: Uuid, 
-        _old_status: &str, 
-        _new_status: &str
-    ) -> Result<()> {
-        Ok(())
-    }
-    
-    /// Called when inventory changes
-    async fn on_inventory_changed(
-        &self, 
-        _ctx: &Context, 
-        _product_id: Uuid, 
-        _old_qty: i32, 
-        _new_qty: i32
-    ) -> Result<()> {
-        Ok(())
-    }
-    
-    // ============ User Hooks ============
-    
-    /// Called when a new user registers
-    async fn on_user_registered(&self, _ctx: &Context, _user_id: Uuid) -> Result<()> {
-        Ok(())
-    }
-    
-    /// Called when user logs in
-    async fn on_user_login(&self, _ctx: &Context, _user_id: Uuid) -> Result<()> {
-        Ok(())
-    }
-    
-    // ============ Content Hooks ============
-    
-    /// Called when content is published
-    async fn on_content_published(
-        &self, 
-        _ctx: &Context, 
-        _content_type: &str, 
-        _content_id: Uuid
-    ) -> Result<()> {
-        Ok(())
-    }
-}
-```
-
-### 7.1 Hook Registry
-
-```rust
-// crates/rustok-core/src/hooks/registry.rs
-
-pub struct HookRegistry {
-    providers: Vec<Box<dyn HookProvider>>,
-}
-
-impl HookRegistry {
-    pub fn new() -> Self {
-        Self { providers: vec![] }
-    }
-    
-    pub fn register(&mut self, provider: Box<dyn HookProvider>) {
-        self.providers.push(provider);
-    }
-    
-    /// Execute hook across all providers
-    pub async fn emit_order_placed(&self, ctx: &Context, order_id: Uuid) -> Result<()> {
-        for provider in &self.providers {
-            provider.on_order_placed(ctx, order_id).await?;
-        }
-        Ok(())
-    }
-    
-    // ... similar methods for other hooks
-}
-```
-
----
-
-## 8. EVENT BUS (Module Communication)
-
-Modules communicate via events, not direct imports.
+### 6.1 Domain Events
 
 ```rust
 // crates/rustok-core/src/events/types.rs
 
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+use chrono::{DateTime, Utc};
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct EventEnvelope {
+    pub id: Uuid,
+    pub tenant_id: Uuid,
+    pub timestamp: DateTime<Utc>,
+    pub event: DomainEvent,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum DomainEvent {
-    // Commerce Events
-    OrderPlaced { order_id: Uuid, tenant_id: Uuid, total: i64 },
-    OrderStatusChanged { order_id: Uuid, old_status: String, new_status: String },
-    PaymentReceived { order_id: Uuid, amount: i64 },
-    InventoryLow { product_id: Uuid, tenant_id: Uuid, remaining: i32 },
-    
-    // User Events
-    UserRegistered { user_id: Uuid, tenant_id: Uuid, email: String },
-    UserLoggedIn { user_id: Uuid },
-    
-    // Content Events
-    ContentPublished { content_type: String, content_id: Uuid, tenant_id: Uuid },
+    // ============ Content Events ============
+    NodeCreated {
+        node_id: Uuid,
+        kind: String,
+        author_id: Option<Uuid>,
+    },
+    NodeUpdated {
+        node_id: Uuid,
+    },
+    NodePublished {
+        node_id: Uuid,
+        kind: String,
+    },
+    NodeDeleted {
+        node_id: Uuid,
+        kind: String,
+    },
+
+    // ============ Commerce Events ============
+    ProductCreated {
+        product_id: Uuid,
+    },
+    ProductUpdated {
+        product_id: Uuid,
+    },
+    ProductPublished {
+        product_id: Uuid,
+    },
+    ProductDeleted {
+        product_id: Uuid,
+    },
+
+    VariantCreated {
+        variant_id: Uuid,
+        product_id: Uuid,
+    },
+    VariantUpdated {
+        variant_id: Uuid,
+        product_id: Uuid,
+    },
+
+    InventoryUpdated {
+        variant_id: Uuid,
+        location_id: Uuid,
+        old_quantity: i32,
+        new_quantity: i32,
+    },
+    InventoryLow {
+        variant_id: Uuid,
+        product_id: Uuid,
+        remaining: i32,
+        threshold: i32,
+    },
+
+    OrderPlaced {
+        order_id: Uuid,
+        customer_id: Option<Uuid>,
+        total: i64,
+    },
+    OrderStatusChanged {
+        order_id: Uuid,
+        old_status: String,
+        new_status: String,
+    },
+    OrderCompleted {
+        order_id: Uuid,
+    },
+    OrderCancelled {
+        order_id: Uuid,
+        reason: Option<String>,
+    },
+
+    // ============ User Events ============
+    UserRegistered {
+        user_id: Uuid,
+        email: String,
+    },
+    UserLoggedIn {
+        user_id: Uuid,
+    },
+
+    // ============ Tag Events ============
+    TagAttached {
+        tag_id: Uuid,
+        target_type: String,
+        target_id: Uuid,
+    },
+    TagDetached {
+        tag_id: Uuid,
+        target_type: String,
+        target_id: Uuid,
+    },
+
+    // ============ Index Events ============
+    ReindexRequested {
+        target_type: String,
+        target_id: Option<Uuid>, // None = full reindex
+    },
 }
 ```
+
+### 6.2 Event Bus
 
 ```rust
 // crates/rustok-core/src/events/bus.rs
 
 use tokio::sync::broadcast;
+use std::sync::Arc;
 
 pub struct EventBus {
-    sender: broadcast::Sender<DomainEvent>,
+    sender: broadcast::Sender<EventEnvelope>,
+    capacity: usize,
 }
 
 impl EventBus {
     pub fn new(capacity: usize) -> Self {
         let (sender, _) = broadcast::channel(capacity);
-        Self { sender }
+        Self { sender, capacity }
     }
-    
-    pub fn publish(&self, event: DomainEvent) {
-        let _ = self.sender.send(event);
+
+    /// Publish event to all subscribers
+    pub fn publish(&self, tenant_id: Uuid, event: DomainEvent) {
+        let envelope = EventEnvelope {
+            id: generate_id(),
+            tenant_id,
+            timestamp: Utc::now(),
+            event,
+        };
+
+        // Log if no receivers (не критично)
+        if self.sender.receiver_count() == 0 {
+            tracing::debug!("No event subscribers for {:?}", envelope.event);
+        }
+
+        let _ = self.sender.send(envelope);
     }
-    
-    pub fn subscribe(&self) -> broadcast::Receiver<DomainEvent> {
+
+    /// Subscribe to events
+    pub fn subscribe(&self) -> broadcast::Receiver<EventEnvelope> {
         self.sender.subscribe()
     }
 }
-```
 
----
-
-## 9. GRAPHQL API
-
-### 9.1 Schema Federation
-
-Each module provides its own Query/Mutation, merged at server level.
-
-```rust
-// apps/server/src/graphql/schema.rs
-
-use async_graphql::{MergedObject, MergedSubscription, Schema, EmptySubscription};
-use rustok_core::graphql::{CoreQuery, CoreMutation};
-use rustok_commerce::graphql::{CommerceQuery, CommerceMutation};
-use rustok_blog::graphql::{BlogQuery, BlogMutation};
-
-#[derive(MergedObject, Default)]
-pub struct Query(CoreQuery, CommerceQuery, BlogQuery);
-
-#[derive(MergedObject, Default)]
-pub struct Mutation(CoreMutation, CommerceMutation, BlogMutation);
-
-pub type AppSchema = Schema<Query, Mutation, EmptySubscription>;
-
-pub fn build_schema(ctx: AppContext) -> AppSchema {
-    Schema::build(Query::default(), Mutation::default(), EmptySubscription)
-        .data(ctx)
-        .finish()
-}
-```
-
-### 9.2 Example: Commerce GraphQL
-
-```rust
-// crates/rustok-commerce/src/graphql/query.rs
-
-use async_graphql::{Context, Object, Result};
-
-#[derive(Default)]
-pub struct CommerceQuery;
-
-#[Object]
-impl CommerceQuery {
-    /// Get all products for current tenant
-    async fn products(
-        &self,
-        ctx: &Context<'_>,
-        #[graphql(default = 20)] limit: i32,
-        #[graphql(default = 0)] offset: i32,
-        status: Option<ProductStatus>,
-    ) -> Result<Vec<Product>> {
-        let app_ctx = ctx.data::<AppContext>()?;
-        let tenant_id = app_ctx.current_tenant_id()?;
-        
-        let products = ProductService::new(&app_ctx.db)
-            .list(tenant_id, limit, offset, status)
-            .await?;
-        
-        Ok(products)
-    }
-    
-    /// Get single product by ID or slug
-    async fn product(
-        &self,
-        ctx: &Context<'_>,
-        id: Option<ID>,
-        slug: Option<String>,
-    ) -> Result<Option<Product>> {
-        let app_ctx = ctx.data::<AppContext>()?;
-        let tenant_id = app_ctx.current_tenant_id()?;
-        
-        let product = match (id, slug) {
-            (Some(id), _) => {
-                ProductService::new(&app_ctx.db)
-                    .find_by_id(tenant_id, id.parse()?)
-                    .await?
-            }
-            (_, Some(slug)) => {
-                ProductService::new(&app_ctx.db)
-                    .find_by_slug(tenant_id, &slug)
-                    .await?
-            }
-            _ => return Err("Either id or slug required".into()),
-        };
-        
-        Ok(product)
-    }
-}
-```
-
----
-
-## 10. ADMIN UI ARCHITECTURE (Leptos CSR)
-
-### 10.1 Schema-Driven + Custom Widgets
-
-Backend crates describe data and metadata only. The Admin UI owns rendering.
-The schema-driven approach means:
-
-- **Backend modules** provide field definitions, types, permissions, and widgets metadata.
-- **Admin frontend** interprets this schema to render forms and tables.
-- **UI is swappable:** Admin can be reimplemented in another framework without touching backend crates.
-
-```rust
-// crates/rustok-core/src/admin/registry.rs
-
-pub struct AdminRegistry {
-    resources: HashMap<String, ResourceConfig>,
-}
-
-impl AdminRegistry {
-    pub fn resource<E>(&mut self, slug: &str) -> ResourceBuilder<E>
-    where
-        E: EntityTrait + AdminEntity,
-    {
-        ResourceBuilder::new(self, slug)
-    }
-}
-
-pub struct ResourceBuilder<'a, E> {
-    registry: &'a mut AdminRegistry,
-    config: ResourceConfig,
-    _phantom: PhantomData<E>,
-}
-
-impl<'a, E: EntityTrait + AdminEntity> ResourceBuilder<'a, E> {
-    pub fn label(mut self, label: &str) -> Self {
-        self.config.label = label.to_string();
-        self
-    }
-    
-    pub fn icon(mut self, icon: &str) -> Self {
-        self.config.icon = icon.to_string();
-        self
-    }
-    
-    /// Configure list view columns
-    pub fn list<F>(mut self, f: F) -> Self
-    where
-        F: FnOnce(ListBuilder) -> ListBuilder,
-    {
-        let builder = f(ListBuilder::new());
-        self.config.list = builder.build();
-        self
-    }
-    
-    /// Configure form fields
-    pub fn form<F>(mut self, f: F) -> Self
-    where
-        F: FnOnce(FormBuilder) -> FormBuilder,
-    {
-        let builder = f(FormBuilder::new());
-        self.config.form = builder.build();
-        self
-    }
-    
-    /// Override detail view with custom component
-    pub fn detail_view<C: Component>(mut self) -> Self {
-        self.config.custom_detail = Some(TypeId::of::<C>());
-        self
-    }
-    
-    pub fn permissions(mut self, read: &str, write: &str) -> Self {
-        self.config.read_permission = read.to_string();
-        self.config.write_permission = write.to_string();
-        self
-    }
-    
-    pub fn build(self) {
-        self.registry.resources.insert(
-            self.config.slug.clone(),
-            self.config,
-        );
-    }
-}
-```
-
-### 10.2 Module Admin Registration Example
-
-```rust
-// crates/rustok-commerce/src/admin.rs
-
-use rustok_core::admin::{AdminRegistry, Widget, Format};
-use crate::entities::product;
-use crate::admin_components::ProductVariantManager;
-
-pub fn register(registry: &mut AdminRegistry) {
-    registry.resource::<product::Entity>("products")
-        .label("Товары")
-        .icon("package")
-        
-        // List View
-        .list(|list| {
-            list.column("title", "Название")
-                    .searchable()
-                    .sortable()
-                .column("sku", "Артикул")
-                .column("price", "Цена")
-                    .format(Format::Money { currency: "currency" })
-                .column("stock_qty", "Остаток")
-                    .badge(|qty| if qty < 10 { "warning" } else { "success" })
-                .column("status", "Статус")
-                    .badge_map([
-                        ("draft", "secondary", "Черновик"),
-                        ("active", "success", "Активен"),
-                        ("archived", "muted", "В архиве"),
-                    ])
-        })
-        
-        // Form View
-        .form(|form| {
-            form.section("Основное", |s| {
-                    s.field("title", Widget::Text { required: true })
-                     .field("slug", Widget::Slug { from: "title" })
-                     .field("description", Widget::RichText)
-                })
-                .section("Цена и склад", |s| {
-                    s.field("price", Widget::Money)
-                     .field("compare_price", Widget::Money)
-                     .field("sku", Widget::Text)
-                     .field("stock_qty", Widget::Number)
-                })
-                .section("Варианты", |s| {
-                    // Custom Leptos component injection
-                    s.custom::<ProductVariantManager>()
-                })
-                .sidebar(|s| {
-                    s.field("status", Widget::Select {
-                        options: vec!["draft", "active", "archived"]
-                    })
-                    .field("categories", Widget::MultiSelect {
-                        resource: "categories"
-                    })
-                })
-        })
-        
-        .permissions("products.read", "products.write")
-        .build();
-}
-```
-
----
-
-## 11. STOREFRONT ARCHITECTURE (Leptos SSR)
-
-### 11.1 Separation from Backend
-
-Storefront is a **separate binary** that communicates with Backend via GraphQL.
-
-```rust
-// apps/storefront/src/main.rs
-
-use leptos::*;
-use leptos_axum::*;
-
-#[tokio::main]
-async fn main() {
-    let conf = get_configuration(None).await.unwrap();
-    let leptos_options = conf.leptos_options;
-    let addr = leptos_options.site_addr;
-    
-    // GraphQL client configuration
-    let graphql_url = std::env::var("RUSTOK_API_URL")
-        .unwrap_or_else(|_| "http://localhost:3000/graphql".to_string());
-    
-    let app = Router::new()
-        .leptos_routes(&leptos_options, routes(), App)
-        .with_state(AppState { graphql_url });
-    
-    axum::serve(TcpListener::bind(&addr).await.unwrap(), app)
-        .await
-        .unwrap();
-}
-```
-
-### 11.2 GraphQL Client
-
-```rust
-// apps/storefront/src/api/client.rs
-
-use cynic::{QueryBuilder, MutationBuilder};
-
-pub struct GraphQLClient {
-    url: String,
-    client: reqwest::Client,
-}
-
-impl GraphQLClient {
-    pub fn new(url: &str) -> Self {
+impl Clone for EventBus {
+    fn clone(&self) -> Self {
         Self {
-            url: url.to_string(),
-            client: reqwest::Client::new(),
-        }
-    }
-    
-    pub async fn query<Q: QueryBuilder>(&self, query: Q) -> Result<Q::Response> {
-        let response = self.client
-            .post(&self.url)
-            .json(&query.build())
-            .send()
-            .await?
-            .json()
-            .await?;
-        
-        Ok(response)
-    }
-}
-```
-
-### 11.3 Server Functions (Leptos SSR)
-
-```rust
-// apps/storefront/src/pages/product.rs
-
-use leptos::*;
-
-#[server(GetProduct)]
-pub async fn get_product(slug: String) -> Result<Option<Product>, ServerFnError> {
-    let client = use_context::<GraphQLClient>()
-        .ok_or_else(|| ServerFnError::new("No GraphQL client"))?;
-    
-    let query = ProductQuery::build(ProductQueryVariables { slug });
-    let response = client.query(query).await?;
-    
-    Ok(response.product)
-}
-
-#[component]
-pub fn ProductPage(slug: String) -> impl IntoView {
-    let product = create_resource(
-        move || slug.clone(),
-        |slug| async move { get_product(slug).await }
-    );
-    
-    view! {
-        <Suspense fallback=|| view! { <LoadingSpinner/> }>
-            {move || product.get().map(|result| match result {
-                Ok(Some(product)) => view! {
-                    <ProductDetail product=product/>
-                }.into_view(),
-                Ok(None) => view! { <NotFound/> }.into_view(),
-                Err(e) => view! { <ErrorPage message=e.to_string()/> }.into_view(),
-            })}
-        </Suspense>
-    }
-}
-```
-
----
-
-## 12. ERROR HANDLING
-
-### 12.1 Error Types
-
-```rust
-// crates/rustok-core/src/error.rs
-
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum RusToKError {
-    #[error("Entity not found: {entity} with id {id}")]
-    NotFound { entity: &'static str, id: Uuid },
-    
-    #[error("Validation failed: {0}")]
-    Validation(String),
-    
-    #[error("Unauthorized: {0}")]
-    Unauthorized(String),
-    
-    #[error("Forbidden: {0}")]
-    Forbidden(String),
-    
-    #[error("Conflict: {0}")]
-    Conflict(String),
-    
-    #[error("Database error: {0}")]
-    Database(#[from] sea_orm::DbErr),
-    
-    #[error("Internal error: {0}")]
-    Internal(String),
-}
-
-impl RusToKError {
-    pub fn not_found<E: EntityTrait>(id: Uuid) -> Self {
-        Self::NotFound {
-            entity: E::default().table_name(),
-            id,
+            sender: self.sender.clone(),
+            capacity: self.capacity,
         }
     }
 }
 ```
 
-### 12.2 Result Type
+### 6.3 Event Handlers
 
 ```rust
-// crates/rustok-core/src/error.rs
+// crates/rustok-core/src/events/handler.rs
 
-pub type Result<T> = std::result::Result<T, RusToKError>;
-```
-
----
-
-## 13. CODING STANDARDS
-
-### 13.1 File Naming
-- Entities: `snake_case.rs` (e.g., `order_item.rs`)
-- Components: `snake_case.rs` (e.g., `product_card.rs`)
-- Tests: `*_test.rs` in same directory
-
-### 13.2 Entity Patterns
-
-```rust
-// Standard entity structure
-// crates/rustok-commerce/src/entities/product.rs
-
-use sea_orm::entity::prelude::*;
-use serde::{Deserialize, Serialize};
-
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "commerce_products")]
-pub struct Model {
-    #[sea_orm(primary_key, auto_increment = false)]
-    pub id: Uuid,
-    pub tenant_id: Uuid,
-    
-    pub title: String,
-    pub slug: String,
-    pub description: Option<String>,
-    pub sku: Option<String>,
-    
-    pub price: i64,
-    pub compare_price: Option<i64>,
-    pub currency: String,
-    
-    pub stock_qty: i32,
-    pub track_inventory: bool,
-    
-    pub status: ProductStatus,
-    
-    pub metadata: Json<serde_json::Value>,
-    
-    pub created_at: DateTimeWithTimeZone,
-    pub updated_at: DateTimeWithTimeZone,
-    pub published_at: Option<DateTimeWithTimeZone>,
-}
-
-#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
-pub enum Relation {
-    #[sea_orm(has_many = "super::order_item::Entity")]
-    OrderItems,
-    
-    #[sea_orm(
-        belongs_to = "crate::entities::tenant::Entity",
-        from = "Column::TenantId",
-        to = "crate::entities::tenant::Column::Id"
-    )]
-    Tenant,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, EnumString, Display)]
-#[sea_orm(rs_type = "String", db_type = "String(Some(32))")]
-pub enum ProductStatus {
-    #[sea_orm(string_value = "draft")]
-    Draft,
-    #[sea_orm(string_value = "active")]
-    Active,
-    #[sea_orm(string_value = "archived")]
-    Archived,
-}
-```
-
-### 13.3 Service Pattern
-
-```rust
-// crates/rustok-commerce/src/services/product_service.rs
-
-pub struct ProductService<'a> {
-    db: &'a DatabaseConnection,
-}
-
-impl<'a> ProductService<'a> {
-    pub fn new(db: &'a DatabaseConnection) -> Self {
-        Self { db }
-    }
-    
-    pub async fn create(&self, input: CreateProductInput) -> Result<product::Model> {
-        let model = product::ActiveModel {
-            id: Set(generate_id()),
-            tenant_id: Set(input.tenant_id),
-            title: Set(input.title),
-            slug: Set(input.slug),
-            price: Set(input.price),
-            status: Set(ProductStatus::Draft),
-            created_at: Set(Utc::now().into()),
-            updated_at: Set(Utc::now().into()),
-            ..Default::default()
-        };
-        
-        let result = model.insert(self.db).await?;
-        Ok(result)
-    }
-    
-    pub async fn find_by_id(
-        &self, 
-        tenant_id: Uuid, 
-        id: Uuid
-    ) -> Result<Option<product::Model>> {
-        let result = product::Entity::find_by_id(id)
-            .filter(product::Column::TenantId.eq(tenant_id))
-            .one(self.db)
-            .await?;
-        
-        Ok(result)
-    }
-    
-    pub async fn list(
-        &self,
-        tenant_id: Uuid,
-        limit: i32,
-        offset: i32,
-        status: Option<ProductStatus>,
-    ) -> Result<Vec<product::Model>> {
-        let mut query = product::Entity::find()
-            .filter(product::Column::TenantId.eq(tenant_id))
-            .order_by_desc(product::Column::CreatedAt);
-        
-        if let Some(status) = status {
-            query = query.filter(product::Column::Status.eq(status));
-        }
-        
-        let results = query
-            .limit(limit as u64)
-            .offset(offset as u64)
-            .all(self.db)
-            .await?;
-        
-        Ok(results)
-    }
-}
-```
-
----
-
-## 14. DEVELOPMENT WORKFLOW
-
-### 14.1 Scaffolding (Loco.rs First)
-
-```bash
-# Install Loco CLI
-cargo install loco-cli
-
-# Create repo root
-mkdir rustok && cd rustok
-git init
-
-# Create backend (SaaS template with auth)
-mkdir apps && cd apps
-loco new server --template saas
-cd ..
-
-# Admin and Storefront are created manually (Leptos CSR/SSR)
-```
-
-### 14.2 Workspace Cargo.toml
-
-```toml
-# Cargo.toml
-[workspace]
-resolver = "2"
-members = [
-    "apps/server",
-    "apps/admin",
-    "apps/storefront",
-    "crates/rustok-core",
-    "crates/rustok-commerce",
-    "crates/rustok-blog",
-]
-
-[workspace.package]
-version = "0.1.0"
-edition = "2021"
-rust-version = "1.75"
-license = "AGPL-3.0"
-repository = "https://github.com/RustokCMS/RusToK"
-
-[workspace.dependencies]
-# Loco Framework
-loco-rs = "0.12"
-
-# Async Runtime
-tokio = { version = "1.40", features = ["full"] }
-
-# Web
-axum = "0.7"
-tower = "0.5"
-tower-http = { version = "0.5", features = ["cors", "fs"] }
-
-# Database (Loco uses SeaORM)
-sea-orm = { version = "1.0", features = [
-    "sqlx-postgres",
-    "runtime-tokio-rustls",
-    "macros",
-    "with-uuid",
-    "with-chrono",
-    "with-json",
-] }
-
-# GraphQL
-async-graphql = { version = "6.0", features = ["uuid", "chrono"] }
-
-# IDs
-uuid = { version = "1.10", features = ["v4", "serde"] }
-ulid = "1.1"
-
-# Serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-
-# Error Handling
-thiserror = "1.0"
-anyhow = "1.0"
-
-# Time
-chrono = { version = "0.4", features = ["serde"] }
-
-# Leptos
-leptos = "0.6"
-leptos_axum = "0.6"
-leptos_router = "0.6"
-
-# Logging
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-
-# Internal crates
-rustok-core = { path = "crates/rustok-core" }
-rustok-commerce = { path = "crates/rustok-commerce" }
-rustok-blog = { path = "crates/rustok-blog" }
-```
-
-### 14.3 Server (Loco-based)
-
-```toml
-# apps/server/Cargo.toml
-[package]
-name = "rustok-server"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
-rustok-core.workspace = true
-rustok-commerce.workspace = true
-rustok-blog.workspace = true
-
-loco-rs.workspace = true
-tokio.workspace = true
-axum.workspace = true
-sea-orm.workspace = true
-async-graphql.workspace = true
-async-graphql-axum.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-uuid.workspace = true
-chrono.workspace = true
-tracing.workspace = true
-
-# Loco extras
-migration = { path = "migration" }
-
-[dev-dependencies]
-loco-rs = { workspace = true, features = ["testing"] }
-serial_test = "3.1"
-```
-
-```rust
-// apps/server/src/main.rs
-use loco_rs::cli;
-use migration::Migrator;
-use rustok_server::app::App;
-
-#[tokio::main]
-async fn main() -> eyre::Result<()> {
-    cli::main::<App, Migrator>().await
-}
-```
-
-```rust
-// apps/server/src/lib.rs
-pub mod app;
-pub mod controllers;
-pub mod models;
-pub mod views;
-pub mod graphql;
-```
-
-```rust
-// apps/server/src/app.rs
 use async_trait::async_trait;
-use loco_rs::{
-    app::{AppContext, Hooks, Initializer},
-    boot::{create_app, BootResult, StartMode},
-    controller::AppRoutes,
-    db::truncate_table,
-    environment::Environment,
-    task::Tasks,
-    Result,
-};
-use sea_orm::DatabaseConnection;
-
-use crate::controllers;
-
-pub struct App;
 
 #[async_trait]
-impl Hooks for App {
-    fn app_name() -> &'static str {
-        env!("CARGO_PKG_NAME")
+pub trait EventHandler: Send + Sync {
+    /// Filter: какие события обрабатываем
+    fn handles(&self, event: &DomainEvent) -> bool;
+
+    /// Handle event
+    async fn handle(&self, envelope: &EventEnvelope) -> Result<()>;
+}
+
+/// Event dispatcher
+pub struct EventDispatcher {
+    bus: EventBus,
+    handlers: Vec<Arc<dyn EventHandler>>,
+}
+
+impl EventDispatcher {
+    pub fn new(bus: EventBus) -> Self {
+        Self {
+            bus,
+            handlers: vec![],
+        }
     }
 
-    fn app_version() -> String {
-        format!(
-            "{} ({})",
-            env!("CARGO_PKG_VERSION"),
-            option_env!("BUILD_SHA")
-                .or(option_env!("GITHUB_SHA"))
-                .unwrap_or("dev")
+    pub fn register(&mut self, handler: Arc<dyn EventHandler>) {
+        self.handlers.push(handler);
+    }
+
+    /// Start listening (spawn background task)
+    pub fn start(self) -> tokio::task::JoinHandle<()> {
+        tokio::spawn(async move {
+            let mut receiver = self.bus.subscribe();
+
+            while let Ok(envelope) = receiver.recv().await {
+                for handler in &self.handlers {
+                    if handler.handles(&envelope.event) {
+                        if let Err(e) = handler.handle(&envelope).await {
+                            tracing::error!(
+                                "Event handler error: {:?}, event: {:?}",
+                                e,
+                                envelope.event
+                            );
+                        }
+                    }
+                }
+            }
+        })
+    }
+}
+```
+
+---
+
+## 7. INDEX MODULE (CQRS)
+
+### 7.1 Index Configuration
+
+```rust
+// crates/rustok-index/src/config.rs
+
+pub struct IndexConfig {
+    /// Reindex batch size
+    pub batch_size: usize,
+
+    /// Parallel workers for reindexing
+    pub workers: usize,
+
+    /// Enable real-time sync via events
+    pub realtime_sync: bool,
+
+    /// Full reindex schedule (cron)
+    pub reindex_schedule: Option<String>,
+}
+
+impl Default for IndexConfig {
+    fn default() -> Self {
+        Self {
+            batch_size: 100,
+            workers: 4,
+            realtime_sync: true,
+            reindex_schedule: Some("0 3 * * *".to_string()), // 3 AM daily
+        }
+    }
+}
+```
+
+### 7.2 Product Indexer
+
+```rust
+// crates/rustok-index/src/indexers/product_indexer.rs
+
+use async_trait::async_trait;
+
+pub struct ProductIndexer {
+    db: DatabaseConnection,
+}
+
+impl ProductIndexer {
+    pub fn new(db: DatabaseConnection) -> Self {
+        Self { db }
+    }
+
+    /// Index single product
+    pub async fn index_product(&self, product_id: Uuid) -> Result<()> {
+        // Fetch product with all relations
+        let product = commerce_products::Entity::find_by_id(product_id)
+            .one(&self.db)
+            .await?
+            .ok_or(RusToKError::not_found::<commerce_products::Entity>(product_id))?;
+
+        // Fetch variants with prices
+        let variants = commerce_variants::Entity::find()
+            .filter(commerce_variants::Column::ProductId.eq(product_id))
+            .all(&self.db)
+            .await?;
+
+        let prices: Vec<i64> = commerce_prices::Entity::find()
+            .filter(commerce_prices::Column::VariantId.is_in(
+                variants.iter().map(|v| v.id).collect::<Vec<_>>()
+            ))
+            .all(&self.db)
+            .await?
+            .iter()
+            .map(|p| p.amount)
+            .collect();
+
+        // Fetch categories
+        let categories = commerce_product_categories::Entity::find()
+            .filter(commerce_product_categories::Column::ProductId.eq(product_id))
+            .find_also_related(commerce_categories::Entity)
+            .all(&self.db)
+            .await?;
+
+        // Fetch tags
+        let tags = taggables::Entity::find()
+            .filter(taggables::Column::TargetType.eq("product"))
+            .filter(taggables::Column::TargetId.eq(product_id))
+            .find_also_related(tags::Entity)
+            .all(&self.db)
+            .await?;
+
+        // Fetch meta
+        let meta = meta::Entity::find()
+            .filter(meta::Column::TargetType.eq("product"))
+            .filter(meta::Column::TargetId.eq(product_id))
+            .one(&self.db)
+            .await?;
+
+        // Calculate stock
+        let total_stock: i32 = /* sum inventory levels */;
+
+        // Build search vector
+        let search_text = format!(
+            "{} {} {}",
+            product.title,
+            product.subtitle.unwrap_or_default(),
+            product.description.unwrap_or_default()
+        );
+
+        // Upsert index record
+        let index_record = index_products::ActiveModel {
+            id: Set(generate_id()),
+            tenant_id: Set(product.tenant_id),
+            product_id: Set(product_id),
+
+            title: Set(product.title),
+            subtitle: Set(product.subtitle),
+            handle: Set(product.handle),
+            description: Set(product.description),
+            status: Set(product.status),
+
+            min_price: Set(prices.iter().min().copied()),
+            max_price: Set(prices.iter().max().copied()),
+            currencies: Set(/* unique currencies */),
+            total_stock: Set(total_stock),
+            has_stock: Set(total_stock > 0),
+
+            categories: Set(json!(categories)),
+            tags: Set(tags.iter().map(|t| t.name.clone()).collect()),
+
+            meta_title: Set(meta.as_ref().and_then(|m| m.title.clone())),
+            meta_description: Set(meta.as_ref().and_then(|m| m.description.clone())),
+
+            search_vector: Set(/* tsvector */),
+            indexed_at: Set(Utc::now().into()),
+        };
+
+        index_products::Entity::insert(index_record)
+            .on_conflict(
+                OnConflict::column(index_products::Column::ProductId)
+                    .update_columns([
+                        index_products::Column::Title,
+                        index_products::Column::MinPrice,
+                        // ... all fields
+                        index_products::Column::IndexedAt,
+                    ])
+                    .to_owned()
+            )
+            .exec(&self.db)
+            .await?;
+
+        Ok(())
+    }
+
+    /// Full reindex for tenant
+    pub async fn reindex_tenant(&self, tenant_id: Uuid) -> Result<IndexStats> {
+        let mut stats = IndexStats::default();
+
+        let products = commerce_products::Entity::find()
+            .filter(commerce_products::Column::TenantId.eq(tenant_id))
+            .all(&self.db)
+            .await?;
+
+        for product in products {
+            match self.index_product(product.id).await {
+                Ok(_) => stats.success += 1,
+                Err(e) => {
+                    tracing::error!("Failed to index product {}: {:?}", product.id, e);
+                    stats.failed += 1;
+                }
+            }
+        }
+
+        stats.total = stats.success + stats.failed;
+        Ok(stats)
+    }
+}
+
+#[async_trait]
+impl EventHandler for ProductIndexer {
+    fn handles(&self, event: &DomainEvent) -> bool {
+        matches!(
+            event,
+            DomainEvent::ProductCreated { .. }
+                | DomainEvent::ProductUpdated { .. }
+                | DomainEvent::ProductPublished { .. }
+                | DomainEvent::VariantUpdated { .. }
+                | DomainEvent::InventoryUpdated { .. }
         )
     }
 
-    async fn boot(mode: StartMode, environment: &Environment) -> Result<BootResult> {
-        create_app::<Self>(mode, environment).await
+    async fn handle(&self, envelope: &EventEnvelope) -> Result<()> {
+        let product_id = match &envelope.event {
+            DomainEvent::ProductCreated { product_id } => *product_id,
+            DomainEvent::ProductUpdated { product_id } => *product_id,
+            DomainEvent::ProductPublished { product_id } => *product_id,
+            DomainEvent::VariantUpdated { product_id, .. } => *product_id,
+            DomainEvent::InventoryUpdated { variant_id, .. } => {
+                // Lookup product_id from variant
+                self.get_product_id_by_variant(*variant_id).await?
+            }
+            _ => return Ok(()),
+        };
+
+        self.index_product(product_id).await
+    }
+}
+```
+
+### 7.3 Content Indexer
+
+```rust
+// crates/rustok-index/src/indexers/content_indexer.rs
+
+pub struct ContentIndexer {
+    db: DatabaseConnection,
+}
+
+impl ContentIndexer {
+    pub async fn index_node(&self, node_id: Uuid) -> Result<()> {
+        let node = nodes::Entity::find_by_id(node_id)
+            .one(&self.db)
+            .await?
+            .ok_or(RusToKError::not_found::<nodes::Entity>(node_id))?;
+
+        // Fetch body
+        let body = bodies::Entity::find_by_id(node_id)
+            .one(&self.db)
+            .await?;
+
+        // Fetch category
+        let category = if let Some(cat_id) = node.category_id {
+            categories::Entity::find_by_id(cat_id).one(&self.db).await?
+        } else {
+            None
+        };
+
+        // Fetch author
+        let author = if let Some(author_id) = node.author_id {
+            users::Entity::find_by_id(author_id).one(&self.db).await?
+        } else {
+            None
+        };
+
+        // Fetch tags
+        let tags = taggables::Entity::find()
+            .filter(taggables::Column::TargetType.eq("node"))
+            .filter(taggables::Column::TargetId.eq(node_id))
+            .find_also_related(tags::Entity)
+            .all(&self.db)
+            .await?;
+
+        // Fetch meta
+        let meta = meta::Entity::find()
+            .filter(meta::Column::TargetType.eq("node"))
+            .filter(meta::Column::TargetId.eq(node_id))
+            .one(&self.db)
+            .await?;
+
+        // Build index record
+        let index_record = index_content::ActiveModel {
+            id: Set(generate_id()),
+            tenant_id: Set(node.tenant_id),
+            node_id: Set(node_id),
+
+            kind: Set(node.kind),
+            title: Set(node.title),
+            slug: Set(node.slug),
+            excerpt: Set(node.excerpt),
+            body_preview: Set(body.as_ref().map(|b| truncate(&b.body, 500))),
+            status: Set(node.status),
+
+            author_id: Set(node.author_id),
+            author_name: Set(author.map(|a| a.email)), // или name если есть
+
+            category_id: Set(node.category_id),
+            category_name: Set(category.as_ref().map(|c| c.name.clone())),
+            category_slug: Set(category.as_ref().map(|c| c.slug.clone())),
+
+            tags: Set(tags.iter().filter_map(|(_, t)| t.as_ref().map(|t| t.name.clone())).collect()),
+            parent_id: Set(node.parent_id),
+            reply_count: Set(node.reply_count),
+
+            meta_title: Set(meta.as_ref().and_then(|m| m.title.clone())),
+            meta_description: Set(meta.as_ref().and_then(|m| m.description.clone())),
+
+            search_vector: Set(/* tsvector */),
+            published_at: Set(node.published_at),
+            indexed_at: Set(Utc::now().into()),
+        };
+
+        // Upsert
+        index_content::Entity::insert(index_record)
+            .on_conflict(/* ... */)
+            .exec(&self.db)
+            .await?;
+
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl EventHandler for ContentIndexer {
+    fn handles(&self, event: &DomainEvent) -> bool {
+        matches!(
+            event,
+            DomainEvent::NodeCreated { .. }
+                | DomainEvent::NodeUpdated { .. }
+                | DomainEvent::NodePublished { .. }
+        )
     }
 
-    fn routes(_ctx: &AppContext) -> AppRoutes {
-        AppRoutes::with_default_routes()
-            .add_route(controllers::health::routes())
-            .add_route(controllers::graphql::routes())
-    }
+    async fn handle(&self, envelope: &EventEnvelope) -> Result<()> {
+        let node_id = match &envelope.event {
+            DomainEvent::NodeCreated { node_id, .. } => *node_id,
+            DomainEvent::NodeUpdated { node_id } => *node_id,
+            DomainEvent::NodePublished { node_id, .. } => *node_id,
+            _ => return Ok(()),
+        };
 
-    async fn truncate(db: &DatabaseConnection) -> Result<()> {
-        // Очистка таблиц для тестов
-        truncate_table(db, "users").await?;
+        self.index_node(node_id).await
+    }
+}
+```
+
+---
+
+## 8. DEPLOYMENT ARCHITECTURE
+
+### 8.1 Monolith (Default)
+
+```yaml
+# docker-compose.yml
+services:
+  rustok:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgres://rustok:rustok@db:5432/rustok
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: postgres:16
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=rustok
+      - POSTGRES_PASSWORD=rustok
+      - POSTGRES_DB=rustok
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+```
+
+### 8.2 Microservices (Scale)
+
+```yaml
+# docker-compose.scale.yml
+services:
+  # API Gateway
+  api:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      - DATABASE_URL=postgres://rustok:rustok@db-primary:5432/rustok
+      - INDEX_SERVICE_URL=http://index:3001
+    deploy:
+      replicas: 3
+
+  # Index Service (отдельный)
+  index:
+    build:
+      context: .
+      dockerfile: crates/rustok-index/Dockerfile
+    environment:
+      - DATABASE_URL=postgres://rustok:rustok@db-replica:5432/rustok
+      - MEILISEARCH_URL=http://meilisearch:7700
+    deploy:
+      replicas: 2
+
+  # Primary DB (writes)
+  db-primary:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=rustok
+      - POSTGRES_PASSWORD=rustok
+
+  # Replica DB (reads for index)
+  db-replica:
+    image: postgres:16
+    environment:
+      - POSTGRES_USER=rustok
+      - POSTGRES_PASSWORD=rustok
+    # Настроить streaming replication
+
+  # Full-text search
+  meilisearch:
+    image: getmeili/meilisearch:v1.6
+    volumes:
+      - meilisearch_data:/meili_data
+
+volumes:
+  meilisearch_data:
+```
+
+### 8.3 Architecture Diagram
+
+```text
+                         ┌─────────────────┐
+                         │   Load Balancer │
+                         └────────┬────────┘
+                                  │
+              ┌───────────────────┼───────────────────┐
+              │                   │                   │
+              ▼                   ▼                   ▼
+       ┌────────────┐      ┌────────────┐      ┌────────────┐
+       │  API Pod 1 │      │  API Pod 2 │      │  API Pod 3 │
+       └─────┬──────┘      └─────┬──────┘      └─────┬──────┘
+             │                   │                   │
+             └───────────────────┼───────────────────┘
+                                 │
+              ┌──────────────────┼──────────────────┐
+              │                  │                  │
+              ▼                  ▼                  ▼
+       ┌────────────┐     ┌────────────┐    ┌─────────────┐
+       │ PostgreSQL │     │   Redis    │    │ Event Bus   │
+       │  Primary   │     │  (Cache)   │    │ (In-memory) │
+       └─────┬──────┘     └────────────┘    └──────┬──────┘
+             │                                     │
+             │ Replication                         │ Events
+             ▼                                     ▼
+       ┌────────────┐                      ┌─────────────┐
+       │ PostgreSQL │◄─────────────────────│Index Service│
+       │  Replica   │                      └──────┬──────┘
+       └────────────┘                             │
+                                                  ▼
+                                          ┌─────────────┐
+                                          │ Meilisearch │
+                                          └─────────────┘
+```
+
+---
+
+## 9. MODULE REGISTRATION (Updated)
+
+```rust
+// apps/server/src/app.rs
+
+use rustok_core::{events::EventBus, RusToKModule};
+use rustok_commerce::CommerceModule;
+use rustok_community::CommunityModule;
+use rustok_index::IndexModule;
+
+pub struct App {
+    event_bus: EventBus,
+    modules: Vec<Box<dyn RusToKModule>>,
+}
+
+impl App {
+    pub fn new() -> Self {
+        let event_bus = EventBus::new(1024);
+
+        Self {
+            event_bus: event_bus.clone(),
+            modules: vec![
+                Box::new(CommerceModule::new(event_bus.clone())),
+                Box::new(CommunityModule::new(event_bus.clone())),
+                Box::new(IndexModule::new(event_bus.clone())), // CQRS sync
+            ],
+        }
+    }
+}
+
+#[async_trait]
+impl Hooks for App {
+    // ... Loco hooks
+
+    async fn after_context(ctx: &AppContext) -> Result<()> {
+        // Start event dispatcher
+        let mut dispatcher = EventDispatcher::new(ctx.event_bus.clone());
+
+        // Register index handlers
+        dispatcher.register(Arc::new(ProductIndexer::new(ctx.db.clone())));
+        dispatcher.register(Arc::new(ContentIndexer::new(ctx.db.clone())));
+
+        // Start background task
+        dispatcher.start();
+
         Ok(())
     }
 }
 ```
 
-```rust
-// apps/server/src/controllers/mod.rs
-pub mod health;
-pub mod graphql;
-```
-
-```rust
-// apps/server/src/controllers/health.rs
-use axum::{routing::get, Router};
-use loco_rs::prelude::*;
-
-async fn health() -> Result<Response> {
-    format::json(serde_json::json!({
-        "status": "ok",
-        "app": "rustok",
-    }))
-}
-
-pub fn routes() -> Routes {
-    Routes::new()
-        .prefix("health")
-        .add("/", get(health))
-}
-```
-
-```rust
-// apps/server/src/controllers/graphql.rs
-use async_graphql::{EmptyMutation, EmptySubscription, Object, Schema};
-use async_graphql_axum::{GraphQLRequest, GraphQLResponse};
-use axum::{routing::{get, post}, Extension, Router};
-use loco_rs::prelude::*;
-
-// Временная заглушка Query
-#[derive(Default)]
-pub struct Query;
-
-#[Object]
-impl Query {
-    async fn health(&self) -> &str {
-        "GraphQL is working!"
-    }
-
-    async fn version(&self) -> &str {
-        env!("CARGO_PKG_VERSION")
-    }
-}
-
-pub type AppSchema = Schema<Query, EmptyMutation, EmptySubscription>;
-
-fn build_schema() -> AppSchema {
-    Schema::build(Query, EmptyMutation, EmptySubscription).finish()
-}
-
-async fn graphql_handler(
-    Extension(schema): Extension<AppSchema>,
-    req: GraphQLRequest,
-) -> GraphQLResponse {
-    schema.execute(req.into_inner()).await.into()
-}
-
-async fn graphql_playground() -> impl axum::response::IntoResponse {
-    axum::response::Html(
-        async_graphql::http::playground_source(
-            async_graphql::http::GraphQLPlaygroundConfig::new("/api/graphql")
-        )
-    )
-}
-
-pub fn routes() -> Routes {
-    let schema = build_schema();
-    
-    Routes::new()
-        .prefix("api/graphql")
-        .add("/", get(graphql_playground).post(graphql_handler))
-        .layer(Extension(schema))
-}
-```
-
-```yaml
-# apps/server/config/development.yaml
-logger:
-  enable: true
-  pretty_backtrace: true
-  level: debug
-  format: compact
-
-server:
-  binding: 0.0.0.0
-  port: 3000
-
-database:
-  uri: postgres://postgres:postgres@localhost:5432/rustok_dev
-  enable_logging: true
-  min_connections: 1
-  max_connections: 5
-
-auth:
-  jwt:
-    secret: change-this-in-production
-    expiration: 604800 # 7 days
-```
-
-```yaml
-# apps/server/config/test.yaml
-logger:
-  enable: true
-  level: error
-  format: compact
-
-server:
-  binding: 0.0.0.0
-  port: 3001
-
-database:
-  uri: postgres://postgres:postgres@localhost:5432/rustok_test
-  enable_logging: false
-  min_connections: 1
-  max_connections: 2
-  auto_migrate: true
-
-auth:
-  jwt:
-    secret: test-secret
-    expiration: 3600
-```
-
-### 14.4 Migrations (Loco Style)
-
-```toml
-# apps/server/migration/Cargo.toml
-[package]
-name = "migration"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-sea-orm-migration.workspace = true
-uuid.workspace = true
-
-[dependencies.sea-orm-migration]
-version = "1.0"
-features = ["runtime-tokio-rustls", "sqlx-postgres"]
-```
-
-```rust
-// apps/server/migration/src/lib.rs
-#![allow(elided_lifetimes_in_paths)]
-
-pub use sea_orm_migration::prelude::*;
-
-mod m20240101_000001_create_tenants;
-mod m20240101_000002_create_users;
-
-pub struct Migrator;
-
-#[async_trait::async_trait]
-impl MigratorTrait for Migrator {
-    fn migrations() -> Vec<Box<dyn MigrationTrait>> {
-        vec![
-            Box::new(m20240101_000001_create_tenants::Migration),
-            Box::new(m20240101_000002_create_users::Migration),
-        ]
-    }
-}
-```
-
-```rust
-// apps/server/migration/src/m20240101_000001_create_tenants.rs
-use sea_orm_migration::prelude::*;
-
-#[derive(DeriveMigrationName)]
-pub struct Migration;
-
-#[async_trait::async_trait]
-impl MigrationTrait for Migration {
-    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager
-            .create_table(
-                Table::create()
-                    .table(Tenants::Table)
-                    .if_not_exists()
-                    .col(ColumnDef::new(Tenants::Id).uuid().not_null().primary_key())
-                    .col(ColumnDef::new(Tenants::Name).string_len(255).not_null())
-                    .col(ColumnDef::new(Tenants::Slug).string_len(64).not_null().unique_key())
-                    .col(ColumnDef::new(Tenants::Settings).json_binary().not_null().default("{}"))
-                    .col(ColumnDef::new(Tenants::CreatedAt).timestamp_with_time_zone().not_null().default(Expr::current_timestamp()))
-                    .col(ColumnDef::new(Tenants::UpdatedAt).timestamp_with_time_zone().not_null().default(Expr::current_timestamp()))
-                    .to_owned(),
-            )
-            .await
-    }
-
-    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager
-            .drop_table(Table::drop().table(Tenants::Table).to_owned())
-            .await
-    }
-}
-
-#[derive(Iden)]
-enum Tenants {
-    Table,
-    Id,
-    Name,
-    Slug,
-    Settings,
-    CreatedAt,
-    UpdatedAt,
-}
-```
-
-```rust
-// apps/server/migration/src/m20240101_000002_create_users.rs
-use sea_orm_migration::prelude::*;
-
-#[derive(DeriveMigrationName)]
-pub struct Migration;
-
-#[async_trait::async_trait]
-impl MigrationTrait for Migration {
-    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager
-            .create_table(
-                Table::create()
-                    .table(Users::Table)
-                    .if_not_exists()
-                    .col(ColumnDef::new(Users::Id).uuid().not_null().primary_key())
-                    .col(ColumnDef::new(Users::TenantId).uuid().not_null())
-                    .col(ColumnDef::new(Users::Email).string_len(255).not_null())
-                    .col(ColumnDef::new(Users::PasswordHash).string_len(255).not_null())
-                    .col(ColumnDef::new(Users::Role).string_len(32).not_null().default("customer"))
-                    .col(ColumnDef::new(Users::Metadata).json_binary().not_null().default("{}"))
-                    .col(ColumnDef::new(Users::CreatedAt).timestamp_with_time_zone().not_null().default(Expr::current_timestamp()))
-                    .col(ColumnDef::new(Users::UpdatedAt).timestamp_with_time_zone().not_null().default(Expr::current_timestamp()))
-                    .foreign_key(
-                        ForeignKey::create()
-                            .from(Users::Table, Users::TenantId)
-                            .to(Tenants::Table, Tenants::Id)
-                            .on_delete(ForeignKeyAction::Cascade),
-                    )
-                    .to_owned(),
-            )
-            .await?;
-
-        // Unique constraint: email per tenant
-        manager
-            .create_index(
-                Index::create()
-                    .name("idx_users_tenant_email")
-                    .table(Users::Table)
-                    .col(Users::TenantId)
-                    .col(Users::Email)
-                    .unique()
-                    .to_owned(),
-            )
-            .await
-    }
-
-    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager
-            .drop_table(Table::drop().table(Users::Table).to_owned())
-            .await
-    }
-}
-
-#[derive(Iden)]
-enum Users {
-    Table,
-    Id,
-    TenantId,
-    Email,
-    PasswordHash,
-    Role,
-    Metadata,
-    CreatedAt,
-    UpdatedAt,
-}
-
-#[derive(Iden)]
-enum Tenants {
-    Table,
-    Id,
-}
-```
-
-### 14.5 Core Crate (Updated)
-
-```toml
-# crates/rustok-core/Cargo.toml
-[package]
-name = "rustok-core"
-version.workspace = true
-edition.workspace = true
-
-[dependencies]
-sea-orm.workspace = true
-uuid.workspace = true
-ulid.workspace = true
-serde.workspace = true
-thiserror.workspace = true
-chrono.workspace = true
-tracing.workspace = true
-```
-
-```rust
-// crates/rustok-core/src/lib.rs
-pub mod error;
-pub mod id;
-
-pub use error::{RusToKError, Result};
-pub use id::generate_id;
-
-/// Re-export common types
-pub mod prelude {
-    pub use crate::error::{RusToKError, Result};
-    pub use crate::id::generate_id;
-    pub use uuid::Uuid;
-}
-```
-
-### 14.6 CI Workflow
-
-```yaml
-# .github/workflows/ci.yml
-name: CI
-
-on:
-  push:
-    branches: [main, develop]
-  pull_request:
-    branches: [main, develop]
-
-env:
-  CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-Dwarnings"
-
-jobs:
-  fmt:
-    name: Formatting
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-      - run: cargo fmt --all -- --check
-
-  clippy:
-    name: Clippy
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo clippy --workspace --all-targets -- -D warnings
-
-  build-crates:
-    name: Build Crates
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build -p rustok-core
-      - run: cargo build -p rustok-commerce
-      - run: cargo build -p rustok-blog
-
-  build-server:
-    name: Build Server (Loco)
-    runs-on: ubuntu-latest
-    needs: build-crates
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build -p rustok-server
-
-  build-admin:
-    name: Build Admin (WASM)
-    runs-on: ubuntu-latest
-    needs: build-crates
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-      - name: Install Trunk
-        run: cargo install trunk --locked
-      - name: Build Admin
-        working-directory: apps/admin
-        run: trunk build
-
-  build-storefront:
-    name: Build Storefront (SSR)
-    runs-on: ubuntu-latest
-    needs: build-crates
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-      - name: Install cargo-leptos
-        run: cargo install cargo-leptos --locked
-      - name: Build Storefront
-        working-directory: apps/storefront
-        run: cargo leptos build
-
-  test:
-    name: Tests
-    runs-on: ubuntu-latest
-    needs: build-crates
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: rustok_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    env:
-      DATABASE_URL: postgres://postgres:postgres@localhost:5432/rustok_test
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo test --workspace
-
-  ci-success:
-    name: CI Success
-    runs-on: ubuntu-latest
-    needs: [fmt, clippy, build-server, build-admin, build-storefront, test]
-    if: always()
-    steps:
-      - name: Check all jobs
-        run: |
-          if [[ "${{ needs.fmt.result }}" != "success" ]] || \
-             [[ "${{ needs.clippy.result }}" != "success" ]] || \
-             [[ "${{ needs.build-server.result }}" != "success" ]] || \
-             [[ "${{ needs.build-admin.result }}" != "success" ]] || \
-             [[ "${{ needs.build-storefront.result }}" != "success" ]] || \
-             [[ "${{ needs.test.result }}" != "success" ]]; then
-            echo "One or more jobs failed"
-            exit 1
-          fi
-          echo "All checks passed!"
-```
-
-### 14.7 Local Run
-
-```bash
-# Database
-docker run -d --name rustok-db \
-  -e POSTGRES_USER=postgres \
-  -e POSTGRES_PASSWORD=postgres \
-  -e POSTGRES_DB=rustok_dev \
-  -p 5432:5432 \
-  postgres:16
-
-# Migrations (Loco CLI)
-cd apps/server
-cargo loco db migrate
-
-# Run server
-cargo loco start
-
-# Admin (separate terminal)
-cd apps/admin
-trunk serve
-
-# GraphQL Playground
-open http://localhost:3000/api/graphql
+---
+
+## 10. SUMMARY: What Lives Where
+
+| Layer | Tables/Entities | Purpose |
+|-------|----------------|---------|
+| **Core** | users, tenants, nodes, bodies, categories, tags, taggables, meta, media, tenant_modules | Universal foundation |
+| **Commerce** | products, variants, options, prices, inventory, orders, commerce_categories | E-commerce domain |
+| **Community** | reactions, reputation, follows | Social features (extends nodes) |
+| **Index** | index_products, index_content | CQRS read models |
+
+---
+
+## 11. DATA FLOW
+
+```text
+┌──────────────────────────────────────────────────────────────────┐
+│                         WRITE PATH                               │
+│                                                                  │
+│  User Request                                                    │
+│       │                                                          │
+│       ▼                                                          │
+│  ┌─────────┐    ┌─────────┐    ┌─────────┐    ┌──────────────┐   │
+│  │ GraphQL │───▶│ Service │───▶│   ORM   │───▶│ PostgreSQL   │   │
+│  │  API    │    │  Layer  │    │(SeaORM) │    │ (normalized) │   │
+│  └─────────┘    └────┬────┘    └─────────┘    └──────────────┘   │
+│                      │                                           │
+│                      ▼                                           │
+│                 ┌─────────┐                                      │
+│                 │  Event  │                                      │
+│                 │   Bus   │                                      │
+│                 └────┬────┘                                      │
+└──────────────────────┼───────────────────────────────────────────┘
+                       │
+                       ▼
+┌──────────────────────────────────────────────────────────────────┐
+│                         READ PATH                                │
+│                                                                  │
+│                 ┌─────────────┐                                  │
+│                 │   Index     │                                  │
+│                 │  Handlers   │                                  │
+│                 └──────┬──────┘                                  │
+│                        │                                         │
+│                        ▼                                         │
+│  ┌────────────────────────────────────────────────────────────┐  │
+│  │                   INDEX TABLES                             │  │
+│  │  ┌─────────────────┐    ┌─────────────────┐               │  │
+│  │  │ index_products  │    │  index_content  │               │  │
+│  │  │ (denormalized)  │    │ (denormalized)  │               │  │
+│  │  └─────────────────┘    └─────────────────┘               │  │
+│  └────────────────────────────────────────────────────────────┘  │
+│                        │                                         │
+│                        ▼                                         │
+│                 ┌─────────────┐                                  │
+│                 │   Search    │    (Optional: Meilisearch)       │
+│                 │   Queries   │                                  │
+│                 └─────────────┘                                  │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 15. SUMMARY CHECKLIST
+## 12. CHECKLIST (Updated)
 
 Before implementing any feature, verify:
 
-- [ ] Uses `Uuid` for all IDs (generated from ULID)
-- [ ] Includes `tenant_id` for multi-tenant entities
-- [ ] Implements proper error handling with `RusToKError`
-- [ ] Has SeaORM entity with relations
-- [ ] Has service layer (not direct DB access in handlers)
-- [ ] GraphQL resolvers check tenant context
-- [ ] Admin resource registered with proper permissions
-- [ ] Hooks called where relevant
-- [ ] Events published for cross-module communication
+- Uses `Uuid` for all IDs (generated from ULID).
+- Includes `tenant_id` for multi-tenant entities.
+- Implements proper error handling with `RusToKError`.
+- Has SeaORM entity with relations.
+- Has service layer (not direct DB access in handlers).
+- Publishes events for state changes.
+- GraphQL resolvers check tenant context.
+- Admin resource registered with proper permissions.
+- Index updated via event handler (if searchable).
+- Core tables used for universal features (tags, meta).
+- Module-specific tables for domain logic.
 
 ---
 
-**END OF MANIFEST v3.0**
-```
+**END OF MANIFEST v4.0**
