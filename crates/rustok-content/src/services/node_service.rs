@@ -1,60 +1,18 @@
 use chrono::Utc;
 use sea_orm::{
     prelude::DateTimeWithTimeZone, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait,
-    QueryFilter, Set, TransactionTrait,
+    PaginatorTrait, QueryFilter, Set, TransactionTrait,
 };
-use serde_json::Value;
 use uuid::Uuid;
 
 use rustok_core::{DomainEvent, EventBus};
 
+use crate::dto::{
+    BodyInput, BodyResponse, CreateNodeInput, ListNodesFilter, NodeListItem, NodeResponse,
+    NodeTranslationResponse, UpdateNodeInput,
+};
 use crate::entities::{body, node, node_translation};
 use crate::error::{ContentError, ContentResult};
-
-#[derive(Debug, Clone)]
-pub struct NodeTranslationInput {
-    pub locale: String,
-    pub title: Option<String>,
-    pub slug: Option<String>,
-    pub excerpt: Option<String>,
-    pub body: Option<String>,
-    pub body_format: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct NodeBodyInput {
-    pub locale: String,
-    pub body: Option<String>,
-    pub format: Option<String>,
-}
-
-#[derive(Debug, Clone)]
-pub struct CreateNodeInput {
-    pub kind: String,
-    pub status: Option<String>,
-    pub parent_id: Option<Uuid>,
-    pub author_id: Option<Uuid>,
-    pub category_id: Option<Uuid>,
-    pub position: Option<i32>,
-    pub depth: Option<i32>,
-    pub reply_count: Option<i32>,
-    pub metadata: Option<Value>,
-    pub translations: Vec<NodeTranslationInput>,
-    pub bodies: Vec<NodeBodyInput>,
-}
-
-#[derive(Debug, Clone, Default)]
-pub struct NodeUpdate {
-    pub parent_id: Option<Option<Uuid>>,
-    pub author_id: Option<Option<Uuid>>,
-    pub category_id: Option<Option<Uuid>>,
-    pub status: Option<String>,
-    pub position: Option<i32>,
-    pub depth: Option<i32>,
-    pub reply_count: Option<i32>,
-    pub metadata: Option<Value>,
-    pub published_at: Option<Option<DateTimeWithTimeZone>>,
-}
 
 pub struct NodeService {
     db: DatabaseConnection,
@@ -71,13 +29,17 @@ impl NodeService {
         tenant_id: Uuid,
         actor_id: Option<Uuid>,
         input: CreateNodeInput,
-    ) -> ContentResult<node::Model> {
+    ) -> ContentResult<NodeResponse> {
         let now = Utc::now().into();
         let node_id = rustok_core::generate_id();
         let status = input.status.unwrap_or_else(|| "draft".to_string());
-        let metadata = input
-            .metadata
-            .unwrap_or_else(|| serde_json::json!({}));
+        let metadata = input.metadata;
+
+        if input.translations.is_empty() {
+            return Err(ContentError::Validation(
+                "At least one translation is required".to_string(),
+            ));
+        }
 
         let txn = self.db.begin().await?;
 
@@ -119,16 +81,7 @@ impl NodeService {
             .insert(&txn)
             .await?;
 
-            if let Some(body_input) = translation
-                .body
-                .map(|body| NodeBodyInput {
-                    locale: translation_model.locale.clone(),
-                    body: Some(body),
-                    format: translation.body_format.clone(),
-                })
-            {
-                upsert_body(&txn, node_id, body_input, now).await?;
-            }
+            let _ = translation_model;
         }
 
         for body_input in input.bodies {
@@ -147,15 +100,16 @@ impl NodeService {
             },
         )?;
 
-        Ok(node_model)
+        let response = self.get_node(node_model.id).await?;
+        Ok(response)
     }
 
     pub async fn update_node(
         &self,
         node_id: Uuid,
         actor_id: Option<Uuid>,
-        update: NodeUpdate,
-    ) -> ContentResult<node::Model> {
+        update: UpdateNodeInput,
+    ) -> ContentResult<NodeResponse> {
         let node_model = self.find_node(node_id).await?;
         let mut active: node::ActiveModel = node_model.clone().into();
         let now = Utc::now().into();
@@ -192,6 +146,46 @@ impl NodeService {
 
         let updated = active.update(&self.db).await?;
 
+        if let Some(translations) = update.translations {
+            let txn = self.db.begin().await?;
+            node_translation::Entity::delete_many()
+                .filter(node_translation::Column::NodeId.eq(node_id))
+                .exec(&txn)
+                .await?;
+
+            for translation in translations {
+                let slug = resolve_slug(translation.slug, translation.title.as_ref())?;
+                node_translation::ActiveModel {
+                    id: Set(rustok_core::generate_id()),
+                    node_id: Set(node_id),
+                    locale: Set(translation.locale),
+                    title: Set(translation.title),
+                    slug: Set(slug),
+                    excerpt: Set(translation.excerpt),
+                    created_at: Set(now),
+                    updated_at: Set(now),
+                }
+                .insert(&txn)
+                .await?;
+            }
+
+            txn.commit().await?;
+        }
+
+        if let Some(bodies) = update.bodies {
+            let txn = self.db.begin().await?;
+            body::Entity::delete_many()
+                .filter(body::Column::NodeId.eq(node_id))
+                .exec(&txn)
+                .await?;
+
+            for body_input in bodies {
+                upsert_body(&txn, node_id, body_input, now).await?;
+            }
+
+            txn.commit().await?;
+        }
+
         self.event_bus.publish(
             updated.tenant_id,
             actor_id,
@@ -201,94 +195,28 @@ impl NodeService {
             },
         )?;
 
-        Ok(updated)
-    }
-
-    pub async fn upsert_translation(
-        &self,
-        node_id: Uuid,
-        actor_id: Option<Uuid>,
-        input: NodeTranslationInput,
-    ) -> ContentResult<node_translation::Model> {
-        let node_model = self.find_node(node_id).await?;
-        let now = Utc::now().into();
-
-        let existing = node_translation::Entity::find()
+        let translations = node_translation::Entity::find()
             .filter(node_translation::Column::NodeId.eq(node_id))
-            .filter(node_translation::Column::Locale.eq(input.locale.clone()))
-            .one(&self.db)
+            .all(&self.db)
+            .await?;
+        let bodies = body::Entity::find()
+            .filter(body::Column::NodeId.eq(node_id))
+            .all(&self.db)
             .await?;
 
-        let slug = resolve_slug(input.slug, input.title.as_ref())?;
-
-        let translation = if let Some(existing) = existing {
-            let mut active: node_translation::ActiveModel = existing.into();
-            if let Some(title) = input.title {
-                active.title = Set(Some(title));
-            }
-            if slug.is_some() {
-                active.slug = Set(slug);
-            }
-            if let Some(excerpt) = input.excerpt {
-                active.excerpt = Set(Some(excerpt));
-            }
-            active.updated_at = Set(now);
-            active.update(&self.db).await?
-        } else {
-            node_translation::ActiveModel {
-                id: Set(rustok_core::generate_id()),
-                node_id: Set(node_id),
-                locale: Set(input.locale.clone()),
-                title: Set(input.title),
-                slug: Set(slug),
-                excerpt: Set(input.excerpt),
-                created_at: Set(now),
-                updated_at: Set(now),
-            }
-            .insert(&self.db)
-            .await?
-        };
-
-        if input.body.is_some() {
-            let body_input = NodeBodyInput {
-                locale: translation.locale.clone(),
-                body: input.body,
-                format: input.body_format,
-            };
-            upsert_body(&self.db, node_id, body_input, now).await?;
-
-            self.event_bus.publish(
-                node_model.tenant_id,
-                actor_id,
-                DomainEvent::BodyUpdated {
-                    node_id: node_model.id,
-                    locale: translation.locale.clone(),
-                },
-            )?;
-        }
-
-        self.event_bus.publish(
-            node_model.tenant_id,
-            actor_id,
-            DomainEvent::NodeTranslationUpdated {
-                node_id: node_model.id,
-                locale: translation.locale.clone(),
-            },
-        )?;
-
-        Ok(translation)
+        Ok(Self::to_response(updated, translations, bodies))
     }
 
     pub async fn publish_node(
         &self,
         node_id: Uuid,
         actor_id: Option<Uuid>,
-    ) -> ContentResult<node::Model> {
+    ) -> ContentResult<NodeResponse> {
         let now = Utc::now().into();
-        let update = NodeUpdate {
+        let update = UpdateNodeInput {
             status: Some("published".to_string()),
             published_at: Some(Some(now)),
-            ..NodeUpdate::default()
+            ..UpdateNodeInput::default()
         };
         let updated = self.update_node(node_id, actor_id, update).await?;
 
@@ -308,11 +236,11 @@ impl NodeService {
         &self,
         node_id: Uuid,
         actor_id: Option<Uuid>,
-    ) -> ContentResult<node::Model> {
-        let update = NodeUpdate {
+    ) -> ContentResult<NodeResponse> {
+        let update = UpdateNodeInput {
             status: Some("draft".to_string()),
             published_at: Some(None),
-            ..NodeUpdate::default()
+            ..UpdateNodeInput::default()
         };
         let updated = self.update_node(node_id, actor_id, update).await?;
 
@@ -350,6 +278,100 @@ impl NodeService {
             .await?
             .ok_or(ContentError::NodeNotFound(node_id))
     }
+
+    pub async fn get_node(&self, node_id: Uuid) -> ContentResult<NodeResponse> {
+        let node_model = self.find_node(node_id).await?;
+        let translations = node_translation::Entity::find()
+            .filter(node_translation::Column::NodeId.eq(node_id))
+            .all(&self.db)
+            .await?;
+        let bodies = body::Entity::find()
+            .filter(body::Column::NodeId.eq(node_id))
+            .all(&self.db)
+            .await?;
+
+        Ok(Self::to_response(node_model, translations, bodies))
+    }
+
+    pub async fn get_by_slug(
+        &self,
+        tenant_id: Uuid,
+        kind: &str,
+        locale: &str,
+        slug: &str,
+    ) -> ContentResult<Option<NodeResponse>> {
+        let result = node::Entity::find()
+            .inner_join(node_translation::Entity)
+            .filter(node::Column::TenantId.eq(tenant_id))
+            .filter(node::Column::Kind.eq(kind))
+            .filter(node_translation::Column::Locale.eq(locale))
+            .filter(node_translation::Column::Slug.eq(slug))
+            .one(&self.db)
+            .await?;
+
+        match result {
+            Some(node_model) => Ok(Some(self.get_node(node_model.id).await?)),
+            None => Ok(None),
+        }
+    }
+
+    pub async fn list_nodes(
+        &self,
+        tenant_id: Uuid,
+        filter: ListNodesFilter,
+    ) -> ContentResult<(Vec<NodeListItem>, u64)> {
+        let locale = filter.locale.clone().unwrap_or_else(|| "en".to_string());
+        let mut query = node::Entity::find().filter(node::Column::TenantId.eq(tenant_id));
+
+        if let Some(kind) = filter.kind {
+            query = query.filter(node::Column::Kind.eq(kind));
+        }
+        if let Some(status) = filter.status {
+            query = query.filter(node::Column::Status.eq(status));
+        }
+        if let Some(parent_id) = filter.parent_id {
+            query = query.filter(node::Column::ParentId.eq(parent_id));
+        }
+        if let Some(author_id) = filter.author_id {
+            query = query.filter(node::Column::AuthorId.eq(author_id));
+        }
+
+        let paginator = query.clone().paginate(&self.db, filter.per_page);
+        let total = paginator.num_items().await?;
+        let nodes = paginator.fetch_page(filter.page.saturating_sub(1)).await?;
+
+        let node_ids: Vec<Uuid> = nodes.iter().map(|node| node.id).collect();
+        let translations = node_translation::Entity::find()
+            .filter(node_translation::Column::NodeId.is_in(node_ids))
+            .filter(node_translation::Column::Locale.eq(locale))
+            .all(&self.db)
+            .await?;
+
+        let mut translations_map = std::collections::HashMap::new();
+        for translation in translations {
+            translations_map.insert(translation.node_id, translation);
+        }
+
+        let items = nodes
+            .into_iter()
+            .map(|node| {
+                let translation = translations_map.get(&node.id);
+                NodeListItem {
+                    id: node.id,
+                    kind: node.kind,
+                    status: node.status,
+                    title: translation.and_then(|t| t.title.clone()),
+                    slug: translation.and_then(|t| t.slug.clone()),
+                    excerpt: translation.and_then(|t| t.excerpt.clone()),
+                    author_id: node.author_id,
+                    created_at: node.created_at.to_rfc3339(),
+                    published_at: node.published_at.map(|date| date.to_rfc3339()),
+                }
+            })
+            .collect();
+
+        Ok((items, total))
+    }
 }
 
 fn resolve_slug(
@@ -364,13 +386,15 @@ fn resolve_slug(
         return Ok(Some(slug::slugify(title)));
     }
 
-    Ok(None)
+    Err(ContentError::Validation(
+        "Slug or title must be provided".to_string(),
+    ))
 }
 
 async fn upsert_body<C>(
     db: &C,
     node_id: Uuid,
-    input: NodeBodyInput,
+    input: BodyInput,
     now: DateTimeWithTimeZone,
 ) -> ContentResult<body::Model>
 where
@@ -406,4 +430,47 @@ where
     };
 
     Ok(model)
+}
+
+impl NodeService {
+    fn to_response(
+        node: node::Model,
+        translations: Vec<node_translation::Model>,
+        bodies: Vec<body::Model>,
+    ) -> NodeResponse {
+        NodeResponse {
+            id: node.id,
+            tenant_id: node.tenant_id,
+            kind: node.kind,
+            status: node.status,
+            parent_id: node.parent_id,
+            author_id: node.author_id,
+            category_id: node.category_id,
+            position: node.position,
+            depth: node.depth,
+            reply_count: node.reply_count,
+            metadata: node.metadata.into(),
+            created_at: node.created_at.to_rfc3339(),
+            updated_at: node.updated_at.to_rfc3339(),
+            published_at: node.published_at.map(|date| date.to_rfc3339()),
+            translations: translations
+                .into_iter()
+                .map(|translation| NodeTranslationResponse {
+                    locale: translation.locale,
+                    title: translation.title,
+                    slug: translation.slug,
+                    excerpt: translation.excerpt,
+                })
+                .collect(),
+            bodies: bodies
+                .into_iter()
+                .map(|body| BodyResponse {
+                    locale: body.locale,
+                    body: body.body,
+                    format: body.format,
+                    updated_at: body.updated_at.to_rfc3339(),
+                })
+                .collect(),
+        }
+    }
 }

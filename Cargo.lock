@@ -3936,6 +3936,7 @@ dependencies = [
  "rustok-content",
  "rustok-core",
  "sea-orm",
+ "sea-orm-migration",
  "serde",
  "serde_json",
  "uuid",

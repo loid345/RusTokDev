@@ -1,5 +1,5 @@
 use rustok_content::{
-    ContentResult, CreateNodeInput, NodeService, NodeTranslationInput, NodeUpdate,
+    BodyInput, ContentResult, CreateNodeInput, NodeService, NodeTranslationInput, UpdateNodeInput,
 };
 use rustok_core::EventBus;
 use sea_orm::DatabaseConnection;
@@ -47,6 +47,7 @@ impl PostService {
             });
         }
 
+        let locale = input.locale.clone();
         let node = self
             .node_service
             .create_node(
@@ -65,16 +66,18 @@ impl PostService {
                     position: None,
                     depth: None,
                     reply_count: None,
-                    metadata: Some(metadata),
+                    metadata,
                     translations: vec![NodeTranslationInput {
-                        locale: input.locale,
+                        locale: locale.clone(),
                         title: Some(input.title),
                         slug: input.slug,
                         excerpt: input.excerpt,
-                        body: Some(input.body),
-                        body_format: None,
                     }],
-                    bodies: Vec::new(),
+                    bodies: vec![BodyInput {
+                        locale,
+                        body: Some(input.body),
+                        format: None,
+                    }],
                 },
             )
             .await?;
@@ -86,7 +89,7 @@ impl PostService {
         &self,
         post_id: Uuid,
         actor_id: Option<Uuid>,
-        update: NodeUpdate,
+        update: UpdateNodeInput,
     ) -> ContentResult<()> {
         self.node_service
             .update_node(post_id, actor_id, update)
