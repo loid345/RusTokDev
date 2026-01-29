@@ -1,0 +1,988 @@
+use sea_orm_migration::prelude::*;
+
+use super::m20250101_000001_create_tenants::Tenants;
+use super::m20250130_000006_create_categories::Categories;
+use super::m20250130_000008_create_meta::Meta;
+use super::m20250130_000009_create_media::Media;
+
+#[derive(DeriveMigrationName)]
+pub struct Migration;
+
+#[async_trait::async_trait]
+impl MigrationTrait for Migration {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .create_table(
+                Table::create()
+                    .table(Products::Table)
+                    .if_not_exists()
+                    .col(ColumnDef::new(Products::Id).uuid().not_null().primary_key())
+                    .col(ColumnDef::new(Products::TenantId).uuid().not_null())
+                    .col(ColumnDef::new(Products::CategoryId).uuid())
+                    .col(ColumnDef::new(Products::MetaId).uuid())
+                    .col(
+                        ColumnDef::new(Products::Status)
+                            .string_len(32)
+                            .not_null()
+                            .default("draft"),
+                    )
+                    .col(
+                        ColumnDef::new(Products::HasVariants)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(Products::IsPublished)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(Products::Tags)
+                            .json_binary()
+                            .not_null()
+                            .default("[]"),
+                    )
+                    .col(
+                        ColumnDef::new(Products::Attributes)
+                            .json_binary()
+                            .not_null()
+                            .default("{}"),
+                    )
+                    .col(
+                        ColumnDef::new(Products::Settings)
+                            .json_binary()
+                            .not_null()
+                            .default("{}"),
+                    )
+                    .col(ColumnDef::new(Products::PublishedAt).timestamp_with_time_zone())
+                    .col(
+                        ColumnDef::new(Products::CreatedAt)
+                            .timestamp_with_time_zone()
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .col(
+                        ColumnDef::new(Products::UpdatedAt)
+                            .timestamp_with_time_zone()
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(Products::Table, Products::TenantId)
+                            .to(Tenants::Table, Tenants::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(Products::Table, Products::CategoryId)
+                            .to(Categories::Table, Categories::Id)
+                            .on_delete(ForeignKeyAction::SetNull),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(Products::Table, Products::MetaId)
+                            .to(Meta::Table, Meta::Id)
+                            .on_delete(ForeignKeyAction::SetNull),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(ProductTranslations::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(ProductTranslations::Id)
+                            .uuid()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(
+                        ColumnDef::new(ProductTranslations::ProductId)
+                            .uuid()
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(ProductTranslations::TenantId).uuid().not_null())
+                    .col(
+                        ColumnDef::new(ProductTranslations::Locale)
+                            .string_len(5)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ProductTranslations::Title)
+                            .string_len(255)
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(ProductTranslations::Subtitle).string_len(255))
+                    .col(
+                        ColumnDef::new(ProductTranslations::Handle)
+                            .string_len(255)
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(ProductTranslations::Description).text())
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(ProductTranslations::Table, ProductTranslations::ProductId)
+                            .to(Products::Table, Products::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(ProductTranslations::Table, ProductTranslations::TenantId)
+                            .to(Tenants::Table, Tenants::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(ProductOptions::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(ProductOptions::Id)
+                            .uuid()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(ColumnDef::new(ProductOptions::ProductId).uuid().not_null())
+                    .col(ColumnDef::new(ProductOptions::TenantId).uuid().not_null())
+                    .col(
+                        ColumnDef::new(ProductOptions::Code)
+                            .string_len(64)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ProductOptions::Position)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .col(
+                        ColumnDef::new(ProductOptions::IsRequired)
+                            .boolean()
+                            .not_null()
+                            .default(true),
+                    )
+                    .col(
+                        ColumnDef::new(ProductOptions::CreatedAt)
+                            .timestamp_with_time_zone()
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(ProductOptions::Table, ProductOptions::ProductId)
+                            .to(Products::Table, Products::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(ProductOptions::Table, ProductOptions::TenantId)
+                            .to(Tenants::Table, Tenants::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(ProductOptionTranslations::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(ProductOptionTranslations::Id)
+                            .uuid()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(
+                        ColumnDef::new(ProductOptionTranslations::OptionId)
+                            .uuid()
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(ProductOptionTranslations::TenantId).uuid().not_null())
+                    .col(
+                        ColumnDef::new(ProductOptionTranslations::Locale)
+                            .string_len(5)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ProductOptionTranslations::Name)
+                            .string_len(100)
+                            .not_null(),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(
+                                ProductOptionTranslations::Table,
+                                ProductOptionTranslations::OptionId,
+                            )
+                            .to(ProductOptions::Table, ProductOptions::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(
+                                ProductOptionTranslations::Table,
+                                ProductOptionTranslations::TenantId,
+                            )
+                            .to(Tenants::Table, Tenants::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(ProductOptionValues::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(ProductOptionValues::Id)
+                            .uuid()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(
+                        ColumnDef::new(ProductOptionValues::OptionId)
+                            .uuid()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ProductOptionValues::TenantId)
+                            .uuid()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ProductOptionValues::Code)
+                            .string_len(64)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ProductOptionValues::Position)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(ProductOptionValues::Table, ProductOptionValues::OptionId)
+                            .to(ProductOptions::Table, ProductOptions::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(ProductOptionValues::Table, ProductOptionValues::TenantId)
+                            .to(Tenants::Table, Tenants::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(ProductOptionValueTranslations::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(ProductOptionValueTranslations::Id)
+                            .uuid()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(
+                        ColumnDef::new(ProductOptionValueTranslations::OptionValueId)
+                            .uuid()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ProductOptionValueTranslations::TenantId)
+                            .uuid()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ProductOptionValueTranslations::Locale)
+                            .string_len(5)
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(ProductOptionValueTranslations::Value)
+                            .string_len(100)
+                            .not_null(),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(
+                                ProductOptionValueTranslations::Table,
+                                ProductOptionValueTranslations::OptionValueId,
+                            )
+                            .to(ProductOptionValues::Table, ProductOptionValues::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(
+                                ProductOptionValueTranslations::Table,
+                                ProductOptionValueTranslations::TenantId,
+                            )
+                            .to(Tenants::Table, Tenants::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(ProductVariants::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(ProductVariants::Id)
+                            .uuid()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(ColumnDef::new(ProductVariants::ProductId).uuid().not_null())
+                    .col(ColumnDef::new(ProductVariants::TenantId).uuid().not_null())
+                    .col(ColumnDef::new(ProductVariants::Sku).string_len(64))
+                    .col(ColumnDef::new(ProductVariants::Barcode).string_len(64))
+                    .col(ColumnDef::new(ProductVariants::Title).string_len(255))
+                    .col(
+                        ColumnDef::new(ProductVariants::Status)
+                            .string_len(32)
+                            .not_null()
+                            .default("active"),
+                    )
+                    .col(
+                        ColumnDef::new(ProductVariants::InventoryQuantity)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .col(
+                        ColumnDef::new(ProductVariants::TrackInventory)
+                            .boolean()
+                            .not_null()
+                            .default(true),
+                    )
+                    .col(
+                        ColumnDef::new(ProductVariants::AllowBackorder)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(ProductVariants::IsDefault)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(ProductVariants::Attributes)
+                            .json_binary()
+                            .not_null()
+                            .default("{}"),
+                    )
+                    .col(ColumnDef::new(ProductVariants::Weight).integer())
+                    .col(ColumnDef::new(ProductVariants::Length).integer())
+                    .col(ColumnDef::new(ProductVariants::Width).integer())
+                    .col(ColumnDef::new(ProductVariants::Height).integer())
+                    .col(
+                        ColumnDef::new(ProductVariants::CreatedAt)
+                            .timestamp_with_time_zone()
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .col(
+                        ColumnDef::new(ProductVariants::UpdatedAt)
+                            .timestamp_with_time_zone()
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(ProductVariants::Table, ProductVariants::ProductId)
+                            .to(Products::Table, Products::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(ProductVariants::Table, ProductVariants::TenantId)
+                            .to(Tenants::Table, Tenants::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(VariantOptionValues::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(VariantOptionValues::Id)
+                            .uuid()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(
+                        ColumnDef::new(VariantOptionValues::VariantId)
+                            .uuid()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(VariantOptionValues::OptionValueId)
+                            .uuid()
+                            .not_null(),
+                    )
+                    .col(
+                        ColumnDef::new(VariantOptionValues::TenantId)
+                            .uuid()
+                            .not_null(),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(VariantOptionValues::Table, VariantOptionValues::VariantId)
+                            .to(ProductVariants::Table, ProductVariants::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(
+                                VariantOptionValues::Table,
+                                VariantOptionValues::OptionValueId,
+                            )
+                            .to(ProductOptionValues::Table, ProductOptionValues::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(VariantOptionValues::Table, VariantOptionValues::TenantId)
+                            .to(Tenants::Table, Tenants::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(VariantPrices::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(VariantPrices::Id)
+                            .uuid()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(ColumnDef::new(VariantPrices::VariantId).uuid().not_null())
+                    .col(ColumnDef::new(VariantPrices::TenantId).uuid().not_null())
+                    .col(
+                        ColumnDef::new(VariantPrices::Currency)
+                            .string_len(3)
+                            .not_null(),
+                    )
+                    .col(ColumnDef::new(VariantPrices::Amount).big_integer().not_null())
+                    .col(ColumnDef::new(VariantPrices::CompareAtAmount).big_integer())
+                    .col(ColumnDef::new(VariantPrices::CostAmount).big_integer())
+                    .col(
+                        ColumnDef::new(VariantPrices::TaxIncluded)
+                            .boolean()
+                            .not_null()
+                            .default(false),
+                    )
+                    .col(
+                        ColumnDef::new(VariantPrices::CreatedAt)
+                            .timestamp_with_time_zone()
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .col(
+                        ColumnDef::new(VariantPrices::UpdatedAt)
+                            .timestamp_with_time_zone()
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(VariantPrices::Table, VariantPrices::VariantId)
+                            .to(ProductVariants::Table, ProductVariants::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(VariantPrices::Table, VariantPrices::TenantId)
+                            .to(Tenants::Table, Tenants::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(ProductMedia::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(ProductMedia::Id)
+                            .uuid()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(ColumnDef::new(ProductMedia::TenantId).uuid().not_null())
+                    .col(ColumnDef::new(ProductMedia::ProductId).uuid().not_null())
+                    .col(ColumnDef::new(ProductMedia::MediaId).uuid().not_null())
+                    .col(
+                        ColumnDef::new(ProductMedia::Role)
+                            .string_len(32)
+                            .not_null()
+                            .default("gallery"),
+                    )
+                    .col(
+                        ColumnDef::new(ProductMedia::Position)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .col(ColumnDef::new(ProductMedia::Locale).string_len(5))
+                    .col(
+                        ColumnDef::new(ProductMedia::CreatedAt)
+                            .timestamp_with_time_zone()
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(ProductMedia::Table, ProductMedia::TenantId)
+                            .to(Tenants::Table, Tenants::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(ProductMedia::Table, ProductMedia::ProductId)
+                            .to(Products::Table, Products::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(ProductMedia::Table, ProductMedia::MediaId)
+                            .to(Media::Table, Media::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_table(
+                Table::create()
+                    .table(VariantMedia::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(VariantMedia::Id)
+                            .uuid()
+                            .not_null()
+                            .primary_key(),
+                    )
+                    .col(ColumnDef::new(VariantMedia::TenantId).uuid().not_null())
+                    .col(ColumnDef::new(VariantMedia::VariantId).uuid().not_null())
+                    .col(ColumnDef::new(VariantMedia::MediaId).uuid().not_null())
+                    .col(
+                        ColumnDef::new(VariantMedia::Position)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .col(ColumnDef::new(VariantMedia::Locale).string_len(5))
+                    .col(
+                        ColumnDef::new(VariantMedia::CreatedAt)
+                            .timestamp_with_time_zone()
+                            .not_null()
+                            .default(Expr::current_timestamp()),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(VariantMedia::Table, VariantMedia::TenantId)
+                            .to(Tenants::Table, Tenants::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(VariantMedia::Table, VariantMedia::VariantId)
+                            .to(ProductVariants::Table, ProductVariants::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .foreign_key(
+                        ForeignKey::create()
+                            .from(VariantMedia::Table, VariantMedia::MediaId)
+                            .to(Media::Table, Media::Id)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_products_tenant_status")
+                    .table(Products::Table)
+                    .col(Products::TenantId)
+                    .col(Products::Status)
+                    .col(Products::IsPublished)
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_products_category")
+                    .table(Products::Table)
+                    .col(Products::TenantId)
+                    .col(Products::CategoryId)
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_product_trans_unique")
+                    .table(ProductTranslations::Table)
+                    .col(ProductTranslations::ProductId)
+                    .col(ProductTranslations::Locale)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_product_trans_handle")
+                    .table(ProductTranslations::Table)
+                    .col(ProductTranslations::TenantId)
+                    .col(ProductTranslations::Locale)
+                    .col(ProductTranslations::Handle)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_product_option_unique")
+                    .table(ProductOptions::Table)
+                    .col(ProductOptions::ProductId)
+                    .col(ProductOptions::Code)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_product_option_trans")
+                    .table(ProductOptionTranslations::Table)
+                    .col(ProductOptionTranslations::OptionId)
+                    .col(ProductOptionTranslations::Locale)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_product_option_value_unique")
+                    .table(ProductOptionValues::Table)
+                    .col(ProductOptionValues::OptionId)
+                    .col(ProductOptionValues::Code)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_product_option_value_trans")
+                    .table(ProductOptionValueTranslations::Table)
+                    .col(ProductOptionValueTranslations::OptionValueId)
+                    .col(ProductOptionValueTranslations::Locale)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_product_variants_product")
+                    .table(ProductVariants::Table)
+                    .col(ProductVariants::ProductId)
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_product_variants_sku")
+                    .table(ProductVariants::Table)
+                    .col(ProductVariants::TenantId)
+                    .col(ProductVariants::Sku)
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_variant_option_values_unique")
+                    .table(VariantOptionValues::Table)
+                    .col(VariantOptionValues::VariantId)
+                    .col(VariantOptionValues::OptionValueId)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_variant_prices_unique")
+                    .table(VariantPrices::Table)
+                    .col(VariantPrices::VariantId)
+                    .col(VariantPrices::Currency)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_variant_prices_currency")
+                    .table(VariantPrices::Table)
+                    .col(VariantPrices::TenantId)
+                    .col(VariantPrices::Currency)
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_product_media_unique")
+                    .table(ProductMedia::Table)
+                    .col(ProductMedia::ProductId)
+                    .col(ProductMedia::MediaId)
+                    .col(ProductMedia::Locale)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_variant_media_unique")
+                    .table(VariantMedia::Table)
+                    .col(VariantMedia::VariantId)
+                    .col(VariantMedia::MediaId)
+                    .col(VariantMedia::Locale)
+                    .unique()
+                    .to_owned(),
+            )
+            .await?;
+
+        Ok(())
+    }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .drop_table(Table::drop().table(VariantMedia::Table).to_owned())
+            .await?;
+        manager
+            .drop_table(Table::drop().table(ProductMedia::Table).to_owned())
+            .await?;
+        manager
+            .drop_table(Table::drop().table(VariantPrices::Table).to_owned())
+            .await?;
+        manager
+            .drop_table(Table::drop().table(VariantOptionValues::Table).to_owned())
+            .await?;
+        manager
+            .drop_table(Table::drop().table(ProductVariants::Table).to_owned())
+            .await?;
+        manager
+            .drop_table(Table::drop().table(ProductOptionValueTranslations::Table).to_owned())
+            .await?;
+        manager
+            .drop_table(Table::drop().table(ProductOptionValues::Table).to_owned())
+            .await?;
+        manager
+            .drop_table(Table::drop().table(ProductOptionTranslations::Table).to_owned())
+            .await?;
+        manager
+            .drop_table(Table::drop().table(ProductOptions::Table).to_owned())
+            .await?;
+        manager
+            .drop_table(Table::drop().table(ProductTranslations::Table).to_owned())
+            .await?;
+        manager
+            .drop_table(Table::drop().table(Products::Table).to_owned())
+            .await?;
+        Ok(())
+    }
+}
+
+#[derive(Iden)]
+enum Products {
+    Table,
+    Id,
+    TenantId,
+    CategoryId,
+    MetaId,
+    Status,
+    HasVariants,
+    IsPublished,
+    Tags,
+    Attributes,
+    Settings,
+    PublishedAt,
+    CreatedAt,
+    UpdatedAt,
+}
+
+#[derive(Iden)]
+enum ProductTranslations {
+    Table,
+    Id,
+    ProductId,
+    TenantId,
+    Locale,
+    Title,
+    Subtitle,
+    Handle,
+    Description,
+}
+
+#[derive(Iden)]
+enum ProductOptions {
+    Table,
+    Id,
+    ProductId,
+    TenantId,
+    Code,
+    Position,
+    IsRequired,
+    CreatedAt,
+}
+
+#[derive(Iden)]
+enum ProductOptionTranslations {
+    Table,
+    Id,
+    OptionId,
+    TenantId,
+    Locale,
+    Name,
+}
+
+#[derive(Iden)]
+enum ProductOptionValues {
+    Table,
+    Id,
+    OptionId,
+    TenantId,
+    Code,
+    Position,
+}
+
+#[derive(Iden)]
+enum ProductOptionValueTranslations {
+    Table,
+    Id,
+    OptionValueId,
+    TenantId,
+    Locale,
+    Value,
+}
+
+#[derive(Iden)]
+enum ProductVariants {
+    Table,
+    Id,
+    ProductId,
+    TenantId,
+    Sku,
+    Barcode,
+    Title,
+    Status,
+    InventoryQuantity,
+    TrackInventory,
+    AllowBackorder,
+    IsDefault,
+    Attributes,
+    Weight,
+    Length,
+    Width,
+    Height,
+    CreatedAt,
+    UpdatedAt,
+}
+
+#[derive(Iden)]
+enum VariantOptionValues {
+    Table,
+    Id,
+    VariantId,
+    OptionValueId,
+    TenantId,
+}
+
+#[derive(Iden)]
+enum VariantPrices {
+    Table,
+    Id,
+    VariantId,
+    TenantId,
+    Currency,
+    Amount,
+    CompareAtAmount,
+    CostAmount,
+    TaxIncluded,
+    CreatedAt,
+    UpdatedAt,
+}
+
+#[derive(Iden)]
+enum ProductMedia {
+    Table,
+    Id,
+    TenantId,
+    ProductId,
+    MediaId,
+    Role,
+    Position,
+    Locale,
+    CreatedAt,
+}
+
+#[derive(Iden)]
+enum VariantMedia {
+    Table,
+    Id,
+    TenantId,
+    VariantId,
+    MediaId,
+    Position,
+    Locale,
+    CreatedAt,
+}

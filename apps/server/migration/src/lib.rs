@@ -16,6 +16,7 @@ mod m20250130_000008_create_meta;
 mod m20250130_000009_create_media;
 mod m20250130_000010_create_index_content;
 mod m20250130_000011_create_index_products;
+mod m20250130_000012_create_commerce_products;
 
 pub struct Migrator;
 
@@ -32,6 +33,7 @@ impl MigratorTrait for Migrator {
             Box::new(m20250130_000007_create_tags::Migration),
             Box::new(m20250130_000008_create_meta::Migration),
             Box::new(m20250130_000009_create_media::Migration),
+            Box::new(m20250130_000012_create_commerce_products::Migration),
             Box::new(m20250130_000010_create_index_content::Migration),
             Box::new(m20250130_000011_create_index_products::Migration),
             Box::new(m20250101_000004_create_sessions::Migration),
