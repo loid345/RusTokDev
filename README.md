@@ -61,6 +61,7 @@ Unlike traditional CMS platforms that suffer from plugin conflicts, security vul
 - 🛠️ **CLI Generators** — `cargo loco generate model/controller/migration`
 - 📝 **Type-Safe Everything** — From database to frontend, one language
 - 🧪 **Testing Built-in** — Unit, integration, and E2E test support
+- 🎨 **Storefront UI Stack** — Leptos SSR with Tailwind + DaisyUI
 - 📚 **Auto-generated Docs** — OpenAPI/GraphQL schema documentation
 
 ### Performance & Reliability
@@ -208,9 +209,13 @@ cargo loco start
 cd apps/admin
 trunk serve --open
 
+# Run storefront (terminal 3)
+cargo run -p rustok-storefront
+
 # Visit
 # API: http://localhost:3000/api/graphql
 # Admin: http://localhost:8080
+# Storefront (SSR): http://localhost:3100?lang=en
 ```
 
 ### First Steps
@@ -320,6 +325,7 @@ cargo build --release
 Modules can be enabled/disabled per tenant without recompilation. The server
 tracks compiled modules in a registry and calls module lifecycle hooks when
 tenants enable or disable a module. See `docs/module-registry.md` for details.
+Storefront SSR notes live in `docs/storefront.md`.
 
 ```sql
 -- Stored in database
@@ -374,7 +380,7 @@ Write → Event Bus → Indexers → Read Models
 
 **Phase 4: Storefront**
 
-*  Leptos SSR setup
+*  Leptos SSR setup (Tailwind + DaisyUI)
 *  Product pages
 *  Cart & checkout flow
 *  SEO optimization

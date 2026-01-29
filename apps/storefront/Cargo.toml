@@ -4,8 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-leptos.workspace = true
-leptos_router.workspace = true
-leptos_axum.workspace = true
 axum.workspace = true
 tokio.workspace = true
+leptos = { workspace = true, features = ["ssr"] }
+serde = { workspace = true, features = ["derive"] }
