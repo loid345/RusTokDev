@@ -1,13 +1,13 @@
 [package]
-name = "rustok-blog"
+name = "rustok-content"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
 async-trait.workspace = true
-rustok-content.workspace = true
+chrono.workspace = true
 rustok-core.workspace = true
-sea-orm-migration.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 uuid.workspace = true
