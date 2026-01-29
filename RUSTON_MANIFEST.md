@@ -660,6 +660,177 @@ CREATE TABLE nodes_p7 PARTITION OF nodes_partitioned FOR VALUES WITH (MODULUS 8,
 
 ---
 
+### 5.6 Architecture Scaling (CQRS-lite + Index Module)
+
+**Идея:** нормализованные write-таблицы остаются быстрыми и строгими, а для чтения строятся
+денормализованные индексы (view/table) через Event Bus / Hooks.
+
+```text
+┌─────────────────────────────────────────────────────────────┐
+│                     WRITE PATH                              │
+│                 (нормализованные таблицы)                   │
+│                                                             │
+│   core.nodes    commerce.products    commerce.orders        │
+│   core.meta     commerce.variants    commerce.inventory     │
+│        │              │                    │                │
+│        └──────────────┼────────────────────┘                │
+│                       ▼                                     │
+│              [ Event Bus / Hooks ]                          │
+│                       │                                     │
+└───────────────────────┼─────────────────────────────────────┘
+                        │
+                        ▼
+┌─────────────────────────────────────────────────────────────┐
+│                   INDEX MODULE                              │
+│              (денормализованные view)                       │
+│                                                             │
+│   search_products     search_content      analytics_orders  │
+│   ┌─────────────┐    ┌─────────────┐     ┌──────────────┐   │
+│   │ product_id  │    │ node_id     │     │ order_id     │   │
+│   │ title       │    │ title       │     │ total        │   │
+│   │ description │    │ body        │     │ items_json   │   │
+│   │ price_json  │    │ category    │     │ customer     │   │
+│   │ variants[]  │    │ tags[]      │     │ created_at   │   │
+│   │ categories[]│    │ author      │     │ ...          │   │
+│   │ tags[]      │    │ ...         │     └──────────────┘   │
+│   │ meta        │    └─────────────┘                        │
+│   └─────────────┘                                           │
+│                                                             │
+│           Можно вынести в отдельный сервис                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### 5.6.1 Partitioning Patterns (по нагрузке)
+
+```sql
+-- =============================================
+-- Партиция по дате (orders, логи)
+-- =============================================
+CREATE TABLE commerce_orders (
+    id              UUID,
+    tenant_id       UUID NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL
+    -- ...
+) PARTITION BY RANGE (created_at);
+
+CREATE TABLE commerce_orders_2025_q1
+    PARTITION OF commerce_orders
+    FOR VALUES FROM ('2025-01-01') TO ('2025-04-01');
+
+-- =============================================
+-- Партиция по tenant (multi-tenant highload)
+-- =============================================
+CREATE TABLE nodes (
+    id              UUID,
+    tenant_id       UUID NOT NULL
+    -- ...
+) PARTITION BY HASH (tenant_id);
+
+CREATE TABLE nodes_p0 PARTITION OF nodes FOR VALUES WITH (MODULUS 4, REMAINDER 0);
+CREATE TABLE nodes_p1 PARTITION OF nodes FOR VALUES WITH (MODULUS 4, REMAINDER 1);
+CREATE TABLE nodes_p2 PARTITION OF nodes FOR VALUES WITH (MODULUS 4, REMAINDER 2);
+CREATE TABLE nodes_p3 PARTITION OF nodes FOR VALUES WITH (MODULUS 4, REMAINDER 3);
+```
+
+#### 5.6.2 Index Module (как Medusa)
+
+```rust
+// crates/rustok-index/src/lib.rs
+
+/// Конфигурация индекса
+pub struct IndexConfig {
+    pub name: &'static str,
+    pub sources: Vec<IndexSource>,
+    pub fields: Vec<IndexField>,
+}
+
+/// Источник данных для индекса
+pub enum IndexSource {
+    Table { name: &'static str, join_on: &'static str },
+    Module { slug: &'static str, entity: &'static str },
+}
+
+// Пример: индекс товаров для поиска
+pub fn product_search_index() -> IndexConfig {
+    IndexConfig {
+        name: "search_products",
+        sources: vec![
+            IndexSource::Table { name: "commerce_products", join_on: "id" },
+            IndexSource::Table { name: "commerce_variants", join_on: "product_id" },
+            IndexSource::Table { name: "meta", join_on: "target_id WHERE target_type = 'product'" },
+            IndexSource::Table { name: "taggables", join_on: "target_id WHERE target_type = 'product'" },
+        ],
+        fields: vec![
+            IndexField::new("product_id", "commerce_products.id"),
+            IndexField::new("title", "commerce_products.title"),
+            IndexField::new("prices", "jsonb_agg(commerce_variants.prices)"),
+            IndexField::new("tags", "array_agg(tags.name)"),
+            IndexField::new("meta_title", "meta.title"),
+            // ...
+        ],
+    }
+}
+```
+
+#### 5.6.3 Синхронизация через Events
+
+```rust
+// При изменении товара — обновляем индекс
+impl HookProvider for IndexModule {
+    async fn on_product_updated(&self, ctx: &Context, product_id: Uuid) -> Result<()> {
+        self.reindex_product(product_id).await
+    }
+
+    async fn on_content_published(&self, ctx: &Context, node_id: Uuid) -> Result<()> {
+        self.reindex_content(node_id).await
+    }
+}
+```
+
+#### 5.6.4 Деплой: монолит или микросервисы
+
+**Вариант 1: Монолит (старт)**
+
+```text
+┌─────────────────────────────┐
+│         rustok-server       │
+│  ┌───────┐ ┌───────┐        │
+│  │ core  │ │commerce│       │
+│  └───────┘ └───────┘        │
+│  ┌───────┐ ┌───────┐        │
+│  │content│ │ index │        │
+│  └───────┘ └───────┘        │
+└─────────────────────────────┘
+```
+
+**Вариант 2: Выделенный индексатор (масштаб)**
+
+```text
+┌─────────────────┐     ┌─────────────────┐
+│  rustok-server  │────▶│  rustok-index   │
+│  (write + API)  │     │  (read replicas)│
+└─────────────────┘     └─────────────────┘
+        │                       │
+        ▼                       ▼
+   [ PostgreSQL ]        [ PostgreSQL RO ]
+                         [ Elasticsearch ]
+                         [ Meilisearch ]
+```
+
+#### 5.6.5 Итог: что даёт архитектура
+
+| Проблема | Решение |
+|---------|---------|
+| Медленные JOIN-ы | Денормализованные индексы |
+| Рост таблиц | Партиционирование |
+| Поиск | Отдельный search index |
+| Нагрузка на запись | CQRS: write и read разделены |
+| Масштабирование | Index module → отдельный сервис |
+
+**Итог:** ядро остаётся чистым и быстрым. Вся "тяжесть" уходит в Index Module, который можно масштабировать независимо.
+
+---
+
 ## 6. TRAITS & INTERFACES (Rust Code)
 
 ### 6.1 Universal Traits (rustok-core)
