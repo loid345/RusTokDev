@@ -11,12 +11,12 @@
 [![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-[Features](#-features) •
-[Why Rust?](#-why-rust) •
-[Comparison](#-comparison) •
-[Quick Start](#-quick-start) •
-[Architecture](#-architecture) •
-[Roadmap](#-roadmap)
+[Features](#features) •
+[Why Rust?](#why-rust) •
+[Comparison](#comparison) •
+[Quick Start](#quick-start) •
+[Architecture](#architecture) •
+[Roadmap](#roadmap)
 
 </div>
 
