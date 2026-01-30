@@ -20,6 +20,16 @@ pub enum ProductStatus {
     Archived,
 }
 
+impl std::fmt::Display for ProductStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Draft => write!(f, "draft"),
+            Self::Active => write!(f, "active"),
+            Self::Archived => write!(f, "archived"),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "products")]
 pub struct Model {

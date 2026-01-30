@@ -62,26 +62,26 @@ impl From<users::Model> for UserResponse {
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-struct UserInfo {
-    id: uuid::Uuid,
-    email: String,
-    name: Option<String>,
-    role: rustok_core::UserRole,
-    status: rustok_core::UserStatus,
+pub struct UserInfo {
+    pub id: uuid::Uuid,
+    pub email: String,
+    pub name: Option<String>,
+    pub role: rustok_core::UserRole,
+    pub status: rustok_core::UserStatus,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-struct AuthResponse {
-    access_token: String,
-    refresh_token: String,
-    token_type: &'static str,
-    expires_in: u64,
-    user: UserInfo,
+pub struct AuthResponse {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub token_type: &'static str,
+    pub expires_in: u64,
+    pub user: UserInfo,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
-struct LogoutResponse {
-    status: &'static str,
+pub struct LogoutResponse {
+    pub status: &'static str,
 }
 
 // --- Handlers ---
