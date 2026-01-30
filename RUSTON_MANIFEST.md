@@ -17,6 +17,8 @@
 | **License** | MIT |
 | **Version** | 4.1 (The Highload Tank) |
 | **Repository** | https://github.com/RustokCMS/RusToK |
+| **Key Advantage** | First AI-Native Enterprise CMS |
+| **Market Segment** | High-performance, low-cost enterprise commerce |
 
 ---
 
