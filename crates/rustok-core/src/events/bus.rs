@@ -80,7 +80,11 @@ impl EventBus {
             }
             Err(error) => {
                 self.stats.events_dropped.fetch_add(1, Ordering::Relaxed);
-                tracing::debug!(?error, "Event dropped while publishing");
+                tracing::warn!(
+                    ?error,
+                    dropped_count = self.stats.events_dropped.load(Ordering::Relaxed),
+                    "Event dropped - channel full or no receivers. CQRS indexes may become inconsistent!"
+                );
             }
         }
 

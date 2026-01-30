@@ -3,7 +3,7 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, Set,
     TransactionTrait,
 };
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use tracing::{info, instrument};
 use uuid::Uuid;
 
@@ -205,46 +205,67 @@ impl CatalogService {
             .all(&self.db)
             .await?;
 
-        let mut variant_responses = Vec::new();
-        for variant in variants {
-            let prices = entities::price::Entity::find()
-                .filter(entities::price::Column::VariantId.eq(variant.id))
+        // Load all prices for all variants in a single query (fixes N+1)
+        let variant_ids: Vec<Uuid> = variants.iter().map(|v| v.id).collect();
+        let all_prices = if !variant_ids.is_empty() {
+            entities::price::Entity::find()
+                .filter(entities::price::Column::VariantId.is_in(variant_ids))
                 .all(&self.db)
-                .await?;
+                .await?
+        } else {
+            Vec::new()
+        };
 
-            let price_responses = prices
-                .into_iter()
-                .map(|price| PriceResponse {
-                    currency_code: price.currency_code,
-                    amount: price.amount,
-                    compare_at_amount: price.compare_at_amount,
-                    on_sale: price
-                        .compare_at_amount
-                        .map(|c| c > price.amount)
-                        .unwrap_or(false),
-                })
-                .collect();
-
-            let title = Self::generate_variant_title(&variant);
-
-            variant_responses.push(VariantResponse {
-                id: variant.id,
-                product_id: variant.product_id,
-                sku: variant.sku,
-                barcode: variant.barcode,
-                title,
-                option1: variant.option1,
-                option2: variant.option2,
-                option3: variant.option3,
-                prices: price_responses,
-                inventory_quantity: variant.inventory_quantity,
-                inventory_policy: variant.inventory_policy.clone(),
-                in_stock: variant.inventory_quantity > 0 || variant.inventory_policy == "continue",
-                weight: variant.weight,
-                weight_unit: variant.weight_unit,
-                position: variant.position,
-            });
+        // Group prices by variant_id
+        let mut prices_by_variant: HashMap<Uuid, Vec<entities::price::Model>> = HashMap::new();
+        for price in all_prices {
+            prices_by_variant
+                .entry(price.variant_id)
+                .or_default()
+                .push(price);
         }
+
+        let variant_responses: Vec<VariantResponse> = variants
+            .into_iter()
+            .map(|variant| {
+                let prices = prices_by_variant
+                    .remove(&variant.id)
+                    .unwrap_or_default();
+
+                let price_responses: Vec<PriceResponse> = prices
+                    .into_iter()
+                    .map(|price| PriceResponse {
+                        currency_code: price.currency_code,
+                        amount: price.amount,
+                        compare_at_amount: price.compare_at_amount,
+                        on_sale: price
+                            .compare_at_amount
+                            .map(|c| c > price.amount)
+                            .unwrap_or(false),
+                    })
+                    .collect();
+
+                let title = Self::generate_variant_title(&variant);
+
+                VariantResponse {
+                    id: variant.id,
+                    product_id: variant.product_id,
+                    sku: variant.sku,
+                    barcode: variant.barcode,
+                    title,
+                    option1: variant.option1,
+                    option2: variant.option2,
+                    option3: variant.option3,
+                    prices: price_responses,
+                    inventory_quantity: variant.inventory_quantity,
+                    inventory_policy: variant.inventory_policy.clone(),
+                    in_stock: variant.inventory_quantity > 0 || variant.inventory_policy == "continue",
+                    weight: variant.weight,
+                    weight_unit: variant.weight_unit,
+                    position: variant.position,
+                }
+            })
+            .collect();
 
         let images = entities::product_image::Entity::find()
             .filter(entities::product_image::Column::ProductId.eq(product_id))

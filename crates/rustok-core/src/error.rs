@@ -8,11 +8,17 @@ pub enum Error {
     InvalidIdFormat(String),
 
     #[error("Database error: {0}")]
-    Database(String),
+    Database(#[from] sea_orm::DbErr),
+
+    #[error("Serialization error: {0}")]
+    Serialization(#[from] serde_json::Error),
 
     #[error("Auth error: {0}")]
     Auth(String),
 
-    #[error("Unknown error: {0}")]
-    Unknown(String),
+    #[error("Not found: {0}")]
+    NotFound(String),
+
+    #[error("Permission denied: {0}")]
+    Forbidden(String),
 }

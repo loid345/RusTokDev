@@ -1,17 +1,149 @@
 use std::collections::HashSet;
 
+use once_cell::sync::Lazy;
+
 use crate::permissions::{Action, Permission, Resource};
 use crate::types::UserRole;
+
+// Pre-computed permission sets (lazy initialized, zero allocation on lookups)
+static SUPER_ADMIN_PERMISSIONS: Lazy<HashSet<Permission>> = Lazy::new(|| {
+    [
+        Resource::Users,
+        Resource::Tenants,
+        Resource::Modules,
+        Resource::Settings,
+        Resource::Products,
+        Resource::Categories,
+        Resource::Orders,
+        Resource::Customers,
+        Resource::Inventory,
+        Resource::Discounts,
+        Resource::Posts,
+        Resource::Pages,
+        Resource::Media,
+        Resource::Comments,
+        Resource::Analytics,
+        Resource::Logs,
+        Resource::Webhooks,
+    ]
+    .into_iter()
+    .map(|resource| Permission::new(resource, Action::Manage))
+    .collect()
+});
+
+static ADMIN_PERMISSIONS: Lazy<HashSet<Permission>> = Lazy::new(|| {
+    let mut permissions = HashSet::new();
+
+    let managed_resources = [
+        Resource::Users,
+        Resource::Settings,
+        Resource::Products,
+        Resource::Categories,
+        Resource::Orders,
+        Resource::Customers,
+        Resource::Inventory,
+        Resource::Discounts,
+        Resource::Posts,
+        Resource::Pages,
+        Resource::Media,
+        Resource::Comments,
+        Resource::Analytics,
+        Resource::Webhooks,
+    ];
+
+    for resource in managed_resources {
+        permissions.insert(Permission::new(resource, Action::Manage));
+    }
+
+    permissions.insert(Permission::new(Resource::Modules, Action::Read));
+    permissions.insert(Permission::new(Resource::Modules, Action::List));
+
+    permissions
+});
+
+static MANAGER_PERMISSIONS: Lazy<HashSet<Permission>> = Lazy::new(|| {
+    let mut permissions = HashSet::new();
+
+    permissions.insert(Permission::PRODUCTS_CREATE);
+    permissions.insert(Permission::PRODUCTS_READ);
+    permissions.insert(Permission::PRODUCTS_UPDATE);
+    permissions.insert(Permission::PRODUCTS_DELETE);
+    permissions.insert(Permission::PRODUCTS_LIST);
+
+    for action in [
+        Action::Create,
+        Action::Read,
+        Action::Update,
+        Action::Delete,
+        Action::List,
+    ] {
+        permissions.insert(Permission::new(Resource::Categories, action));
+    }
+
+    permissions.insert(Permission::ORDERS_READ);
+    permissions.insert(Permission::ORDERS_UPDATE);
+    permissions.insert(Permission::ORDERS_LIST);
+
+    permissions.insert(Permission::new(Resource::Customers, Action::Read));
+    permissions.insert(Permission::new(Resource::Customers, Action::List));
+
+    for action in [Action::Create, Action::Read, Action::Update, Action::List] {
+        permissions.insert(Permission::new(Resource::Inventory, action));
+    }
+
+    permissions.insert(Permission::POSTS_CREATE);
+    permissions.insert(Permission::POSTS_READ);
+    permissions.insert(Permission::POSTS_UPDATE);
+    permissions.insert(Permission::POSTS_DELETE);
+    permissions.insert(Permission::POSTS_LIST);
+
+    for action in [
+        Action::Create,
+        Action::Read,
+        Action::Update,
+        Action::Delete,
+        Action::List,
+    ] {
+        permissions.insert(Permission::new(Resource::Media, action));
+    }
+
+    permissions.insert(Permission::ANALYTICS_READ);
+
+    permissions
+});
+
+static CUSTOMER_PERMISSIONS: Lazy<HashSet<Permission>> = Lazy::new(|| {
+    let mut permissions = HashSet::new();
+
+    permissions.insert(Permission::PRODUCTS_READ);
+    permissions.insert(Permission::PRODUCTS_LIST);
+
+    permissions.insert(Permission::new(Resource::Categories, Action::Read));
+    permissions.insert(Permission::new(Resource::Categories, Action::List));
+
+    permissions.insert(Permission::ORDERS_READ);
+    permissions.insert(Permission::ORDERS_LIST);
+    permissions.insert(Permission::ORDERS_CREATE);
+
+    permissions.insert(Permission::POSTS_READ);
+    permissions.insert(Permission::POSTS_LIST);
+
+    permissions.insert(Permission::new(Resource::Comments, Action::Create));
+    permissions.insert(Permission::new(Resource::Comments, Action::Read));
+    permissions.insert(Permission::new(Resource::Comments, Action::List));
+
+    permissions
+});
 
 pub struct Rbac;
 
 impl Rbac {
-    pub fn permissions_for_role(role: &UserRole) -> HashSet<Permission> {
+    pub fn permissions_for_role(role: &UserRole) -> &'static HashSet<Permission> {
         match role {
-            UserRole::SuperAdmin => Self::super_admin_permissions(),
-            UserRole::Admin => Self::admin_permissions(),
-            UserRole::Manager => Self::manager_permissions(),
-            UserRole::Customer => Self::customer_permissions(),
+            UserRole::SuperAdmin => &SUPER_ADMIN_PERMISSIONS,
+            UserRole::Admin => &ADMIN_PERMISSIONS,
+            UserRole::Manager => &MANAGER_PERMISSIONS,
+            UserRole::Customer => &CUSTOMER_PERMISSIONS,
         }
     }
 
@@ -36,135 +168,6 @@ impl Rbac {
         permissions
             .iter()
             .all(|permission| Self::has_permission(role, permission))
-    }
-
-    fn super_admin_permissions() -> HashSet<Permission> {
-        [
-            Resource::Users,
-            Resource::Tenants,
-            Resource::Modules,
-            Resource::Settings,
-            Resource::Products,
-            Resource::Categories,
-            Resource::Orders,
-            Resource::Customers,
-            Resource::Inventory,
-            Resource::Discounts,
-            Resource::Posts,
-            Resource::Pages,
-            Resource::Media,
-            Resource::Comments,
-            Resource::Analytics,
-            Resource::Logs,
-            Resource::Webhooks,
-        ]
-        .into_iter()
-        .map(|resource| Permission::new(resource, Action::Manage))
-        .collect()
-    }
-
-    fn admin_permissions() -> HashSet<Permission> {
-        let mut permissions = HashSet::new();
-
-        let managed_resources = [
-            Resource::Users,
-            Resource::Settings,
-            Resource::Products,
-            Resource::Categories,
-            Resource::Orders,
-            Resource::Customers,
-            Resource::Inventory,
-            Resource::Discounts,
-            Resource::Posts,
-            Resource::Pages,
-            Resource::Media,
-            Resource::Comments,
-            Resource::Analytics,
-            Resource::Webhooks,
-        ];
-
-        for resource in managed_resources {
-            permissions.insert(Permission::new(resource, Action::Manage));
-        }
-
-        permissions.insert(Permission::new(Resource::Modules, Action::Read));
-        permissions.insert(Permission::new(Resource::Modules, Action::List));
-
-        permissions
-    }
-
-    fn manager_permissions() -> HashSet<Permission> {
-        let mut permissions = HashSet::new();
-
-        permissions.insert(Permission::PRODUCTS_CREATE);
-        permissions.insert(Permission::PRODUCTS_READ);
-        permissions.insert(Permission::PRODUCTS_UPDATE);
-        permissions.insert(Permission::PRODUCTS_DELETE);
-        permissions.insert(Permission::PRODUCTS_LIST);
-
-        for action in [
-            Action::Create,
-            Action::Read,
-            Action::Update,
-            Action::Delete,
-            Action::List,
-        ] {
-            permissions.insert(Permission::new(Resource::Categories, action));
-        }
-
-        permissions.insert(Permission::ORDERS_READ);
-        permissions.insert(Permission::ORDERS_UPDATE);
-        permissions.insert(Permission::ORDERS_LIST);
-
-        permissions.insert(Permission::new(Resource::Customers, Action::Read));
-        permissions.insert(Permission::new(Resource::Customers, Action::List));
-
-        for action in [Action::Create, Action::Read, Action::Update, Action::List] {
-            permissions.insert(Permission::new(Resource::Inventory, action));
-        }
-
-        permissions.insert(Permission::POSTS_CREATE);
-        permissions.insert(Permission::POSTS_READ);
-        permissions.insert(Permission::POSTS_UPDATE);
-        permissions.insert(Permission::POSTS_DELETE);
-        permissions.insert(Permission::POSTS_LIST);
-
-        for action in [
-            Action::Create,
-            Action::Read,
-            Action::Update,
-            Action::Delete,
-            Action::List,
-        ] {
-            permissions.insert(Permission::new(Resource::Media, action));
-        }
-
-        permissions.insert(Permission::ANALYTICS_READ);
-
-        permissions
-    }
-
-    fn customer_permissions() -> HashSet<Permission> {
-        let mut permissions = HashSet::new();
-
-        permissions.insert(Permission::PRODUCTS_READ);
-        permissions.insert(Permission::PRODUCTS_LIST);
-
-        permissions.insert(Permission::new(Resource::Categories, Action::Read));
-        permissions.insert(Permission::new(Resource::Categories, Action::List));
-
-        permissions.insert(Permission::ORDERS_READ);
-        permissions.insert(Permission::ORDERS_LIST);
-        permissions.insert(Permission::ORDERS_CREATE);
-
-        permissions.insert(Permission::POSTS_READ);
-        permissions.insert(Permission::POSTS_LIST);
-
-        permissions.insert(Permission::new(Resource::Comments, Action::Create));
-        permissions.insert(Permission::new(Resource::Comments, Action::Read));
-        permissions.insert(Permission::new(Resource::Comments, Action::List));
-
-        permissions
     }
 }
 
