@@ -20,12 +20,12 @@ pub type IndexResult<T> = Result<T, IndexError>;
 impl From<IndexError> for rustok_core::Error {
     fn from(error: IndexError) -> Self {
         match error {
-            IndexError::Database(error) => Self::Database(error.to_string()),
+            IndexError::Database(error) => Self::Database(error),
             IndexError::NotFound { entity_type, id } => {
-                Self::Unknown(format!("Entity not found: {entity_type} with id {id}"))
+                Self::NotFound(format!("{entity_type} with id {id}"))
             }
-            IndexError::Index(message) => Self::Unknown(message),
-            IndexError::Serialization(error) => Self::Unknown(error.to_string()),
+            IndexError::Index(message) => Self::NotFound(message),
+            IndexError::Serialization(error) => Self::Serialization(error),
         }
     }
 }
