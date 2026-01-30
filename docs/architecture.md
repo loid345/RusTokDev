@@ -80,6 +80,33 @@ The `ModuleRegistry` is the brain of the system. It tracks which modules are com
 
 ---
 
+## 🔌 API Architecture
+
+RusToK uses a hybrid API approach to balance system tasks and domain-specific content management.
+
+### 1. Hybrid Design
+- **REST API (Axum/Loco.rs):** Used for infrastructure and system-level tasks.
+  - Authentication (`/api/auth`)
+  - Health checks (`/api/health`)
+  - OpenAPI/Swagger UI (`/swagger`)
+- **GraphQL API (async-graphql):** The primary interface for domain data and complex queries.
+  - Modular schema via `MergedObject`.
+  - Federated extensions (Commerce, Content, Blog).
+  - Single endpoint: `/api/graphql`.
+
+### 2. Service-Oriented Logic
+Interaction follows a strict hierarchy:
+1. **Controllers/Resolvers:** Handle request parsing, RBAC (Role-Based Access Control), and Tenant context.
+2. **Domain Services:** Located in `crates/*`, these handle business logic, database transactions, and event publishing.
+3. **Data Access:** Performed via SeaORM entities.
+
+### 3. Standards & Documentation
+- **OpenAPI 3.0:** Fully supported via `utoipa`. Schemas are derive-based, ensuring documentation always matches the code.
+- **DTOs:** Strong separation between API Input/Response structures and internal Database models.
+- **Error Handling:** Unified error types and GraphQL-specific error extensions.
+
+---
+
 ## 📂 Project Structure Overview
 
 | Component | Path | Responsibility |
