@@ -519,7 +519,6 @@ What this means:
 * ✅ No "copyleft" requirements (keep your proprietary code private)
 * ✅ Standard "as-is" liability protection
 
-For commercial licensing without AGPL requirements, contact us.
 
 ---
 
