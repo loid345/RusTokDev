@@ -25,13 +25,15 @@ use crate::extractors::auth::CurrentUser;
 pub async fn list_posts(
     State(ctx): State<AppContext>,
     tenant: TenantContext,
-    _user: CurrentUser,
+    user: CurrentUser,
     Query(mut filter): Query<ListNodesFilter>,
 ) -> Result<Json<Vec<rustok_content::dto::NodeListItem>>> {
     let service = NodeService::new(ctx.db.clone(), EventBus::default());
     // Force kind="post"
     filter.kind = Some("post".to_string());
-    let (items, _) = service.list_nodes(tenant.id, filter).await?;
+    let (items, _) = service
+        .list_nodes(tenant.id, user.security_context(), filter)
+        .await?;
     Ok(Json(items))
 }
 
@@ -84,7 +86,7 @@ pub async fn create_post(
 ) -> Result<Json<Uuid>> {
     let service = PostService::new(ctx.db.clone(), EventBus::default());
     let post_id = service
-        .create_post(tenant.id, Some(user.user.id), Some(user.user.id), input)
+        .create_post(tenant.id, user.security_context(), input)
         .await?;
     Ok(Json(post_id))
 }
@@ -113,7 +115,7 @@ pub async fn update_post(
 ) -> Result<()> {
     let service = PostService::new(ctx.db.clone(), EventBus::default());
     service
-        .update_post(id, Some(user.user.id), input)
+        .update_post(id, user.security_context(), input)
         .await?;
     Ok(())
 }
@@ -139,6 +141,6 @@ pub async fn delete_post(
     Path(id): Path<Uuid>,
 ) -> Result<()> {
     let service = PostService::new(ctx.db.clone(), EventBus::default());
-    service.delete_post(id, Some(user.user.id)).await?;
+    service.delete_post(id, user.security_context()).await?;
     Ok(())
 }

@@ -2,14 +2,10 @@ use crate::dto::CreatePostInput;
 use rustok_content::{
     BodyInput, ContentResult, CreateNodeInput, NodeService, NodeTranslationInput, UpdateNodeInput,
 };
-use rustok_core::EventBus;
+use rustok_core::{EventBus, SecurityContext};
 use sea_orm::DatabaseConnection;
-use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
-
-use utoipa::ToSchema;
-
 
 pub struct PostService {
     node_service: NodeService,
@@ -25,8 +21,7 @@ impl PostService {
     pub async fn create_post(
         &self,
         tenant_id: Uuid,
-        author_id: Option<Uuid>,
-        actor_id: Option<Uuid>,
+        security: SecurityContext,
         input: CreatePostInput,
     ) -> ContentResult<Uuid> {
         let mut metadata = input.metadata.unwrap_or_else(|| serde_json::json!({}));
@@ -44,7 +39,7 @@ impl PostService {
             .node_service
             .create_node(
                 tenant_id,
-                actor_id,
+                security.clone(),
                 CreateNodeInput {
                     kind: "post".to_string(),
                     status: Some(if input.publish {
@@ -53,7 +48,7 @@ impl PostService {
                         rustok_content::entities::node::ContentStatus::Draft
                     }),
                     parent_id: None,
-                    author_id,
+                    author_id: security.user_id,
                     category_id: None,
                     position: None,
                     depth: None,
@@ -80,27 +75,31 @@ impl PostService {
     pub async fn update_post(
         &self,
         post_id: Uuid,
-        actor_id: Option<Uuid>,
+        security: SecurityContext,
         update: UpdateNodeInput,
     ) -> ContentResult<()> {
         self.node_service
-            .update_node(post_id, actor_id, update)
+            .update_node(post_id, security, update)
             .await?;
         Ok(())
     }
 
-    pub async fn publish_post(&self, post_id: Uuid, actor_id: Option<Uuid>) -> ContentResult<()> {
-        self.node_service.publish_node(post_id, actor_id).await?;
+    pub async fn publish_post(&self, post_id: Uuid, security: SecurityContext) -> ContentResult<()> {
+        self.node_service.publish_node(post_id, security).await?;
         Ok(())
     }
 
-    pub async fn unpublish_post(&self, post_id: Uuid, actor_id: Option<Uuid>) -> ContentResult<()> {
-        self.node_service.unpublish_node(post_id, actor_id).await?;
+    pub async fn unpublish_post(
+        &self,
+        post_id: Uuid,
+        security: SecurityContext,
+    ) -> ContentResult<()> {
+        self.node_service.unpublish_node(post_id, security).await?;
         Ok(())
     }
 
-    pub async fn delete_post(&self, post_id: Uuid, actor_id: Option<Uuid>) -> ContentResult<()> {
-        self.node_service.delete_node(post_id, actor_id).await?;
+    pub async fn delete_post(&self, post_id: Uuid, security: SecurityContext) -> ContentResult<()> {
+        self.node_service.delete_node(post_id, security).await?;
         Ok(())
     }
 }

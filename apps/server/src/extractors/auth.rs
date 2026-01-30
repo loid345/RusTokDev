@@ -23,6 +23,12 @@ pub struct CurrentUser {
     pub permissions: Vec<Permission>,
 }
 
+impl CurrentUser {
+    pub fn security_context(&self) -> rustok_core::SecurityContext {
+        rustok_core::SecurityContext::new(self.user.role.clone(), Some(self.user.id))
+    }
+}
+
 async fn resolve_current_user<S>(
     parts: &mut Parts,
     state: &S,

@@ -1,3 +1,3 @@
 mod post;
 
-pub use post::{CreatePostInput, PostService};
+pub use post::PostService;

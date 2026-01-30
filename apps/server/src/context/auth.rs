@@ -8,3 +8,9 @@ pub struct AuthContext {
     pub role: UserRole,
     pub permissions: Vec<Permission>,
 }
+
+impl AuthContext {
+    pub fn security_context(&self) -> rustok_core::SecurityContext {
+        rustok_core::SecurityContext::new(self.role.clone(), Some(self.user_id))
+    }
+}
