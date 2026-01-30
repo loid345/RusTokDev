@@ -23,17 +23,17 @@ base64.workspace = true
 eyre = "0.6"
 async-trait.workspace = true
 thiserror.workspace = true
-rust_decimal = "1.36"
-argon2 = "0.5"
-hex = "0.4"
-jsonwebtoken = "9.3"
-password-hash = "0.5"
-rand = "0.8"
-sha2 = "0.10"
-moka = { version = "0.12", features = ["future"] }
-once_cell = "1.19"
-utoipa = { version = "4.2", features = ["axum_extras", "uuid", "chrono", "yaml"] }
-utoipa-swagger-ui = { version = "7.0", features = ["axum"] }
+rust_decimal.workspace = true
+argon2.workspace = true
+hex.workspace = true
+jsonwebtoken.workspace = true
+password-hash.workspace = true
+rand.workspace = true
+sha2.workspace = true
+moka = { workspace = true, features = ["future"] }
+once_cell.workspace = true
+utoipa = { workspace = true, features = ["axum_extras", "uuid", "chrono", "yaml"] }
+utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 
 # Loco extras
 migration = { path = "migration" }

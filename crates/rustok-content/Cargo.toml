@@ -12,6 +12,6 @@ sea-orm-migration.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 slug = "0.1"
-utoipa = { version = "4.2", features = ["uuid", "chrono"] }
+utoipa = { workspace = true, features = ["uuid", "chrono"] }
 thiserror.workspace = true
 uuid.workspace = true
