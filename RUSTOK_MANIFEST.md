@@ -44,6 +44,13 @@
 - **No Heavy JOINs on Storefront:** данные "склеиваются" при записи (в Indexer), а не при чтении.
 - **Multilingual by Default:** многоязычность включена сразу; платформа по умолчанию полностью многоязычная.
 
+### 2.5 Multilingual Implementation (Current State)
+Многоязычность уже внедрена в ключевых доменных модулях:
+- **Content:** переводы узлов и тела (`node_translation`, `body`) с `locale`.
+- **Commerce:** переводы продуктов и вариантов (`product_translation`, `variant_translation`) с `locale`.
+- **Blog:** DTO и сервисы принимают `locale`.
+- **Index:** индексация поддерживает `locale` и пересборку по локалям.
+
 ---
 
 ## 3. TECHNOLOGY STACK (Approved)
@@ -925,5 +932,21 @@ Check/add:
 - 2.3 Feature flags
 - 3.3 Telemetry check
 - 3.4 Config check
+
+### 23.7 Implementation Status (Repo Snapshot)
+
+| Item | Status | Notes |
+|------|--------|-------|
+| 1.1 EventEnvelope fields | ✅ Done | correlation/causation/retry/timestamp are present |
+| 1.2 EventTransport methods | ✅ Done | publish/publish_batch/ack/reliability |
+| 1.3 OutboxTransport crate | ✅ Done (scaffold) | entity/migration/relay/transport skeleton |
+| 1.4 MemoryTransport | ✅ Done | in-memory transport via EventBus |
+| 2.1 rustok-iggy crate | ✅ Done (skeleton) | backend/transport/topology/serialization stubs |
+| 2.2 Iggy config | ✅ Done | config, topology, retention, serialization |
+| 2.3 Iggy feature flag | ⛔ Not yet | feature flag wiring in workspace/core |
+| 3.1 Module dependencies/health | ✅ Done | HealthStatus + default health() |
+| 3.2 AppContext fields | ✅ Done (scaffold) | events/cache/search traits present |
+| 3.3 Telemetry improvements | ⛔ Not yet | JSON logs/metrics/trace propagation |
+| 3.4 Config hierarchy | ⛔ Not yet | default/local/env with RUSTOK_* |
 
 END OF MANIFEST v4.1
