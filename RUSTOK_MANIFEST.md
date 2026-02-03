@@ -42,6 +42,7 @@
 ### 2.4 Highload by Default
 - **Event-Driven Glue:** модули не знают друг друга напрямую. Они общаются через EventBus.
 - **No Heavy JOINs on Storefront:** данные "склеиваются" при записи (в Indexer), а не при чтении.
+- **Multilingual by Default:** многоязычность включена сразу; платформа по умолчанию полностью многоязычная.
 
 ---
 
@@ -74,10 +75,10 @@
 
 ## 4. API ARCHITECTURE
 
-### 4.1 REST-First (GraphQL in Backlog)
-RusToK starts with a REST-first API for platform endpoints:
+### 4.1 REST + GraphQL in Parallel
+RusToK develops REST and GraphQL APIs simultaneously for platform and domain endpoints:
 - **REST (Axum):** Authentication, Health, Admin endpoints.
-- **GraphQL:** **Backlog** item for phase after Foundation.
+- **GraphQL:** Modular schema (MergedObject) for domain operations.
 
 ### 4.2 Documentation
 - **OpenAPI:** Generated via `utoipa` and served at `/swagger`.
@@ -368,7 +369,7 @@ CREATE TABLE nodes_p0 PARTITION OF nodes_partitioned FOR VALUES WITH (MODULUS 8,
 **Идея:** нормализованные write-таблицы остаются быстрыми и строгими, а для чтения строятся денормализованные индексы через Event Bus / Handlers.
 
 ```text
-WRITE: REST API -> Service -> SeaORM -> PostgreSQL -> EventBus
+WRITE: REST/GraphQL API -> Service -> SeaORM -> PostgreSQL -> EventBus
 READ:  User -> Index Tables (denormalized) -> Search Results
 ```
 
@@ -581,7 +582,7 @@ graph TD
 ```text
 ┌──────────────────────────────────────────────────────────────────┐
 │                         WRITE PATH                               │
-│  User Request -> REST API -> Service -> SeaORM -> PostgreSQL     │
+│  User Request -> REST/GraphQL API -> Service -> SeaORM -> PostgreSQL │
 │                      |                                           │
 │                      v                                           │
 │                 [ Event Bus ]                                    │
@@ -629,7 +630,7 @@ graph TD
 ## 16. ARCHITECTURAL PATTERNS
 
 ### 16.1 The Service Layer Pattern
-Контроллеры (REST) и будущие резолверы (GraphQL, backlog) — это просто тонкие обертки. Вся логика живет в `Services`.
+Контроллеры (REST) и резолверы (GraphQL) — это просто тонкие обертки. Вся логика живет в `Services`.
 
 ```rust
 pub struct NodeService;
@@ -658,7 +659,7 @@ impl NodeService {
 3.  **Module Crate**: Создай или выбери крафт в `crates/`.
 4.  **Logic**: Напиши `Service` для CRUD операций.
 5.  **Events**: Добавь новые варианты в `DomainEvent` и публикуй их в `Service`.
-6.  **GraphQL (backlog)**: Напиши резолверы и добавь их в общий `MergedObject`, когда GraphQL будет активирован.
+6.  **GraphQL**: Напиши резолверы и добавь их в общий `MergedObject`.
 7.  **Index**: Если нужен поиск — добавь `Handler` в `rustok-search`, который будет слушать события нового модуля.
 
 ---
