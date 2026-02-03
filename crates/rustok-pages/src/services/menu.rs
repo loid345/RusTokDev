@@ -155,9 +155,7 @@ impl MenuService {
             .and_then(|t| t.title.clone())
             .unwrap_or_default();
 
-        let items = self
-            .get_menu_items(tenant_id, security, menu_id)
-            .await?;
+        let items = self.get_menu_items(tenant_id, security, menu_id).await?;
 
         Ok(MenuResponse {
             id: menu_id,
@@ -194,10 +192,7 @@ impl MenuService {
             let mut responses = Vec::with_capacity(items.len());
             for item in items {
                 let node = self.nodes.get_node(item.id).await?;
-                let title = node
-                    .translations
-                    .first()
-                    .and_then(|t| t.title.clone());
+                let title = node.translations.first().and_then(|t| t.title.clone());
 
                 let url = node
                     .metadata

@@ -33,7 +33,10 @@ impl PageService {
         security: SecurityContext,
         input: CreatePageInput,
     ) -> PagesResult<PageResponse> {
-        let template = input.template.clone().unwrap_or_else(|| "default".to_string());
+        let template = input
+            .template
+            .clone()
+            .unwrap_or_else(|| "default".to_string());
 
         let metadata = build_page_metadata(&template, &input.translations, None);
 
@@ -105,7 +108,10 @@ impl PageService {
             return Err(PagesError::PageNotFound(page_id));
         }
 
-        let blocks = self.blocks.list_for_page(tenant_id, security, page_id).await?;
+        let blocks = self
+            .blocks
+            .list_for_page(tenant_id, security, page_id)
+            .await?;
         Ok(node_to_page(node, blocks))
     }
 
@@ -123,7 +129,9 @@ impl PageService {
             .await?;
 
         match node {
-            Some(node) if node.status == rustok_content::entities::node::ContentStatus::Published => {
+            Some(node)
+                if node.status == rustok_content::entities::node::ContentStatus::Published =>
+            {
                 let blocks = self
                     .blocks
                     .list_for_page(tenant_id, security, node.id)
@@ -325,7 +333,10 @@ fn build_page_metadata(
     metadata
 }
 
-fn node_to_page(node: rustok_content::dto::NodeResponse, blocks: Vec<BlockResponse>) -> PageResponse {
+fn node_to_page(
+    node: rustok_content::dto::NodeResponse,
+    blocks: Vec<BlockResponse>,
+) -> PageResponse {
     let template = node
         .metadata
         .get("template")
@@ -347,7 +358,10 @@ fn node_to_page(node: rustok_content::dto::NodeResponse, blocks: Vec<BlockRespon
                 locale: translation.locale,
                 title: translation.title,
                 slug: translation.slug,
-                meta_title: meta.and_then(|value| value.get("meta_title")).and_then(|value| value.as_str()).map(String::from),
+                meta_title: meta
+                    .and_then(|value| value.get("meta_title"))
+                    .and_then(|value| value.as_str())
+                    .map(String::from),
                 meta_description: meta
                     .and_then(|value| value.get("meta_description"))
                     .and_then(|value| value.as_str())

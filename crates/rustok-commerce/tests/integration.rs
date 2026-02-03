@@ -1,5 +1,7 @@
 use rust_decimal::Decimal;
-use rustok_commerce::dto::{CreateProductInput, CreateVariantInput, PriceInput, ProductTranslationInput};
+use rustok_commerce::dto::{
+    CreateProductInput, CreateVariantInput, PriceInput, ProductTranslationInput,
+};
 use rustok_commerce::services::CatalogService;
 use rustok_core::events::EventEnvelope;
 use rustok_core::{DomainEvent, EventBus};

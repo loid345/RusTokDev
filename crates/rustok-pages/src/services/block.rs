@@ -190,11 +190,11 @@ impl BlockService {
         security: SecurityContext,
         page_id: Uuid,
     ) -> PagesResult<()> {
-        let blocks = self.list_for_page(tenant_id, security.clone(), page_id).await?;
+        let blocks = self
+            .list_for_page(tenant_id, security.clone(), page_id)
+            .await?;
         for block in blocks {
-            self.nodes
-                .delete_node(block.id, security.clone())
-                .await?;
+            self.nodes.delete_node(block.id, security.clone()).await?;
         }
         Ok(())
     }

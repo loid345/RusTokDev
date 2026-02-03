@@ -76,8 +76,7 @@ const NODE_PUBLISHED_FIELDS: &[FieldSchema] =
     &[field!("node_id", "uuid"), field!("kind", "string")];
 const NODE_UNPUBLISHED_FIELDS: &[FieldSchema] =
     &[field!("node_id", "uuid"), field!("kind", "string")];
-const NODE_DELETED_FIELDS: &[FieldSchema] =
-    &[field!("node_id", "uuid"), field!("kind", "string")];
+const NODE_DELETED_FIELDS: &[FieldSchema] = &[field!("node_id", "uuid"), field!("kind", "string")];
 const BODY_UPDATED_FIELDS: &[FieldSchema] =
     &[field!("node_id", "uuid"), field!("locale", "string")];
 
@@ -96,16 +95,15 @@ const MEDIA_UPLOADED_FIELDS: &[FieldSchema] = &[
 ];
 const MEDIA_DELETED_FIELDS: &[FieldSchema] = &[field!("media_id", "uuid")];
 
-const USER_REGISTERED_FIELDS: &[FieldSchema] = &[field!("user_id", "uuid"), field!("email", "string")];
+const USER_REGISTERED_FIELDS: &[FieldSchema] =
+    &[field!("user_id", "uuid"), field!("email", "string")];
 const USER_LOGGED_IN_FIELDS: &[FieldSchema] = &[field!("user_id", "uuid")];
 const USER_UPDATED_FIELDS: &[FieldSchema] = &[field!("user_id", "uuid")];
 const USER_DELETED_FIELDS: &[FieldSchema] = &[field!("user_id", "uuid")];
 
 const PRODUCT_ID_FIELDS: &[FieldSchema] = &[field!("product_id", "uuid")];
-const VARIANT_FIELDS: &[FieldSchema] = &[
-    field!("variant_id", "uuid"),
-    field!("product_id", "uuid"),
-];
+const VARIANT_FIELDS: &[FieldSchema] =
+    &[field!("variant_id", "uuid"), field!("product_id", "uuid")];
 const INVENTORY_UPDATED_FIELDS: &[FieldSchema] = &[
     field!("variant_id", "uuid"),
     field!("product_id", "uuid"),
@@ -147,16 +145,11 @@ const REINDEX_REQUESTED_FIELDS: &[FieldSchema] = &[
     field!("target_type", "string"),
     field!("target_id", "uuid", optional),
 ];
-const INDEX_UPDATED_FIELDS: &[FieldSchema] = &[
-    field!("index_name", "string"),
-    field!("target_id", "uuid"),
-];
+const INDEX_UPDATED_FIELDS: &[FieldSchema] =
+    &[field!("index_name", "string"), field!("target_id", "uuid")];
 
 const TENANT_ID_FIELDS: &[FieldSchema] = &[field!("tenant_id", "uuid")];
-const LOCALE_FIELDS: &[FieldSchema] = &[
-    field!("tenant_id", "uuid"),
-    field!("locale", "string"),
-];
+const LOCALE_FIELDS: &[FieldSchema] = &[field!("tenant_id", "uuid"), field!("locale", "string")];
 
 pub const EVENT_SCHEMAS: &[EventSchema] = &[
     EventSchema {

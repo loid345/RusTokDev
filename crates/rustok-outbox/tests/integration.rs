@@ -25,10 +25,7 @@ async fn test_outbox_persist_and_dispatch() -> TestResult<()> {
     bus.publish(ctx.tenant_id, None, event)?;
 
     let envelope = next_event(&mut ctx.events).await?;
-    assert!(matches!(
-        envelope.event,
-        DomainEvent::UserRegistered { .. }
-    ));
+    assert!(matches!(envelope.event, DomainEvent::UserRegistered { .. }));
 
     let dispatched = wait_for_dispatch(&ctx, envelope.id).await?;
     assert!(dispatched);

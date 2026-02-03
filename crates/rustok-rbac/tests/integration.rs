@@ -1,6 +1,6 @@
+use rustok_core::events::{DomainEvent, EventEnvelope};
 use rustok_core::permissions::{Action, Resource};
 use rustok_core::{EventBus, SecurityContext};
-use rustok_core::events::{DomainEvent, EventEnvelope};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
@@ -33,10 +33,7 @@ async fn test_rbac_event_flow() -> TestResult<()> {
     )?;
 
     let envelope = next_event(&mut ctx.events).await?;
-    assert!(matches!(
-        envelope.event,
-        DomainEvent::UserLoggedIn { .. }
-    ));
+    assert!(matches!(envelope.event, DomainEvent::UserLoggedIn { .. }));
 
     Ok(())
 }
