@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use chrono::Utc;
-use sea_orm::{ActiveModelTrait, DatabaseConnection, Set};
+use sea_orm::{ActiveModelTrait, DatabaseConnection, EntityTrait, Set};
 
 use rustok_core::events::{EventEnvelope, EventTransport, ReliabilityLevel};
 use rustok_core::Result;
@@ -25,7 +25,7 @@ impl EventTransport for OutboxTransport {
         let payload = serde_json::to_value(&envelope)?;
         let model = entity::ActiveModel {
             id: Set(envelope.id),
-            payload: Set(sea_orm::Json(payload)),
+            payload: Set(payload),
             status: Set(SysEventStatus::Pending),
             created_at: Set(Utc::now()),
             dispatched_at: Set(None),

@@ -1,4 +1,7 @@
-use axum::{extract::Query, Json, State};
+use axum::{
+    extract::{Query, State},
+    Json,
+};
 use loco_rs::prelude::*;
 use serde::Deserialize;
 use utoipa::{IntoParams, ToSchema};

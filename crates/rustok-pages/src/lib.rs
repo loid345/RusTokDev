@@ -3,6 +3,9 @@ pub mod entities;
 pub mod error;
 pub mod services;
 
+pub use dto::{CreatePageInput, PageResponse};
+pub use services::PageService;
+
 use async_trait::async_trait;
 use rustok_core::module::{HealthStatus, MigrationSource, RusToKModule};
 use sea_orm_migration::MigrationTrait;

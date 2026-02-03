@@ -8,12 +8,13 @@ use rustok_forum::{
     CategoryListItem, CategoryResponse, CategoryService, CreateCategoryInput, UpdateCategoryInput,
 };
 use serde::Deserialize;
+use utoipa::IntoParams;
 use uuid::Uuid;
 
 use crate::context::TenantContext;
 use crate::extractors::auth::CurrentUser;
 
-#[derive(Deserialize)]
+#[derive(Debug, Deserialize, IntoParams)]
 pub struct CategoryListParams {
     pub locale: Option<String>,
 }

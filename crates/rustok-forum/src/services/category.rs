@@ -192,12 +192,16 @@ impl CategoryService {
             name: translation
                 .and_then(|t| t.title.clone())
                 .unwrap_or_default(),
-            slug: translation
-                .and_then(|t| t.slug.clone())
-                .unwrap_or_default(),
+            slug: translation.and_then(|t| t.slug.clone()).unwrap_or_default(),
             description: translation.and_then(|t| t.excerpt.clone()),
-            icon: metadata.get("icon").and_then(|v| v.as_str()).map(|v| v.to_string()),
-            color: metadata.get("color").and_then(|v| v.as_str()).map(|v| v.to_string()),
+            icon: metadata
+                .get("icon")
+                .and_then(|v| v.as_str())
+                .map(|v| v.to_string()),
+            color: metadata
+                .get("color")
+                .and_then(|v| v.as_str())
+                .map(|v| v.to_string()),
             parent_id: node.parent_id,
             position: node.position,
             topic_count: metadata
