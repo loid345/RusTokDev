@@ -10,6 +10,7 @@ description = "MCP adapter server for RusToK modules"
 anyhow.workspace = true
 rmcp = { version = "0.8.0", features = ["macros", "server", "transport-io"] }
 serde.workspace = true
+serde_json.workspace = true
 schemars = "0.8"
 tokio.workspace = true
 rustok-core.workspace = true
