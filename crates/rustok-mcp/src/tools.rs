@@ -22,8 +22,8 @@ pub struct ModuleListResponse {
     pub modules: Vec<ModuleInfo>,
 }
 
-#[rmcp::mcp_tool]
-pub async fn list_modules(state: &McpState) -> ModuleListResponse {
+#[rmcp::tool]
+pub async fn list_modules(state: &'static McpState) -> ModuleListResponse {
     let modules = state
         .registry
         .list()
@@ -33,7 +33,11 @@ pub async fn list_modules(state: &McpState) -> ModuleListResponse {
             name: module.name().to_string(),
             description: module.description().to_string(),
             version: module.version().to_string(),
-            dependencies: module.dependencies().iter().map(|dep| dep.to_string()).collect(),
+            dependencies: module
+                .dependencies()
+                .iter()
+                .map(|dep| dep.to_string())
+                .collect(),
         })
         .collect();
 
@@ -51,8 +55,11 @@ pub struct ModuleLookupRequest {
     pub slug: String,
 }
 
-#[rmcp::mcp_tool]
-pub async fn module_exists(state: &McpState, input: ModuleLookupRequest) -> ModuleLookupResponse {
+#[rmcp::tool]
+pub async fn module_exists(
+    state: &'static McpState,
+    input: ModuleLookupRequest,
+) -> ModuleLookupResponse {
     let exists = state.registry.contains(&input.slug);
 
     ModuleLookupResponse {

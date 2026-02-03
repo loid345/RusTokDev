@@ -41,7 +41,7 @@ managed and deployed independently. To wire actual modules, construct a `ModuleR
 ## Extending tools
 
 1. Add a new tool function in `crates/rustok-mcp/src/tools.rs` and annotate it with
-   `#[rmcp::mcp_tool]`.
+   `#[rmcp::tool]`.
 2. Use `schemars::JsonSchema` on request/response DTOs for automatic schema generation.
 3. Register the tool in `crates/rustok-mcp/src/server.rs`.
 
