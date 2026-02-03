@@ -1,7 +1,7 @@
 use rustok_content::dto::{BodyInput, CreateNodeInput, NodeTranslationInput};
 use rustok_content::services::NodeService;
 use rustok_core::events::EventEnvelope;
-use rustok_core::{DomainEvent, EventBus, SecurityContext};
+use rustok_core::{DomainEvent, SecurityContext};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
