@@ -15,6 +15,13 @@ pub trait MigrationSource: Send + Sync {
     fn migrations(&self) -> Vec<Box<dyn MigrationTrait>>;
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum HealthStatus {
+    Healthy,
+    Degraded,
+    Unhealthy,
+}
+
 #[async_trait]
 pub trait RusToKModule: Send + Sync + MigrationSource {
     fn slug(&self) -> &'static str;
@@ -39,5 +46,9 @@ pub trait RusToKModule: Send + Sync + MigrationSource {
 
     async fn on_disable(&self, _ctx: ModuleContext<'_>) -> crate::Result<()> {
         Ok(())
+    }
+
+    async fn health(&self) -> HealthStatus {
+        HealthStatus::Healthy
     }
 }

@@ -5,20 +5,27 @@ use uuid::Uuid;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EventEnvelope {
     pub id: Uuid,
+    pub correlation_id: Uuid,
+    pub causation_id: Option<Uuid>,
     pub tenant_id: Uuid,
     pub timestamp: DateTime<Utc>,
     pub actor_id: Option<Uuid>,
     pub event: DomainEvent,
+    pub retry_count: u32,
 }
 
 impl EventEnvelope {
     pub fn new(tenant_id: Uuid, actor_id: Option<Uuid>, event: DomainEvent) -> Self {
+        let id = crate::id::generate_id();
         Self {
-            id: crate::id::generate_id(),
+            id,
+            correlation_id: id,
+            causation_id: None,
             tenant_id,
             timestamp: Utc::now(),
             actor_id,
             event,
+            retry_count: 0,
         }
     }
 }

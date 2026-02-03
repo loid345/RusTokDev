@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod context;
 pub mod error;
 pub mod events;
 pub mod id;
@@ -11,13 +12,14 @@ pub mod types;
 pub use error::{Error, Result};
 pub use events::{
     DispatcherConfig, DomainEvent, EventBus, EventBusStats, EventDispatcher, EventEnvelope,
-    EventHandler, HandlerBuilder, HandlerResult, RunningDispatcher,
+    EventHandler, EventTransport, HandlerBuilder, HandlerResult, MemoryTransport,
+    ReliabilityLevel, RunningDispatcher,
 };
 pub use id::generate_id;
 pub use migrations::ModuleMigration;
-pub use module::ModuleContext;
-pub use module::RusToKModule;
+pub use module::{HealthStatus, ModuleContext, RusToKModule};
 pub use module::{EventListener, MigrationSource};
+pub use context::{AppContext, CacheBackend, SearchBackend};
 pub use permissions::{Action, Permission, Resource};
 pub use rbac::{PermissionScope, Rbac, SecurityContext};
 pub use registry::ModuleRegistry;
@@ -27,11 +29,14 @@ pub mod prelude {
     pub use crate::error::{Error, Result};
     pub use crate::events::{
         DispatcherConfig, DomainEvent, EventBus, EventBusStats, EventDispatcher, EventEnvelope,
-        EventHandler, HandlerBuilder, HandlerResult, RunningDispatcher,
+        EventHandler, EventTransport, HandlerBuilder, HandlerResult, MemoryTransport,
+        ReliabilityLevel, RunningDispatcher,
     };
     pub use crate::id::generate_id;
+    pub use crate::module::HealthStatus;
     pub use crate::permissions::{Action, Permission, Resource};
     pub use crate::rbac::{PermissionScope, Rbac, SecurityContext};
     pub use crate::types::{UserRole, UserStatus};
+    pub use crate::{AppContext, CacheBackend, SearchBackend};
     pub use uuid::Uuid;
 }

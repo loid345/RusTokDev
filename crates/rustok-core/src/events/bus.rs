@@ -62,14 +62,12 @@ impl EventBus {
         receiver
     }
 
-    pub fn publish(
-        &self,
-        tenant_id: Uuid,
-        actor_id: Option<Uuid>,
-        event: DomainEvent,
-    ) -> crate::Result<()> {
+    pub fn publish(&self, tenant_id: Uuid, actor_id: Option<Uuid>, event: DomainEvent) -> crate::Result<()> {
         let envelope = EventEnvelope::new(tenant_id, actor_id, event);
+        self.publish_envelope(envelope)
+    }
 
+    pub fn publish_envelope(&self, envelope: EventEnvelope) -> crate::Result<()> {
         if self.sender.receiver_count() == 0 {
             tracing::debug!(event = ?envelope.event, "Event published without subscribers");
         }
