@@ -1,6 +1,6 @@
 [advisories]
-db-path = "~/.cargo/advisory-db"
-db-urls = ["https://github.com/rustsec/advisory-db"]
+db-path = "advisory-db"
+db-urls = []
 vulnerability = "deny"
 unmaintained = "warn"
 unsound = "warn"
