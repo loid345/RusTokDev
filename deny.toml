@@ -1,5 +1,5 @@
 [advisories]
-db-path = "advisory-db-empty"
+db-path = "advisory-db-empty-2"
 db-urls = []
 vulnerability = "deny"
 unmaintained = "warn"
