@@ -27,8 +27,11 @@ impl ModuleRegistry {
     }
 
     pub fn list(&self) -> Vec<&dyn RusToKModule> {
-        let mut modules: Vec<&dyn RusToKModule> =
-            self.modules.values().map(|module| module.as_ref()).collect();
+        let mut modules: Vec<&dyn RusToKModule> = self
+            .modules
+            .values()
+            .map(|module| module.as_ref())
+            .collect();
         modules.sort_by_key(|module| module.slug());
         modules
     }

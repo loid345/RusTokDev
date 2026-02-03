@@ -91,7 +91,11 @@ fn parse_forwarded_host(forwarded: &str) -> Option<&str> {
     forwarded
         .split(',')
         .next()
-        .and_then(|entry| entry.split(';').find(|part| part.trim_start().starts_with("host=")))
+        .and_then(|entry| {
+            entry
+                .split(';')
+                .find(|part| part.trim_start().starts_with("host="))
+        })
         .and_then(|part| part.trim_start().strip_prefix("host="))
         .map(|host| host.trim_matches('"').trim())
 }
