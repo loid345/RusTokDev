@@ -4,7 +4,10 @@ use axum::{
 };
 use loco_rs::prelude::*;
 use rustok_core::EventBus;
-use rustok_forum::{CreateTopicInput, ListTopicsFilter, TopicListItem, TopicResponse, TopicService, UpdateTopicInput};
+use rustok_forum::{
+    CreateTopicInput, ListTopicsFilter, TopicListItem, TopicResponse, TopicService,
+    UpdateTopicInput,
+};
 use uuid::Uuid;
 
 use crate::context::TenantContext;

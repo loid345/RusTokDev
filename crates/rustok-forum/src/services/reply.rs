@@ -63,11 +63,7 @@ impl ReplyService {
     }
 
     #[instrument(skip(self))]
-    pub async fn get(
-        &self,
-        reply_id: Uuid,
-        locale: &str,
-    ) -> ForumResult<ReplyResponse> {
+    pub async fn get(&self, reply_id: Uuid, locale: &str) -> ForumResult<ReplyResponse> {
         let node = self.nodes.get_node(reply_id).await?;
 
         if node.kind != KIND_REPLY {

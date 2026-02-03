@@ -18,7 +18,10 @@ pub fn routes() -> Routes {
                 .put(categories::update_category)
                 .delete(categories::delete_category),
         )
-        .add("/topics", get(topics::list_topics).post(topics::create_topic))
+        .add(
+            "/topics",
+            get(topics::list_topics).post(topics::create_topic),
+        )
         .add(
             "/topics/:id",
             get(topics::get_topic)

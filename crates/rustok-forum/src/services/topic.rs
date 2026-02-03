@@ -9,7 +9,9 @@ use rustok_core::events::EventBus;
 use rustok_core::SecurityContext;
 
 use crate::constants::{topic_status, KIND_TOPIC};
-use crate::dto::{CreateTopicInput, ListTopicsFilter, TopicListItem, TopicResponse, UpdateTopicInput};
+use crate::dto::{
+    CreateTopicInput, ListTopicsFilter, TopicListItem, TopicResponse, UpdateTopicInput,
+};
 use crate::error::{ForumError, ForumResult};
 
 pub struct TopicService {
@@ -72,11 +74,7 @@ impl TopicService {
     }
 
     #[instrument(skip(self))]
-    pub async fn get(
-        &self,
-        topic_id: Uuid,
-        locale: &str,
-    ) -> ForumResult<TopicResponse> {
+    pub async fn get(&self, topic_id: Uuid, locale: &str) -> ForumResult<TopicResponse> {
         let node = self.nodes.get_node(topic_id).await?;
 
         if node.kind != KIND_TOPIC {
@@ -205,7 +203,9 @@ impl TopicService {
             id: node.id,
             locale: locale.to_string(),
             category_id: node.category_id.unwrap_or(Uuid::nil()),
-            title: translation.and_then(|t| t.title.clone()).unwrap_or_default(),
+            title: translation
+                .and_then(|t| t.title.clone())
+                .unwrap_or_default(),
             body: body.and_then(|b| b.body.clone()).unwrap_or_default(),
             status: metadata
                 .get("forum_status")
@@ -221,8 +221,14 @@ impl TopicService {
                         .collect()
                 })
                 .unwrap_or_default(),
-            is_pinned: metadata.get("is_pinned").and_then(|v| v.as_bool()).unwrap_or(false),
-            is_locked: metadata.get("is_locked").and_then(|v| v.as_bool()).unwrap_or(false),
+            is_pinned: metadata
+                .get("is_pinned")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
+            is_locked: metadata
+                .get("is_locked")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false),
             reply_count: metadata
                 .get("reply_count")
                 .and_then(|v| v.as_i64())

@@ -31,21 +31,13 @@ impl ModerationService {
     }
 
     #[instrument(skip(self, security))]
-    pub async fn reject_reply(
-        &self,
-        reply_id: Uuid,
-        security: SecurityContext,
-    ) -> ForumResult<()> {
+    pub async fn reject_reply(&self, reply_id: Uuid, security: SecurityContext) -> ForumResult<()> {
         self.update_reply_status(reply_id, security, reply_status::REJECTED)
             .await
     }
 
     #[instrument(skip(self, security))]
-    pub async fn hide_reply(
-        &self,
-        reply_id: Uuid,
-        security: SecurityContext,
-    ) -> ForumResult<()> {
+    pub async fn hide_reply(&self, reply_id: Uuid, security: SecurityContext) -> ForumResult<()> {
         self.update_reply_status(reply_id, security, reply_status::HIDDEN)
             .await
     }

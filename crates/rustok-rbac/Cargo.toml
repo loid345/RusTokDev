@@ -1,5 +1,5 @@
 [package]
-name = "rustok-pages"
+name = "rustok-rbac"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -10,4 +10,3 @@ rustok-core.workspace = true
 sea-orm-migration.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-uuid.workspace = true

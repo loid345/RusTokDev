@@ -48,7 +48,10 @@ mod tests {
         let module = ContentModule;
         assert_eq!(module.slug(), "content");
         assert_eq!(module.name(), "Content");
-        assert_eq!(module.description(), "Core CMS Module (Nodes, Bodies, Categories)");
+        assert_eq!(
+            module.description(),
+            "Core CMS Module (Nodes, Bodies, Categories)"
+        );
         assert_eq!(module.version(), env!("CARGO_PKG_VERSION"));
     }
 

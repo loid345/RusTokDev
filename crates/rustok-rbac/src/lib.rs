@@ -7,26 +7,26 @@ use async_trait::async_trait;
 use rustok_core::module::{HealthStatus, MigrationSource, RusToKModule};
 use sea_orm_migration::MigrationTrait;
 
-pub struct PagesModule;
+pub struct RbacModule;
 
-impl MigrationSource for PagesModule {
+impl MigrationSource for RbacModule {
     fn migrations(&self) -> Vec<Box<dyn MigrationTrait>> {
         Vec::new()
     }
 }
 
 #[async_trait]
-impl RusToKModule for PagesModule {
+impl RusToKModule for RbacModule {
     fn slug(&self) -> &'static str {
-        "pages"
+        "rbac"
     }
 
     fn name(&self) -> &'static str {
-        "Pages"
+        "RBAC"
     }
 
     fn description(&self) -> &'static str {
-        "Pages and menus domain logic."
+        "Role-based access control helpers."
     }
 
     fn version(&self) -> &'static str {

@@ -62,7 +62,12 @@ impl EventBus {
         receiver
     }
 
-    pub fn publish(&self, tenant_id: Uuid, actor_id: Option<Uuid>, event: DomainEvent) -> crate::Result<()> {
+    pub fn publish(
+        &self,
+        tenant_id: Uuid,
+        actor_id: Option<Uuid>,
+        event: DomainEvent,
+    ) -> crate::Result<()> {
         let envelope = EventEnvelope::new(tenant_id, actor_id, event);
         self.publish_envelope(envelope)
     }

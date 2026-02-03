@@ -9,17 +9,17 @@ pub mod permissions;
 pub mod rbac;
 pub mod registry;
 pub mod types;
+pub use context::{AppContext, CacheBackend, SearchBackend};
 pub use error::{Error, Result};
 pub use events::{
     DispatcherConfig, DomainEvent, EventBus, EventBusStats, EventDispatcher, EventEnvelope,
-    EventHandler, EventTransport, HandlerBuilder, HandlerResult, MemoryTransport,
-    ReliabilityLevel, RunningDispatcher,
+    EventHandler, EventTransport, HandlerBuilder, HandlerResult, MemoryTransport, ReliabilityLevel,
+    RunningDispatcher,
 };
 pub use id::generate_id;
 pub use migrations::ModuleMigration;
-pub use module::{HealthStatus, ModuleContext, RusToKModule};
 pub use module::{EventListener, MigrationSource};
-pub use context::{AppContext, CacheBackend, SearchBackend};
+pub use module::{HealthStatus, ModuleContext, RusToKModule};
 pub use permissions::{Action, Permission, Resource};
 pub use rbac::{PermissionScope, Rbac, SecurityContext};
 pub use registry::ModuleRegistry;

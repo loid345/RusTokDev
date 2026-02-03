@@ -84,7 +84,9 @@ rustok-core = { path = "crates/rustok-core" }
 rustok-commerce = { path = "crates/rustok-commerce" }
 rustok-blog = { path = "crates/rustok-blog" }
 rustok-content = { path = "crates/rustok-content" }
+rustok-pages = { path = "crates/rustok-pages" }
 rustok-index = { path = "crates/rustok-index" }
 rustok-iggy = { path = "crates/rustok-iggy" }
 rustok-forum = { path = "crates/rustok-forum" }
-rustok-pages = { path = "crates/rustok-pages" }
+rustok-tenant = { path = "crates/rustok-tenant" }
+rustok-rbac = { path = "crates/rustok-rbac" }

@@ -30,7 +30,7 @@
 - **Monorepo:** Backend, Admin и Storefront живут вместе.
 
 ### 2.2 Core Module, Specific Modules
-- **Core Module (`rustok-core`):** Содержит только универсальные возможности (Traits, Auth, Events). Без таблиц БД.
+- **Core Module (`rustok-core`):** Содержит только универсальные возможности (Traits, Events, Module Registry). Без таблиц БД.
 - **Specialized Modules:** Товары, Блог и пр. — у каждого свои таблицы и бизнес-логика.
 - **Empty Tables Cost Zero:** Неиспользуемые таблицы не нагружают систему.
 
@@ -42,6 +42,9 @@
 | `rustok-content` | `content` | Content | Core CMS Module (Nodes, Bodies, Categories) |
 | `rustok-blog` | `blog` | Blog | Posts, Pages, Comments |
 | `rustok-commerce` | `commerce` | Commerce | Products, Orders, Cart, Checkout |
+| `rustok-pages` | `pages` | Pages | Static pages, menus, blocks |
+| `rustok-tenant` | `tenant` | Tenant | Multi-tenancy helpers |
+| `rustok-rbac` | `rbac` | RBAC | Roles & permissions |
 | `rustok-index` | `index` | Index | CQRS Read Model (Fast Search) |
 
 ### 2.3 CQRS (Write vs Read)
@@ -61,6 +64,23 @@
 - **Blog:** DTO и сервисы принимают `locale`.
 - **Index:** индексация поддерживает `locale` и пересборку по локалям.
 
+### 2.6 Loco RS Foundation (Current State)
+Используем Loco RS как базовый каркас, чтобы не дублировать инфраструктуру:
+- **Config:** `apps/server/config/*.yaml`, секция `rustok` для кастомных настроек.
+- **Auth:** встроенные Users + JWT access/refresh + bcrypt.
+- **Cache:** Redis через Loco cache.
+- **Workers/Queue:** фоновые задачи и очереди Loco.
+- **Mailer:** SMTP через Loco mailer.
+- **Storage:** Local/S3 через Loco storage (`object_store`).
+
+**Следствие:** отдельные crates `rustok-config`, `rustok-cache`, `rustok-auth`, `rustok-storage` **не нужны**.
+
+**RusToK settings (Loco `settings.rustok`):**
+- `tenant.enabled` / `tenant.resolution` / `tenant.header_name` / `tenant.default_id`
+- `search.enabled` / `search.driver` / `search.url` / `search.api_key` / `search.index_prefix`
+- `features.registration_enabled` / `features.email_verification` / `features.multi_tenant` / `features.search_indexing` / `features.oauth_enabled`
+- `rate_limit.enabled` / `rate_limit.requests_per_minute` / `rate_limit.burst`
+
 ---
 
 ## 3. TECHNOLOGY STACK (Approved)
@@ -69,23 +89,26 @@
 |-------|------------|---------|
 | **Repository** | Cargo Workspace | Monorepo for all apps & crates |
 | **Runtime** | Tokio | Async runtime |
-| **HTTP Framework** | Axum | REST + middleware |
+| **Application Framework** | Loco RS (Axum-based) | "Rust on Rails" foundation for app boot, auth, workers, mailers |
+| **HTTP Framework** | Axum | REST + middleware (via Loco) |
 | **OpenAPI Docs** | Utoipa | `utoipa`, `utoipa-swagger-ui` |
 | **Validation** | Validator | `validator` crate |
 | **Database** | PostgreSQL 16+ | Partitioning, JSONB |
 | **ORM** | SeaORM | Async, fully typed |
 | **SQL Driver** | SQLx | For raw queries/migrations |
-| **Config** | config-rs | Layered hierarchy (default/local/env) |
+| **Config** | Loco YAML | `apps/server/config/*.yaml` with env overrides |
 | **Events (L0)** | tokio::sync::mpsc | In-memory transport |
 | **Events (L1)** | Outbox Pattern | Custom crate `rustok-outbox` |
 | **Events (L2)** | Iggy | Streaming (remote/embedded) |
-| **Cache (L1)** | Moka | In-memory cache |
-| **Cache (L2)** | Redis | Optional remote cache |
+| **Cache** | Loco Cache (Redis) | Built-in cache integration |
 | **Search** | Tantivy | Embedded full-text search |
 | **Storage** | object_store | Unified object storage API |
 | **Tracing** | tracing + OpenTelemetry | `tracing`, `tracing-opentelemetry` |
 | **Metrics** | Prometheus | `metrics`, `metrics-exporter-prometheus` |
-| **Auth** | PASETO / JWT | `pasetors` / `jsonwebtoken` |
+| **Auth** | Loco Auth (JWT) | Users + JWT access/refresh, bcrypt hashing |
+| **Mailer** | Loco Mailer (SMTP) | Built-in mail delivery + templates |
+| **Workers/Queue** | Loco Workers | Async workers + Redis/Postgres queue |
+| **Storage** | Loco Storage | Local/S3 via `object_store` |
 | **Serialization** | Serde | `serde`, `serde_json` |
 
 ---
@@ -107,30 +130,28 @@ RusToK develops REST and GraphQL APIs simultaneously for platform and domain end
 ```text
 rustok/
 ├── Cargo.toml                 # Workspace
-├── config/
-│   ├── default.toml
-│   └── local.toml
-│
 ├── crates/
-│   ├── rustok-config/         # P1: Конфигурация
-│   ├── rustok-core/           # P1: Ядро (module, context, events)
-│   ├── rustok-telemetry/      # P1: Observability
-│   ├── rustok-outbox/         # P2: Outbox transport
-│   ├── rustok-cache/          # P3: Кэширование
-│   ├── rustok-search/         # P3: Поиск
-│   ├── rustok-storage/        # P3: Файловое хранилище
-│   ├── rustok-iggy/           # P4: Streaming
-│   ├── rustok-forum/          # P5: Бизнес-модуль
-│   ├── rustok-auth/           # P5: Бизнес-модуль
-│   └── rustok-content/        # P5: Бизнес-модуль
+│   ├── rustok-core/           # Core traits/events
+│   ├── rustok-content         # CMS domain
+│   ├── rustok-blog            # Blog domain
+│   ├── rustok-forum           # Forum domain
+│   ├── rustok-pages           # Pages domain
+│   ├── rustok-commerce        # Commerce domain
+│   ├── rustok-index           # CQRS read model
+│   ├── rustok-tenant          # Multi-tenancy helpers
+│   ├── rustok-rbac            # Roles & permissions
+│   ├── rustok-outbox          # Outbox transport
+│   └── rustok-iggy            # Streaming (optional)
 │
 └── apps/
-    └── server/
-        ├── src/
-        │   ├── main.rs
-        │   └── bootstrap.rs
-        └── migration/
-            └── src/
+    ├── server/                # Loco RS backend
+    │   ├── config/            # Loco YAML configs
+    │   ├── migration/         # SeaORM migrations
+    │   └── src/
+    │       ├── app.rs         # Loco hooks & routes
+    │       └── main.rs
+    ├── admin/                 # Admin UI
+    └── storefront/            # Storefront UI
 ```
 
 ---
@@ -628,9 +649,79 @@ graph TD
 
 ---
 
+## 15. MODULES: DETAILED RESPONSIBILITIES (No Duplication)
+
+Ниже перечислены все модули и их обязанности. Цель: **не дублировать функциональность Loco RS** и не вводить параллельные инфраструктурные слои.
+
+### 15.1 Loco RS (Infrastructure — используем как есть)
+- **Config:** `apps/server/config/*.yaml`, кастомные поля в `settings.rustok`.
+- **Auth:** Users + JWT access/refresh, hashing.
+- **Cache:** Redis cache.
+- **Workers/Queue:** фоновые задачи.
+- **Mailer:** SMTP + templates.
+- **Storage:** Local/S3 через `object_store`.
+
+### 15.2 `rustok-core` (Infrastructure, без таблиц)
+**Роль:** только общие типы и контракты.
+- ID generation (ULID → UUID), общие типы.
+- Event bus, envelope, transport traits.
+- `RusToKModule` interface + registry.
+- Ошибки и базовые helpers.
+
+### 15.3 `rustok-tenant` (Multi-tenancy helpers)
+**Роль:** логика тенантов и доступ к metadata, но **не** инфраструктура.
+- Tenant helpers/DTOs/сервисы.
+- Модель тенанта остаётся в `apps/server` (Loco + SeaORM).
+- Конфиг резолюции тенанта — в `settings.rustok.tenant`.
+
+### 15.4 `rustok-rbac` (Roles & Permissions)
+**Роль:** правила доступа поверх Loco Users.
+- Проверки прав/ролей.
+- Политики доступа (permission checks).
+- Не дублирует Loco Auth.
+
+### 15.5 `rustok-content` (Core CMS write model)
+**Роль:** универсальный контент.
+- Nodes/Bodies/Categories/Tags.
+- Версионирование, локализации.
+- События изменений → EventBus.
+
+### 15.6 `rustok-blog` (Wrapper module)
+**Роль:** надстройка над `rustok-content`.
+- Бизнес-логика для постов/комментариев.
+- Не создаёт собственных таблиц, использует content tables.
+
+### 15.7 `rustok-forum` (Wrapper module)
+**Роль:** форумная логика поверх `rustok-content`.
+- Topics/Replies как специализация nodes.
+- Не дублирует storage/config/auth.
+
+### 15.8 `rustok-pages` (Pages & Menus)
+**Роль:** статические страницы, меню, блоки.
+- Реализуется на основе content tables или собственных страниц.
+- Не дублирует базовый CMS слой.
+
+### 15.9 `rustok-commerce` (Commerce domain)
+**Роль:** товары/заказы/цены.
+- Commerce write model + события.
+- Мульти-tenant фильтрация обязательна.
+
+### 15.10 `rustok-index` (CQRS Read Model)
+**Роль:** быстрый поиск и denormalized read tables.
+- Подписка на события.
+- Построение `index_*` таблиц / search индекс.
+
+### 15.11 `rustok-outbox` (Event delivery)
+**Роль:** надёжная доставка событий (Outbox pattern).
+- Не заменяет EventBus, а расширяет транспорт.
+
+### 15.12 `rustok-iggy` (Streaming transport)
+**Роль:** потоковый транспорт событий (опционально).
+- Реализация `EventTransport` для L2.
+
 ---
 
-## 15. CODING STANDARDS (The "Golden Rules")
+## 16. CODING STANDARDS (The "Golden Rules")
 
 Для обеспечения консистентности кода и предсказуемости для ИИ:
 
@@ -645,9 +736,9 @@ graph TD
 
 ---
 
-## 16. ARCHITECTURAL PATTERNS
+## 17. ARCHITECTURAL PATTERNS
 
-### 16.1 The Service Layer Pattern
+### 17.1 The Service Layer Pattern
 Контроллеры (REST) и резолверы (GraphQL) — это просто тонкие обертки. Вся логика живет в `Services`.
 
 ```rust
@@ -663,12 +754,12 @@ impl NodeService {
 }
 ```
 
-### 16.2 The Transactional Pattern
+### 17.2 The Transactional Pattern
 Для операций с несколькими таблицами всегда передавайте `&C where C: ConnectionTrait` в методы сервисов, чтобы можно было прокинуть транзакцию.
 
 ---
 
-## 17. RECIPE: Creating a New Module
+## 18. RECIPE: Creating a New Module
 
 Чтобы добавить новый функционал (например, "Tickets"), следуй этому алгоритму:
 
@@ -682,7 +773,7 @@ impl NodeService {
 
 ---
 
-## 18. FINAL CHECKLIST for AI
+## 19. FINAL CHECKLIST for AI
 
 - [x] Использует `Uuid` (ULID) для всех ID.
 - [x] `tenant_id` присутствует во всех фильтрах БД.
@@ -693,11 +784,11 @@ impl NodeService {
 
 ---
 
-## 19. STANDARD MODULE LAYOUT (Design Pattern)
+## 20. STANDARD MODULE LAYOUT (Design Pattern)
 
 Чтобы ИИ и разработчики могли ориентироваться в любом крайте (crate), мы вводим единый стандарт папок. Даже если папка пуста — она должна быть (или создаваться по мере роста).
 
-### 19.1 Directory Structure
+### 20.1 Directory Structure
 ```text
 crates/rustok-[name]/
 ├── src/
@@ -710,7 +801,7 @@ crates/rustok-[name]/
 └── README.md
 ```
 
-### 19.2 Module Categorization
+### 20.2 Module Categorization
 Мы разделяем модули на 4 типа, но структура папок остается **одинаковой**:
 
 1.  **Core Components** (e.g., `rustok-content`): Базовые кирпичики системы. Имеют таблицы, но могут не иметь сложной бизнес-логики.
@@ -718,7 +809,7 @@ crates/rustok-[name]/
 3.  **Wrapper Modules** (e.g., `rustok-blog`): Надстройки. **Не имеют своих таблиц**. Используют таблицы `Core Components`, упаковывая их в специфичную бизнес-логику.
 4.  **Infrastructural Modules** (e.g., `rustok-index`): Технические модули (Поиск, CQRS, Почта).
 
-### 19.3 The lib.rs Standard
+### 20.3 The lib.rs Standard
 Все модули обязаны реализовывать `RusToKModule` для интеграции в `ModuleRegistry`.
 
 ```rust
@@ -734,7 +825,7 @@ impl RusToKModule for MyModule {
 
 ---
 
-## 20. IGGY INTEGRATION (Consensus)
+## 21. IGGY INTEGRATION (Consensus)
 
 | Decision | Status |
 |----------|--------|
@@ -745,28 +836,28 @@ impl RusToKModule for MyModule {
 | Auto consumer groups | ✅ |
 | JSON default, Bincode optional | ✅ |
 
-## 21. PLATFORM FOUNDATION (Consensus)
+## 22. PLATFORM FOUNDATION (Consensus)
 
 | Decision | Status |
 |----------|--------|
 | Simple RusToKModule trait | ✅ |
 | Arc<AppContext> (no DI) | ✅ |
-| config-rs hierarchy | ✅ |
-| Axum + utoipa | ✅ |
+| Loco RS foundation | ✅ |
+| Loco YAML config | ✅ |
+| Axum + utoipa (via Loco) | ✅ |
 | Tantivy embedded | ✅ |
-| object_store | ✅ |
-| moka + Redis optional | ✅ |
+| Loco Storage (object_store) | ✅ |
+| Loco Cache (Redis) | ✅ |
 | tracing + metrics | ✅ |
 | GraphQL in backlog | ✅ |
 
-## 22. MASTER PLAN v4.1 (Implementation Order)
+## 23. MASTER PLAN v4.1 (Implementation Order)
 
 ```text
 PHASE 1: Foundation (Week 1-2)
-□ 1.1 rustok-config
+□ 1.1 Loco app bootstrap + config
 □ 1.2 rustok-core (module trait + context)
 □ 1.3 rustok-telemetry
-□ 1.4 apps/server bootstrap
 
 PHASE 2: Event System (Week 2-3)
 □ 2.1 rustok-core/events (traits + envelope)
@@ -775,9 +866,8 @@ PHASE 2: Event System (Week 2-3)
 □ 2.4 apps/server (sys_events migration)
 
 PHASE 3: Infrastructure (Week 3-4)
-□ 3.1 rustok-cache (moka backend)
-□ 3.2 rustok-search (tantivy backend)
-□ 3.3 rustok-storage (object_store wrapper)
+□ 3.1 rustok-index (tantivy backend)
+□ 3.2 Loco storage/cache integrations (via apps/server)
 
 PHASE 4: Iggy Integration (Week 4-5)
 □ 4.1 rustok-iggy (remote backend)
@@ -785,16 +875,17 @@ PHASE 4: Iggy Integration (Week 4-5)
 □ 4.3 rustok-iggy (topology + consumer groups)
 
 PHASE 5: Business Modules (Week 5+)
-□ 5.1 rustok-auth (example module)
-□ 5.2 rustok-content (example module)
-□ 5.3 rustok-forum (community module)
+□ 5.1 rustok-content (example module)
+□ 5.2 rustok-forum (community module)
+□ 5.3 rustok-blog (blog module)
+□ 5.4 rustok-commerce (commerce module)
 ```
 
 ---
 
-## 23. CHANGE PLAN (Consensus-Driven)
+## 24. CHANGE PLAN (Consensus-Driven)
 
-### 23.1 Overview by Stage
+### 24.1 Overview by Stage
 
 | Stage | Area | Change Type |
 |-------|------|-------------|
@@ -802,7 +893,7 @@ PHASE 5: Business Modules (Week 5+)
 | 2 | Iggy Integration | New crate |
 | 3 | Platform Foundation | Refactor + improvements |
 
-### 23.2 Stage 1: Event System — Detailed Changes
+### 24.2 Stage 1: Event System — Detailed Changes
 
 **1.1 Extend `EventEnvelope` (P0)**  
 **File:** `crates/rustok-core/src/events/envelope.rs` (or current location)  
@@ -842,7 +933,7 @@ Key components:
 **File:** `crates/rustok-core/src/events/memory.rs`  
 In-memory transport via `tokio::sync::broadcast`.
 
-### 23.3 Stage 2: Iggy Integration — Detailed Changes
+### 24.3 Stage 2: Iggy Integration — Detailed Changes
 
 **2.1 New crate `rustok-iggy` (P1)**  
 **Path:** `crates/rustok-iggy/`  
@@ -852,7 +943,7 @@ crates/rustok-iggy/
 ├── Cargo.toml
 └── src/
     ├── lib.rs
-    ├── config.rs           # IggyConfig (or in rustok-config)
+    ├── config.rs           # IggyConfig (mirrors apps/server config)
     ├── transport.rs        # IggyTransport impl EventTransport
     ├── backend/
     │   ├── mod.rs          # IggyBackend trait
@@ -865,7 +956,7 @@ crates/rustok-iggy/
 ```
 
 **2.2 Add Iggy config (P1)**  
-**File:** `crates/rustok-config/src/types.rs` (or current location)  
+**File:** `apps/server/config/*.yaml` (section `rustok.iggy`)  
 Add:
 - `IggyConfig`
 - `IggyEmbeddedConfig`
@@ -880,7 +971,7 @@ Add:
 iggy = ["rustok-iggy"]
 ```
 
-### 23.4 Stage 3: Platform Foundation — Detailed Changes
+### 24.4 Stage 3: Platform Foundation — Detailed Changes
 
 **3.1 Extend `RusToKModule` trait (P0)**  
 **File:** `crates/rustok-core/src/module.rs`  
@@ -906,12 +997,12 @@ Check/add:
 - TraceId propagation in events
 
 **3.4 Config hierarchy (P1)**  
-**File:** `crates/rustok-config/src/lib.rs`  
+**File:** `apps/server/config/*.yaml`  
 Check/add:
-- `default.toml → local.toml → ENV` overrides
-- `RUSTOK_*` environment prefix
+- `development.yaml/production.yaml/test.yaml` layering
+- Env overrides supported by Loco
 
-### 23.5 Summary Table of Changes
+### 24.5 Summary Table of Changes
 
 | # | Change | Type | File/Crate | Priority |
 |---|--------|------|-----------|----------|
@@ -920,14 +1011,14 @@ Check/add:
 | 1.3 | OutboxTransport | New crate | `rustok-outbox` | P0 |
 | 1.4 | MemoryTransport | Add/Check | `rustok-core/events` | P1 |
 | 2.1 | IggyTransport | New crate | `rustok-iggy` | P1 |
-| 2.2 | Iggy config | Add | `rustok-config` | P1 |
+| 2.2 | Iggy config | Add | `apps/server/config` | P1 |
 | 2.3 | Iggy feature flag | Add | `Cargo.toml` | P1 |
 | 3.1 | Module dependencies/health | Modify | `rustok-core/module` | P0 |
 | 3.2 | AppContext fields | Modify | `rustok-core/context` | P0 |
 | 3.3 | Telemetry improvements | Check/Add | `rustok-telemetry` | P1 |
-| 3.4 | Config hierarchy | Check/Add | `rustok-config` | P1 |
+| 3.4 | Config hierarchy | Check/Add | `apps/server/config` | P1 |
 
-### 23.6 Delivery Order
+### 24.6 Delivery Order
 
 **Week 1 (P0):**
 - 1.1 EventEnvelope extension
@@ -945,7 +1036,7 @@ Check/add:
 - 3.3 Telemetry check
 - 3.4 Config check
 
-### 23.7 Implementation Status (Repo Snapshot)
+### 24.7 Implementation Status (Repo Snapshot)
 
 | Item | Status | Notes |
 |------|--------|-------|
@@ -959,6 +1050,6 @@ Check/add:
 | 3.1 Module dependencies/health | ✅ Done | HealthStatus + default health() |
 | 3.2 AppContext fields | ✅ Done (scaffold) | events/cache/search traits present |
 | 3.3 Telemetry improvements | ⛔ Not yet | JSON logs/metrics/trace propagation |
-| 3.4 Config hierarchy | ⛔ Not yet | default/local/env with RUSTOK_* |
+| 3.4 Config hierarchy | ✅ Done | Loco YAML configs + env overrides |
 
 END OF MANIFEST v4.1

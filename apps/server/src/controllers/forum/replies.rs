@@ -3,9 +3,11 @@ use axum::{
     Json,
 };
 use loco_rs::prelude::*;
-use serde::Deserialize;
 use rustok_core::EventBus;
-use rustok_forum::{CreateReplyInput, ReplyListItem, ReplyResponse, ReplyService, UpdateReplyInput};
+use rustok_forum::{
+    CreateReplyInput, ReplyListItem, ReplyResponse, ReplyService, UpdateReplyInput,
+};
+use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::context::TenantContext;

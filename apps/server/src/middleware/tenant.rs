@@ -14,6 +14,7 @@ use once_cell::sync::Lazy;
 use std::time::Duration;
 use uuid::Uuid;
 
+use crate::common::settings::RustokSettings;
 use crate::context::{TenantContext, TenantContextExtension};
 use crate::models::tenants;
 
@@ -31,8 +32,9 @@ pub async fn resolve(
     mut req: Request<Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    let host = extract_host(req.headers()).ok_or(StatusCode::BAD_REQUEST)?;
-    let identifier = host.split(':').next().unwrap_or(host).to_string();
+    let settings = RustokSettings::from_settings(&ctx.config.settings)
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    let identifier = resolve_identifier(&req, &settings)?;
 
     // Check cache first
     if let Some(cached_context) = TENANT_CACHE.get(&identifier).await {
@@ -66,6 +68,33 @@ pub async fn resolve(
             Ok(next.run(req).await)
         }
         None => Err(StatusCode::NOT_FOUND),
+    }
+}
+
+fn resolve_identifier(
+    req: &Request<Body>,
+    settings: &RustokSettings,
+) -> Result<String, StatusCode> {
+    if !settings.tenant.enabled {
+        return Ok(settings.tenant.default_id.to_string());
+    }
+
+    match settings.tenant.resolution.as_str() {
+        "header" => {
+            let header_value = req
+                .headers()
+                .get(&settings.tenant.header_name)
+                .and_then(|value| value.to_str().ok());
+
+            Ok(header_value
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| settings.tenant.default_id.to_string()))
+        }
+        "host" | "domain" | "subdomain" => {
+            let host = extract_host(req.headers()).ok_or(StatusCode::BAD_REQUEST)?;
+            Ok(host.split(':').next().unwrap_or(host).to_string())
+        }
+        _ => Ok(settings.tenant.default_id.to_string()),
     }
 }
 

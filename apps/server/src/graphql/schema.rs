@@ -11,7 +11,13 @@ use super::mutations::RootMutation;
 use super::queries::RootQuery;
 
 #[derive(MergedObject, Default)]
-pub struct Query(RootQuery, CommerceQuery, ContentQuery, BlogQuery, ForumQuery);
+pub struct Query(
+    RootQuery,
+    CommerceQuery,
+    ContentQuery,
+    BlogQuery,
+    ForumQuery,
+);
 
 #[derive(MergedObject, Default)]
 pub struct Mutation(

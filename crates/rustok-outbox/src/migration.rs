@@ -18,11 +18,7 @@ impl MigrationTrait for SysEventsMigration {
                             .primary_key(),
                     )
                     .col(ColumnDef::new(SysEvents::Payload).json_binary().not_null())
-                    .col(
-                        ColumnDef::new(SysEvents::Status)
-                            .string_len(32)
-                            .not_null(),
-                    )
+                    .col(ColumnDef::new(SysEvents::Status).string_len(32).not_null())
                     .col(
                         ColumnDef::new(SysEvents::CreatedAt)
                             .timestamp_with_time_zone()
