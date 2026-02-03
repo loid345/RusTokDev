@@ -1,7 +1,10 @@
 use axum::{
     body::Body,
     extract::State,
-    http::{header::HOST, Request, StatusCode},
+    http::{
+        header::{FORWARDED, HOST},
+        Request, StatusCode,
+    },
     middleware::Next,
     response::Response,
 };
@@ -28,11 +31,7 @@ pub async fn resolve(
     mut req: Request<Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
-    let host = req
-        .headers()
-        .get(HOST)
-        .and_then(|value| value.to_str().ok())
-        .ok_or(StatusCode::BAD_REQUEST)?;
+    let host = extract_host(req.headers()).ok_or(StatusCode::BAD_REQUEST)?;
     let identifier = host.split(':').next().unwrap_or(host).to_string();
 
     // Check cache first
@@ -68,6 +67,33 @@ pub async fn resolve(
         }
         None => Err(StatusCode::NOT_FOUND),
     }
+}
+
+fn extract_host(headers: &axum::http::HeaderMap) -> Option<&str> {
+    if let Some(host) = headers
+        .get("x-forwarded-host")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.split(',').next())
+    {
+        return Some(host.trim());
+    }
+
+    if let Some(forwarded) = headers.get(FORWARDED).and_then(|value| value.to_str().ok()) {
+        if let Some(host) = parse_forwarded_host(forwarded) {
+            return Some(host);
+        }
+    }
+
+    headers.get(HOST).and_then(|value| value.to_str().ok())
+}
+
+fn parse_forwarded_host(forwarded: &str) -> Option<&str> {
+    forwarded
+        .split(',')
+        .next()
+        .and_then(|entry| entry.split(';').find(|part| part.trim_start().starts_with("host=")))
+        .and_then(|part| part.trim_start().strip_prefix("host="))
+        .map(|host| host.trim_matches('"').trim())
 }
 
 /// Invalidate cached tenant (call after tenant update)

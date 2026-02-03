@@ -27,15 +27,15 @@ impl ModuleRegistry {
     }
 
     pub fn list(&self) -> Vec<&dyn RusToKModule> {
-        self.modules
-            .values()
-            .map(|module| module.as_ref())
-            .collect()
+        let mut modules: Vec<&dyn RusToKModule> =
+            self.modules.values().map(|module| module.as_ref()).collect();
+        modules.sort_by_key(|module| module.slug());
+        modules
     }
 
     pub fn migrations(&self) -> Vec<ModuleMigration> {
-        self.modules
-            .values()
+        self.list()
+            .into_iter()
             .map(|module| ModuleMigration {
                 module_slug: module.slug(),
                 migrations: module.migrations(),
@@ -44,8 +44,8 @@ impl ModuleRegistry {
     }
 
     pub fn event_listeners(&self) -> Vec<Box<dyn EventListener>> {
-        self.modules
-            .values()
+        self.list()
+            .into_iter()
             .flat_map(|module| module.event_listeners())
             .collect()
     }
