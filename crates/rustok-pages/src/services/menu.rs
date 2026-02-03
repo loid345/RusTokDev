@@ -1,4 +1,6 @@
 use sea_orm::DatabaseConnection;
+use std::future::Future;
+use std::pin::Pin;
 use uuid::Uuid;
 
 use rustok_content::{CreateNodeInput, ListNodesFilter, NodeService};
@@ -67,59 +69,67 @@ impl MenuService {
         self.get(tenant_id, security, menu_id).await
     }
 
-    async fn create_menu_item(
+    fn create_menu_item(
         &self,
         tenant_id: Uuid,
         security: SecurityContext,
         menu_id: Uuid,
         parent_item_id: Option<Uuid>,
         input: MenuItemInput,
-    ) -> PagesResult<Uuid> {
-        let url = input.url.clone().unwrap_or_else(|| "/".to_string());
+    ) -> Pin<Box<dyn Future<Output = PagesResult<Uuid>> + Send + '_>> {
+        Box::pin(async move {
+            let url = input.url.clone().unwrap_or_else(|| "/".to_string());
 
-        let metadata = serde_json::json!({
-            "menu_id": menu_id,
-            "url": url,
-            "icon": input.icon,
-            "page_id": input.page_id,
-        });
+            let metadata = serde_json::json!({
+                "menu_id": menu_id,
+                "url": url,
+                "icon": input.icon,
+                "page_id": input.page_id,
+            });
 
-        let parent = parent_item_id.or(Some(menu_id));
+            let parent = parent_item_id.or(Some(menu_id));
 
-        let node = self
-            .nodes
-            .create_node(
-                tenant_id,
-                security.clone(),
-                CreateNodeInput {
-                    kind: MENU_ITEM_KIND.to_string(),
-                    status: Some(rustok_content::entities::node::ContentStatus::Published),
-                    parent_id: parent,
-                    author_id: security.user_id,
-                    category_id: None,
-                    position: Some(input.position),
-                    depth: None,
-                    reply_count: None,
-                    metadata,
-                    translations: vec![rustok_content::NodeTranslationInput {
-                        locale: "default".to_string(),
-                        title: Some(input.title),
-                        slug: None,
-                        excerpt: None,
-                    }],
-                    bodies: vec![],
-                },
-            )
-            .await?;
+            let node = self
+                .nodes
+                .create_node(
+                    tenant_id,
+                    security.clone(),
+                    CreateNodeInput {
+                        kind: MENU_ITEM_KIND.to_string(),
+                        status: Some(rustok_content::entities::node::ContentStatus::Published),
+                        parent_id: parent,
+                        author_id: security.user_id,
+                        category_id: None,
+                        position: Some(input.position),
+                        depth: None,
+                        reply_count: None,
+                        metadata,
+                        translations: vec![rustok_content::NodeTranslationInput {
+                            locale: "default".to_string(),
+                            title: Some(input.title),
+                            slug: None,
+                            excerpt: None,
+                        }],
+                        bodies: vec![],
+                    },
+                )
+                .await?;
 
-        if let Some(children) = input.children {
-            for child in children {
-                self.create_menu_item(tenant_id, security.clone(), menu_id, Some(node.id), child)
+            if let Some(children) = input.children {
+                for child in children {
+                    self.create_menu_item(
+                        tenant_id,
+                        security.clone(),
+                        menu_id,
+                        Some(node.id),
+                        child,
+                    )
                     .await?;
+                }
             }
-        }
 
-        Ok(node.id)
+            Ok(node.id)
+        })
     }
 
     pub async fn get(
@@ -157,63 +167,65 @@ impl MenuService {
         })
     }
 
-    async fn get_menu_items(
+    fn get_menu_items(
         &self,
         tenant_id: Uuid,
         security: SecurityContext,
         parent_id: Uuid,
-    ) -> PagesResult<Vec<MenuItemResponse>> {
-        let (items, _) = self
-            .nodes
-            .list_nodes(
-                tenant_id,
-                security.clone(),
-                ListNodesFilter {
-                    kind: Some(MENU_ITEM_KIND.to_string()),
-                    status: None,
-                    parent_id: Some(parent_id),
-                    author_id: None,
-                    locale: None,
-                    page: 1,
-                    per_page: 100,
-                },
-            )
-            .await?;
-
-        let mut responses = Vec::with_capacity(items.len());
-        for item in items {
-            let node = self.nodes.get_node(item.id).await?;
-            let title = node
-                .translations
-                .first()
-                .and_then(|t| t.title.clone());
-
-            let url = node
-                .metadata
-                .get("url")
-                .and_then(|value| value.as_str())
-                .unwrap_or("#")
-                .to_string();
-
-            let icon = node
-                .metadata
-                .get("icon")
-                .and_then(|value| value.as_str())
-                .map(String::from);
-
-            let children = self
-                .get_menu_items(tenant_id, security.clone(), node.id)
+    ) -> Pin<Box<dyn Future<Output = PagesResult<Vec<MenuItemResponse>>> + Send + '_>> {
+        Box::pin(async move {
+            let (items, _) = self
+                .nodes
+                .list_nodes(
+                    tenant_id,
+                    security.clone(),
+                    ListNodesFilter {
+                        kind: Some(MENU_ITEM_KIND.to_string()),
+                        status: None,
+                        parent_id: Some(parent_id),
+                        author_id: None,
+                        locale: None,
+                        page: 1,
+                        per_page: 100,
+                    },
+                )
                 .await?;
 
-            responses.push(MenuItemResponse {
-                id: node.id,
-                title,
-                url,
-                icon,
-                children,
-            });
-        }
+            let mut responses = Vec::with_capacity(items.len());
+            for item in items {
+                let node = self.nodes.get_node(item.id).await?;
+                let title = node
+                    .translations
+                    .first()
+                    .and_then(|t| t.title.clone());
 
-        Ok(responses)
+                let url = node
+                    .metadata
+                    .get("url")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or("#")
+                    .to_string();
+
+                let icon = node
+                    .metadata
+                    .get("icon")
+                    .and_then(|value| value.as_str())
+                    .map(String::from);
+
+                let children = self
+                    .get_menu_items(tenant_id, security.clone(), node.id)
+                    .await?;
+
+                responses.push(MenuItemResponse {
+                    id: node.id,
+                    title,
+                    url,
+                    icon,
+                    children,
+                });
+            }
+
+            Ok(responses)
+        })
     }
 }
