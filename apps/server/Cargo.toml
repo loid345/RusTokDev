@@ -10,6 +10,7 @@ rustok-commerce.workspace = true
 rustok-blog.workspace = true
 rustok-content.workspace = true
 rustok-forum.workspace = true
+rustok-pages.workspace = true
 
 loco-rs.workspace = true
 tokio.workspace = true
