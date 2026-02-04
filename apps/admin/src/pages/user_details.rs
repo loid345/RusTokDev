@@ -45,26 +45,20 @@ pub fn UserDetails() -> impl IntoView {
     let user_resource = Resource::new(
         move || {
             (
-                params.with(|params| {
-                    params
-                        .as_ref()
-                        .ok()
-                        .and_then(|params| params.id.clone())
-                }),
+                params.with(|params| params.as_ref().ok().and_then(|params| params.id.clone())),
                 tenant_slug.get(),
             )
         },
         move |_| {
             let token = auth.token.get().unwrap_or_default();
             let tenant = tenant_slug.get().trim().to_string();
-            let user_id = params
-                .with(|params| {
-                    params
-                        .as_ref()
-                        .ok()
-                        .and_then(|params| params.id.clone())
-                        .unwrap_or_default()
-                });
+            let user_id = params.with(|params| {
+                params
+                    .as_ref()
+                    .ok()
+                    .and_then(|params| params.id.clone())
+                    .unwrap_or_default()
+            });
 
             async move {
                 request::<UserVariables, GraphqlUserResponse>(
