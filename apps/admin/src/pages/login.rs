@@ -92,15 +92,10 @@ pub fn Login() -> impl IntoView {
                 Err(err) => {
                     let message = match err {
                         ApiError::Unauthorized => {
-                            translate(locale.get(), "errors.auth.invalid_credentials")
-                                .to_string()
+                            translate(locale.get(), "errors.auth.invalid_credentials").to_string()
                         }
-                        ApiError::Http(_) => {
-                            translate(locale.get(), "errors.http").to_string()
-                        }
-                        ApiError::Network => {
-                            translate(locale.get(), "errors.network").to_string()
-                        }
+                        ApiError::Http(_) => translate(locale.get(), "errors.http").to_string(),
+                        ApiError::Network => translate(locale.get(), "errors.network").to_string(),
                         ApiError::Graphql(_) => {
                             translate(locale.get(), "errors.unknown").to_string()
                         }

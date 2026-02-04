@@ -1,9 +1,9 @@
 pub fn translate_en(key: &str) -> Option<&'static str> {
     match key {
         "users.title" => Some("Users"),
-        "users.subtitle" => Some(
-            "REST and GraphQL API preview. Provide admin token and tenant slug.",
-        ),
+        "users.subtitle" => {
+            Some("REST and GraphQL API preview. Provide admin token and tenant slug.")
+        }
         "users.refresh" => Some("Refresh"),
         "users.access.title" => Some("Access settings"),
         "users.access.hint" => Some(

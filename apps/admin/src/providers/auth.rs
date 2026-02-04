@@ -62,8 +62,7 @@ pub fn use_auth() -> AuthContext {
 }
 
 fn local_storage() -> Option<web_sys::Storage> {
-    web_sys::window()
-        .and_then(|window| window.local_storage().ok().flatten())
+    web_sys::window().and_then(|window| window.local_storage().ok().flatten())
 }
 
 fn load_token_from_storage() -> Option<String> {

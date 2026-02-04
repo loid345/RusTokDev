@@ -1,8 +1,6 @@
 pub fn translate_en(key: &str) -> Option<&'static str> {
     match key {
-        "dashboard.subtitle" => Some(
-            "RusToK system summary: key metrics and quick module access.",
-        ),
+        "dashboard.subtitle" => Some("RusToK system summary: key metrics and quick module access."),
         "dashboard.logout" => Some("Log out"),
         "dashboard.createTenant" => Some("Create tenant"),
         "dashboard.stats.tenants" => Some("Active tenants"),
@@ -37,9 +35,9 @@ pub fn translate_en(key: &str) -> Option<&'static str> {
 
 pub fn translate_ru(key: &str) -> Option<&'static str> {
     match key {
-        "dashboard.subtitle" => Some(
-            "Сводка системы RusToK: ключевые метрики и быстрый доступ к модулям.",
-        ),
+        "dashboard.subtitle" => {
+            Some("Сводка системы RusToK: ключевые метрики и быстрый доступ к модулям.")
+        }
         "dashboard.logout" => Some("Выйти"),
         "dashboard.createTenant" => Some("Создать тенант"),
         "dashboard.stats.tenants" => Some("Активные тенанты"),
