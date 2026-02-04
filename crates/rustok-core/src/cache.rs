@@ -90,7 +90,7 @@ impl CacheBackend for RedisCacheBackend {
     async fn health(&self) -> Result<()> {
         let mut conn = self
             .client
-            .get_async_connection()
+            .get_multiplexed_async_connection()
             .await
             .map_err(|err| crate::Error::Cache(err.to_string()))?;
         let pong: String = redis::cmd("PING")
@@ -109,7 +109,7 @@ impl CacheBackend for RedisCacheBackend {
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
         let mut conn = self
             .client
-            .get_async_connection()
+            .get_multiplexed_async_connection()
             .await
             .map_err(|err| crate::Error::Cache(err.to_string()))?;
         let value: Option<Vec<u8>> = redis::cmd("GET")
@@ -123,7 +123,7 @@ impl CacheBackend for RedisCacheBackend {
     async fn set(&self, key: String, value: Vec<u8>) -> Result<()> {
         let mut conn = self
             .client
-            .get_async_connection()
+            .get_multiplexed_async_connection()
             .await
             .map_err(|err| crate::Error::Cache(err.to_string()))?;
         redis::cmd("SET")
@@ -140,7 +140,7 @@ impl CacheBackend for RedisCacheBackend {
     async fn invalidate(&self, key: &str) -> Result<()> {
         let mut conn = self
             .client
-            .get_async_connection()
+            .get_multiplexed_async_connection()
             .await
             .map_err(|err| crate::Error::Cache(err.to_string()))?;
         redis::cmd("DEL")
