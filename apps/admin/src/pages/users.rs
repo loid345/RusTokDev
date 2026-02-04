@@ -189,7 +189,7 @@ pub fn Users() -> impl IntoView {
                                     <p>{move || translate(locale.locale.get(), "users.rest.pending")}</p>
                                 </div>
                             }
-                            .into_view(),
+                            .into_any(),
                             Some(Ok(user)) => view! {
                                 <div class="user-card">
                                     <strong>{user.email}</strong>
@@ -200,7 +200,7 @@ pub fn Users() -> impl IntoView {
                                     <p class="meta-text">{user.id}</p>
                                 </div>
                             }
-                            .into_view(),
+                            .into_any(),
                             Some(Err(err)) => view! {
                                 <div class="alert">
                                     {match err {
@@ -211,7 +211,7 @@ pub fn Users() -> impl IntoView {
                                     }}
                                 </div>
                             }
-                            .into_view(),
+                            .into_any(),
                         }}
                     </Suspense>
                 </div>
@@ -225,7 +225,7 @@ pub fn Users() -> impl IntoView {
                                     <p>{move || translate(locale.locale.get(), "users.rest.pending")}</p>
                                 </div>
                             }
-                            .into_view(),
+                            .into_any(),
                             Some(Ok(response)) => view! {
                                 <div>
                                     <p class="meta-text">
@@ -336,7 +336,7 @@ pub fn Users() -> impl IntoView {
                                     </div>
                                 </div>
                             }
-                            .into_view(),
+                            .into_any(),
                             Some(Err(err)) => view! {
                                 <div class="alert">
                                     {match err {
@@ -347,7 +347,7 @@ pub fn Users() -> impl IntoView {
                                     }}
                                 </div>
                             }
-                            .into_view(),
+                            .into_any(),
                         }}
                     </Suspense>
                 </div>
