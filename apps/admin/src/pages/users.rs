@@ -1,4 +1,5 @@
 use leptos::*;
+use leptos_router::Link;
 use serde::{Deserialize, Serialize};
 
 use crate::api::{request, rest_get, ApiError};
@@ -234,7 +235,11 @@ pub fn Users() -> impl IntoView {
                                                     let user = &edge.node;
                                                     view! {
                                                         <tr>
-                                                            <td>{user.email.clone()}</td>
+                                                            <td>
+                                                                <Link href=format!("/users/{}", user.id.clone())>
+                                                                    {user.email.clone()}
+                                                                </Link>
+                                                            </td>
                                                             <td>{user.name.clone().unwrap_or_else(|| translate(locale.locale.get(), "users.placeholderDash").to_string())}</td>
                                                             <td>{user.role.clone()}</td>
                                                             <td>
