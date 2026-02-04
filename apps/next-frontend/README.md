@@ -18,3 +18,15 @@ npm run dev
 - Zod
 - Next SEO
 - next-intl (ru/en)
+
+## Расширенный стандартный стек
+
+- Auth: next-auth
+- State: zustand
+- GraphQL: graphql-request
+- REST/OpenAPI: openapi-fetch
+- Tables: @tanstack/react-table
+- Dates: date-fns
+- Analytics: posthog-js
+- Monitoring: @sentry/nextjs
+- Notifications: react-hot-toast

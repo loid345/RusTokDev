@@ -18,3 +18,15 @@ npm run dev
 - React Hook Form + Zod
 - next-intl (ru/en)
 - Lucide icons
+
+## Расширенный стандартный стек
+
+- Auth: next-auth
+- State: zustand
+- GraphQL: graphql-request
+- REST/OpenAPI: openapi-fetch
+- Tables: @tanstack/react-table
+- Dates: date-fns
+- Analytics: posthog-js
+- Monitoring: @sentry/nextjs
+- Notifications: react-hot-toast
