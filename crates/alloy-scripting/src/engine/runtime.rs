@@ -1,5 +1,5 @@
 use parking_lot::RwLock;
-use rhai::{Dynamic, Engine, EvalAltResult, RhaiNativeFunc, Variant, AST};
+use rhai::{Dynamic, Engine, EvalAltResult, RhaiNativeFunc, AST};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -8,9 +8,8 @@ use crate::error::{ScriptError, ScriptResult};
 
 use super::config::EngineConfig;
 
-struct CompiledScript {
+pub struct CompiledScript {
     ast: AST,
-    name: String,
 }
 
 pub struct ScriptEngine {
@@ -46,7 +45,8 @@ impl ScriptEngine {
         name: &str,
         func: impl RhaiNativeFunc<A, N, X, R, F> + Send + Sync + 'static,
     ) where
-        R: Variant + Clone,
+        A: 'static,
+        R: 'static + Clone + Send + Sync,
     {
         self.engine.register_fn(name, func);
     }
@@ -72,10 +72,7 @@ impl ScriptEngine {
             .compile(source)
             .map_err(|e| ScriptError::Compilation(e.to_string()))?;
 
-        let compiled = Arc::new(CompiledScript {
-            ast,
-            name: name.to_string(),
-        });
+        let compiled = Arc::new(CompiledScript { ast });
 
         let mut cache = self.cache.write();
         cache.insert(name.to_string(), Arc::clone(&compiled));
