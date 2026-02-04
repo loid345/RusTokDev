@@ -71,7 +71,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 async-trait = "0.1"
 rust_decimal = "1.36"
-utoipa = "5.4.0"
+utoipa = "5.4"
 utoipa-swagger-ui = { version = "7.0", features = ["vendored"] }
 moka = { version = "0.12", features = ["future"] }
 argon2 = "0.5"
