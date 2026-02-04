@@ -72,9 +72,10 @@ impl ScriptEngine {
             }
         }
 
-        let ast = self.engine.compile_with_scope(scope, source).map_err(|e| {
-            ScriptError::Compilation(e.to_string())
-        })?;
+        let ast = self
+            .engine
+            .compile_with_scope(scope, source)
+            .map_err(|e| ScriptError::Compilation(e.to_string()))?;
 
         let compiled = Arc::new(CompiledScript { ast });
 
