@@ -2,4 +2,5 @@
 
 Design tokens live here (colors, typography, spacing, radius, shadows, and themes).
 
-Light and dark themes should be defined as CSS variables and consumed by both Next and Leptos.
+- `base.css`: minimal token set aligned to shadcn defaults (HSL values) with light/dark themes.
+- Consumers should map these to framework-specific styling systems.
