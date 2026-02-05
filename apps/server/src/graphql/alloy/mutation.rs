@@ -1,10 +1,12 @@
 use async_graphql::{Context, Object, Result};
 use chrono::Utc;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use alloy_scripting::model::Script;
 use alloy_scripting::runner::ExecutionOutcome;
 use alloy_scripting::ScriptRegistry;
+use rhai::Dynamic;
 
 use super::types::{
     CreateScriptInput, GqlExecutionResult, GqlScript, RunScriptInput, UpdateScriptInput,
@@ -128,13 +130,15 @@ impl AlloyMutation {
         let params = input
             .params
             .map(|params| {
-                params
+                let object = params
                     .0
                     .as_object()
-                    .ok_or_else(|| async_graphql::Error::new("params must be a JSON object"))?
+                    .ok_or_else(|| async_graphql::Error::new("params must be a JSON object"))?;
+                let params_map: HashMap<String, Dynamic> = object
                     .iter()
                     .map(|(key, value)| (key.clone(), json_to_dynamic(value.clone())))
-                    .collect()
+                    .collect();
+                Ok(params_map)
             })
             .transpose()?
             .unwrap_or_default();
