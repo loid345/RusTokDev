@@ -69,7 +69,9 @@
     "resetConfirmSubmit": "Update password",
     "resetRequested": "Reset request accepted.",
     "passwordUpdated": "Password updated.",
-    "resetTokenPreview": "Reset token: {token}"
+    "resetTokenPreview": "Reset token: {token}",
+    "resetTokenExpired": "This reset token has expired.",
+    "resetTokenExpiredRecovery": "Request a new reset link and try again."
   },
   "users": {
     "eyebrow": "Users",

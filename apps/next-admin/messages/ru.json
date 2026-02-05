@@ -69,7 +69,9 @@
     "resetConfirmSubmit": "Обновить пароль",
     "resetRequested": "Запрос на сброс принят.",
     "passwordUpdated": "Пароль обновлён.",
-    "resetTokenPreview": "Токен сброса: {token}"
+    "resetTokenPreview": "Токен сброса: {token}",
+    "resetTokenExpired": "Срок действия токена сброса истёк.",
+    "resetTokenExpiredRecovery": "Запросите новую ссылку для сброса и повторите попытку."
   },
   "users": {
     "eyebrow": "Users",
