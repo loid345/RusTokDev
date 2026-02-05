@@ -2,8 +2,7 @@ use argon2::{PasswordHasher, PasswordVerifier};
 use chrono::{Duration, Utc};
 use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
 use loco_rs::{app::AppContext, Error, Result};
-use password_hash::rand_core::OsRng;
-use rand::RngCore;
+use password_hash::rand_core::{OsRng, RngCore};
 use rustok_core::UserRole;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -132,7 +131,8 @@ pub fn decode_access_token(config: &AuthConfig, token: &str) -> Result<Claims> {
 
 pub fn generate_refresh_token() -> String {
     let mut bytes = [0u8; 32];
-    rand::rngs::OsRng.fill_bytes(&mut bytes);
+    let mut rng = OsRng;
+    rng.fill_bytes(&mut bytes);
     hex::encode(bytes)
 }
 

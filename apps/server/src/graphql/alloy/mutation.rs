@@ -1,10 +1,12 @@
 use async_graphql::{Context, Object, Result};
 use chrono::Utc;
+use std::collections::HashMap;
 use uuid::Uuid;
 
 use alloy_scripting::model::Script;
 use alloy_scripting::runner::ExecutionOutcome;
 use alloy_scripting::ScriptRegistry;
+use rhai::Dynamic;
 
 use super::types::{
     CreateScriptInput, GqlExecutionResult, GqlScript, RunScriptInput, UpdateScriptInput,
@@ -127,14 +129,16 @@ impl AlloyMutation {
 
         let params = input
             .params
-            .map(|params| {
-                params
+            .map(|params| -> Result<HashMap<String, Dynamic>> {
+                let object = params
                     .0
                     .as_object()
-                    .ok_or_else(|| async_graphql::Error::new("params must be a JSON object"))?
+                    .ok_or_else(|| async_graphql::Error::new("params must be a JSON object"))?;
+                let params_map: HashMap<String, Dynamic> = object
                     .iter()
                     .map(|(key, value)| (key.clone(), json_to_dynamic(value.clone())))
-                    .collect()
+                    .collect();
+                Ok(params_map)
             })
             .transpose()?
             .unwrap_or_default();
@@ -147,21 +151,21 @@ impl AlloyMutation {
 
         let (success, error, return_value, changes) = match result.outcome {
             ExecutionOutcome::Success {
-                return_value,
-                entity_changes,
+                ref return_value,
+                ref entity_changes,
             } => (
                 true,
                 None,
-                return_value.map(dynamic_to_json),
+                return_value.clone().map(dynamic_to_json),
                 Some(serde_json::Value::Object(
                     entity_changes
-                        .into_iter()
-                        .map(|(key, value)| (key, dynamic_to_json(value)))
+                        .iter()
+                        .map(|(key, value)| (key.clone(), dynamic_to_json(value.clone())))
                         .collect(),
                 )),
             ),
-            ExecutionOutcome::Aborted { reason } => (false, Some(reason), None, None),
-            ExecutionOutcome::Failed { error } => (false, Some(error.to_string()), None, None),
+            ExecutionOutcome::Aborted { ref reason } => (false, Some(reason.clone()), None, None),
+            ExecutionOutcome::Failed { ref error } => (false, Some(error.to_string()), None, None),
         };
 
         Ok(GqlExecutionResult {

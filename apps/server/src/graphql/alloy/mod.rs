@@ -84,30 +84,30 @@ fn dynamic_to_json(value: Dynamic) -> serde_json::Value {
         return serde_json::Value::Null;
     }
 
-    if let Ok(v) = value.clone().try_cast::<bool>() {
+    if let Some(v) = value.clone().try_cast::<bool>() {
         return serde_json::Value::Bool(v);
     }
 
-    if let Ok(v) = value.clone().try_cast::<i64>() {
+    if let Some(v) = value.clone().try_cast::<i64>() {
         return serde_json::Value::Number(serde_json::Number::from(v));
     }
 
-    if let Ok(v) = value.clone().try_cast::<f64>() {
+    if let Some(v) = value.clone().try_cast::<f64>() {
         if let Some(num) = serde_json::Number::from_f64(v) {
             return serde_json::Value::Number(num);
         }
     }
 
-    if let Ok(v) = value.clone().try_cast::<String>() {
+    if let Some(v) = value.clone().try_cast::<String>() {
         return serde_json::Value::String(v);
     }
 
-    if let Ok(v) = value.clone().try_cast::<Vec<Dynamic>>() {
+    if let Some(v) = value.clone().try_cast::<Vec<Dynamic>>() {
         let items: Vec<serde_json::Value> = v.into_iter().map(dynamic_to_json).collect();
         return serde_json::Value::Array(items);
     }
 
-    if let Ok(v) = value.try_cast::<rhai::Map>() {
+    if let Some(v) = value.try_cast::<rhai::Map>() {
         let mut json_map: serde_json::Map<String, serde_json::Value> = serde_json::Map::new();
         for (key, value) in v {
             json_map.insert(key.to_string(), dynamic_to_json(value));
