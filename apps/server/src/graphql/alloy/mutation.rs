@@ -151,12 +151,12 @@ impl AlloyMutation {
 
         let (success, error, return_value, changes) = match result.outcome {
             ExecutionOutcome::Success {
-                return_value,
+                ref return_value,
                 ref entity_changes,
             } => (
                 true,
                 None,
-                return_value.map(dynamic_to_json),
+                return_value.clone().map(dynamic_to_json),
                 Some(serde_json::Value::Object(
                     entity_changes
                         .iter()
