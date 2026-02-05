@@ -165,7 +165,7 @@ impl AlloyMutation {
                 )),
             ),
             ExecutionOutcome::Aborted { reason } => (false, Some(reason), None, None),
-            ExecutionOutcome::Failed { error } => (false, Some(error.to_string()), None, None),
+            ExecutionOutcome::Failed { ref error } => (false, Some(error.to_string()), None, None),
         };
 
         Ok(GqlExecutionResult {
