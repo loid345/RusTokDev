@@ -315,7 +315,7 @@ pub fn Security() -> impl IntoView {
                                                 <strong>{label}</strong>
                                                 <p class="form-hint">
                                                     {move || translate(locale.locale.get(), "security.sessionIp")}
-                                                    {" : "}
+                                                    " : "
                                                     {ip}
                                                 </p>
                                             </div>
@@ -354,7 +354,7 @@ pub fn Security() -> impl IntoView {
                                                 <strong>{label}</strong>
                                                 <p class="form-hint">
                                                     {move || translate(locale.locale.get(), "security.sessionIp")}
-                                                    {" : "}
+                                                    " : "
                                                     {ip}
                                                 </p>
                                             </div>

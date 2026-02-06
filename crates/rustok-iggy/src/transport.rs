@@ -22,8 +22,8 @@ pub struct IggyTransport {
 impl IggyTransport {
     pub async fn new(config: IggyConfig) -> Result<Self> {
         let connector: Arc<dyn IggyConnector> = match config.mode {
-            IggyMode::Remote => Arc::new(RemoteConnector::default()),
-            IggyMode::Embedded => Arc::new(EmbeddedConnector::default()),
+            IggyMode::Remote => Arc::new(RemoteConnector),
+            IggyMode::Embedded => Arc::new(EmbeddedConnector),
         };
 
         let connector_config = ConnectorConfig::from(&config);
