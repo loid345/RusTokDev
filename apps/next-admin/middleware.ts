@@ -15,6 +15,13 @@ export default function middleware(request: NextRequest) {
   const isLocaleRoute = locales.includes(locale as (typeof locales)[number]);
   const isPublicRoute = pathname.endsWith("/login") || pathname.endsWith("/register") || pathname.endsWith("/reset");
   const token = request.cookies.get("rustok-admin-token")?.value;
+  const savedLocale = request.cookies.get("rustok-admin-locale")?.value;
+
+  if (pathname === "/" && savedLocale && locales.includes(savedLocale as (typeof locales)[number])) {
+    const localeUrl = request.nextUrl.clone();
+    localeUrl.pathname = `/${savedLocale}`;
+    return NextResponse.redirect(localeUrl);
+  }
 
   if (isLocaleRoute && !isPublicRoute && !token) {
     const loginUrl = request.nextUrl.clone();

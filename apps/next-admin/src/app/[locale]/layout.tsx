@@ -1,5 +1,7 @@
 import { setRequestLocale } from "next-intl/server";
 
+import LocaleSync from "@/components/locale-sync";
+
 export default function LocaleLayout({
   children,
   params: { locale },
@@ -9,5 +11,10 @@ export default function LocaleLayout({
 }) {
   setRequestLocale(locale);
 
-  return children;
+  return (
+    <>
+      <LocaleSync locale={locale} />
+      {children}
+    </>
+  );
 }
