@@ -376,7 +376,7 @@ pub fn Security() -> impl IntoView {
                                             </div>
                                             <span class="status-pill">{event.created_at}</span>
                                             <span class="inline-flex items-center rounded-full bg-slate-200 px-2.5 py-1 text-xs text-slate-600">
-                                                {move || translate(locale.locale.get(), status_key.clone())}
+                                                {move || translate(locale.locale.get(), status_key.as_str())}
                                             </span>
                                         </div>
                                     }
