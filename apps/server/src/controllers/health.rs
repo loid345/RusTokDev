@@ -52,9 +52,13 @@ pub async fn live() -> Result<Response> {
 /// Checks database connectivity
 pub async fn ready(State(ctx): State<AppContext>) -> Result<Response> {
     let db_status = check_database(&ctx.db).await;
-    
-    let status = if db_status == "connected" { "ok" } else { "degraded" };
-    
+
+    let status = if db_status == "connected" {
+        "ok"
+    } else {
+        "degraded"
+    };
+
     format::json(ReadinessResponse {
         status,
         database: db_status,
@@ -96,7 +100,7 @@ pub async fn modules(Extension(registry): Extension<ModuleRegistry>) -> Result<R
 
 async fn check_database(db: &DatabaseConnection) -> &'static str {
     use sea_orm::ConnectionTrait;
-    
+
     match db.execute_unprepared("SELECT 1").await {
         Ok(_) => "connected",
         Err(_) => "disconnected",

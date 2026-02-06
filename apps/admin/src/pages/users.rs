@@ -68,10 +68,14 @@ pub fn Users() -> impl IntoView {
     let query = use_query_map();
 
     // Initialize state from URL params
-    let initial_search = query.get_untracked().get("search").cloned().unwrap_or_default();
-    let initial_role = query.get_untracked().get("role").cloned().unwrap_or_default();
-    let initial_status = query.get_untracked().get("status").cloned().unwrap_or_default();
-    let initial_page = query.get_untracked().get("page").and_then(|p| p.parse::<i64>().ok()).unwrap_or(1);
+    let initial_search = query.get_untracked().get("search").unwrap_or_default();
+    let initial_role = query.get_untracked().get("role").unwrap_or_default();
+    let initial_status = query.get_untracked().get("status").unwrap_or_default();
+    let initial_page = query
+        .get_untracked()
+        .get("page")
+        .and_then(|p| p.parse::<i64>().ok())
+        .unwrap_or(1);
 
     let (api_token, set_api_token) = signal(auth.token.get().unwrap_or_default());
     let (tenant_slug, set_tenant_slug) = signal(String::new());
@@ -79,7 +83,7 @@ pub fn Users() -> impl IntoView {
     let (page, set_page) = signal(initial_page);
     let (limit, set_limit) = signal(12i64);
     let (limit_input, set_limit_input) = signal("12".to_string());
-    
+
     // Filter signals
     let (search_query, set_search_query) = signal(initial_search);
     let (role_filter, set_role_filter) = signal(initial_role);
@@ -93,10 +97,18 @@ pub fn Users() -> impl IntoView {
         let p = page.get();
 
         let mut params = Vec::new();
-        if !s.is_empty() { params.push(format!("search={}", s)); }
-        if !r.is_empty() { params.push(format!("role={}", r)); }
-        if !st.is_empty() { params.push(format!("status={}", st)); }
-        if p > 1 { params.push(format!("page={}", p)); }
+        if !s.is_empty() {
+            params.push(format!("search={}", s));
+        }
+        if !r.is_empty() {
+            params.push(format!("role={}", r));
+        }
+        if !st.is_empty() {
+            params.push(format!("status={}", st));
+        }
+        if p > 1 {
+            params.push(format!("page={}", p));
+        }
 
         let search_string = if params.is_empty() {
             String::new()
@@ -172,9 +184,9 @@ pub fn Users() -> impl IntoView {
         <section class="px-10 py-8">
             <PageHeader
                 title=translate("users.title")
-                subtitle=Some(translate("users.subtitle"))
-                eyebrow=Some(translate("app.nav.users"))
-                actions=Some(move || view! {
+                subtitle=translate("users.subtitle")
+                eyebrow=translate("app.nav.users")
+                actions=view! {
                     <LanguageToggle />
                     <Button
                         on_click=refresh
@@ -182,7 +194,8 @@ pub fn Users() -> impl IntoView {
                     >
                         {move || translate("users.refresh")}
                     </Button>
-                }.into_any())
+                }
+                .into_any()
             />
 
             <div class="mb-6 rounded-2xl bg-white p-6 shadow-[0_18px_36px_rgba(15,23,42,0.08)]">

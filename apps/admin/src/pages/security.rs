@@ -69,18 +69,10 @@ pub fn Security() -> impl IntoView {
                 }
                 Err(err) => {
                     let message = match err {
-                        ApiError::Unauthorized => {
-                            translate("errors.auth.unauthorized").to_string()
-                        }
-                        ApiError::Http(_) => {
-                            translate("errors.http").to_string()
-                        }
-                        ApiError::Network => {
-                            translate("errors.network").to_string()
-                        }
-                        ApiError::Graphql(_) => {
-                            translate("errors.unknown").to_string()
-                        }
+                        ApiError::Unauthorized => translate("errors.auth.unauthorized").to_string(),
+                        ApiError::Http(_) => translate("errors.http").to_string(),
+                        ApiError::Network => translate("errors.network").to_string(),
+                        ApiError::Graphql(_) => translate("errors.unknown").to_string(),
                     };
                     set_error.set(Some(message));
                 }
@@ -103,18 +95,10 @@ pub fn Security() -> impl IntoView {
                 }
                 Err(err) => {
                     let message = match err {
-                        ApiError::Unauthorized => {
-                            translate("errors.auth.unauthorized").to_string()
-                        }
-                        ApiError::Http(_) => {
-                            translate("errors.http").to_string()
-                        }
-                        ApiError::Network => {
-                            translate("errors.network").to_string()
-                        }
-                        ApiError::Graphql(_) => {
-                            translate("errors.unknown").to_string()
-                        }
+                        ApiError::Unauthorized => translate("errors.auth.unauthorized").to_string(),
+                        ApiError::Http(_) => translate("errors.http").to_string(),
+                        ApiError::Network => translate("errors.network").to_string(),
+                        ApiError::Graphql(_) => translate("errors.unknown").to_string(),
                     };
                     set_error.set(Some(message));
                 }
@@ -124,9 +108,7 @@ pub fn Security() -> impl IntoView {
 
     let on_change_password = move |_| {
         if current_password.get().is_empty() || new_password.get().is_empty() {
-            set_error.set(Some(
-                translate("security.passwordRequired").to_string(),
-            ));
+            set_error.set(Some(translate("security.passwordRequired").to_string()));
             set_status.set(None);
             return;
         }
@@ -134,9 +116,7 @@ pub fn Security() -> impl IntoView {
         let token = auth.token.get();
         let tenant_slug = auth.tenant_slug.get();
         if token.is_none() {
-            set_error.set(Some(
-                translate("errors.auth.unauthorized").to_string(),
-            ));
+            set_error.set(Some(translate("errors.auth.unauthorized").to_string()));
             set_status.set(None);
             return;
         }
@@ -161,24 +141,14 @@ pub fn Security() -> impl IntoView {
             match result {
                 Ok(_) => {
                     set_error.set(None);
-                    set_status.set(Some(
-                        translate("security.signOutAll").to_string(),
-                    ));
+                    set_status.set(Some(translate("security.signOutAll").to_string()));
                 }
                 Err(err) => {
                     let message = match err {
-                        ApiError::Unauthorized => {
-                            translate("errors.auth.unauthorized").to_string()
-                        }
-                        ApiError::Http(_) => {
-                            translate("errors.http").to_string()
-                        }
-                        ApiError::Network => {
-                            translate("errors.network").to_string()
-                        }
-                        ApiError::Graphql(_) => {
-                            translate("errors.unknown").to_string()
-                        }
+                        ApiError::Unauthorized => translate("errors.auth.unauthorized").to_string(),
+                        ApiError::Http(_) => translate("errors.http").to_string(),
+                        ApiError::Network => translate("errors.network").to_string(),
+                        ApiError::Graphql(_) => translate("errors.unknown").to_string(),
                     };
                     set_error.set(Some(message));
                     set_status.set(None);
@@ -205,24 +175,14 @@ pub fn Security() -> impl IntoView {
             match result {
                 Ok(_) => {
                     set_error.set(None);
-                    set_status.set(Some(
-                        translate("security.passwordUpdated").to_string(),
-                    ));
+                    set_status.set(Some(translate("security.passwordUpdated").to_string()));
                 }
                 Err(err) => {
                     let message = match err {
-                        ApiError::Unauthorized => {
-                            translate("errors.auth.unauthorized").to_string()
-                        }
-                        ApiError::Http(_) => {
-                            translate("errors.http").to_string()
-                        }
-                        ApiError::Network => {
-                            translate("errors.network").to_string()
-                        }
-                        ApiError::Graphql(_) => {
-                            translate("errors.unknown").to_string()
-                        }
+                        ApiError::Unauthorized => translate("errors.auth.unauthorized").to_string(),
+                        ApiError::Http(_) => translate("errors.http").to_string(),
+                        ApiError::Network => translate("errors.network").to_string(),
+                        ApiError::Graphql(_) => translate("errors.unknown").to_string(),
                     };
                     set_error.set(Some(message));
                 }

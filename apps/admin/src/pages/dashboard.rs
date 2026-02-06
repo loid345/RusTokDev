@@ -83,13 +83,19 @@ pub fn Dashboard() -> impl IntoView {
         auth.set_user.set(None);
     };
 
+    let title = auth
+        .user
+        .get()
+        .and_then(|user| user.name)
+        .unwrap_or_else(|| "Dashboard".to_string());
+
     view! {
         <section class="px-10 py-8">
             <PageHeader
-                title=move || auth.user.get().and_then(|u| u.name).unwrap_or_else(|| "Dashboard".to_string())
-                eyebrow=Some(translate("app.nav.dashboard"))
-                subtitle=Some(translate("app.dashboard.subtitle"))
-                actions=Some(move || view! {
+                title=title
+                eyebrow=translate("app.nav.dashboard")
+                subtitle=translate("app.dashboard.subtitle")
+                actions=view! {
                     <LanguageToggle />
                     <Button
                         on_click=logout
@@ -100,7 +106,8 @@ pub fn Dashboard() -> impl IntoView {
                     <Button on_click=move |_| {}>
                         {move || translate("app.dashboard.createTenant")}
                     </Button>
-                }.into_any())
+                }
+                .into_any()
             />
 
             <div class="mb-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
@@ -112,7 +119,7 @@ pub fn Dashboard() -> impl IntoView {
                                 title=title
                                 value=value
                                 icon=icon
-                                trend=Some(hint) // Reusing hint as trend text for now
+                                trend=hint
                                 class="transition-all hover:scale-[1.02]"
                             />
                         }

@@ -60,4 +60,3 @@ pub trait RusToKModule: Send + Sync + MigrationSource {
         HealthStatus::Healthy
     }
 }
-

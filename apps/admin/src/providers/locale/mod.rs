@@ -1,8 +1,8 @@
 use leptos::prelude::*;
 use leptos::web_sys;
 
-pub use crate::i18n::Locale;
 use crate::i18n;
+pub use crate::i18n::Locale;
 
 impl Locale {
     pub fn from_code(code: &str) -> Self {
@@ -46,7 +46,8 @@ pub fn use_locale() -> LocaleContext {
 }
 
 pub fn translate(key: &str) -> String {
-    i18n::translate(key)
+    let locale = use_locale().locale.get_untracked();
+    i18n::translate(locale, key)
 }
 
 fn local_storage() -> Option<web_sys::Storage> {

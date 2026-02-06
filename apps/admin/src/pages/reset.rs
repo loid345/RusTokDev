@@ -40,9 +40,7 @@ pub fn ResetPassword() -> impl IntoView {
 
     let on_request = move |_| {
         if tenant.get().is_empty() || email.get().is_empty() {
-            set_error.set(Some(
-                translate("reset.errorRequired").to_string(),
-            ));
+            set_error.set(Some(translate("reset.errorRequired").to_string()));
             set_status.set(None);
             set_token_expired.set(false);
             return;
@@ -69,16 +67,12 @@ pub fn ResetPassword() -> impl IntoView {
                     if let Some(reset_token) = response.reset_token {
                         set_token.set(reset_token);
                     }
-                    set_status.set(Some(
-                        translate("reset.requestSent").to_string(),
-                    ));
+                    set_status.set(Some(translate("reset.requestSent").to_string()));
                     set_token_expired.set(false);
                 }
                 Err(err) => {
                     let message = match err {
-                        ApiError::Unauthorized => {
-                            translate("errors.auth.unauthorized").to_string()
-                        }
+                        ApiError::Unauthorized => translate("errors.auth.unauthorized").to_string(),
                         ApiError::Http(_) => {
                             set_token_expired.set(false);
                             translate("errors.http").to_string()
@@ -102,9 +96,7 @@ pub fn ResetPassword() -> impl IntoView {
 
     let on_reset = move |_| {
         if token.get().is_empty() || new_password.get().is_empty() {
-            set_error.set(Some(
-                translate("reset.tokenRequired").to_string(),
-            ));
+            set_error.set(Some(translate("reset.tokenRequired").to_string()));
             set_status.set(None);
             set_token_expired.set(false);
             return;
@@ -131,9 +123,7 @@ pub fn ResetPassword() -> impl IntoView {
             match result {
                 Ok(_) => {
                     set_error.set(None);
-                    set_status.set(Some(
-                        translate("reset.updated").to_string(),
-                    ));
+                    set_status.set(Some(translate("reset.updated").to_string()));
                     set_token_expired.set(false);
                 }
                 Err(err) => {

@@ -4,8 +4,8 @@ use leptos::prelude::*;
 pub fn StatsCard(
     #[prop(into)] title: String,
     #[prop(into)] value: String,
-    #[prop(into)] icon: View,
-    #[prop(optional, into)] trend: Option<String>,
+    #[prop(into)] icon: AnyView,
+    #[prop(into)] trend: String,
     #[prop(optional, into)] trend_up: Option<bool>,
     #[prop(optional, into)] class: String,
 ) -> impl IntoView {
@@ -20,19 +20,19 @@ pub fn StatsCard(
                     {icon}
                 </div>
             </div>
-            {move || trend.clone().map(|text| {
+            {
                 let is_up = trend_up.unwrap_or(true);
                 let color_class = if is_up { "text-emerald-600" } else { "text-rose-600" };
-                let bg_class = if is_up { "bg-emerald-50" } else { "bg-rose-50" }; // Not used for text but commonly used in badges
+                let _bg_class = if is_up { "bg-emerald-50" } else { "bg-rose-50" }; // Not used for text but commonly used in badges
                 view! {
                     <div class="mt-4 flex items-center gap-2">
                         <span class=format!("flex items-center text-sm font-medium {}", color_class)>
-                            {if is_up { "+" } else { "" }} {text}
+                            {if is_up { "+" } else { "" }} {trend}
                         </span>
                         <span class="text-sm text-slate-400">"vs last month"</span>
                     </div>
                 }
-            })}
+            }
         </div>
     }
 }

@@ -68,4 +68,3 @@ impl MigrationSource for ContentModule {
         Vec::new() // Migrations are currently handled by the main app
     }
 }
-
