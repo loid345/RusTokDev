@@ -105,6 +105,7 @@
   "register.verifyLabel": "Verification email",
   "register.verifyRequired": "Enter the email address to resend.",
   "register.verifySent": "Verification email sent.",
+  "register.verifyTokenPreview": "Verification token:",
   "register.verifySubmit": "Resend verification",
   "register.verifySubtitle": "Resend the verification email if the link expired.",
   "register.verifyTitle": "Verify email access",

@@ -77,7 +77,14 @@
     "inviteSubmit": "Принять приглашение",
     "inviteRequired": "Введите tenant и токен приглашения.",
     "inviteAccepted": "Приглашение принято. Теперь можно войти.",
-    "inviteExpired": "Токен приглашения недействителен или истёк."
+    "inviteExpired": "Токен приглашения недействителен или истёк.",
+    "verifyTitle": "Подтверждение email",
+    "verifySubtitle": "Отправьте письмо ещё раз, если ссылка истекла.",
+    "verifyLabel": "Email для подтверждения",
+    "verifySubmit": "Отправить повторно",
+    "verifyRequired": "Введите email для отправки.",
+    "verifySent": "Письмо подтверждения отправлено.",
+    "verifyTokenPreview": "Токен подтверждения:"
   },
   "users": {
     "eyebrow": "Users",

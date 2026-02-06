@@ -105,6 +105,7 @@
   "register.verifyLabel": "Email для подтверждения",
   "register.verifyRequired": "Введите email для отправки.",
   "register.verifySent": "Письмо подтверждения отправлено.",
+  "register.verifyTokenPreview": "Токен подтверждения:",
   "register.verifySubmit": "Отправить повторно",
   "register.verifySubtitle": "Отправьте письмо ещё раз, если ссылка истекла.",
   "register.verifyTitle": "Подтверждение email",

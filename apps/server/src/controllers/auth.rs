@@ -15,10 +15,11 @@ use std::net::SocketAddr;
 use utoipa::ToSchema;
 
 use crate::auth::{
-    decode_invite_token, decode_password_reset_token, encode_access_token,
-    encode_password_reset_token, generate_refresh_token, hash_password, hash_refresh_token,
-    verify_password, AuthConfig,
+    decode_email_verification_token, decode_invite_token, decode_password_reset_token,
+    encode_access_token, encode_email_verification_token, encode_password_reset_token,
+    generate_refresh_token, hash_password, hash_refresh_token, verify_password, AuthConfig,
 };
+use crate::common::settings::RustokSettings;
 use crate::extractors::{auth::CurrentUser, tenant::CurrentTenant};
 use crate::models::{
     sessions,
@@ -27,6 +28,7 @@ use crate::models::{
 use crate::services::auth::AuthService;
 
 const DEFAULT_RESET_TOKEN_TTL_SECS: u64 = 15 * 60;
+const DEFAULT_VERIFY_TOKEN_TTL_SECS: u64 = 24 * 60 * 60;
 
 #[derive(Deserialize, ToSchema)]
 pub struct LoginParams {
@@ -70,6 +72,16 @@ pub struct ConfirmResetParams {
 }
 
 #[derive(Deserialize, ToSchema)]
+pub struct RequestVerificationParams {
+    pub email: String,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct ConfirmVerificationParams {
+    pub token: String,
+}
+
+#[derive(Deserialize, ToSchema)]
 pub struct ChangePasswordParams {
     pub current_password: String,
     pub new_password: String,
@@ -84,6 +96,12 @@ pub struct UpdateProfileParams {
 pub struct ResetRequestResponse {
     pub status: &'static str,
     pub reset_token: Option<String>,
+}
+
+#[derive(Debug, Serialize, ToSchema)]
+pub struct VerificationRequestResponse {
+    pub status: &'static str,
+    pub verification_token: Option<String>,
 }
 
 #[derive(Debug, Serialize, ToSchema)]
@@ -427,6 +445,75 @@ async fn confirm_reset(
     format::json(GenericStatusResponse { status: "ok" })
 }
 
+#[utoipa::path(post, path = "/api/auth/verify/request", tag = "auth", request_body = RequestVerificationParams,
+    responses((status = 200, description = "Verification request accepted", body = VerificationRequestResponse)))]
+async fn request_verification(
+    State(ctx): State<AppContext>,
+    CurrentTenant(tenant): CurrentTenant,
+    Json(params): Json<RequestVerificationParams>,
+) -> Result<Response> {
+    let config = AuthConfig::from_ctx(&ctx)?;
+    let settings = RustokSettings::from_settings(&ctx.config.settings)
+        .map_err(|_| Error::InternalServerError)?;
+
+    let user = Users::find_by_email(&ctx.db, tenant.id, &params.email).await?;
+
+    let expose_token = std::env::var("RUSTOK_DEMO_MODE")
+        .map(|value| value == "1")
+        .unwrap_or(false);
+
+    let verification_token = if settings.features.email_verification {
+        user.filter(|record| record.email_verified_at.is_none())
+            .map(|record| {
+                encode_email_verification_token(
+                    &config,
+                    tenant.id,
+                    &record.email,
+                    DEFAULT_VERIFY_TOKEN_TTL_SECS,
+                )
+            })
+            .transpose()?
+    } else {
+        None
+    };
+
+    format::json(VerificationRequestResponse {
+        status: "ok",
+        verification_token: if expose_token {
+            verification_token
+        } else {
+            None
+        },
+    })
+}
+
+#[utoipa::path(post, path = "/api/auth/verify/confirm", tag = "auth", request_body = ConfirmVerificationParams,
+    responses((status = 200, description = "Email verified", body = GenericStatusResponse),(status = 401, description = "Invalid token")))]
+async fn confirm_verification(
+    State(ctx): State<AppContext>,
+    CurrentTenant(tenant): CurrentTenant,
+    Json(params): Json<ConfirmVerificationParams>,
+) -> Result<Response> {
+    let config = AuthConfig::from_ctx(&ctx)?;
+    let claims = decode_email_verification_token(&config, &params.token)?;
+
+    if claims.tenant_id != tenant.id {
+        return Err(Error::Unauthorized("Invalid verification token".into()));
+    }
+
+    let user = Users::find_by_email(&ctx.db, tenant.id, &claims.sub)
+        .await?
+        .ok_or_else(|| Error::Unauthorized("Invalid verification token".into()))?;
+
+    if user.email_verified_at.is_none() {
+        let mut user_active: users::ActiveModel = user.into();
+        user_active.email_verified_at = Set(Some(Utc::now().into()));
+        user_active.update(&ctx.db).await?;
+    }
+
+    format::json(GenericStatusResponse { status: "ok" })
+}
+
 #[utoipa::path(get, path = "/api/auth/sessions", tag = "auth", security(("bearer_auth" = [])),
     responses((status = 200, description = "Active sessions", body = SessionsResponse)))]
 async fn list_sessions(
@@ -565,6 +652,8 @@ pub fn routes() -> Routes {
         .add("/invite/accept", post(accept_invite))
         .add("/reset/request", post(request_reset))
         .add("/reset/confirm", post(confirm_reset))
+        .add("/verify/request", post(request_verification))
+        .add("/verify/confirm", post(confirm_verification))
         .add("/sessions", get(list_sessions))
         .add("/sessions/revoke-all", post(revoke_all_sessions))
         .add("/change-password", post(change_password))

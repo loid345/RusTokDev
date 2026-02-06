@@ -40,6 +40,16 @@ struct InviteAcceptResponse {
     role: String,
 }
 
+#[derive(Serialize)]
+struct VerificationRequestParams {
+    email: String,
+}
+
+#[derive(Deserialize)]
+struct VerificationRequestResponse {
+    verification_token: Option<String>,
+}
+
 #[component]
 pub fn Register() -> impl IntoView {
     let auth = use_auth();
@@ -166,14 +176,55 @@ pub fn Register() -> impl IntoView {
     };
 
     let on_resend_verification = move |_| {
-        if verification_email.get().is_empty() {
+        if tenant.get().is_empty() || verification_email.get().is_empty() {
             set_error.set(Some(translate("register.verifyRequired").to_string()));
             set_status.set(None);
             return;
         }
 
-        set_error.set(None);
-        set_status.set(Some(translate("register.verifySent").to_string()));
+        let tenant_value = tenant.get().trim().to_string();
+        let verification_value = verification_email.get().trim().to_string();
+        let set_error = set_error;
+        let set_status = set_status;
+
+        spawn_local(async move {
+            let result = rest_post::<VerificationRequestParams, VerificationRequestResponse>(
+                "/api/auth/verify/request",
+                &VerificationRequestParams {
+                    email: verification_value,
+                },
+                None,
+                Some(tenant_value),
+            )
+            .await;
+
+            match result {
+                Ok(response) => {
+                    set_error.set(None);
+                    let status = if let Some(token) = response.verification_token {
+                        format!(
+                            "{} {} {}",
+                            translate("register.verifySent"),
+                            translate("register.verifyTokenPreview"),
+                            token
+                        )
+                    } else {
+                        translate("register.verifySent")
+                    };
+                    set_status.set(Some(status));
+                }
+                Err(err) => {
+                    let message = match err {
+                        ApiError::Unauthorized => translate("errors.auth.unauthorized").to_string(),
+                        ApiError::Http(_) => translate("errors.http").to_string(),
+                        ApiError::Network => translate("errors.network").to_string(),
+                        ApiError::Graphql(_) => translate("errors.unknown").to_string(),
+                    };
+                    set_error.set(Some(message));
+                    set_status.set(None);
+                }
+            }
+        });
     };
 
     view! {

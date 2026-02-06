@@ -77,7 +77,14 @@
     "inviteSubmit": "Accept invitation",
     "inviteRequired": "Enter tenant and invitation token.",
     "inviteAccepted": "Invitation accepted. You can now sign in.",
-    "inviteExpired": "Invitation token is invalid or expired."
+    "inviteExpired": "Invitation token is invalid or expired.",
+    "verifyTitle": "Verify email access",
+    "verifySubtitle": "Resend the verification email if the link expired.",
+    "verifyLabel": "Verification email",
+    "verifySubmit": "Resend verification",
+    "verifyRequired": "Enter the email address to resend.",
+    "verifySent": "Verification email sent.",
+    "verifyTokenPreview": "Verification token:"
   },
   "users": {
     "eyebrow": "Users",

@@ -45,6 +45,17 @@ pub struct PasswordResetClaims {
     pub iat: usize,
 }
 
+#[derive(Debug, Serialize, Deserialize)]
+pub struct EmailVerificationClaims {
+    pub sub: String,
+    pub tenant_id: Uuid,
+    pub purpose: String,
+    pub iss: String,
+    pub aud: String,
+    pub exp: usize,
+    pub iat: usize,
+}
+
 #[derive(Debug, Clone)]
 pub struct AuthConfig {
     pub secret: String,
@@ -229,6 +240,57 @@ pub fn decode_password_reset_token(
 
     if claims.purpose != "password_reset" {
         return Err(Error::Unauthorized("Invalid reset token".to_string()));
+    }
+
+    Ok(claims)
+}
+
+pub fn encode_email_verification_token(
+    config: &AuthConfig,
+    tenant_id: Uuid,
+    email: &str,
+    ttl_seconds: u64,
+) -> Result<String> {
+    let now = Utc::now();
+    let exp = now + Duration::seconds(ttl_seconds as i64);
+
+    let claims = EmailVerificationClaims {
+        sub: email.to_lowercase(),
+        tenant_id,
+        purpose: "email_verification".to_string(),
+        iss: config.issuer.clone(),
+        aud: config.audience.clone(),
+        exp: exp.timestamp() as usize,
+        iat: now.timestamp() as usize,
+    };
+
+    encode(
+        &Header::default(),
+        &claims,
+        &EncodingKey::from_secret(config.secret.as_bytes()),
+    )
+    .map_err(|_| Error::InternalServerError)
+}
+
+pub fn decode_email_verification_token(
+    config: &AuthConfig,
+    token: &str,
+) -> Result<EmailVerificationClaims> {
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.validate_exp = true;
+    validation.set_issuer(&[config.issuer.as_str()]);
+    validation.set_audience(&[config.audience.as_str()]);
+
+    let claims = decode::<EmailVerificationClaims>(
+        token,
+        &DecodingKey::from_secret(config.secret.as_bytes()),
+        &validation,
+    )
+    .map(|data| data.claims)
+    .map_err(|_| Error::Unauthorized("Invalid verification token".to_string()))?;
+
+    if claims.purpose != "email_verification" {
+        return Err(Error::Unauthorized("Invalid verification token".to_string()));
     }
 
     Ok(claims)
