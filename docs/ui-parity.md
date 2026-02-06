@@ -88,7 +88,7 @@ This strategy is **compatible with the storefronts** because both are already Ta
 and can consume the same design tokens and shadcn-style component contracts.
 
 - `apps/next-frontend`: use shadcn/ui + Tailwind.
-- `apps/storefront`: use leptos-shadcn-ui + CSS variables.
+- `apps/storefront`: use leptos-shadcn-ui + Tailwind.
 
 ## Next steps
 
