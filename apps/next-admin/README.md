@@ -38,3 +38,4 @@ npm run dev
 - [Admin Phase 3 gap analysis](../../docs/admin-phase3-gap-analysis.md)
 - [UI parity (admin + storefront)](../../docs/ui-parity.md)
 - [Tech parity tracker](../../docs/tech-parity.md)
+- [Template integration plan](../../docs/admin-template-integration-plan.md)

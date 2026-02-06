@@ -193,6 +193,7 @@ Admin docs:
 - `docs/admin-phase3-gap-analysis.md`
 - `docs/ui-parity.md`
 - `docs/tech-parity.md`
+- `docs/admin-template-integration-plan.md`
 
 ---
 
