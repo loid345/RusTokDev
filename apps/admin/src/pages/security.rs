@@ -297,6 +297,11 @@ pub fn Security() -> impl IntoView {
                             {move || status.get().unwrap_or_default()}
                         </div>
                     </Show>
+                    <Show when=move || error.get().is_some()>
+                        <div class="rounded-xl bg-rose-100 px-4 py-2 text-sm text-rose-700">
+                            {move || error.get().unwrap_or_default()}
+                        </div>
+                    </Show>
                 </div>
 
                 <div class="settings-card">
