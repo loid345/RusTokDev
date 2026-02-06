@@ -50,7 +50,7 @@ pub fn Security() -> impl IntoView {
     let (current_password, set_current_password) = signal(String::new());
     let (new_password, set_new_password) = signal(String::new());
     let (status, set_status) = signal(Option::<String>::None);
-    let (error, set_error) = signal(Option::<String>::None);
+    let (_error, set_error) = signal(Option::<String>::None);
     let (sessions, set_sessions) = signal(Vec::<SessionItem>::new());
     let (history, set_history) = signal(Vec::<HistoryItem>::new());
 
@@ -295,11 +295,6 @@ pub fn Security() -> impl IntoView {
                     <Show when=move || status.get().is_some()>
                         <div class="rounded-xl bg-emerald-100 px-4 py-2 text-sm text-emerald-700">
                             {move || status.get().unwrap_or_default()}
-                        </div>
-                    </Show>
-                    <Show when=move || error.get().is_some()>
-                        <div class="rounded-xl bg-rose-100 px-4 py-2 text-sm text-rose-700">
-                            {move || error.get().unwrap_or_default()}
                         </div>
                     </Show>
                 </div>
