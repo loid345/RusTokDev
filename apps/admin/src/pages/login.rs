@@ -49,9 +49,7 @@ pub fn Login() -> impl IntoView {
 
     let on_submit = move |_| {
         if tenant.get().is_empty() || email.get().is_empty() || password.get().is_empty() {
-            set_error.set(Some(
-                translate("auth.errorRequired").to_string(),
-            ));
+            set_error.set(Some(translate("auth.errorRequired").to_string()));
             return;
         }
 
@@ -97,9 +95,7 @@ pub fn Login() -> impl IntoView {
                         }
                         ApiError::Http(_) => translate("errors.http").to_string(),
                         ApiError::Network => translate("errors.network").to_string(),
-                        ApiError::Graphql(_) => {
-                            translate("errors.unknown").to_string()
-                        }
+                        ApiError::Graphql(_) => translate("errors.unknown").to_string(),
                     };
                     set_error.set(Some(message));
                 }

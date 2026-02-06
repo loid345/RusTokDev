@@ -1,7 +1,7 @@
 use leptos::prelude::*;
+use leptos_i18n::I18nContextProvider;
 use leptos_router::components::{Outlet, Route, Router, Routes};
 use leptos_router::path;
-use leptos_i18n::I18nContextProvider;
 
 use crate::components::protected_route::ProtectedRoute;
 use crate::pages::{

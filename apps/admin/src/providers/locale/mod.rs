@@ -1,8 +1,8 @@
 use leptos::prelude::*;
 use leptos::web_sys;
 
-pub use crate::i18n::Locale;
 use crate::i18n;
+pub use crate::i18n::Locale;
 
 impl Locale {
     pub fn from_code(code: &str) -> Self {

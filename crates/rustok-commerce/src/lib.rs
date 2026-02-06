@@ -68,4 +68,3 @@ impl MigrationSource for CommerceModule {
         Vec::new()
     }
 }
-

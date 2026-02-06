@@ -56,9 +56,7 @@ pub fn Register() -> impl IntoView {
 
     let on_submit = move |_| {
         if tenant.get().is_empty() || email.get().is_empty() || password.get().is_empty() {
-            set_error.set(Some(
-                translate("register.errorRequired").to_string(),
-            ));
+            set_error.set(Some(translate("register.errorRequired").to_string()));
             set_status.set(None);
             return;
         }
@@ -94,9 +92,7 @@ pub fn Register() -> impl IntoView {
             match result {
                 Ok(response) => {
                     set_error.set(None);
-                    set_status.set(Some(
-                        translate("register.success").to_string(),
-                    ));
+                    set_status.set(Some(translate("register.success").to_string()));
                     set_token.set(Some(response.access_token));
                     set_tenant_slug.set(Some(tenant_value));
                     set_user.set(Some(User {
@@ -109,18 +105,10 @@ pub fn Register() -> impl IntoView {
                 }
                 Err(err) => {
                     let message = match err {
-                        ApiError::Unauthorized => {
-                            translate("errors.auth.unauthorized").to_string()
-                        }
-                        ApiError::Http(_) => {
-                            translate("errors.http").to_string()
-                        }
-                        ApiError::Network => {
-                            translate("errors.network").to_string()
-                        }
-                        ApiError::Graphql(_) => {
-                            translate("errors.unknown").to_string()
-                        }
+                        ApiError::Unauthorized => translate("errors.auth.unauthorized").to_string(),
+                        ApiError::Http(_) => translate("errors.http").to_string(),
+                        ApiError::Network => translate("errors.network").to_string(),
+                        ApiError::Graphql(_) => translate("errors.unknown").to_string(),
                     };
                     set_error.set(Some(message));
                     set_status.set(None);
@@ -131,9 +119,7 @@ pub fn Register() -> impl IntoView {
 
     let on_accept_invite = move |_| {
         if tenant.get().is_empty() || invite_token.get().is_empty() {
-            set_error.set(Some(
-                translate("register.inviteRequired").to_string(),
-            ));
+            set_error.set(Some(translate("register.inviteRequired").to_string()));
             set_status.set(None);
             return;
         }
@@ -167,18 +153,10 @@ pub fn Register() -> impl IntoView {
                 }
                 Err(err) => {
                     let message = match err {
-                        ApiError::Unauthorized => {
-                            translate("register.inviteExpired").to_string()
-                        }
-                        ApiError::Http(_) => {
-                            translate("errors.http").to_string()
-                        }
-                        ApiError::Network => {
-                            translate("errors.network").to_string()
-                        }
-                        ApiError::Graphql(_) => {
-                            translate("errors.unknown").to_string()
-                        }
+                        ApiError::Unauthorized => translate("register.inviteExpired").to_string(),
+                        ApiError::Http(_) => translate("errors.http").to_string(),
+                        ApiError::Network => translate("errors.network").to_string(),
+                        ApiError::Graphql(_) => translate("errors.unknown").to_string(),
                     };
                     set_error.set(Some(message));
                     set_status.set(None);
@@ -189,17 +167,13 @@ pub fn Register() -> impl IntoView {
 
     let on_resend_verification = move |_| {
         if verification_email.get().is_empty() {
-            set_error.set(Some(
-                translate("register.verifyRequired").to_string(),
-            ));
+            set_error.set(Some(translate("register.verifyRequired").to_string()));
             set_status.set(None);
             return;
         }
 
         set_error.set(None);
-        set_status.set(Some(
-            translate("register.verifySent").to_string(),
-        ));
+        set_status.set(Some(translate("register.verifySent").to_string()));
     };
 
     view! {

@@ -40,9 +40,7 @@ pub fn Profile() -> impl IntoView {
         let token = auth.token.get();
         let tenant_slug = auth.tenant_slug.get();
         if token.is_none() {
-            set_error.set(Some(
-                translate("errors.auth.unauthorized").to_string(),
-            ));
+            set_error.set(Some(translate("errors.auth.unauthorized").to_string()));
             set_status.set(None);
             return;
         }
@@ -73,24 +71,14 @@ pub fn Profile() -> impl IntoView {
                         set_name.set(new_name);
                     }
                     set_error.set(None);
-                    set_status.set(Some(
-                        translate("profile.saved").to_string(),
-                    ));
+                    set_status.set(Some(translate("profile.saved").to_string()));
                 }
                 Err(err) => {
                     let message = match err {
-                        ApiError::Unauthorized => {
-                            translate("errors.auth.unauthorized").to_string()
-                        }
-                        ApiError::Http(_) => {
-                            translate("errors.http").to_string()
-                        }
-                        ApiError::Network => {
-                            translate("errors.network").to_string()
-                        }
-                        ApiError::Graphql(_) => {
-                            translate("errors.unknown").to_string()
-                        }
+                        ApiError::Unauthorized => translate("errors.auth.unauthorized").to_string(),
+                        ApiError::Http(_) => translate("errors.http").to_string(),
+                        ApiError::Network => translate("errors.network").to_string(),
+                        ApiError::Graphql(_) => translate("errors.unknown").to_string(),
                     };
                     set_error.set(Some(message));
                     set_status.set(None);
