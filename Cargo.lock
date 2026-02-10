@@ -4914,6 +4914,8 @@ dependencies = [
  "rustok-content",
  "rustok-core",
  "rustok-forum",
+ "rustok-iggy",
+ "rustok-outbox",
  "rustok-pages",
  "rustok-rbac",
  "rustok-telemetry",

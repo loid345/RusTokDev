@@ -18,6 +18,8 @@ rustok-pages.workspace = true
 rustok-tenant.workspace = true
 rustok-rbac.workspace = true
 rustok-telemetry.workspace = true
+rustok-iggy.workspace = true
+rustok-outbox.workspace = true
 alloy-scripting.workspace = true
 
 loco-rs.workspace = true
