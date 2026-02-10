@@ -65,16 +65,22 @@ Every request passes through the `TenantContext` middleware, which identifies th
 
 ### 1.1. Request-Level Caching (Tenant Context)
 **Current behavior (code today)**  
-The tenant resolver middleware keeps a **local in-memory cache** (Moka) keyed by a **normalized identifier** (`uuid:`, `slug:`, `host:`). It uses a **TTL of 5 minutes** and a **max capacity of 1,000 entries**. On cache hit, the request avoids a DB lookup; on miss, it queries the DB and stores the tenant context. After tenant updates, the cache entry is explicitly invalidated so subsequent requests re-fetch fresh data.
+Tenant resolution now uses a shared infrastructure object (`TenantCacheInfrastructure`) stored in the application context (`AppContext.shared_store`) instead of process-global static caches. The middleware resolves tenant IDs (`uuid`, `slug`, `host`) via a unified versioned key-builder and caches results through `CacheBackend`.
 
-**Implemented improvements**
-- Normalized cache keys (e.g., `uuid:`, `slug:`, `host:` prefixes) to avoid collisions and simplify debugging.
-- Added short-lived **negative caching** for 404 tenant lookups to reduce repeated DB hits.
-- Enabled cache stats (hit/miss/evictions + negative cache stats) and exposed them via the `/metrics` endpoint.
-- Routed tenant caching through the shared `CacheBackend` interface with an in-memory backend implementation.
-
-**Distributed cache support**
-- `CacheBackend` now supports a Redis-backed implementation (`RedisCacheBackend`) behind the `redis-cache` feature flag for multi-instance deployments.
+**Key details**
+- **Versioned key namespace**: tenant keys are generated in a unified format with explicit versioning (`v1`) for `uuid`/`slug`/`host`, plus separate negative-cache keys.
+- **Two cache layers**:
+  - Positive cache: tenant context (TTL 5 minutes, capacity 1000).
+  - Negative cache: not-found lookups (TTL 60 seconds, capacity 1000).
+- **Backend selection**:
+  - Uses `RedisCacheBackend` when Redis URL is available (`RUSTOK_REDIS_URL`, fallback `REDIS_URL`).
+  - Falls back to in-memory cache backend when Redis is unavailable.
+- **Cross-instance invalidation**:
+  - Tenant/domain updates publish cache invalidation messages to Redis pub/sub channel `tenant.cache.invalidate`.
+  - Every instance subscribes and invalidates matching positive + negative keys.
+- **Metrics**:
+  - `/metrics` exports tenant cache hit/miss and negative-cache counters from shared cache metrics.
+  - In Redis mode counters are stored/read via Redis keys, so metrics reflect shared multi-instance behavior (not only local process state).
 
 ### 2. CQRS-lite (Write vs Read)
 To ensure maximum Performance on read paths (Storefront) without sacrificing data integrity on write paths (Admin), RusTok uses a **CQRS-lite** approach:
