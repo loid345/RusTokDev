@@ -194,6 +194,18 @@ RusToK — это headless-платформа на Rust для e-commerce и к�
 | **Storage** | Loco Storage | Local/S3 via `object_store` |
 | **Serialization** | Serde | `serde`, `serde_json` |
 
+### 3.1 Frontend/GraphQL integration stack (Leptos-first)
+
+| Layer | Library | Role in RusToK |
+|---|---|---|
+| UI Runtime | `leptos`, `leptos_router` | UI components, routing, reactive state on admin/storefront |
+| GraphQL Transport | `crates/leptos-graphql` (internal) | Thin wrapper for request shape, persisted-query extensions, tenant/auth headers, error mapping |
+| HTTP Client | `reqwest` | Battle-tested HTTP transport for GraphQL/REST calls |
+| Typed GraphQL (optional) | `graphql-client` | Codegen of typed operations from `.graphql` files (app-level adoption) |
+| Async State | Leptos `Resource`/actions | Query/mutation lifecycle (`loading/error/data`) without Apollo-like runtime |
+
+**Policy:** prefer battle-tested libraries (`reqwest`, optionally `graphql-client`) + minimal internal glue (`leptos-graphql`) instead of building monolithic custom GraphQL clients.
+
 ---
 
 ## 4. API ARCHITECTURE

@@ -19,7 +19,7 @@
 | Метаданные (Next.js) | next/metadata | leptos-next-metadata | https://github.com/cloud-shuttle/leptos-next-metadata |
 | Data fetching | @tanstack/react-query | leptos-query | https://github.com/cloud-shuttle/leptos-query |
 | i18n | next-intl | leptos_i18n | https://github.com/Baptistemontan/leptos_i18n |
-| GraphQL client | graphql-request (или fetch) | reqwest + обёртка в `apps/admin/src/api/mod.rs` | Leptos не использует `async-graphql` на клиенте; запросы идут по HTTP к `/api/graphql`. |
+| GraphQL client | graphql-request (или fetch) | `leptos-graphql` (тонкий transport слой на `reqwest`) + `Resource`/actions Leptos | На клиенте не используем `async-graphql`; запросы идут по HTTP к `/api/graphql`, typed codegen — через `graphql-client` (опционально). |
 
 ## Требуют поиска и подтверждения
 
@@ -40,3 +40,13 @@
 [`docs/UI/admin-reuse-matrix.md`](./admin-reuse-matrix.md).
 
 This is an alpha version and requires clarification. Be careful, there may be errors in the text. So that no one thinks that this is an immutable rule.
+
+
+## Зафиксированный GraphQL-подход (RusToK)
+
+1. **Transport:** `leptos-graphql` (наш тонкий внутренний слой, без собственного state runtime).
+2. **HTTP:** `reqwest` как battle-tested клиент.
+3. **Типизация (по необходимости):** `graphql-client` для codegen из `.graphql` файлов.
+4. **State lifecycle:** `leptos::Resource`/actions в UI страницах.
+
+Это осознанная альтернатива Apollo/urql-подобным монолитам для Leptos-части.
