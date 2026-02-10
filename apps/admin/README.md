@@ -13,3 +13,22 @@
 - [Admin libraries parity](../../docs/UI/admin-libraries-parity.md)
 
 This is an alpha version and requires clarification. Be careful, there may be errors in the text. So that no one thinks that this is an immutable rule.
+
+## Взаимодействие
+- apps/server (HTTP/GraphQL API)
+- crates/rustok-core (контракты и события через API-слой)
+- crates/rustok-rbac (авторизация/права через backend)
+
+## Паспорт компонента
+- **Роль в системе:** Админ-приложение для управления RusToK (контент, каталог, настройки, пользователи).
+- **Основные данные/ответственность:** бизнес-логика и API данного компонента; структура кода и документации в корне компонента.
+- **Взаимодействует с:**
+  - apps/server (REST/GraphQL API)
+  - crates/leptos-* (UI/формы/таблицы)
+  - crates/rustok-rbac (модель прав через backend)
+- **Точки входа:**
+  - `apps/admin/src/main.rs`
+  - `apps/admin/src/pages/*`
+- **Локальная документация:** `./docs/`
+- **Глобальная документация платформы:** `/docs/`
+

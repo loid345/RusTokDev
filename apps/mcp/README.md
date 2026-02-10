@@ -51,3 +51,25 @@ managed and deployed independently. To wire actual modules, construct a `ModuleR
 - Updating MCP protocol behavior should be handled by updating the `rmcp` dependency.
 
 This is an alpha version and requires clarification. Be careful, there may be errors in the text. So that no one thinks that this is an immutable rule.
+
+## Взаимодействие
+- crates/rustok-mcp
+- crates/rustok-core (ModuleRegistry/контракты)
+- apps/server (возможная интеграция backend-сервисов)
+
+## Документация
+- Локальная документация: `./docs/`
+- Общая документация платформы: `/docs`
+
+## Паспорт компонента
+- **Роль в системе:** MCP server-приложение для инструментального доступа AI-клиентов к возможностям RusToK.
+- **Основные данные/ответственность:** бизнес-логика и API данного компонента; структура кода и документации в корне компонента.
+- **Взаимодействует с:**
+  - crates/rustok-mcp
+  - crates/rustok-core (ModuleRegistry/контракты)
+  - apps/server (интеграция сервисов платформы)
+- **Точки входа:**
+  - `apps/mcp/src/main.rs`
+- **Локальная документация:** `./docs/`
+- **Глобальная документация платформы:** `/docs/`
+
