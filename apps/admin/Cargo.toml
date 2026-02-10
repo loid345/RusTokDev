@@ -23,6 +23,8 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 reqwest = { version = "0.13", default-features = false, features = ["json"] }
 thiserror = { workspace = true }
+uuid = { workspace = true }
+base64 = { workspace = true }
 web-sys = { version = "0.3", features = ["Storage", "Window"] }
 
 [package.metadata.cargo-udeps.ignore]

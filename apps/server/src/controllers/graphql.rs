@@ -4,6 +4,7 @@ use loco_rs::prelude::*;
 use crate::context::{AuthContext, TenantContext};
 use crate::extractors::auth::OptionalCurrentUser;
 use crate::graphql::build_schema;
+use crate::graphql::persisted::is_admin_persisted_hash;
 use crate::services::event_bus::event_bus_from_context;
 use rustok_core::ModuleRegistry;
 
@@ -15,6 +16,18 @@ async fn graphql_handler(
     OptionalCurrentUser(current_user): OptionalCurrentUser,
     Json(req): Json<async_graphql::Request>,
 ) -> Json<async_graphql::Response> {
+    if is_critical_admin_operation(&req) {
+        let hash = persisted_query_hash(&req);
+        if hash.is_none_or(|hash| !is_admin_persisted_hash(hash)) {
+            return Json(async_graphql::Response::from_errors(vec![
+                async_graphql::ServerError::new(
+                    "Critical admin operations require an approved persisted query hash",
+                    None,
+                ),
+            ]));
+        }
+    }
+
     let schema = build_schema(ctx.db.clone(), event_bus_from_context(&ctx), alloy_state);
     let mut request = req.data(ctx).data(tenant_ctx).data(registry);
 
@@ -29,6 +42,24 @@ async fn graphql_handler(
     }
 
     Json(schema.execute(request).await)
+}
+
+fn is_critical_admin_operation(req: &async_graphql::Request) -> bool {
+    let op_name = req.operation_name.as_deref().unwrap_or_default();
+    matches!(op_name, "Users" | "User")
+}
+
+fn persisted_query_hash(req: &async_graphql::Request) -> Option<&str> {
+    use async_graphql::Value;
+
+    let value = req.extensions.get("persistedQuery")?;
+    let Value::Object(obj) = value else {
+        return None;
+    };
+    let Value::String(hash) = obj.get("sha256Hash")? else {
+        return None;
+    };
+    Some(hash.as_ref())
 }
 
 async fn graphql_playground() -> impl axum::response::IntoResponse {

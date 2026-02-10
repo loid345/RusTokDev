@@ -1,4 +1,6 @@
-use async_graphql::{EmptySubscription, MergedObject, Schema};
+use async_graphql::{
+    dataloader::DataLoader, extensions::Analyzer, EmptySubscription, MergedObject, Schema,
+};
 use sea_orm::DatabaseConnection;
 
 use rustok_core::EventBus;
@@ -8,7 +10,9 @@ use super::blog::{BlogMutation, BlogQuery};
 use super::commerce::{CommerceMutation, CommerceQuery};
 use super::content::{ContentMutation, ContentQuery};
 use super::forum::{ForumMutation, ForumQuery};
+use super::loaders::TenantNameLoader;
 use super::mutations::RootMutation;
+use super::observability::GraphqlObservability;
 use super::queries::RootQuery;
 
 #[derive(MergedObject, Default)]
@@ -39,6 +43,14 @@ pub fn build_schema(
     alloy_state: AlloyState,
 ) -> AppSchema {
     Schema::build(Query::default(), Mutation::default(), EmptySubscription)
+        .limit_depth(12)
+        .limit_complexity(600)
+        .extension(Analyzer)
+        .extension(GraphqlObservability)
+        .data(DataLoader::new(
+            TenantNameLoader::new(db.clone()),
+            tokio::spawn,
+        ))
         .data(db)
         .data(event_bus)
         .data(alloy_state)

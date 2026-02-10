@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
+use uuid::Uuid;
 
 pub const API_URL: &str = "http://localhost:3000/api/graphql";
 pub const REST_API_URL: &str = "http://localhost:3000";
@@ -20,6 +21,8 @@ pub enum ApiError {
 struct GraphqlRequest<V> {
     query: String,
     variables: V,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    extensions: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize)]
@@ -43,10 +46,51 @@ where
     V: Serialize,
     T: for<'de> Deserialize<'de>,
 {
+    request_with_extensions(query, variables, None, token, tenant_slug).await
+}
+
+pub async fn request_with_persisted<V, T>(
+    query: &str,
+    variables: V,
+    sha256_hash: &str,
+    token: Option<String>,
+    tenant_slug: Option<String>,
+) -> Result<T, ApiError>
+where
+    V: Serialize,
+    T: for<'de> Deserialize<'de>,
+{
+    request_with_extensions(
+        query,
+        variables,
+        Some(serde_json::json!({
+            "persistedQuery": {
+                "version": 1,
+                "sha256Hash": sha256_hash,
+            }
+        })),
+        token,
+        tenant_slug,
+    )
+    .await
+}
+
+async fn request_with_extensions<V, T>(
+    query: &str,
+    variables: V,
+    extensions: Option<serde_json::Value>,
+    token: Option<String>,
+    tenant_slug: Option<String>,
+) -> Result<T, ApiError>
+where
+    V: Serialize,
+    T: for<'de> Deserialize<'de>,
+{
     let client = reqwest::Client::new();
     let mut req = client.post(API_URL).json(&GraphqlRequest {
         query: query.to_string(),
         variables,
+        extensions,
     });
 
     if let Some(t) = token {
@@ -118,7 +162,10 @@ where
     T: for<'de> Deserialize<'de>,
 {
     let client = reqwest::Client::new();
-    let mut req = client.post(format!("{}{}", REST_API_URL, path)).json(body);
+    let mut req = client
+        .post(format!("{}{}", REST_API_URL, path))
+        .json(body)
+        .header("Idempotency-Key", Uuid::new_v4().to_string());
 
     if let Some(t) = token {
         req = req.header("Authorization", format!("Bearer {}", t));
