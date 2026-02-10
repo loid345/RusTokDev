@@ -17,21 +17,29 @@ impl TenantNameLoader {
     }
 }
 
-#[async_trait::async_trait]
 impl Loader<Uuid> for TenantNameLoader {
     type Value = String;
     type Error = async_graphql::Error;
 
-    async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, Self::Value>, Self::Error> {
-        let tenants = tenants::Entity::find()
-            .filter(tenants::Column::Id.is_in(keys.iter().copied()))
-            .all(&self.db)
-            .await
-            .map_err(|err| async_graphql::Error::new(err.to_string()))?;
+    fn load(
+        &self,
+        keys: &[Uuid],
+    ) -> impl std::future::Future<Output = Result<HashMap<Uuid, Self::Value>, Self::Error>> + Send
+    {
+        let db = self.db.clone();
+        let keys = keys.to_vec();
 
-        Ok(tenants
-            .into_iter()
-            .map(|tenant| (tenant.id, tenant.name))
-            .collect())
+        async move {
+            let tenants = tenants::Entity::find()
+                .filter(tenants::Column::Id.is_in(keys))
+                .all(&db)
+                .await
+                .map_err(|err| async_graphql::Error::new(err.to_string()))?;
+
+            Ok(tenants
+                .into_iter()
+                .map(|tenant| (tenant.id, tenant.name))
+                .collect())
+        }
     }
 }

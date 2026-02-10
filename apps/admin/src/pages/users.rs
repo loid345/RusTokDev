@@ -404,6 +404,7 @@ pub fn Users() -> impl IntoView {
                                                                 role,
                                                                 status,
                                                                 created_at,
+                                                                ..
                                                             } = edge.node.clone();
                                                             view! {
                                                                 <tr>

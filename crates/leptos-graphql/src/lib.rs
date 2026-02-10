@@ -40,7 +40,7 @@ pub struct GraphqlError {
     pub message: String,
 }
 
-#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq)]
+#[derive(thiserror::Error, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum GraphqlHttpError {
     #[error("Network error")]
     Network,

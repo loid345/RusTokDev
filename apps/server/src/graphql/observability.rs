@@ -4,7 +4,7 @@ use std::time::Instant;
 use async_graphql::extensions::{
     Extension, ExtensionContext, ExtensionFactory, NextResolve, ResolveInfo,
 };
-use async_graphql::{ServerResult, Value};
+use async_graphql::{QueryPathSegment, ServerResult, Value};
 
 #[derive(Default)]
 pub struct GraphqlObservability;
@@ -29,11 +29,10 @@ impl Extension for GraphqlObservabilityExtension {
         let parent_type = info.parent_type;
         let return_type = info.return_type;
         let field_name = info.path_node.field_name().to_string();
-        let cardinality = info
-            .path_node
-            .index()
-            .map(|idx| idx.to_string())
-            .unwrap_or_else(|| "single".to_string());
+        let cardinality = match info.path_node.segment {
+            QueryPathSegment::Index(idx) => idx.to_string(),
+            QueryPathSegment::Name(_) => "single".to_string(),
+        };
 
         let result = next.run(_ctx, info).await;
         let duration_ms = started_at.elapsed().as_secs_f64() * 1000.0;
