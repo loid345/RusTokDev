@@ -1,3 +1,5 @@
-# leptos-table docs
+# leptos-table docs (legacy)
 
-В этой папке хранится документация модуля `crates/leptos-table`.
+Документация по `crates/leptos-table` устарела.
+
+Актуальная библиотека таблиц: [`leptos-struct-table`](https://docs.rs/leptos-struct-table/latest/leptos_struct_table/).

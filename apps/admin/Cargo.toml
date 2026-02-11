@@ -14,7 +14,7 @@ leptos-auth = { workspace = true }
 leptos-graphql = { workspace = true }
 leptos-hook-form = { workspace = true }
 leptos-zod = { workspace = true }
-leptos-table = { workspace = true }
+leptos-struct-table = { workspace = true }
 leptos-zustand = { workspace = true }
 console_error_panic_hook = "0.1"
 console_log = "1"
@@ -32,7 +32,7 @@ normal = [
   "leptos-auth",
   "leptos-graphql",
   "leptos-hook-form",
-  "leptos-table",
+  "leptos-struct-table",
   "leptos-zod",
   "leptos-zustand",
 ]

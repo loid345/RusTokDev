@@ -12,7 +12,7 @@ leptos-auth = { workspace = true }
 leptos-graphql = { workspace = true }
 leptos-hook-form = { workspace = true }
 leptos-zod = { workspace = true }
-leptos-table = { workspace = true }
+leptos-struct-table = { workspace = true }
 leptos-zustand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 
@@ -21,7 +21,7 @@ normal = [
   "leptos-auth",
   "leptos-graphql",
   "leptos-hook-form",
-  "leptos-table",
+  "leptos-struct-table",
   "leptos-zod",
   "leptos-zustand",
 ]
