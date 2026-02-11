@@ -81,15 +81,44 @@ impl RateLimiter {
     }
 
     /// Check if a request should be rate limited
+    /// 
+    /// FIXED: Improved locking strategy - use read lock first, write lock only when needed
     pub async fn check_rate_limit(&self, key: &str) -> Result<RateLimitInfo, StatusCode> {
         if !self.config.enabled {
             return Ok(RateLimitInfo::unlimited());
         }
 
-        let mut requests = self.requests.write().await;
         let now = Instant::now();
+        
+        // First, try to check with read lock (allows concurrent reads)
+        {
+            let requests = self.requests.read().await;
+            if let Some(counter) = requests.get(key) {
+                // Check if window is still valid
+                if now.duration_since(counter.window_start) <= self.config.window {
+                    // Check if limit exceeded
+                    if counter.count >= self.config.max_requests {
+                        let retry_after = self.config.window
+                            .saturating_sub(now.duration_since(counter.window_start))
+                            .as_secs();
 
-        let counter = requests.entry(key.to_string()).or_insert(RequestCounter {
+                        warn!(
+                            key = %key,
+                            count = counter.count,
+                            limit = self.config.max_requests,
+                            retry_after = retry_after,
+                            "Rate limit exceeded"
+                        );
+
+                        return Err(StatusCode::TOO_MANY_REQUESTS);
+                    }
+                }
+            }
+        }
+
+        // Now acquire write lock to increment or create counter
+        let mut requests = self.requests.write().await;
+        let counter = requests.entry(key.to_string()).or_insert_with(|| RequestCounter {
             count: 0,
             window_start: now,
         });
@@ -100,7 +129,7 @@ impl RateLimiter {
             counter.window_start = now;
         }
 
-        // Check limit
+        // Double-check limit (race condition protection)
         if counter.count >= self.config.max_requests {
             let retry_after = self.config.window
                 .saturating_sub(now.duration_since(counter.window_start))
@@ -111,7 +140,7 @@ impl RateLimiter {
                 count = counter.count,
                 limit = self.config.max_requests,
                 retry_after = retry_after,
-                "Rate limit exceeded"
+                "Rate limit exceeded (race condition check)"
             );
 
             return Err(StatusCode::TOO_MANY_REQUESTS);
@@ -119,10 +148,16 @@ impl RateLimiter {
 
         counter.count += 1;
 
+        // FIXED: Correct calculation of reset time
+        let reset_at = counter.window_start + self.config.window;
+        let reset_secs = reset_at
+            .saturating_duration_since(now)
+            .as_secs();
+
         Ok(RateLimitInfo {
             limit: self.config.max_requests,
             remaining: self.config.max_requests.saturating_sub(counter.count),
-            reset: (now + self.config.window).elapsed().as_secs(),
+            reset: reset_secs,
         })
     }
 
@@ -137,6 +172,22 @@ impl RateLimiter {
 
         debug!(retained = requests.len(), "Cleaned up expired rate limit entries");
     }
+    
+    /// Get current statistics (useful for monitoring)
+    pub async fn get_stats(&self) -> RateLimitStats {
+        let requests = self.requests.read().await;
+        RateLimitStats {
+            active_clients: requests.len(),
+            total_entries: requests.len(),
+        }
+    }
+}
+
+/// Statistics about rate limiter
+#[derive(Debug, Clone)]
+pub struct RateLimitStats {
+    pub active_clients: usize,
+    pub total_entries: usize,
 }
 
 /// Information about current rate limit status
@@ -366,6 +417,29 @@ mod tests {
         {
             let requests = limiter.requests.read().await;
             assert_eq!(requests.len(), 0);
+        }
+    }
+    
+    #[tokio::test]
+    async fn test_concurrent_requests() {
+        use tokio::task::JoinSet;
+        
+        let config = RateLimitConfig::new(100, 60);
+        let limiter = Arc::new(RateLimiter::new(config));
+        
+        let mut tasks = JoinSet::new();
+        
+        // Spawn 50 concurrent requests
+        for i in 0..50 {
+            let limiter = limiter.clone();
+            tasks.spawn(async move {
+                limiter.check_rate_limit(&format!("client-{}", i)).await
+            });
+        }
+        
+        // All should succeed (different clients)
+        while let Some(result) = tasks.join_next().await {
+            assert!(result.unwrap().is_ok());
         }
     }
 }

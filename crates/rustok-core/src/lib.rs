@@ -3,6 +3,7 @@ pub mod cache;
 pub mod context;
 pub mod error;
 pub mod events;
+pub mod i18n;
 pub mod id;
 pub mod migrations;
 pub mod module;
@@ -24,6 +25,7 @@ pub use events::{
     EventEnvelope, EventHandler, EventSchema, EventTransport, FieldSchema, HandlerBuilder,
     HandlerResult, MemoryTransport, ReliabilityLevel, RunningDispatcher, EVENT_SCHEMAS,
 };
+pub use i18n::{extract_locale_from_header, translate, Locale};
 pub use id::generate_id;
 pub use migrations::ModuleMigration;
 pub use module::{EventListener, MigrationSource};
