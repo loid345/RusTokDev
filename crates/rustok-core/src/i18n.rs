@@ -47,11 +47,8 @@ impl Default for Locale {
     }
 }
 
-/// Translation key
-pub type TranslationKey = &'static str;
-
 /// Static translations map
-static TRANSLATIONS: Lazy<HashMap<(Locale, TranslationKey), &'static str>> = Lazy::new(|| {
+static TRANSLATIONS: Lazy<HashMap<(Locale, &'static str), &'static str>> = Lazy::new(|| {
     let mut map = HashMap::new();
     
     // Validation errors - English
@@ -147,12 +144,26 @@ static TRANSLATIONS: Lazy<HashMap<(Locale, TranslationKey), &'static str>> = Laz
     map
 });
 
-/// Get translation for a key in the specified locale
-pub fn translate(locale: Locale, key: TranslationKey) -> &'static str {
-    TRANSLATIONS
-        .get(&(locale, key))
-        .or_else(|| TRANSLATIONS.get(&(Locale::En, key)))
-        .unwrap_or(key)
+/// Get translation for a key in the specified locale  
+/// Returns the translation if found, otherwise returns the key itself
+pub fn translate(locale: Locale, key: &str) -> String {
+    // Try to get translation from map
+    // We need to iterate and compare because key is not 'static
+    for ((loc, trans_key), trans_value) in TRANSLATIONS.iter() {
+        if *loc == locale && *trans_key == key {
+            return trans_value.to_string();
+        }
+    }
+    
+    // Fallback to English
+    for ((loc, trans_key), trans_value) in TRANSLATIONS.iter() {
+        if *loc == Locale::En && *trans_key == key {
+            return trans_value.to_string();
+        }
+    }
+    
+    // Return key if no translation found
+    key.to_string()
 }
 
 /// Extract locale from Accept-Language header

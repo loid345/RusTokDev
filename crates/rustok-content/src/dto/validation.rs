@@ -4,7 +4,7 @@
 /// 
 /// FIXED: Added i18n support for error messages
 
-use validator::{Validate, ValidationError};
+use validator::ValidationError;
 
 /// Custom validator for body format
 pub fn validate_body_format(format: &str) -> Result<(), ValidationError> {

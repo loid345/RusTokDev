@@ -18,7 +18,7 @@ pub fn format_validation_errors(errors: &ValidationErrors, locale: Locale) -> Va
                 msg.to_string()
             } else {
                 // Translate error code
-                translate(locale, error.code.as_ref()).to_string()
+                translate(locale, error.code.as_ref())
             };
             
             messages.push(message);
@@ -37,7 +37,7 @@ pub fn format_single_error(error: &validator::ValidationError, locale: Locale) -
     if let Some(msg) = &error.message {
         msg.to_string()
     } else {
-        translate(locale, error.code.as_ref()).to_string()
+        translate(locale, error.code.as_ref())
     }
 }
 

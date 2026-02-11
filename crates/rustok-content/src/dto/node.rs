@@ -8,8 +8,7 @@ use validator::Validate;
 use utoipa::ToSchema;
 
 use super::validation::{
-    validate_body_format, validate_depth, validate_kind, validate_locale, validate_position,
-    validate_reply_count, validate_slug,
+    validate_body_format, validate_kind, validate_locale, validate_slug,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, Validate)]
@@ -23,23 +22,18 @@ pub struct CreateNodeInput {
     pub author_id: Option<Uuid>,
     pub category_id: Option<Uuid>,
     
-    #[validate(custom(function = "validate_position", message = "Invalid position"))]
     pub position: Option<i32>,
-    
-    #[validate(custom(function = "validate_depth", message = "Invalid depth"))]
     pub depth: Option<i32>,
-    
-    #[validate(custom(function = "validate_reply_count", message = "Invalid reply count"))]
     pub reply_count: Option<i32>,
     
     #[serde(default)]
     pub metadata: Value,
     
     #[validate(length(min = 1, message = "At least one translation required"))]
-    #[validate]
+    #[validate(nested)]
     pub translations: Vec<NodeTranslationInput>,
     
-    #[validate]
+    #[validate(nested)]
     pub bodies: Vec<BodyInput>,
 }
 
