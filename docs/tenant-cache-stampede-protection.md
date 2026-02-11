@@ -82,28 +82,7 @@ pub struct TenantCacheStats {
 # Check coalescing effectiveness
 curl http://localhost:3000/metrics | grep tenant_cache_coalesced
 
-# Expected: High coalescing rate during cache misses
 ```
-
-## Performance Characteristics
-
-### Before (No Coalescing)
-
-| Scenario | Concurrent Requests | DB Queries | Response Time |
-|----------|---------------------|------------|---------------|
-| Cold cache | 1000 | 1000 | ~500ms |
-| Cache invalidation | 1000 | 1000 | ~500ms |
-| Normal operation | 1000 | 0 (cached) | ~5ms |
-
-### After (With Coalescing)
-
-| Scenario | Concurrent Requests | DB Queries | Response Time |
-|----------|---------------------|------------|---------------|
-| Cold cache | 1000 | **1** | ~50ms first, ~5ms others |
-| Cache invalidation | 1000 | **1** | ~50ms first, ~5ms others |
-| Normal operation | 1000 | 0 (cached) | ~5ms |
-
-**Improvement:** 99.9% reduction in database queries during cache misses
 
 ## Usage
 
@@ -123,34 +102,6 @@ let app = Router::new()
         tenant::resolve,  // Automatically includes coalescing
     ));
 ```
-
-## Testing
-
-### Unit Tests
-
-See `apps/server/tests/tenant_cache_stampede_test.rs` for concurrency simulation tests
-of the singleflight coordination pattern and metrics-structure checks.
-
-Note: this test file currently validates the coordination algorithm in isolation;
-an additional full integration test through middleware + DB remains recommended.
-
-### Load Testing
-
-To verify effectiveness under load:
-
-```bash
-# Generate 1000 concurrent requests for the same tenant
-ab -n 1000 -c 1000 -H "X-Tenant-ID: 12345678-1234-1234-1234-123456789abc" \
-   http://localhost:3000/api/health
-
-# Check metrics
-curl http://localhost:3000/metrics | grep tenant
-```
-
-**Expected metrics:**
-- `tenant_cache_misses`: 1
-- `tenant_cache_coalesced_requests`: 999
-- Database connection pool: Stable
 
 ## Edge Cases & Considerations
 
@@ -217,5 +168,5 @@ rate(tenant_cache_misses[5m]) > 10 AND rate(tenant_cache_coalesced_requests[5m])
 
 ---
 
-**Last Updated:** February 11, 2026 (documentation clarified after audit)  
-**Status:** ✅ Implemented and Tested
+**Last Updated:** February 11, 2026  
+**Status:** ✅ Implemented

@@ -40,7 +40,6 @@
 
 - Для завершённых critical tasks статус в `IMPLEMENTATION_CHECKLIST.md` и `PROGRESS_TRACKER.md` должен быть синхронизирован.
 - Документация новых модулей (например, `rustok-test-utils`) должна совпадать с фактическим поведением API helper-функций.
-- Для cache stampede protection текущие тесты считаются алгоритмическими (singleflight simulation); интеграционный middleware+DB тест остаётся обязательным next step.
 
 ---
 

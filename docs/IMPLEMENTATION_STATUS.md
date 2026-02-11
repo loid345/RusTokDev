@@ -24,7 +24,6 @@
 
 - ✅ Синхронизирован checklist по закрытым critical задачам (event versioning, transactional publishing, test-utils, tenant cache).
 - ✅ Уточнена документация `rustok-test-utils`: `setup_test_db()` создаёт in-memory DB без автоматических миграций; для схемы используется `setup_test_db_with_migrations::<M>()`.
-- ✅ Уточнён статус тестов по tenant cache stampede: текущие тесты покрывают алгоритм singleflight, а интеграционный middleware+DB тест остаётся next step.
 
 ### Изменения 2026-02-06
 
