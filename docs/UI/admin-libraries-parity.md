@@ -50,9 +50,9 @@ This is an alpha version and requires clarification. Be careful, there may be er
 | `next-themes` | Тема/переключение dark-light | ✅ Закрыто | Theme слой через Leptos + Tailwind токены |
 | `nuqs` | Синхронизация состояния с query params | ⚠️ Частично | `leptos_router` + `leptos-use` + утилиты сериализации; при сложных кейсах добавить shared helper crate |
 | `sonner` | Toast-уведомления | ⚠️ Частично | Использовать существующий notification слой; при нехватке — сделать `leptos-sonner`-совместимый wrapper |
-| `@dnd-kit/*` | Drag-and-drop (kanban) | ❌ Gap | Найти готовую Leptos DnD-библиотеку; если не подходит — разработать `crates/leptos-dnd` |
+| `@dnd-kit/*` | Drag-and-drop (kanban) | ⚠️ Candidate found | Кандидат: `leptos_dnd` (`docs.rs/crate/leptos_dnd/0.1.4`). Проверить production-ready критерии; fallback: `crates/leptos-dnd` |
 | `kbar` / `cmdk` | Command palette / быстрый поиск | ❌ Gap | Поиск готовой Leptos command palette; fallback: `crates/leptos-command-palette` |
-| `react-dropzone` | Upload/dropzone | ❌ Gap | Поиск готовой Leptos dropzone; fallback: `crates/leptos-dropzone` |
+| `react-dropzone` | Upload/dropzone | ⚠️ Candidate found | Кандидат: Rust-UI Dropzone (`rust-ui.com/docs/components/dropzone`). Проверить интеграцию с нашим стеком; fallback: `crates/leptos-dropzone` |
 | `react-day-picker` | Date picker/calendar | ⚠️ Частично | Проверить существующий date UI в `leptos-shadcn`; при отсутствии — выделить отдельный date-picker crate |
 | `vaul` | Drawer/Sheet UX | ⚠️ Частично | Проверить покрытие текущими UI primitives; если не хватает — добавить shared drawer primitive |
 | `@sentry/nextjs` | Monitoring/trace | ⚠️ Частично | Проверить текущий Rust/FE telemetry контур; для web-клиента зафиксировать единый Sentry adapter |
@@ -67,6 +67,19 @@ This is an alpha version and requires clarification. Be careful, there may be er
 5. **Toast parity**: формализовать единый notification API для Next и Leptos.
 6. **URL-state parity (`nuqs`-подобно)**: добавить shared helper для query-state.
 7. **Monitoring parity**: утвердить единый adapter для frontend telemetry/Sentry.
+
+### Кандидаты из текущего обсуждения
+
+- DnD: `leptos_dnd` — https://docs.rs/crate/leptos_dnd/0.1.4
+- Dropzone: Rust UI Dropzone — https://www.rust-ui.com/docs/components/dropzone
+
+Мини-чек перед принятием в стек:
+
+1. Поддержка текущей версии `leptos` в workspace.
+2. Совместимость с SSR/CSR режимами там, где это нужно.
+3. Состояние поддержки (релизы/issue-активность).
+4. Отсутствие блокирующих лицензий/ограничений.
+5. Возможность завернуть в наш shared API (без прямой привязки к app-слою).
 
 ### Правило внедрения по gap-задачам
 
