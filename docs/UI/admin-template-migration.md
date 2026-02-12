@@ -81,6 +81,48 @@
 
 Это не strict Atomic Design naming, но по сути покрывает Atom→Molecule→Organism и при этом лучше совпадает с module-first delivery.
 
+## 2.2 Zero-config запуск админки для локальной отладки (без ручной настройки)
+
+Чтобы админка "сама понимала", к какому серверу подключаться и какие ключи использовать, фиксируем bootstrap-правила.
+
+### Источники конфигурации (приоритет сверху вниз)
+
+1. Runtime injected config (предпочтительно): `window.__RUSTOK_CONFIG__` / SSR-injected payload.
+2. `.env` / `.env.local` (локальная разработка).
+3. Safe defaults для dev (localhost-порты и demo tenant).
+
+> UI никогда не содержит захардкоженные production URLs/keys; только runtime/env источники.
+
+### Минимальный runtime config контракт
+
+- `api_base_url` (например, `http://localhost:5150`)
+- `graphql_endpoint` (по умолчанию `/api/graphql`)
+- `auth_base_url` (по умолчанию `/api/auth`)
+- `tenant_slug` (опционально; для single-tenant dev может заполняться автоматически)
+- `app_env` (`local`/`staging`/`production`)
+- `feature_flags` (опционально)
+
+### Авто-детект в dev
+
+- Если `api_base_url` не передан, использовать origin текущего UI (`window.location.origin`) + прокси путь.
+- Если `tenant_slug` пуст, запрашивать `me`/`tenant context` и сохранять выбранный tenant в `leptos-auth` storage.
+- Если backend недоступен, показывать diagnostics экран с готовым checklist (endpoint, auth, tenant header).
+
+### Server Registry режим (для multi-server отладки)
+
+Для случаев "админка не знает чей сервер":
+
+- Включаем `server_registry.json` (или endpoint `/api/servers`) для dev/staging.
+- Пользователь выбирает target server один раз в UI (селектор в login/start screen).
+- Выбор сохраняется локально и подставляется в `api_base_url` + telemetry context.
+- Для production этот режим отключается фичефлагом.
+
+### Security и DX ограничения
+
+- Секретные ключи не хранятся во фронте; только public config.
+- Токены живут в auth storage/cookie согласно `leptos-auth` контракту.
+- Любое изменение runtime config логируется в debug panel (кто/когда/какой target).
+
 
 Приоритеты обновлены под быстрый запуск рабочей админки:
 
