@@ -84,6 +84,12 @@ docs/DISTRIBUTED_TRACING_GUIDE.md (17KB) - NEW
 - ✅ Service layers (via `#[instrument]` macro)
 - ✅ HTTP handlers (via Axum middleware)
 
+**Post-implementation Audit (2026-02-12):**
+- 🔧 Fixed broken tracing field recording in `create_span` (missing declared fields for `tenant_id`, `user_id`, errors, success, duration).
+- 🔧 Aligned error field naming (`error_type`, `error_occurred`) to avoid invalid dotted keys and simplify query filters.
+- 🔧 Refactored `traced!` macro from non-working pseudo-attribute form into executable span wrapper macro with block result.
+- ✅ Added unit test for `traced!` return behavior.
+
 ---
 
 ## 🔄 Current Task (1/3)

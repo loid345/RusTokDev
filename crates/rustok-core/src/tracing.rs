@@ -7,8 +7,7 @@
 /// - Tenant and user correlation
 /// - Error span recording
 /// - Performance tracking
-
-use tracing::{Span, Level};
+use tracing::Span;
 use uuid::Uuid;
 
 /// Common span attributes for RusToK operations
@@ -60,6 +59,14 @@ pub fn create_span(name: &str, attrs: SpanAttributes) -> Span {
         name,
         module = %attrs.module,
         operation = %attrs.operation,
+        tenant_id = tracing::field::Empty,
+        user_id = tracing::field::Empty,
+        error = tracing::field::Empty,
+        error_type = tracing::field::Empty,
+        error_occurred = tracing::field::Empty,
+        success = tracing::field::Empty,
+        result = tracing::field::Empty,
+        duration_ms = tracing::field::Empty,
     );
 
     if let Some(tenant_id) = attrs.tenant_id {
@@ -87,8 +94,8 @@ pub fn create_span(name: &str, attrs: SpanAttributes) -> Span {
 pub fn record_error<E: std::fmt::Display>(error: E, error_type: &str) {
     let span = Span::current();
     span.record("error", &tracing::field::display(&error));
-    span.record("error.type", error_type);
-    span.record("error.occurred", true);
+    span.record("error_type", error_type);
+    span.record("error_occurred", true);
 }
 
 /// Record operation success with optional result data
@@ -137,31 +144,42 @@ pub fn event_span(event_type: &str, event_id: &str) -> Span {
     )
 }
 
-/// Macro for creating a traced async function
+/// Macro for executing a block within a standardized tracing span.
 ///
 /// # Example
 /// ```ignore
 /// use rustok_core::traced;
+/// use uuid::Uuid;
 ///
-/// #[traced(name = "fetch_user", tenant_id, user_id)]
-/// async fn fetch_user(tenant_id: Uuid, user_id: Uuid) -> Result<User> {
-///     // Function automatically gets a span with tenant_id and user_id
-///     Ok(User::default())
-/// }
+/// let tenant_id = Uuid::new_v4();
+/// let user_id = Uuid::new_v4();
+/// let value = traced!(name = "fetch_user", tenant_id, user_id => {
+///     42
+/// });
+/// assert_eq!(value, 42);
 /// ```
 #[macro_export]
 macro_rules! traced {
     (
         name = $name:expr,
-        $($field:ident),* $(,)?
+        $($field:ident),* => $body:block
     ) => {
-        tracing::instrument(
-            name = $name,
-            skip_all,
-            fields(
+        {
+            let __span = tracing::info_span!(
+                $name,
                 $($field = tracing::field::Empty,)*
-            )
-        )
+            );
+            $(
+                __span.record(
+                    stringify!($field),
+                    &tracing::field::display(&$field)
+                );
+            )*
+            let __guard = __span.enter();
+            let __result = { $body };
+            drop(__guard);
+            __result
+        }
     };
 }
 
@@ -226,8 +244,21 @@ mod tests {
         let result = measure("test", || async {
             tokio::time::sleep(std::time::Duration::from_millis(10)).await;
             42
-        }).await;
+        })
+        .await;
 
         assert_eq!(result, 42);
+    }
+
+    #[test]
+    fn test_traced_macro_returns_block_result() {
+        let tenant_id = Uuid::new_v4();
+        let user_id = Uuid::new_v4();
+
+        let result = traced!(name = "test.traced", tenant_id, user_id => {
+            format!("{tenant_id}:{user_id}")
+        });
+
+        assert!(result.contains(':'));
     }
 }
