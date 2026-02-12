@@ -8,6 +8,9 @@ updates:
     groups:
       all-updates:
         update-types: ["major", "minor", "patch"]
+    ignore:
+      - dependency-name: "lru"
+        update-types: ["version-update:semver-patch", "version-update:semver-minor", "version-update:semver-major"]
   - package-ecosystem: "cargo"
     directory: "/apps/admin"
     schedule:
