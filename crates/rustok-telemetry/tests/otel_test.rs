@@ -2,8 +2,7 @@
 ///
 /// These tests verify OpenTelemetry initialization and configuration.
 /// Note: Full tracing tests require a running OTLP collector (Jaeger/Tempo).
-
-use rustok_telemetry::otel::{OtelConfig, OtelError, init_tracing};
+use rustok_telemetry::otel::{init_tracing, OtelConfig, OtelError};
 
 #[test]
 fn test_otel_config_builder() {
@@ -45,7 +44,7 @@ fn test_config_from_env_defaults() {
     std::env::remove_var("OTEL_ENABLED");
 
     let config = OtelConfig::from_env();
-    
+
     // Should use defaults
     assert_eq!(config.service_name, "rustok-server");
     assert_eq!(config.otlp_endpoint, "http://localhost:4317");
@@ -63,7 +62,7 @@ fn test_config_from_env_custom() {
     std::env::set_var("OTEL_ENABLED", "true");
 
     let config = OtelConfig::from_env();
-    
+
     assert_eq!(config.service_name, "custom-service");
     assert_eq!(config.service_version, "2.0.0");
     assert_eq!(config.otlp_endpoint, "http://custom:4317");
@@ -123,18 +122,18 @@ async fn test_init_tracing_with_collector() {
     };
 
     let result = init_tracing(config).await;
-    
+
     // This will fail if Jaeger is not running, but that's expected
     match result {
         Ok(_) => {
             // Success - collector is running
             tracing::info!("Successfully connected to OTLP collector");
-            
+
             // Create a test span
             let span = tracing::info_span!("test_span");
             let _guard = span.enter();
             tracing::info!("Test log inside span");
-            
+
             // Shutdown gracefully
             rustok_telemetry::otel::shutdown().await;
         }

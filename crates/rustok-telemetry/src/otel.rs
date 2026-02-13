@@ -8,7 +8,6 @@
 /// - Span creation и management
 /// - Resource attributes (service info)
 /// - Batch span processor
-
 use opentelemetry::{
     global,
     sdk::{
@@ -26,19 +25,19 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilte
 pub struct OtelConfig {
     /// Service name (e.g., "rustok-server")
     pub service_name: String,
-    
+
     /// Service version (e.g., "0.1.0")
     pub service_version: String,
-    
+
     /// OTLP endpoint (e.g., "http://localhost:4317")
     pub otlp_endpoint: String,
-    
+
     /// Environment (e.g., "development", "production")
     pub environment: String,
-    
+
     /// Sampling rate (0.0-1.0, where 1.0 = 100%)
     pub sampling_rate: f64,
-    
+
     /// Enable tracing export
     pub enabled: bool,
 }
@@ -171,7 +170,13 @@ pub async fn init_tracing(config: OtelConfig) -> Result<(), OtelError> {
 /// ```
 pub async fn init_otel_layer(
     config: OtelConfig,
-) -> Result<tracing_opentelemetry::OpenTelemetryLayer<tracing_subscriber::Registry, opentelemetry_sdk::trace::Tracer>, OtelError> {
+) -> Result<
+    tracing_opentelemetry::OpenTelemetryLayer<
+        tracing_subscriber::Registry,
+        opentelemetry_sdk::trace::Tracer,
+    >,
+    OtelError,
+> {
     if !config.enabled {
         return Err(OtelError::Disabled);
     }
@@ -229,10 +234,10 @@ pub async fn shutdown() {
 pub enum OtelError {
     #[error("OpenTelemetry initialization failed: {0}")]
     InitFailed(String),
-    
+
     #[error("OpenTelemetry is disabled")]
     Disabled,
-    
+
     #[error("Failed to export spans: {0}")]
     ExportFailed(String),
 }
