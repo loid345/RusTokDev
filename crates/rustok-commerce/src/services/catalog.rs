@@ -213,7 +213,7 @@ impl CatalogService {
         product_id: Uuid,
     ) -> CommerceResult<ProductResponse> {
         debug!(product_id = %product_id, "Fetching product");
-        
+
         let product = entities::product::Entity::find_by_id(product_id)
             .filter(entities::product::Column::TenantId.eq(tenant_id))
             .one(&self.db)
@@ -365,7 +365,7 @@ impl CatalogService {
         input: UpdateProductInput,
     ) -> CommerceResult<ProductResponse> {
         debug!(product_id = %product_id, "Updating product");
-        
+
         let txn = self.db.begin().await?;
 
         let product = entities::product::Entity::find_by_id(product_id)
@@ -466,9 +466,9 @@ impl CatalogService {
         product_id: Uuid,
     ) -> CommerceResult<ProductResponse> {
         debug!(product_id = %product_id, "Publishing product");
-        
+
         let txn = self.db.begin().await?;
-        
+
         let product = entities::product::Entity::find_by_id(product_id)
             .filter(entities::product::Column::TenantId.eq(tenant_id))
             .one(&txn)
@@ -483,7 +483,7 @@ impl CatalogService {
         product_active.published_at = Set(Some(Utc::now().into()));
         product_active.updated_at = Set(Utc::now().into());
         let updated = product_active.update(&txn).await?;
-        
+
         self.event_bus
             .publish_in_tx(
                 &txn,
@@ -492,7 +492,7 @@ impl CatalogService {
                 DomainEvent::ProductPublished { product_id },
             )
             .await?;
-        
+
         txn.commit().await?;
         info!(product_id = %product_id, "Product published successfully");
 
@@ -507,9 +507,9 @@ impl CatalogService {
         product_id: Uuid,
     ) -> CommerceResult<ProductResponse> {
         debug!(product_id = %product_id, "Unpublishing product");
-        
+
         let txn = self.db.begin().await?;
-        
+
         let product = entities::product::Entity::find_by_id(product_id)
             .filter(entities::product::Column::TenantId.eq(tenant_id))
             .one(&txn)
@@ -520,7 +520,7 @@ impl CatalogService {
         product_active.status = Set(entities::product::ProductStatus::Draft);
         product_active.updated_at = Set(Utc::now().into());
         product_active.update(&txn).await?;
-        
+
         self.event_bus
             .publish_in_tx(
                 &txn,
@@ -529,7 +529,7 @@ impl CatalogService {
                 DomainEvent::ProductUpdated { product_id },
             )
             .await?;
-        
+
         txn.commit().await?;
         info!(product_id = %product_id, "Product unpublished successfully");
 
@@ -544,9 +544,9 @@ impl CatalogService {
         product_id: Uuid,
     ) -> CommerceResult<()> {
         debug!(product_id = %product_id, "Deleting product");
-        
+
         let txn = self.db.begin().await?;
-        
+
         let product = entities::product::Entity::find_by_id(product_id)
             .filter(entities::product::Column::TenantId.eq(tenant_id))
             .one(&txn)
@@ -561,7 +561,7 @@ impl CatalogService {
         entities::product::Entity::delete_by_id(product_id)
             .exec(&txn)
             .await?;
-        
+
         self.event_bus
             .publish_in_tx(
                 &txn,
@@ -570,7 +570,7 @@ impl CatalogService {
                 DomainEvent::ProductDeleted { product_id },
             )
             .await?;
-        
+
         txn.commit().await?;
         info!(product_id = %product_id, "Product deleted successfully");
 
@@ -579,13 +579,14 @@ impl CatalogService {
 
     fn slugify(text: &str) -> String {
         use unicode_normalization::UnicodeNormalization;
-        
+
         const MAX_LENGTH: usize = 255;
-        const RESERVED_NAMES: &[&str] = &["admin", "api", "null", "undefined", "new", "edit", "delete"];
-        
+        const RESERVED_NAMES: &[&str] =
+            &["admin", "api", "null", "undefined", "new", "edit", "delete"];
+
         // 1. Unicode normalization (NFC) to prevent homograph attacks
         let normalized: String = text.nfc().collect();
-        
+
         // 2. Convert to lowercase and filter valid characters
         // Allow: a-z, 0-9, hyphen, space (will become hyphen)
         let slug: String = normalized
@@ -594,28 +595,28 @@ impl CatalogService {
             .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == ' ' || *c == '_')
             .map(|c| if c == ' ' || c == '_' { '-' } else { c })
             .collect();
-        
+
         // 3. Remove consecutive hyphens and trim
         let slug = slug
             .split('-')
             .filter(|s| !s.is_empty())
             .collect::<Vec<_>>()
             .join("-");
-        
+
         // 4. Limit length
         let slug = if slug.len() > MAX_LENGTH {
             slug[..MAX_LENGTH].to_string()
         } else {
             slug
         };
-        
+
         // 5. Prevent reserved names by adding suffix
         let slug = if RESERVED_NAMES.contains(&slug.as_str()) {
             format!("{}-1", slug)
         } else {
             slug
         };
-        
+
         // 6. Ensure non-empty
         if slug.is_empty() {
             "untitled".to_string()
