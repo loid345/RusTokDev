@@ -430,7 +430,7 @@ impl<S> Order<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     fn create_test_order() -> Order<Pending> {
         Order::new_pending(
             Uuid::new_v4(),
@@ -440,27 +440,27 @@ mod tests {
             "USD".to_string(),
         )
     }
-    
+
     #[test]
     fn test_pending_to_confirmed() {
         let order = create_test_order();
         let order = order.confirm().unwrap();
-        
+
         assert!(order.state.inventory_reserved);
     }
-    
+
     #[test]
     fn test_confirmed_to_paid() {
-        let order = create_test_order()
-            .confirm()
+        let order = create_test_order().confirm().unwrap();
+
+        let order = order
+            .pay("pay_123".to_string(), "credit_card".to_string())
             .unwrap();
-        
-        let order = order.pay("pay_123".to_string(), "credit_card".to_string()).unwrap();
-        
+
         assert_eq!(order.state.payment_id, "pay_123");
         assert_eq!(order.state.payment_method, "credit_card");
     }
-    
+
     #[test]
     fn test_paid_to_shipped() {
         let order = create_test_order()
@@ -468,13 +468,15 @@ mod tests {
             .unwrap()
             .pay("pay_123".to_string(), "credit_card".to_string())
             .unwrap();
-        
-        let order = order.ship("TRACK123".to_string(), "FedEx".to_string()).unwrap();
-        
+
+        let order = order
+            .ship("TRACK123".to_string(), "FedEx".to_string())
+            .unwrap();
+
         assert_eq!(order.state.tracking_number, "TRACK123");
         assert_eq!(order.state.carrier, "FedEx");
     }
-    
+
     #[test]
     fn test_shipped_to_delivered() {
         let order = create_test_order()
@@ -484,17 +486,17 @@ mod tests {
             .unwrap()
             .ship("TRACK123".to_string(), "FedEx".to_string())
             .unwrap();
-        
+
         let order = order.deliver(Some("John Doe".to_string()));
-        
+
         assert_eq!(order.state.signature, Some("John Doe".to_string()));
     }
-    
+
     #[test]
     fn test_pending_to_cancelled() {
         let order = create_test_order();
         let order = order.cancel("Customer request".to_string());
-        
+
         assert_eq!(order.state.reason, "Customer request");
         assert!(!order.state.refunded);
     }
