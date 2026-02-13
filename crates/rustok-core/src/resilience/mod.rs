@@ -5,7 +5,6 @@
 /// - Retry: Automatic retry with backoff
 /// - Timeout: Enforce operation deadlines
 /// - Bulkhead: Isolate resources
-
 pub mod circuit_breaker;
 pub mod retry;
 pub mod timeout;
