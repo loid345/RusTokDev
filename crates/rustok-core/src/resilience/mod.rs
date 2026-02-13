@@ -1,5 +1,5 @@
 /// Resilience patterns for fault-tolerant systems
-/// 
+///
 /// This module provides:
 /// - Circuit Breaker: Prevent cascading failures
 /// - Retry: Automatic retry with backoff
