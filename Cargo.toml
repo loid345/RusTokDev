@@ -57,7 +57,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 # Validation
-validator = { version = "0.19", features = ["derive"] }
+validator = { version = "0.20", features = ["derive"] }
 
 # Error Handling
 thiserror = "2.0.18"
@@ -115,7 +115,7 @@ hex = "0.4"
 iggy = "0.4.4"
 reqwest-middleware = "0.3.3"
 reqwest-retry = "0.5.0"
-prometheus = "0.13"
+prometheus = "0.14"
 lazy_static = "1.5"
 
 # Internal crates
