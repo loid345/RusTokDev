@@ -4,7 +4,7 @@ use std::time::Duration;
 use async_trait::async_trait;
 use moka::future::Cache;
 
-use crate::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError};
+use crate::resilience::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError};
 use crate::context::CacheBackend;
 use crate::Result;
 
@@ -108,7 +108,7 @@ impl CacheBackend for RedisCacheBackend {
         let client = self.client.clone();
 
         self.circuit_breaker
-            .call(async move {
+            .call(|| async move {
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
@@ -126,12 +126,12 @@ impl CacheBackend for RedisCacheBackend {
                 }
             })
             .await
-            .map_err(|e| match e {
+            .map_err(|e: CircuitBreakerError| match e {
                 CircuitBreakerError::Open => {
                     tracing::warn!("Redis cache circuit breaker is OPEN");
                     crate::Error::Cache("Redis unavailable (circuit breaker open)".to_string())
                 }
-                CircuitBreakerError::Upstream(err) => err,
+                CircuitBreakerError::Execution(err) => crate::Error::Cache(err),
             })
     }
 
@@ -140,7 +140,7 @@ impl CacheBackend for RedisCacheBackend {
         let redis_key = self.key(key);
 
         self.circuit_breaker
-            .call(async move {
+            .call(|| async move {
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
@@ -150,15 +150,15 @@ impl CacheBackend for RedisCacheBackend {
                     .query_async(&mut conn)
                     .await
                     .map_err(|err| crate::Error::Cache(err.to_string()))?;
-                Ok(value)
+                Ok::<_, crate::Error>(value)
             })
             .await
-            .map_err(|e| match e {
+            .map_err(|e: CircuitBreakerError| match e {
                 CircuitBreakerError::Open => {
                     tracing::debug!("Redis cache GET failed: circuit breaker open");
                     crate::Error::Cache("Redis unavailable (circuit breaker open)".to_string())
                 }
-                CircuitBreakerError::Upstream(err) => err,
+                CircuitBreakerError::Execution(err) => crate::Error::Cache(err),
             })
     }
 
@@ -168,7 +168,7 @@ impl CacheBackend for RedisCacheBackend {
         let ttl_secs = self.ttl.as_secs();
 
         self.circuit_breaker
-            .call(async move {
+            .call(|| async move {
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
@@ -181,15 +181,15 @@ impl CacheBackend for RedisCacheBackend {
                     .query_async::<()>(&mut conn)
                     .await
                     .map_err(|err| crate::Error::Cache(err.to_string()))?;
-                Ok(())
+                Ok::<_, crate::Error>(())
             })
             .await
-            .map_err(|e| match e {
+            .map_err(|e: CircuitBreakerError| match e {
                 CircuitBreakerError::Open => {
                     tracing::debug!("Redis cache SET failed: circuit breaker open");
                     crate::Error::Cache("Redis unavailable (circuit breaker open)".to_string())
                 }
-                CircuitBreakerError::Upstream(err) => err,
+                CircuitBreakerError::Execution(err) => crate::Error::Cache(err),
             })
     }
 
@@ -198,7 +198,7 @@ impl CacheBackend for RedisCacheBackend {
         let redis_key = self.key(key);
 
         self.circuit_breaker
-            .call(async move {
+            .call(|| async move {
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
@@ -208,15 +208,15 @@ impl CacheBackend for RedisCacheBackend {
                     .query_async::<()>(&mut conn)
                     .await
                     .map_err(|err| crate::Error::Cache(err.to_string()))?;
-                Ok(())
+                Ok::<_, crate::Error>(())
             })
             .await
-            .map_err(|e| match e {
+            .map_err(|e: CircuitBreakerError| match e {
                 CircuitBreakerError::Open => {
                     tracing::debug!("Redis cache DEL failed: circuit breaker open");
                     crate::Error::Cache("Redis unavailable (circuit breaker open)".to_string())
                 }
-                CircuitBreakerError::Upstream(err) => err,
+                CircuitBreakerError::Execution(err) => crate::Error::Cache(err),
             })
     }
 
