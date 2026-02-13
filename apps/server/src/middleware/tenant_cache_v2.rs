@@ -1,5 +1,5 @@
 /// Simplified Tenant Cache using Moka
-/// 
+///
 /// This is a simplified version of the tenant caching system that uses moka's built-in
 /// features instead of manual implementations:
 /// - Automatic stampede protection via `try_get_with`
@@ -97,7 +97,7 @@ impl SimplifiedTenantCache {
     }
 
     /// Get or load a tenant by identifier
-    /// 
+    ///
     /// This method automatically handles stampede protection via moka's `try_get_with`.
     /// Multiple concurrent requests for the same tenant will be coalesced into a single DB query.
     pub async fn get_or_load(
@@ -110,9 +110,7 @@ impl SimplifiedTenantCache {
         // If multiple requests come in for the same key, only one will execute the loader
         let cached = self
             .cache
-            .try_get_with(cache_key, async {
-                self.load_from_db(identifier).await
-            })
+            .try_get_with(cache_key, async { self.load_from_db(identifier).await })
             .await
             .map_err(|e| {
                 tracing::error!(
@@ -231,10 +229,7 @@ pub struct SimplifiedTenantCacheStats {
 
 /// Initialize simplified tenant cache
 pub async fn init_simplified_tenant_cache(ctx: &AppContext) {
-    if ctx
-        .shared_store
-        .contains::<Arc<SimplifiedTenantCache>>()
-    {
+    if ctx.shared_store.contains::<Arc<SimplifiedTenantCache>>() {
         return;
     }
 

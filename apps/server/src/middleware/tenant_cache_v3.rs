@@ -1,15 +1,14 @@
 /// Tenant Cache V3 - With Circuit Breaker Protection
-/// 
+///
 /// This version adds circuit breaker protection on top of V2:
 /// - Protects against database outages
 /// - Fail-fast when DB is down (0.1ms instead of 30s timeout)
 /// - Automatic recovery detection
-/// 
 /// Example usage:
 /// ```rust
 /// // Initialize with circuit breaker
 /// let cache = TenantCacheV3::new(db, CircuitBreakerConfig::default());
-/// 
+///
 /// // Load tenant with protection
 /// match cache.get_or_load(&identifier).await {
 ///     Ok(tenant) => // Use tenant
@@ -18,7 +17,6 @@
 ///     Err(TenantCacheError::Database(e)) => // Database error
 /// }
 /// ```
-
 use axum::{
     body::Body,
     extract::State,
@@ -28,7 +26,9 @@ use axum::{
 };
 use loco_rs::app::AppContext;
 use moka::future::Cache;
-use rustok_core::resilience::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError, CircuitState};
+use rustok_core::resilience::{
+    CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError, CircuitState,
+};
 use rustok_core::tenant_validation::TenantIdentifierValidator;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -37,10 +37,10 @@ use uuid::Uuid;
 
 use crate::common::settings::RustokSettings;
 use crate::context::{TenantContext, TenantContextExtension};
-use crate::models::tenants;
 use crate::middleware::tenant::{
-    ResolvedTenantIdentifier, TenantIdentifierKind, resolve_identifier
+    resolve_identifier, ResolvedTenantIdentifier, TenantIdentifierKind,
 };
+use crate::models::tenants;
 
 const TENANT_CACHE_TTL: Duration = Duration::from_secs(300);
 const TENANT_CACHE_IDLE: Duration = Duration::from_secs(180);
@@ -58,10 +58,10 @@ enum CachedTenant {
 pub enum TenantCacheError {
     #[error("Tenant not found")]
     NotFound,
-    
+
     #[error("Circuit breaker is open, database unavailable")]
     CircuitOpen,
-    
+
     #[error("Database error: {0}")]
     Database(String),
 }
@@ -92,29 +92,27 @@ impl TenantCacheV3 {
             .time_to_live(TENANT_CACHE_TTL)
             .time_to_idle(TENANT_CACHE_IDLE)
             .build();
-        
+
         let circuit_breaker = Arc::new(CircuitBreaker::new(config));
-        
+
         Self {
             cache,
             db,
             circuit_breaker,
         }
     }
-    
+
     /// Get or load tenant with circuit breaker protection
     pub async fn get_or_load(
         &self,
         identifier: &ResolvedTenantIdentifier,
     ) -> Result<TenantContext, TenantCacheError> {
         let cache_key = self.build_cache_key(identifier);
-        
+
         // Try to get from cache with circuit breaker protection
         let cached = self
             .cache
-            .try_get_with(cache_key, async {
-                self.load_from_db_protected(identifier).await
-            })
+            .try_get_with(cache_key, async { self.load_from_db_protected(identifier).await })
             .await
             .map_err(|e| {
                 tracing::error!(
@@ -123,7 +121,7 @@ impl TenantCacheV3 {
                     identifier_value = %identifier.value,
                     "Failed to load tenant"
                 );
-                
+
                 // Parse error to determine type
                 let error_str = e.to_string();
                 if error_str.contains("Circuit breaker is open") {
@@ -132,34 +130,33 @@ impl TenantCacheV3 {
                     TenantCacheError::Database(error_str)
                 }
             })?;
-        
+
         match cached.as_ref() {
             CachedTenant::Found(context) => Ok(context.clone()),
             CachedTenant::NotFound => Err(TenantCacheError::NotFound),
         }
     }
-    
+
     /// Load from database with circuit breaker protection
     async fn load_from_db_protected(
         &self,
         identifier: &ResolvedTenantIdentifier,
     ) -> Result<Arc<CachedTenant>, anyhow::Error> {
         // Execute database query through circuit breaker
-        let result = self.circuit_breaker.call(|| async {
-            self.load_from_db_internal(identifier).await
-        }).await;
-        
+        let result = self
+            .circuit_breaker
+            .call(|| async { self.load_from_db_internal(identifier).await })
+            .await;
+
         match result {
             Ok(cached) => Ok(cached),
-            Err(CircuitBreakerError::Open) => {
-                Err(anyhow::anyhow!("Circuit breaker is open, database unavailable"))
-            }
-            Err(CircuitBreakerError::Execution(e)) => {
-                Err(anyhow::anyhow!("Database error: {}", e))
-            }
+            Err(CircuitBreakerError::Open) => Err(anyhow::anyhow!(
+                "Circuit breaker is open, database unavailable"
+            )),
+            Err(CircuitBreakerError::Execution(e)) => Err(anyhow::anyhow!("Database error: {}", e)),
         }
     }
-    
+
     /// Internal database loading (not exposed)
     async fn load_from_db_internal(
         &self,
@@ -170,13 +167,11 @@ impl TenantCacheV3 {
             identifier_value = %identifier.value,
             "Loading tenant from database"
         );
-        
+
         let tenant = match identifier.kind {
-            TenantIdentifierKind::Uuid => {
-                tenants::Entity::find_by_id(&self.db, identifier.uuid)
-                    .await
-                    .map_err(|e| e.to_string())?
-            }
+            TenantIdentifierKind::Uuid => tenants::Entity::find_by_id(&self.db, identifier.uuid)
+                .await
+                .map_err(|e| e.to_string())?,
             TenantIdentifierKind::Slug => {
                 tenants::Entity::find_by_slug(&self.db, &identifier.value)
                     .await
@@ -188,7 +183,7 @@ impl TenantCacheV3 {
                     .map_err(|e| e.to_string())?
             }
         };
-        
+
         let cached = match tenant {
             Some(tenant) => {
                 tracing::info!(
@@ -207,10 +202,10 @@ impl TenantCacheV3 {
                 CachedTenant::NotFound
             }
         };
-        
+
         Ok(Arc::new(cached))
     }
-    
+
     /// Build cache key
     fn build_cache_key(&self, identifier: &ResolvedTenantIdentifier) -> String {
         format!(
@@ -222,12 +217,12 @@ impl TenantCacheV3 {
             }
         )
     }
-    
+
     /// Get circuit breaker state
     pub async fn circuit_state(&self) -> CircuitState {
         self.circuit_breaker.get_state().await
     }
-    
+
     /// Get cache statistics
     pub fn cache_stats(&self) -> TenantCacheV3Stats {
         TenantCacheV3Stats {
@@ -235,12 +230,12 @@ impl TenantCacheV3 {
             cache_weighted_size: self.cache.weighted_size(),
         }
     }
-    
+
     /// Get circuit breaker statistics (async)
     pub async fn circuit_stats(&self) -> rustok_core::resilience::CircuitBreakerStats {
         self.circuit_breaker.stats().await
     }
-    
+
     /// Invalidate cached tenant
     pub async fn invalidate(&self, identifier: &ResolvedTenantIdentifier) {
         let cache_key = self.build_cache_key(identifier);
@@ -260,18 +255,18 @@ pub async fn init_tenant_cache_v3(ctx: &AppContext) {
     if ctx.shared_store.contains::<Arc<TenantCacheV3>>() {
         return;
     }
-    
+
     // Configure circuit breaker for database
     let circuit_config = CircuitBreakerConfig {
-        failure_threshold: 5,    // Open after 5 DB failures
-        success_threshold: 2,    // Close after 2 successes
+        failure_threshold: 5,             // Open after 5 DB failures
+        success_threshold: 2,             // Close after 2 successes
         timeout: Duration::from_secs(30), // Wait 30s before retrying
         half_open_max_requests: Some(3),
     };
-    
+
     let cache = Arc::new(TenantCacheV3::new(ctx.db.clone(), circuit_config));
     ctx.shared_store.insert(cache);
-    
+
     tracing::info!("Tenant cache V3 initialized with circuit breaker protection");
 }
 
@@ -288,22 +283,22 @@ pub async fn resolve_v3(
 ) -> Result<Response, StatusCode> {
     let settings = RustokSettings::from_settings(&ctx.config.settings)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    
+
     let identifier = resolve_identifier(&req, &settings)?;
-    
+
     let Some(cache) = tenant_cache_v3(&ctx) else {
         return Err(StatusCode::INTERNAL_SERVER_ERROR);
     };
-    
+
     // Check circuit breaker state for observability
     let circuit_state = cache.circuit_state().await;
     if circuit_state == CircuitState::Open {
         tracing::warn!("Tenant cache circuit breaker is OPEN, database unavailable");
     }
-    
+
     // Try to load tenant
     let context = cache.get_or_load(&identifier).await?;
-    
+
     req.extensions_mut().insert(TenantContextExtension(context));
     Ok(next.run(req).await)
 }
