@@ -95,6 +95,7 @@ impl Hooks for App {
         Ok(router
             .layer(Extension(registry))
             .layer(Extension(alloy_state))
+            .layer(axum_middleware::from_fn(middleware::platform::detect_platform))
             .layer(axum_middleware::from_fn_with_state(
                 ctx.clone(),
                 middleware::tenant::resolve,
