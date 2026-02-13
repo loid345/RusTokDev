@@ -49,12 +49,13 @@
 ## ⚠️ ВАЖНО: Старые планы DEPRECATED
 
 **НЕ ИСПОЛЬЗУЙТЕ:**
-- ❌ `ADMIN_IMPLEMENTATION_PLAN.md` — устарел, заменён на `MASTER_IMPLEMENTATION_PLAN.md`
-- ❌ Любые другие старые планы
+- ❌ Файлы в папке `deprecated/` — устаревшие планы
+- ❌ См. [deprecated/README.md](./deprecated/README.md) для списка
 
 **ИСПОЛЬЗУЙТЕ ТОЛЬКО:**
 - ✅ `MASTER_IMPLEMENTATION_PLAN.md` — единый источник правды
 - ✅ `CUSTOM_LIBRARIES_STATUS.md` — статус библиотек
+- ✅ `DESIGN_SYSTEM_DECISION.md` — FSD/DSD подход
 
 ---
 
@@ -64,12 +65,11 @@
 
 | Документ | Описание | Когда читать |
 |----------|----------|--------------|
-| [ADMIN_IMPLEMENTATION_PLAN.md](./ADMIN_IMPLEMENTATION_PLAN.md) | Главный план с 8 фазами | Перед началом любой фазы |
-| [PROGRESS_SUMMARY.md](./PROGRESS_SUMMARY.md) | Сводка прогресса и backlog | Ежедневно для sync |
+| [MASTER_IMPLEMENTATION_PLAN.md](./MASTER_IMPLEMENTATION_PLAN.md) | **Главный план (Phase 0-4)** | **ОБЯЗАТЕЛЬНО перед началом любой задачи** |
+| [CUSTOM_LIBRARIES_STATUS.md](./CUSTOM_LIBRARIES_STATUS.md) | **Статус самописных библиотек** | При работе с `leptos-*` библиотеками |
+| [DESIGN_SYSTEM_DECISION.md](./DESIGN_SYSTEM_DECISION.md) | **FSD/DSD подход** | При создании UI компонентов |
 | [PHASE_0_COMPLETE.md](./PHASE_0_COMPLETE.md) | Отчет о Фазе 0 | Для понимания инфраструктуры |
-| [PHASE_1_START.md](./PHASE_1_START.md) | Старт Фазы 1 (Auth) | **Текущая фаза** 🚀 |
-| [FRONTEND_DEVELOPMENT_LOG.md](./FRONTEND_DEVELOPMENT_LOG.md) | Лог разработки фронтендов | **Актуальный progress tracking** |
-| [SESSION_SUMMARY.md](./SESSION_SUMMARY.md) | Итоги сессии реализации | Для контекста начальной сессии |
+| [deprecated/](./deprecated/) | ⚠️ Устаревшие документы | **НЕ ИСПОЛЬЗОВАТЬ** (только для истории) |
 
 ### Технические руководства
 
@@ -103,36 +103,34 @@
 
 ## 🎯 Быстрая навигация по задачам
 
-### Фаза 0: Подготовка (✅ Завершено)
+**См. [MASTER_IMPLEMENTATION_PLAN.md](./MASTER_IMPLEMENTATION_PLAN.md) для детального плана!**
+
+### Phase 0: Setup (✅ Завершена)
 - [x] Docker Compose full-dev
 - [x] Dockerfiles для всех компонентов
 - [x] Environment configuration
 - [x] Скрипт dev-start.sh
+- [x] Custom libraries: `leptos-graphql` ✅, `leptos-auth` ✅
 - [x] Документация
 
 **Отчет:** [PHASE_0_COMPLETE.md](./PHASE_0_COMPLETE.md)
 
-### Фаза 1: Auth + RBAC + Navigation (🟡 Текущая)
+### Phase 1: Auth + Navigation (🚧 В работе)
 
 **Задачи:**
-1. Backend seed script (admin пользователь)
-2. Auth endpoints (`/api/auth/login`, `/api/auth/register`, `/api/auth/logout`)
-3. GraphQL query `me` (user + roles + permissions)
-4. Next.js Admin: интеграция auth
-5. Leptos Admin: интеграция auth через `crates/leptos-auth`
-6. Sidebar с RBAC фильтрацией
+1. Backend GraphQL schema (Auth mutations, queries, RBAC directives)
+2. Custom libraries: `leptos-forms` 🚧, `leptos-ui` 🚧
+3. Leptos Admin: Login, Register, App shell, Dashboard
+4. Next.js Admin: Login, Register, App shell, Dashboard
+5. Testing & QA
 
-**Детали:** См. раздел "Фаза 1" в [ADMIN_IMPLEMENTATION_PLAN.md](./ADMIN_IMPLEMENTATION_PLAN.md)
+**Детали:** См. Phase 1 в [MASTER_IMPLEMENTATION_PLAN.md](./MASTER_IMPLEMENTATION_PLAN.md)
 
 ### Следующие фазы
 
-- **Фаза 2:** Адаптация страниц (Dashboard, Profile, Workspaces, Team)
-- **Фаза 3:** Tables & Data Grids
-- **Фаза 4:** Forms & Validation
-- **Фаза 5:** Advanced Features (Command Palette, DnD, Charts)
-- **Фаза 6:** Observability & Telemetry
-- **Фаза 7:** Testing & QA
-- **Фаза 8:** Deployment
+- **Phase 2:** CRUD Operations (Users, Posts)
+- **Phase 3:** Advanced Features (i18n, file upload, permissions)
+- **Phase 4:** Analytics & Polish
 
 ---
 
@@ -141,24 +139,26 @@
 ### При старте новой задачи
 
 1. ✅ Проверить [CRITICAL_WARNINGS.md](./CRITICAL_WARNINGS.md) — не забыли ли правила?
-2. ✅ Найти задачу в [ADMIN_IMPLEMENTATION_PLAN.md](./ADMIN_IMPLEMENTATION_PLAN.md)
-3. ✅ Проверить [admin-libraries-parity.md](./admin-libraries-parity.md) — какие библиотеки использовать?
-4. ✅ Реализовать задачу
-5. ✅ Обновить [PROGRESS_SUMMARY.md](./PROGRESS_SUMMARY.md) — отметить прогресс
+2. ✅ Найти задачу в [MASTER_IMPLEMENTATION_PLAN.md](./MASTER_IMPLEMENTATION_PLAN.md)
+3. ✅ Проверить [CUSTOM_LIBRARIES_STATUS.md](./CUSTOM_LIBRARIES_STATUS.md) — статус библиотек
+4. ✅ Проверить [admin-libraries-parity.md](./admin-libraries-parity.md) — какие библиотеки использовать?
+5. ✅ Реализовать задачу
+6. ✅ Обновить статус в [MASTER_IMPLEMENTATION_PLAN.md](./MASTER_IMPLEMENTATION_PLAN.md)
 
 ### При обнаружении проблемы
 
 1. 🔍 Проверить [admin-server-connection-quickstart.md](./admin-server-connection-quickstart.md) — может быть там решение?
-2. 🔍 Проверить [admin-libraries-parity.md](./admin-libraries-parity.md) — может библиотека в разработке?
-3. ❓ Создать issue с тегом `library-issue` или `blocker`
-4. 💡 Использовать временный workaround (см. [CRITICAL_WARNINGS.md](./CRITICAL_WARNINGS.md))
+2. 🔍 Проверить [CUSTOM_LIBRARIES_STATUS.md](./CUSTOM_LIBRARIES_STATUS.md) — может библиотека в разработке?
+3. 🔍 Проверить [admin-libraries-parity.md](./admin-libraries-parity.md) — может библиотека в разработке?
+4. ❓ Создать issue с тегом `library-issue` или `blocker`
+5. 💡 Использовать временный workaround (см. [CRITICAL_WARNINGS.md](./CRITICAL_WARNINGS.md))
 
 ### При завершении фазы
 
-1. ✅ Убедиться, что все задачи фазы выполнены
-2. ✅ Обновить [PROGRESS_SUMMARY.md](./PROGRESS_SUMMARY.md)
-3. ✅ Создать отчет по аналогии с [PHASE_0_COMPLETE.md](./PHASE_0_COMPLETE.md)
-4. ✅ Обновить статус в [ADMIN_IMPLEMENTATION_PLAN.md](./ADMIN_IMPLEMENTATION_PLAN.md)
+1. ✅ Убедиться, что все задачи фазы выполнены (чек-лист в [MASTER_IMPLEMENTATION_PLAN.md](./MASTER_IMPLEMENTATION_PLAN.md))
+2. ✅ Создать отчет по аналогии с [PHASE_0_COMPLETE.md](./PHASE_0_COMPLETE.md)
+3. ✅ Обновить статус Phase в [MASTER_IMPLEMENTATION_PLAN.md](./MASTER_IMPLEMENTATION_PLAN.md)
+4. ✅ Обновить статус библиотек в [CUSTOM_LIBRARIES_STATUS.md](./CUSTOM_LIBRARIES_STATUS.md)
 
 ---
 
@@ -167,8 +167,9 @@
 ### Чек-лист для новых разработчиков
 
 - [ ] Прочитал [CRITICAL_WARNINGS.md](./CRITICAL_WARNINGS.md)
+- [ ] Прочитал [MASTER_IMPLEMENTATION_PLAN.md](./MASTER_IMPLEMENTATION_PLAN.md) (хотя бы overview)
+- [ ] Прочитал [CUSTOM_LIBRARIES_STATUS.md](./CUSTOM_LIBRARIES_STATUS.md)
 - [ ] Прочитал [PARALLEL_DEVELOPMENT_WORKFLOW.md](./PARALLEL_DEVELOPMENT_WORKFLOW.md) — алгоритм работы
-- [ ] Прочитал [ADMIN_IMPLEMENTATION_PLAN.md](./ADMIN_IMPLEMENTATION_PLAN.md) (хотя бы overview)
 - [ ] Запустил dev стек: `./scripts/dev-start.sh` или `make dev-start`
 - [ ] Открыл обе админки: http://localhost:3000 (Next.js), http://localhost:3001 (Leptos)
 - [ ] Залогинился: `admin@local` / `admin12345`
@@ -184,7 +185,8 @@
 **Используйте полный чек-лист из [PARALLEL_DEVELOPMENT_WORKFLOW.md](./PARALLEL_DEVELOPMENT_WORKFLOW.md)!**
 
 Краткая версия:
-- [ ] Задача из [ADMIN_IMPLEMENTATION_PLAN.md](./ADMIN_IMPLEMENTATION_PLAN.md)?
+- [ ] Задача из [MASTER_IMPLEMENTATION_PLAN.md](./MASTER_IMPLEMENTATION_PLAN.md)?
+- [ ] Проверил [CUSTOM_LIBRARIES_STATUS.md](./CUSTOM_LIBRARIES_STATUS.md) — статус библиотек
 - [ ] Проверил [admin-libraries-parity.md](./admin-libraries-parity.md) — какие библиотеки?
 - [ ] Следую алгоритму из [PARALLEL_DEVELOPMENT_WORKFLOW.md](./PARALLEL_DEVELOPMENT_WORKFLOW.md)?
 - [ ] Код в правильном месте (`crates/*` или `apps/*`)?
@@ -192,7 +194,7 @@
 - [ ] Если библиотека не работает — создал issue + workaround (НЕ удалил)?
 - [ ] Обновил документацию (если изменился стек/архитектура)?
 - [ ] Создал коммит с понятным сообщением?
-- [ ] Обновил [PROGRESS_SUMMARY.md](./PROGRESS_SUMMARY.md)?
+- [ ] Обновил статус в [MASTER_IMPLEMENTATION_PLAN.md](./MASTER_IMPLEMENTATION_PLAN.md)?
 
 ---
 
