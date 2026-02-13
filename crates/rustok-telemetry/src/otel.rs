@@ -114,8 +114,8 @@ pub async fn init_tracing(config: OtelConfig) -> Result<(), OtelError> {
         .tonic()
         .with_endpoint(&config.otlp_endpoint);
 
-    // Build tracer provider
-    let tracer = opentelemetry_otlp::new_pipeline()
+    // install_batch already sets the global tracer provider in opentelemetry-otlp 0.14
+    let _tracer = opentelemetry_otlp::new_pipeline()
         .tracing()
         .with_exporter(exporter)
         .with_trace_config(
@@ -129,11 +129,6 @@ pub async fn init_tracing(config: OtelConfig) -> Result<(), OtelError> {
         .with_batch_config(batch_config)
         .install_batch(opentelemetry_sdk::runtime::Tokio)
         .map_err(|e| OtelError::InitFailed(e.to_string()))?;
-
-    // Set global tracer provider
-    if let Some(provider) = tracer.provider() {
-        global::set_tracer_provider(provider.clone());
-    }
 
     tracing::info!(
         service_name = %config.service_name,

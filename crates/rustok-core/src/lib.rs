@@ -1,6 +1,5 @@
 pub mod auth;
 pub mod cache;
-pub mod circuit_breaker;
 pub mod context;
 pub mod error;
 pub mod events;
@@ -23,7 +22,6 @@ pub use auth::{
 #[cfg(feature = "redis-cache")]
 pub use cache::RedisCacheBackend;
 pub use cache::{CacheStats, InMemoryCacheBackend};
-pub use circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError};
 pub use context::{AppContext, CacheBackend, SearchBackend};
 pub use error::{
     Error, ErrorContext, ErrorKind, ErrorResponse, FieldError, Result, RichError,
@@ -50,7 +48,6 @@ pub use scripting::ScriptingContext;
 pub use types::{UserRole, UserStatus};
 
 pub mod prelude {
-    pub use crate::circuit_breaker::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError};
     pub use crate::error::{Error, Result};
     pub use crate::events::{
         event_schema, DispatcherConfig, DomainEvent, EventBus, EventBusStats, EventDispatcher,
@@ -61,6 +58,7 @@ pub mod prelude {
     pub use crate::module::HealthStatus;
     pub use crate::permissions::{Action, Permission, Resource};
     pub use crate::rbac::{PermissionScope, Rbac, SecurityContext};
+    pub use crate::resilience::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError};
     pub use crate::types::{UserRole, UserStatus};
     #[cfg(feature = "redis-cache")]
     pub use crate::RedisCacheBackend;
