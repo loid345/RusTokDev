@@ -9,8 +9,8 @@ use rustok_content::entities::node::ContentStatus;
 use rustok_content::services::NodeService;
 use rustok_content::ContentError;
 use rustok_test_utils::{
-    db::setup_test_db, events::mock_event_bus, helpers::admin_context,
-    helpers::customer_context, helpers::manager_context, helpers::unique_slug,
+    db::setup_test_db, events::mock_event_bus, helpers::admin_context, helpers::customer_context,
+    helpers::manager_context, helpers::unique_slug,
 };
 use sea_orm::DatabaseConnection;
 use uuid::Uuid;

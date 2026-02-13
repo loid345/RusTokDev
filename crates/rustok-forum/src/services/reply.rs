@@ -3,8 +3,8 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use rustok_content::{BodyInput, CreateNodeInput, ListNodesFilter, NodeService, UpdateNodeInput};
-use rustok_outbox::TransactionalEventBus;
 use rustok_core::SecurityContext;
+use rustok_outbox::TransactionalEventBus;
 
 use crate::constants::{reply_status, KIND_REPLY};
 use crate::dto::{CreateReplyInput, ReplyListItem, ReplyResponse, UpdateReplyInput};

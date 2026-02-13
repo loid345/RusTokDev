@@ -3,8 +3,8 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use rustok_content::NodeService;
-use rustok_outbox::TransactionalEventBus;
 use rustok_core::SecurityContext;
+use rustok_outbox::TransactionalEventBus;
 
 use crate::constants::reply_status;
 use crate::error::ForumResult;

@@ -5,8 +5,8 @@ use uuid::Uuid;
 use rustok_content::{
     CreateNodeInput, ListNodesFilter, NodeService, NodeTranslationInput, UpdateNodeInput,
 };
-use rustok_outbox::TransactionalEventBus;
 use rustok_core::SecurityContext;
+use rustok_outbox::TransactionalEventBus;
 
 use crate::constants::KIND_CATEGORY;
 use crate::dto::{CategoryListItem, CategoryResponse, CreateCategoryInput, UpdateCategoryInput};
