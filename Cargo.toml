@@ -65,7 +65,7 @@ thiserror = "2.0.18"
 anyhow = "1.0"
 
 # Benchmarking
-criterion = { version = "0.5", features = ["html_reports"] }
+criterion = { version = "0.8", features = ["html_reports"] }
 
 # Time
 chrono = { version = "0.4", features = ["serde"] }
@@ -100,10 +100,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 async-trait = "0.1"
 
 # OpenTelemetry
-opentelemetry = "0.21"
-opentelemetry-otlp = "0.14"
-tracing-opentelemetry = "0.22"
-opentelemetry_sdk = { version = "0.21", features = ["rt-tokio"] }
+opentelemetry = "0.31"
+opentelemetry-otlp = "0.31"
+tracing-opentelemetry = "0.32"
+opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"] }
 rust_decimal = "1.36"
 utoipa = "5.4"
 utoipa-swagger-ui = { version = "7.0", features = ["vendored"] }
