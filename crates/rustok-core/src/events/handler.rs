@@ -91,7 +91,7 @@ impl EventDispatcher {
     }
 
     pub fn start(self) -> RunningDispatcher {
-        let handlers = self.handlers;
+        let handlers = Arc::new(self.handlers);
         let config = self.config;
         let mut receiver = self.bus.subscribe();
         let bus = self.bus.clone();
@@ -114,15 +114,23 @@ impl EventDispatcher {
                             );
 
                             let bp = backpressure.clone();
-                            Self::dispatch_to_handlers(
-                                &envelope,
-                                &handlers,
-                                &config,
-                                Arc::clone(&semaphore),
-                                bp,
-                            )
-                            .instrument(span)
-                            .await;
+                            let handlers = handlers.clone();
+                            let config = config.clone();
+                            let semaphore = semaphore.clone();
+
+                            tokio::spawn(
+                                async move {
+                                    Self::dispatch_to_handlers(
+                                        envelope,
+                                        handlers,
+                                        config,
+                                        semaphore,
+                                        bp,
+                                    )
+                                    .await;
+                                }
+                                .instrument(span),
+                            );
                         }
                         Err(broadcast::error::RecvError::Lagged(skipped)) => {
                             warn!(skipped = skipped, "Event dispatcher lagged, skipped events");
@@ -141,9 +149,9 @@ impl EventDispatcher {
     }
 
     async fn dispatch_to_handlers(
-        envelope: &EventEnvelope,
-        handlers: &[Arc<dyn EventHandler>],
-        config: &DispatcherConfig,
+        envelope: EventEnvelope,
+        handlers: Arc<Vec<Arc<dyn EventHandler>>>,
+        config: DispatcherConfig,
         semaphore: Arc<Semaphore>,
         backpressure: Option<Arc<super::backpressure::BackpressureController>>,
     ) {
@@ -205,15 +213,31 @@ impl EventDispatcher {
 
             tokio::spawn(async move {
                 let _permit = permit;
-                let _ = Self::handle_with_retry(handler, envelope, &config).await;
+                
+                struct CompletionGuard {
+                    count: Arc<AtomicUsize>,
+                    limit: usize,
+                    bp: Option<Arc<super::backpressure::BackpressureController>>,
+                }
 
-                // Release backpressure slot when all handlers complete
-                let completed = count.fetch_add(1, Ordering::Relaxed) + 1;
-                if completed == handler_count {
-                    if let Some(bp) = bp {
-                        bp.release();
+                impl Drop for CompletionGuard {
+                    fn drop(&mut self) {
+                        let completed = self.count.fetch_add(1, Ordering::Relaxed) + 1;
+                        if completed == self.limit {
+                            if let Some(bp) = &self.bp {
+                                bp.release();
+                            }
+                        }
                     }
                 }
+
+                let _guard = CompletionGuard {
+                    count,
+                    limit: handler_count,
+                    bp,
+                };
+
+                let _ = Self::handle_with_retry(handler, envelope, &config).await;
             });
         }
     }
@@ -279,19 +303,22 @@ impl RunningDispatcher {
     }
 }
 
-pub struct HandlerBuilder<F, P>
+pub struct HandlerBuilder<F, Fut, P>
 where
-    F: Fn(&EventEnvelope) -> HandlerResult + Send + Sync + 'static,
+    F: Fn(EventEnvelope) -> Fut + Send + Sync + 'static,
+    Fut: std::future::Future<Output = HandlerResult> + Send + 'static,
     P: Fn(&DomainEvent) -> bool + Send + Sync + 'static,
 {
     name: &'static str,
     predicate: P,
     handler: F,
+    _phantom: std::marker::PhantomData<Fut>,
 }
 
-impl<F, P> HandlerBuilder<F, P>
+impl<F, Fut, P> HandlerBuilder<F, Fut, P>
 where
-    F: Fn(&EventEnvelope) -> HandlerResult + Send + Sync + 'static,
+    F: Fn(EventEnvelope) -> Fut + Send + Sync + 'static,
+    Fut: std::future::Future<Output = HandlerResult> + Send + 'static,
     P: Fn(&DomainEvent) -> bool + Send + Sync + 'static,
 {
     pub fn new(name: &'static str, predicate: P, handler: F) -> Self {
@@ -299,14 +326,16 @@ where
             name,
             predicate,
             handler,
+            _phantom: std::marker::PhantomData,
         }
     }
 }
 
 #[async_trait]
-impl<F, P> EventHandler for HandlerBuilder<F, P>
+impl<F, Fut, P> EventHandler for HandlerBuilder<F, Fut, P>
 where
-    F: Fn(&EventEnvelope) -> HandlerResult + Send + Sync + 'static,
+    F: Fn(EventEnvelope) -> Fut + Send + Sync + 'static,
+    Fut: std::future::Future<Output = HandlerResult> + Send + 'static,
     P: Fn(&DomainEvent) -> bool + Send + Sync + 'static,
 {
     fn name(&self) -> &'static str {
@@ -318,7 +347,7 @@ where
     }
 
     async fn handle(&self, envelope: &EventEnvelope) -> HandlerResult {
-        (self.handler)(envelope)
+        (self.handler)(envelope.clone()).await
     }
 }
 

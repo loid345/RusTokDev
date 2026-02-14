@@ -84,12 +84,12 @@ impl CircuitState {
 
 /// Circuit breaker error
 #[derive(Debug, thiserror::Error)]
-pub enum CircuitBreakerError {
+pub enum CircuitBreakerError<E = String> {
     #[error("Circuit breaker is open, requests blocked")]
     Open,
 
-    #[error("Execution failed: {0}")]
-    Execution(String),
+    #[error("Upstream error: {0}")]
+    Upstream(E),
 }
 
 /// Internal state tracking
@@ -141,7 +141,7 @@ impl CircuitBreaker {
     }
 
     /// Execute a fallible operation with circuit breaker protection
-    pub async fn call<F, Fut, T, E>(&self, f: F) -> Result<T, CircuitBreakerError>
+    pub async fn call<F, Fut, T, E>(&self, f: F) -> Result<T, CircuitBreakerError<E>>
     where
         F: FnOnce() -> Fut,
         Fut: std::future::Future<Output = Result<T, E>>,
@@ -191,7 +191,7 @@ impl CircuitBreaker {
                     "Circuit breaker: failure"
                 );
 
-                Err(CircuitBreakerError::Execution(err.to_string()))
+                Err(CircuitBreakerError::Upstream(err))
             }
         }
     }

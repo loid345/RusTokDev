@@ -239,8 +239,8 @@ mod tests {
         use uuid::Uuid;
 
         let user = users::Model {
-            id: Uuid::new_v4(),
-            tenant_id: Uuid::new_v4(),
+            id: rustok_core::generate_id(),
+            tenant_id: rustok_core::generate_id(),
             email: "test@example.com".to_string(),
             password_hash: "hash".to_string(),
             role,
@@ -252,7 +252,7 @@ mod tests {
 
         CurrentUser {
             user,
-            session_id: Uuid::new_v4(),
+            session_id: rustok_core::generate_id(),
             permissions: vec![],
         }
     }

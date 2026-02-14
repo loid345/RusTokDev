@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use sea_orm::DatabaseConnection;
@@ -13,6 +14,7 @@ pub trait CacheBackend: Send + Sync {
     async fn health(&self) -> Result<()>;
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>>;
     async fn set(&self, key: String, value: Vec<u8>) -> Result<()>;
+    async fn set_with_ttl(&self, key: String, value: Vec<u8>, ttl: Duration) -> Result<()>;
     async fn invalidate(&self, key: &str) -> Result<()>;
     fn stats(&self) -> CacheStats;
 }

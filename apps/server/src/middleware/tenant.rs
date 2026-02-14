@@ -215,10 +215,10 @@ impl TenantCacheMetricsStore {
 }
 
 impl TenantCacheInfrastructure {
-    fn new() -> Self {
+    async fn new() -> Self {
         Self {
-            tenant_cache: build_tenant_cache_backend(),
-            tenant_negative_cache: build_negative_tenant_cache_backend(),
+            tenant_cache: build_tenant_cache_backend().await,
+            tenant_negative_cache: build_negative_tenant_cache_backend().await,
             metrics: Arc::new(TenantCacheMetricsStore::new()),
             key_builder: TenantCacheKeyBuilder::new(TENANT_CACHE_VERSION),
             invalidation_publisher: Arc::new(TenantInvalidationPublisher::new()),
@@ -246,7 +246,8 @@ impl TenantCacheInfrastructure {
         self.metrics.incr("hits", &self.metrics.local_hits).await;
         match serde_json::from_slice::<TenantContext>(&bytes) {
             Ok(context) => Ok(Some(context)),
-            Err(_) => {
+            Err(e) => {
+                tracing::warn!("Tenant cache deserialization error: {}", e);
                 let _ = self.tenant_cache.invalidate(cache_key).await;
                 Ok(None)
             }
@@ -258,7 +259,10 @@ impl TenantCacheInfrastructure {
         cache_key: String,
         context: &TenantContext,
     ) -> Result<(), StatusCode> {
-        let bytes = serde_json::to_vec(context).map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+        let bytes = serde_json::to_vec(context).map_err(|e| {
+            tracing::error!("Tenant cache serialization error: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
         self.tenant_cache
             .set(cache_key, bytes)
             .await
@@ -357,14 +361,16 @@ impl TenantCacheInfrastructure {
     }
 }
 
-fn build_tenant_cache_backend() -> Arc<dyn CacheBackend> {
+async fn build_tenant_cache_backend() -> Arc<dyn CacheBackend> {
     #[cfg(feature = "redis-cache")]
     if let Some(url) = resolve_redis_url() {
         if let Ok(redis_cache) = RedisCacheBackend::new(
             &url,
             format!("tenant-cache:{}:data", TENANT_CACHE_VERSION),
             TENANT_CACHE_TTL,
-        ) {
+        )
+        .await
+        {
             return Arc::new(redis_cache);
         }
     }
@@ -375,14 +381,16 @@ fn build_tenant_cache_backend() -> Arc<dyn CacheBackend> {
     ))
 }
 
-fn build_negative_tenant_cache_backend() -> Arc<dyn CacheBackend> {
+async fn build_negative_tenant_cache_backend() -> Arc<dyn CacheBackend> {
     #[cfg(feature = "redis-cache")]
     if let Some(url) = resolve_redis_url() {
         if let Ok(redis_cache) = RedisCacheBackend::new(
             &url,
             format!("tenant-cache:{}:negative", TENANT_CACHE_VERSION),
             TENANT_NEGATIVE_CACHE_TTL,
-        ) {
+        )
+        .await
+        {
             return Arc::new(redis_cache);
         }
     }
@@ -419,7 +427,7 @@ pub async fn init_tenant_cache_infrastructure(ctx: &AppContext) {
         return;
     }
 
-    let infra = Arc::new(TenantCacheInfrastructure::new());
+    let infra = Arc::new(TenantCacheInfrastructure::new().await);
     ctx.shared_store.insert(infra.clone());
 
     if let Some(task) = spawn_invalidation_listener(infra).await {
@@ -654,6 +662,19 @@ fn classify_and_validate_identifier(
         kind: TenantIdentifierKind::Slug,
         uuid: Uuid::nil(),
     })
+}
+
+/// Classifies a tenant identifier without returning errors (best-effort).
+/// Falls back to UUID kind if the identifier doesn't match slug/UUID patterns.
+fn classify_identifier(value: String) -> ResolvedTenantIdentifier {
+    match classify_and_validate_identifier(&value) {
+        Ok(resolved) => resolved,
+        Err(_) => ResolvedTenantIdentifier {
+            value: value.clone(),
+            kind: TenantIdentifierKind::Uuid,
+            uuid: value.parse::<Uuid>().unwrap_or(Uuid::nil()),
+        },
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

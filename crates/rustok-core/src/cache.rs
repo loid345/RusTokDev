@@ -23,6 +23,7 @@ impl InMemoryCacheBackend {
     pub fn new(ttl: Duration, max_capacity: u64) -> Self {
         let cache = Cache::builder()
             .time_to_live(ttl)
+            .time_to_live(ttl)
             .max_capacity(max_capacity)
             .build();
         Self { cache }
@@ -31,7 +32,7 @@ impl InMemoryCacheBackend {
 
 #[cfg(feature = "redis-cache")]
 pub struct RedisCacheBackend {
-    client: redis::Client,
+    manager: redis::aio::ConnectionManager,
     prefix: String,
     ttl: Duration,
     circuit_breaker: Arc<CircuitBreaker>,
@@ -39,11 +40,11 @@ pub struct RedisCacheBackend {
 
 #[cfg(feature = "redis-cache")]
 impl RedisCacheBackend {
-    pub fn new(url: &str, prefix: impl Into<String>, ttl: Duration) -> Result<Self> {
-        Self::with_circuit_breaker(url, prefix, ttl, CircuitBreakerConfig::default())
+    pub async fn new(url: &str, prefix: impl Into<String>, ttl: Duration) -> Result<Self> {
+        Self::with_circuit_breaker(url, prefix, ttl, CircuitBreakerConfig::default()).await
     }
 
-    pub fn with_circuit_breaker(
+    pub async fn with_circuit_breaker(
         url: &str,
         prefix: impl Into<String>,
         ttl: Duration,
@@ -51,8 +52,13 @@ impl RedisCacheBackend {
     ) -> Result<Self> {
         let client =
             redis::Client::open(url).map_err(|err| crate::Error::Cache(err.to_string()))?;
+        let manager = client
+            .get_connection_manager()
+            .await
+            .map_err(|err| crate::Error::Cache(err.to_string()))?;
+
         Ok(Self {
-            client,
+            manager,
             prefix: prefix.into(),
             ttl,
             circuit_breaker: Arc::new(CircuitBreaker::new(breaker_config)),
@@ -87,6 +93,13 @@ impl CacheBackend for InMemoryCacheBackend {
         Ok(())
     }
 
+    async fn set_with_ttl(&self, key: String, value: Vec<u8>, _ttl: Duration) -> Result<()> {
+        // Moka cache uses global TTL policy by default.
+        // For now we just insert, ignoring specific TTL.
+        self.cache.insert(key, value).await;
+        Ok(())
+    }
+
     async fn invalidate(&self, key: &str) -> Result<()> {
         self.cache.invalidate(key).await;
         Ok(())
@@ -104,16 +117,12 @@ impl CacheBackend for InMemoryCacheBackend {
 #[async_trait]
 impl CacheBackend for RedisCacheBackend {
     async fn health(&self) -> Result<()> {
-        let client = self.client.clone();
+        let mut manager = self.manager.clone();
 
         self.circuit_breaker
             .call(async move {
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .map_err(|err| crate::Error::Cache(err.to_string()))?;
                 let pong: String = redis::cmd("PING")
-                    .query_async(&mut conn)
+                    .query_async(&mut manager)
                     .await
                     .map_err(|err| crate::Error::Cache(err.to_string()))?;
                 if pong == "PONG" {
@@ -135,18 +144,14 @@ impl CacheBackend for RedisCacheBackend {
     }
 
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
-        let client = self.client.clone();
+        let mut manager = self.manager.clone();
         let redis_key = self.key(key);
 
         self.circuit_breaker
             .call(async move {
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .map_err(|err| crate::Error::Cache(err.to_string()))?;
                 let value: Option<Vec<u8>> = redis::cmd("GET")
                     .arg(redis_key)
-                    .query_async(&mut conn)
+                    .query_async(&mut manager)
                     .await
                     .map_err(|err| crate::Error::Cache(err.to_string()))?;
                 Ok(value)
@@ -162,22 +167,22 @@ impl CacheBackend for RedisCacheBackend {
     }
 
     async fn set(&self, key: String, value: Vec<u8>) -> Result<()> {
-        let client = self.client.clone();
+        self.set_with_ttl(key, value, self.ttl).await
+    }
+
+    async fn set_with_ttl(&self, key: String, value: Vec<u8>, ttl: Duration) -> Result<()> {
+        let mut manager = self.manager.clone();
         let redis_key = self.key(&key);
-        let ttl_secs = self.ttl.as_secs();
+        let ttl_secs = ttl.as_secs();
 
         self.circuit_breaker
             .call(async move {
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .map_err(|err| crate::Error::Cache(err.to_string()))?;
                 redis::cmd("SET")
                     .arg(redis_key)
                     .arg(value)
                     .arg("EX")
                     .arg(ttl_secs)
-                    .query_async::<()>(&mut conn)
+                    .query_async::<()>(&mut manager)
                     .await
                     .map_err(|err| crate::Error::Cache(err.to_string()))?;
                 Ok::<(), crate::Error>(())
@@ -193,18 +198,14 @@ impl CacheBackend for RedisCacheBackend {
     }
 
     async fn invalidate(&self, key: &str) -> Result<()> {
-        let client = self.client.clone();
+        let mut manager = self.manager.clone();
         let redis_key = self.key(key);
 
         self.circuit_breaker
             .call(async move {
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .map_err(|err| crate::Error::Cache(err.to_string()))?;
                 redis::cmd("DEL")
                     .arg(redis_key)
-                    .query_async::<()>(&mut conn)
+                    .query_async::<()>(&mut manager)
                     .await
                     .map_err(|err| crate::Error::Cache(err.to_string()))?;
                 Ok::<(), crate::Error>(())

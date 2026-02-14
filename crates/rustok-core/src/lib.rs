@@ -56,7 +56,7 @@ pub use id::generate_id;
 pub use metrics::{Counter, Gauge, Histogram, MetricSnapshot, MetricValue, MetricsRegistry, Timer};
 pub use migrations::ModuleMigration;
 pub use module::{EventListener, MigrationSource};
-pub use module::{HealthStatus, ModuleContext, RusToKModule};
+pub use module::{ModuleContext, RusToKModule};
 pub use permissions::{Action, Permission, Resource};
 pub use rbac::{PermissionScope, Rbac, SecurityContext};
 pub use registry::ModuleRegistry;

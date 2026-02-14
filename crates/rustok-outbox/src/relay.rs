@@ -108,8 +108,19 @@ impl OutboxRelay {
     }
 
     pub async fn run(&self) -> Result<()> {
-        let _ = self.process_pending_once().await?;
-        Ok(())
+        loop {
+            match self.process_pending_once().await {
+                Ok(count) => {
+                    if count == 0 {
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                }
+                Err(e) => {
+                    tracing::error!("Relay processing error: {}", e);
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+                }
+            }
+        }
     }
 
     pub async fn process_pending_once(&self) -> Result<usize> {

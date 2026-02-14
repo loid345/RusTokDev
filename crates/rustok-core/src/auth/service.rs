@@ -3,6 +3,8 @@ use std::sync::Arc;
 use chrono::Utc;
 use uuid::Uuid;
 
+use crate::id::generate_id;
+
 use alloy_scripting::{integration::ScriptableEntity, model::EventType, runner::HookOutcome};
 
 use crate::auth::error::AuthError;
@@ -20,6 +22,7 @@ pub struct AuthTokens {
 
 #[derive(Debug)]
 pub struct RegisterInput {
+    pub tenant_id: Uuid,
     pub email: String,
     pub password: String,
     pub first_name: Option<String>,
@@ -48,7 +51,12 @@ impl AuthService {
     }
 
     pub async fn register(&self, input: RegisterInput) -> Result<User, AuthError> {
-        if self.repo.find_by_email(&input.email).await?.is_some() {
+        if self
+            .repo
+            .find_by_email_and_tenant(&input.email, input.tenant_id)
+            .await?
+            .is_some()
+        {
             return Err(AuthError::EmailAlreadyExists);
         }
 
@@ -57,7 +65,8 @@ impl AuthService {
 
         let now = chrono::DateTime::<chrono::FixedOffset>::from(Utc::now());
         let mut user = User {
-            id: Uuid::new_v4(),
+            id: generate_id(),
+            tenant_id: input.tenant_id,
             email: input.email,
             password_hash,
             first_name: input.first_name,
@@ -128,7 +137,7 @@ impl AuthService {
     ) -> Result<AuthTokens, AuthError> {
         let user = self
             .repo
-            .find_by_email(email)
+            .find_by_email_and_tenant(email, tenant_id)
             .await?
             .ok_or(AuthError::InvalidCredentials)?;
 

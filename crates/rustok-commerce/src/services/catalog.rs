@@ -349,7 +349,7 @@ impl CatalogService {
                 .map(|image| ProductImageResponse {
                     id: image.id,
                     media_id: image.media_id,
-                    url: String::new(),
+                    url: format!("/api/v1/media/{}", image.media_id),
                     alt_text: image.alt_text,
                     position: image.position,
                 })
@@ -613,11 +613,7 @@ impl CatalogService {
             .join("-");
 
         // 4. Limit length
-        let slug = if slug.len() > MAX_LENGTH {
-            slug[..MAX_LENGTH].to_string()
-        } else {
-            slug
-        };
+        let slug: String = slug.chars().take(MAX_LENGTH).collect();
 
         // 5. Prevent reserved names by adding suffix
         let slug = if RESERVED_NAMES.contains(&slug.as_str()) {

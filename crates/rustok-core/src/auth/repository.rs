@@ -18,6 +18,21 @@ impl UserRepository {
         active.insert(&self.db).await.map_err(map_db_error)
     }
 
+    /// Find user by email scoped to tenant (primary method — enforces tenant isolation)
+    pub async fn find_by_email_and_tenant(
+        &self,
+        email: &str,
+        tenant_id: uuid::Uuid,
+    ) -> Result<Option<Model>, AuthError> {
+        Entity::find()
+            .filter(Column::Email.eq(email))
+            .filter(Column::TenantId.eq(tenant_id))
+            .one(&self.db)
+            .await
+            .map_err(map_db_error)
+    }
+
+    /// Find user by email globally (for migrations/admin only — prefer `find_by_email_and_tenant`)
     pub async fn find_by_email(&self, email: &str) -> Result<Option<Model>, AuthError> {
         Entity::find()
             .filter(Column::Email.eq(email))
@@ -26,14 +41,22 @@ impl UserRepository {
             .map_err(map_db_error)
     }
 
-    pub async fn find_by_id(&self, id: uuid::Uuid) -> Result<Option<Model>, AuthError> {
+    pub async fn find_by_id(
+        &self,
+        id: uuid::Uuid,
+        tenant_id: uuid::Uuid,
+    ) -> Result<Option<Model>, AuthError> {
         Entity::find_by_id(id)
+            .filter(Column::TenantId.eq(tenant_id))
             .one(&self.db)
             .await
             .map_err(map_db_error)
     }
 
-    pub async fn update_last_login(&self, id: uuid::Uuid) -> Result<(), AuthError> {
+    pub async fn update_last_login(
+        &self,
+        id: uuid::Uuid,
+    ) -> Result<(), AuthError> {
         let result = Entity::update_many()
             .filter(Column::Id.eq(id))
             .col_expr(

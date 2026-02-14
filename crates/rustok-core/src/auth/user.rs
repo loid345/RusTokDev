@@ -15,6 +15,7 @@ use crate::types::{UserRole, UserStatus};
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
+    pub tenant_id: Uuid,
     #[sea_orm(unique)]
     pub email: String,
     #[serde(skip)]
@@ -55,6 +56,10 @@ impl ScriptableEntity for Model {
     fn to_dynamic_map(&self) -> HashMap<String, Dynamic> {
         let mut map = HashMap::new();
         map.insert("id".into(), Dynamic::from(self.id.to_string()));
+        map.insert(
+            "tenant_id".into(),
+            Dynamic::from(self.tenant_id.to_string()),
+        );
         map.insert("email".into(), Dynamic::from(self.email.clone()));
         if let Some(first_name) = &self.first_name {
             map.insert("first_name".into(), Dynamic::from(first_name.clone()));

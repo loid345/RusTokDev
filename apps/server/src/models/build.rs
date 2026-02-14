@@ -121,7 +121,7 @@ impl Model {
         profile: DeploymentProfile,
     ) -> Self {
         Self {
-            id: Uuid::new_v4(),
+            id: rustok_core::generate_id(),
             status: BuildStatus::Queued,
             stage: BuildStage::Pending,
             progress: 0,

@@ -146,6 +146,7 @@ impl EventBus {
             Ok(_) => {
                 self.stats.events_published.fetch_add(1, Ordering::Relaxed);
                 tracing::debug!("Event published successfully");
+                Ok(())
             }
             Err(error) => {
                 // Release backpressure slot on send failure
@@ -153,15 +154,19 @@ impl EventBus {
                     backpressure.release();
                 }
                 self.stats.events_dropped.fetch_add(1, Ordering::Relaxed);
-                tracing::warn!(
-                    ?error,
-                    dropped_count = self.stats.events_dropped.load(Ordering::Relaxed),
-                    "Event dropped - channel full or no receivers. CQRS indexes may become inconsistent!"
+                let dropped_count = self.stats.events_dropped.load(Ordering::Relaxed);
+                tracing::error!(
+                    event_type = error.0.event.event_type(),
+                    dropped_count,
+                    "Event dropped - no receivers. CQRS indexes may become inconsistent!"
                 );
+                Err(crate::Error::External(format!(
+                    "Event dropped (no receivers): {}. Total dropped: {}",
+                    error.0.event.event_type(),
+                    dropped_count,
+                )))
             }
         }
-
-        Ok(())
     }
 }
 

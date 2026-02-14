@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use super::validation::{validators, EventValidationError, ValidateEvent};
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct EventEnvelope {
     pub id: Uuid,
     /// Event type string for fast filtering and routing
@@ -39,6 +39,18 @@ impl EventEnvelope {
             event,
             retry_count: 0,
         }
+    }
+}
+
+impl std::fmt::Debug for EventEnvelope {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EventEnvelope")
+            .field("id", &self.id)
+            .field("type", &self.event_type)
+            .field("tenant_id", &self.tenant_id)
+            .field("actor_id", &self.actor_id)
+            .field("timestamp", &self.timestamp)
+            .finish_non_exhaustive()
     }
 }
 
