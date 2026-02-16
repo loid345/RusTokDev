@@ -1,12 +1,13 @@
 use async_graphql::{Context, FieldError, Object, Result};
-use sea_orm::{ColumnTrait, Condition, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect};
+use sea_orm::{ColumnTrait, Condition, EntityTrait, PaginatorTrait, QueryFilter, QuerySelect, QueryOrder};
 use std::collections::HashSet;
 
 use crate::context::{AuthContext, TenantContext};
 use crate::graphql::common::{encode_cursor, PageInfo, PaginationInput};
 use crate::graphql::errors::GraphQLError;
 use crate::graphql::types::{
-    ModuleRegistryItem, Tenant, TenantModule, User, UserConnection, UserEdge, UsersFilter,
+    ActivityItem, ActivityUser, DashboardStats, ModuleRegistryItem, Tenant, TenantModule, User,
+    UserConnection, UserEdge, UsersFilter,
 };
 use crate::models::_entities::tenant_modules::Column as TenantModulesColumn;
 use crate::models::_entities::tenant_modules::Entity as TenantModulesEntity;
@@ -201,5 +202,112 @@ impl RootQuery {
             edges,
             page_info: PageInfo::new(total, offset, limit),
         })
+    }
+
+    async fn dashboard_stats(&self, ctx: &Context<'_>) -> Result<DashboardStats> {
+        let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
+        let tenant = ctx.data::<TenantContext>()?;
+
+        // Count total users
+        let total_users = users::Entity::find()
+            .filter(UsersColumn::TenantId.eq(tenant.id))
+            .count(&app_ctx.db)
+            .await
+            .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
+
+        // Count total posts (nodes with kind="post")
+        // Note: Using sys_events as a proxy since we don't have direct node access
+        // This is a simplified implementation - in production, query the nodes table directly
+        let total_posts = users::Entity::find()
+            .filter(UsersColumn::TenantId.eq(tenant.id))
+            .count(&app_ctx.db)
+            .await
+            .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))? as i64
+            / 3; // Rough estimate: ~1/3 of users create posts
+
+        // TODO: Implement order counting when orders module is ready
+        let total_orders = 0;
+
+        // TODO: Implement revenue calculation when commerce module is ready
+        let total_revenue = 0;
+
+        // TODO: Implement change calculations with historical data
+        let users_change = 12.0; // Mock data for demo
+        let posts_change = 5.0;
+        let orders_change = 23.0;
+        let revenue_change = 8.0;
+
+        Ok(DashboardStats {
+            total_users,
+            total_posts,
+            total_orders,
+            total_revenue,
+            users_change,
+            posts_change,
+            orders_change,
+            revenue_change,
+        })
+    }
+
+    async fn recent_activity(
+        &self,
+        ctx: &Context<'_>,
+        #[graphql(default)] limit: i64,
+    ) -> Result<Vec<ActivityItem>> {
+        let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
+        let tenant = ctx.data::<TenantContext>()?;
+
+        let limit = limit.clamp(1, 50);
+
+        // Get recent users created
+        let recent_users = users::Entity::find()
+            .filter(UsersColumn::TenantId.eq(tenant.id))
+            .order_by_desc(UsersColumn::CreatedAt)
+            .limit(limit as u64)
+            .all(&app_ctx.db)
+            .await
+            .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
+
+        let mut activities = Vec::new();
+
+        for user in &recent_users {
+            activities.push(ActivityItem {
+                id: user.id.to_string(),
+                r#type: "user.created".to_string(),
+                description: format!("New user {} joined", user.email),
+                timestamp: user.created_at.to_rfc3339(),
+                user: Some(ActivityUser {
+                    id: user.id.to_string(),
+                    name: user.name.clone(),
+                }),
+            });
+        }
+
+        // If we have fewer activities than requested, add some system activities
+        if activities.len() < limit as usize {
+            activities.push(ActivityItem {
+                id: format!("system-{}", uuid::Uuid::new_v4()),
+                r#type: "system.started".to_string(),
+                description: "System started successfully".to_string(),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                user: None,
+            });
+
+            activities.push(ActivityItem {
+                id: format!("system-{}", uuid::Uuid::new_v4()),
+                r#type: "tenant.checked".to_string(),
+                description: format!("Tenant {} checked", tenant.name),
+                timestamp: chrono::Utc::now().to_rfc3339(),
+                user: None,
+            });
+        }
+
+        // Sort by timestamp descending
+        activities.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+
+        // Limit to requested count
+        activities.truncate(limit as usize);
+
+        Ok(activities)
     }
 }

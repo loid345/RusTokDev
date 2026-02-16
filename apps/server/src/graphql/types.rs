@@ -151,3 +151,30 @@ pub struct UserConnection {
     pub edges: Vec<UserEdge>,
     pub page_info: PageInfo,
 }
+
+#[derive(SimpleObject, Clone)]
+pub struct DashboardStats {
+    pub total_users: i64,
+    pub total_posts: i64,
+    pub total_orders: i64,
+    pub total_revenue: i64,
+    pub users_change: f64,
+    pub posts_change: f64,
+    pub orders_change: f64,
+    pub revenue_change: f64,
+}
+
+#[derive(SimpleObject, Clone)]
+pub struct ActivityItem {
+    pub id: String,
+    pub r#type: String,
+    pub description: String,
+    pub timestamp: String,
+    pub user: Option<ActivityUser>,
+}
+
+#[derive(SimpleObject, Clone)]
+pub struct ActivityUser {
+    pub id: String,
+    pub name: Option<String>,
+}

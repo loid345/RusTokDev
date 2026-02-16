@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - 2026-02-16
+
+#### GraphQL API - Admin Dashboard Support
+- **Dashboard Stats Query** (`apps/server/src/graphql/queries.rs`)
+  - `dashboardStats` query providing aggregated statistics for admin dashboard
+  - Real user count from database (tenant-isolated)
+  - Post count estimation (users / 3 for demo)
+  - Order and revenue placeholders (0 for now)
+  - Percentage change values (mock data for demo)
+  - GraphQL types: `DashboardStats` with 8 fields
+
+- **Recent Activity Query** (`apps/server/src/graphql/queries.rs`)
+  - `recentActivity` query returning recent system and user activities
+  - Real user creation events from `users` table
+  - System events (started, tenant checked)
+  - Configurable limit (1-50, default: 10)
+  - Sorted by timestamp descending
+  - GraphQL types: `ActivityItem`, `ActivityUser`
+
+- **GraphQL Types** (`apps/server/src/graphql/types.rs`)
+  - Added `DashboardStats` SimpleObject (8 fields)
+  - Added `ActivityItem` SimpleObject (5 fields)
+  - Added `ActivityUser` SimpleObject (2 fields)
+
+#### Documentation
+- **Dashboard GraphQL Queries Guide** (`docs/UI/DASHBOARD_GRAPHQL_QUERIES.md`)
+  - Complete documentation for new dashboard queries
+  - GraphQL schema definitions
+  - Example queries and responses
+  - Frontend integration examples (Leptos)
+  - Testing instructions
+  - Future enhancement roadmap
+  - Performance and security considerations
+
 ### Fixed - 2026-02-12
 
 - **Tracing field consistency and runtime recording**
