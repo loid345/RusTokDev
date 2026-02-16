@@ -37,6 +37,7 @@
 | [MANIFEST_ADDENDUM.md](docs/MANIFEST_ADDENDUM.md) | Дополнения к манифесту (секции 26-33) |
 | [modules/flex.md](docs/modules/flex.md) | Спецификация Flex модуля (новый концепт) |
 | [modules/module-manifest.md](docs/modules/module-manifest.md) | Манифест модулей и rebuild (WordPress/NodeBB-style) |
+| [modules/MODULE_UI_PACKAGES_INSTALLATION.md](docs/modules/MODULE_UI_PACKAGES_INSTALLATION.md) | **NEW** Полное руководство по установке модулей с UI пакетами для админки и фронтенда |
 | [templates/module_contract.md](docs/templates/module_contract.md) | Шаблон контракта модуля |
 | [CODE_AUDIT_VERIFICATION.md](CODE_AUDIT_VERIFICATION.md) | Результаты проверки реализации и согласование чеклистов |
 | [TESTING_PROGRESS.md](TESTING_PROGRESS.md) | Testing coverage progress and test suites |
