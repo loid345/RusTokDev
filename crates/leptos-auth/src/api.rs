@@ -139,13 +139,10 @@ struct AuthPayload {
     #[serde(rename = "accessToken")]
     access_token: String,
     #[serde(rename = "refreshToken")]
-    #[allow(dead_code)]
     refresh_token: String,
     #[serde(rename = "tokenType")]
-    #[allow(dead_code)]
     token_type: String,
     #[serde(rename = "expiresIn")]
-    #[allow(dead_code)]
     expires_in: i32,
     user: AuthUserGraphQL,
 }
@@ -178,6 +175,10 @@ struct ForgotPasswordPayload {
 // ============================================================================
 
 fn get_api_url() -> String {
+    if let Some(url) = option_env!("RUSTOK_GRAPHQL_URL") {
+        return url.trim_end_matches("/api/graphql").to_string();
+    }
+
     #[cfg(target_arch = "wasm32")]
     {
         web_sys::window()
@@ -186,13 +187,23 @@ fn get_api_url() -> String {
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        std::env::var("RUSTOK_API_URL")
-            .unwrap_or_else(|_| "http://localhost:5150".to_string())
+        std::env::var("RUSTOK_API_URL").unwrap_or_else(|_| "http://localhost:5150".to_string())
     }
 }
 
 fn get_graphql_url() -> String {
+    if let Some(url) = option_env!("RUSTOK_GRAPHQL_URL") {
+        return url.to_string();
+    }
+
     format!("{}/api/graphql", get_api_url())
+}
+
+fn now_unix_ts() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or_default()
 }
 
 // ============================================================================
@@ -240,8 +251,11 @@ pub async fn sign_in(
         role: payload.user.role,
     };
 
+    let now = now_unix_ts();
     let session = AuthSession {
         token: payload.access_token,
+        refresh_token: payload.refresh_token,
+        expires_at: now + i64::from(payload.expires_in),
         tenant,
     };
 
@@ -284,8 +298,11 @@ pub async fn sign_up(
         role: payload.user.role,
     };
 
+    let now = now_unix_ts();
     let session = AuthSession {
         token: payload.access_token,
+        refresh_token: payload.refresh_token,
+        expires_at: now + i64::from(payload.expires_in),
         tenant,
     };
 
@@ -306,10 +323,7 @@ pub async fn sign_out(token: String, tenant: String) -> Result<(), AuthError> {
 }
 
 /// Refresh access token using refresh token
-pub async fn refresh_token(
-    refresh_tok: String,
-    tenant: String,
-) -> Result<AuthSession, AuthError> {
+pub async fn refresh_token(refresh_tok: String, tenant: String) -> Result<AuthSession, AuthError> {
     let url = get_graphql_url();
 
     let variables = json!({
@@ -326,8 +340,11 @@ pub async fn refresh_token(
 
     let payload = response.refresh_token;
 
+    let now = now_unix_ts();
     let session = AuthSession {
         token: payload.access_token,
+        refresh_token: payload.refresh_token,
+        expires_at: now + i64::from(payload.expires_in),
         tenant,
     };
 
@@ -400,7 +417,7 @@ mod tests {
     }
 
     #[test]
-    fn test_graphql_url() {
+    fn test_graphql_url_shape() {
         let url = get_graphql_url();
         assert!(url.contains("/api/graphql"));
     }

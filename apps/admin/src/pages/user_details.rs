@@ -3,10 +3,11 @@ use leptos_router::hooks::{use_navigate, use_params};
 use leptos_router::params::Params;
 use serde::{Deserialize, Serialize};
 
+use crate::api::queries::{USER_DETAILS_QUERY, USER_DETAILS_QUERY_HASH};
 use crate::api::{request_with_persisted, ApiError};
 use crate::components::ui::{Button, LanguageToggle};
-use leptos_auth::hooks::{use_token, use_tenant};
 use crate::providers::locale::translate;
+use leptos_auth::hooks::{use_tenant, use_token};
 
 #[derive(Params, PartialEq)]
 struct UserParams {
@@ -44,9 +45,7 @@ pub fn UserDetails() -> impl IntoView {
     let params = use_params::<UserParams>();
 
     let user_resource = Resource::new(
-        move || {
-            params.with(|params| params.as_ref().ok().and_then(|params| params.id.clone()))
-        },
+        move || params.with(|params| params.as_ref().ok().and_then(|params| params.id.clone())),
         move |_| {
             let token_value = token.get();
             let tenant_value = tenant.get();
@@ -60,9 +59,9 @@ pub fn UserDetails() -> impl IntoView {
 
             async move {
                 request_with_persisted::<UserVariables, GraphqlUserResponse>(
-                    "query User($id: UUID!) { user(id: $id) { id email name role status createdAt tenantName } }",
+                    USER_DETAILS_QUERY,
                     UserVariables { id: user_id },
-                    "85f7f7ba212ab47e951fcf7dbb30bb918e66b88710574a576b0088877653f3b7",
+                    USER_DETAILS_QUERY_HASH,
                     token_value,
                     tenant_value,
                 )

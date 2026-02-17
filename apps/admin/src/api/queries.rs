@@ -1,0 +1,13 @@
+pub const USERS_QUERY: &str = "query Users($pagination: PaginationInput, $filter: UsersFilter, $search: String) { users(pagination: $pagination, filter: $filter, search: $search) { edges { cursor node { id email name role status createdAt tenantName } } pageInfo { totalCount hasNextPage endCursor } } }";
+
+pub const USERS_QUERY_HASH: &str =
+    "ff1e132e28d2e1c804d8d5ade5966307e17685b9f4b39262d70ecaa4d49abb66";
+
+pub const USER_DETAILS_QUERY: &str =
+    "query User($id: UUID!) { user(id: $id) { id email name role status createdAt tenantName } }";
+
+pub const USER_DETAILS_QUERY_HASH: &str =
+    "85f7f7ba212ab47e951fcf7dbb30bb918e66b88710574a576b0088877653f3b7";
+
+pub const DASHBOARD_STATS_QUERY: &str =
+    "query DashboardStats { dashboardStats { totalTenants totalModules avgLatencyMs queueDepth } }";

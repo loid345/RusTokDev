@@ -24,6 +24,8 @@ This index serves as the central navigation hub for RusToK documentation.
 - [Tenancy](./architecture/tenancy.md) - Multi-tenancy implementation.
 - [Principles](./architecture/principles.md) - Core architectural principles.
 
+- [Admin Review Improvement Plan](./admin-review-improvement-plan.md) - Implementation roadmap for Leptos admin hardening.
+
 ## Guides (`docs/guides/`)
 
 - [Quick Start](./guides/quickstart.md) - Getting started with RusToK.

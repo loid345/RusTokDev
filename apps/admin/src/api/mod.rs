@@ -1,3 +1,5 @@
+pub mod queries;
+
 // GraphQL-only API layer for RusTok admin
 // All data fetching goes through GraphQL — no REST endpoints
 
@@ -7,7 +9,11 @@ use leptos_graphql::{
 use serde::{Deserialize, Serialize};
 
 /// GraphQL endpoint URL — resolves from window.location in browser
-fn get_graphql_url() -> String {
+pub fn get_graphql_url() -> String {
+    if let Some(url) = option_env!("RUSTOK_GRAPHQL_URL") {
+        return url.to_string();
+    }
+
     #[cfg(target_arch = "wasm32")]
     {
         let origin = web_sys::window()
@@ -17,8 +23,8 @@ fn get_graphql_url() -> String {
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        let base = std::env::var("RUSTOK_API_URL")
-            .unwrap_or_else(|_| "http://localhost:5150".to_string());
+        let base =
+            std::env::var("RUSTOK_API_URL").unwrap_or_else(|_| "http://localhost:5150".to_string());
         format!("{}/api/graphql", base)
     }
 }

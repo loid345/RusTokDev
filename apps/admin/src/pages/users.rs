@@ -1,10 +1,13 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
 use leptos::prelude::*;
-use leptos_auth::hooks::{use_token, use_tenant};
+use leptos_auth::hooks::{use_tenant, use_token};
 use leptos_router::components::A;
 use leptos_router::hooks::{use_navigate, use_query_map};
+use leptos_ui::{Badge, BadgeVariant};
+use leptos_use::use_debounce_fn_with_arg;
 use serde::{Deserialize, Serialize};
 
+use crate::api::queries::{USERS_QUERY, USERS_QUERY_HASH};
 use crate::api::{request_with_persisted, ApiError};
 use crate::components::ui::{Button, Input, LanguageToggle, PageHeader};
 use crate::providers::locale::translate;
@@ -90,11 +93,42 @@ pub fn Users() -> impl IntoView {
     let (limit, _set_limit) = signal(12i64);
 
     let (search_query, set_search_query) = signal(initial_search);
+    let (debounced_search, set_debounced_search) = signal(search_query.get_untracked());
     let (role_filter, set_role_filter) = signal(initial_role);
     let (status_filter, set_status_filter) = signal(initial_status);
 
+    let update_debounced_search = use_debounce_fn_with_arg(
+        move |value: String| {
+            set_debounced_search.set(value);
+        },
+        300.0,
+    );
+
     Effect::new(move |_| {
-        let s = search_query.get();
+        update_debounced_search(search_query.get());
+    });
+
+    let (filters_initialized, set_filters_initialized) = signal(false);
+    Effect::new(move |_| {
+        let _ = (
+            debounced_search.get(),
+            role_filter.get(),
+            status_filter.get(),
+        );
+
+        if filters_initialized.get() {
+            set_page.update(|current| {
+                if *current != 1 {
+                    *current = 1;
+                }
+            });
+        } else {
+            set_filters_initialized.set(true);
+        }
+    });
+
+    Effect::new(move |_| {
+        let s = debounced_search.get();
         let r = role_filter.get();
         let st = status_filter.get();
         let p = page.get();
@@ -123,7 +157,16 @@ pub fn Users() -> impl IntoView {
     });
 
     let graphql_resource = Resource::new(
-        move || (refresh_counter.get(), page.get(), limit.get()),
+        move || {
+            (
+                refresh_counter.get(),
+                page.get(),
+                limit.get(),
+                debounced_search.get(),
+                role_filter.get(),
+                status_filter.get(),
+            )
+        },
         move |_| {
             let token_value = token.get();
             let tenant_value = tenant.get();
@@ -134,19 +177,31 @@ pub fn Users() -> impl IntoView {
             };
             async move {
                 request_with_persisted::<UsersVariables, GraphqlUsersResponse>(
-                    "query Users($pagination: PaginationInput, $filter: UsersFilter, $search: String) { users(pagination: $pagination, filter: $filter, search: $search) { edges { cursor node { id email name role status createdAt tenantName } } pageInfo { totalCount hasNextPage endCursor } } }",
+                    USERS_QUERY,
                     UsersVariables {
                         pagination: PaginationInput {
                             first: limit.get(),
                             after,
                         },
                         filter: Some(UsersFilterInput {
-                            role: if role_filter.get().is_empty() { None } else { Some(role_filter.get().to_uppercase()) },
-                            status: if status_filter.get().is_empty() { None } else { Some(status_filter.get().to_uppercase()) },
+                            role: if role_filter.get().is_empty() {
+                                None
+                            } else {
+                                Some(role_filter.get().to_uppercase())
+                            },
+                            status: if status_filter.get().is_empty() {
+                                None
+                            } else {
+                                Some(status_filter.get().to_uppercase())
+                            },
                         }),
-                        search: if search_query.get().is_empty() { None } else { Some(search_query.get()) },
+                        search: if debounced_search.get().is_empty() {
+                            None
+                        } else {
+                            Some(debounced_search.get())
+                        },
                     },
-                    "ff1e132e28d2e1c804d8d5ade5966307e17685b9f4b39262d70ecaa4d49abb66",
+                    USERS_QUERY_HASH,
                     token_value,
                     tenant_value,
                 )
@@ -248,30 +303,7 @@ pub fn Users() -> impl IntoView {
                                         </thead>
                                         <tbody>
                                             {{
-                                                let query = search_query.get().to_lowercase();
-                                                let role = role_filter.get().to_lowercase();
-                                                let status = status_filter.get().to_lowercase();
-
-                                                edges
-                                                    .iter()
-                                                    .filter(|edge| {
-                                                        let user = &edge.node;
-                                                        let name = user.name.clone().unwrap_or_default().to_lowercase();
-                                                        let email = user.email.to_lowercase();
-                                                        let role_value = user.role.to_lowercase();
-                                                        let status_value = user.status.to_lowercase();
-
-                                                        let matches_query = query.is_empty()
-                                                            || email.contains(&query)
-                                                            || name.contains(&query);
-                                                        let matches_role = role.is_empty()
-                                                            || role_value.contains(&role);
-                                                        let matches_status = status.is_empty()
-                                                            || status_value.contains(&status);
-
-                                                        matches_query && matches_role && matches_status
-                                                    })
-                                                    .map(|edge| {
+                                                edges.into_iter().map(|edge| {
                                                         let GraphqlUser {
                                                             id,
                                                             email,
@@ -295,9 +327,7 @@ pub fn Users() -> impl IntoView {
                                                                 </td>
                                                                 <td class="border-b border-slate-200 py-2">{role}</td>
                                                                 <td class="border-b border-slate-200 py-2">
-                                                                    <span class="inline-flex items-center rounded-full bg-slate-200 px-2.5 py-1 text-xs text-slate-600">
-                                                                        {status}
-                                                                    </span>
+                                                                    <Badge variant=if status.eq_ignore_ascii_case("active") { BadgeVariant::Success } else { BadgeVariant::Secondary }>{status}</Badge>
                                                                 </td>
                                                                 <td class="border-b border-slate-200 py-2">{created_at}</td>
                                                             </tr>

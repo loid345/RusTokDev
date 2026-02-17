@@ -1,5 +1,6 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use leptos_use::use_interval_fn;
 
 use crate::api;
 use crate::storage;
@@ -103,7 +104,7 @@ impl AuthContext {
     pub async fn refresh_session(&self) -> Result<(), AuthError> {
         if let Some(session) = self.session.get() {
             let new_session =
-                api::refresh_token(session.token.clone(), session.tenant.clone()).await?;
+                api::refresh_token(session.refresh_token.clone(), session.tenant.clone()).await?;
             let _ = storage::save_session(&new_session);
             self.session.set(Some(new_session));
             Ok(())
@@ -127,7 +128,19 @@ impl AuthContext {
     }
 
     pub fn is_authenticated(&self) -> bool {
-        self.user.get().is_some() && self.session.get().is_some()
+        self.user.get().is_some() && self.session.get().is_some() && !self.is_token_expired()
+    }
+
+    pub fn is_token_expired(&self) -> bool {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_secs() as i64)
+            .unwrap_or_default();
+
+        self.session
+            .get()
+            .map(|session| now >= session.expires_at - 60)
+            .unwrap_or(true)
     }
 
     pub fn get_token(&self) -> Option<String> {
@@ -153,11 +166,38 @@ pub fn AuthProvider(children: Children) -> impl IntoView {
 
     Effect::new(move |_| {
         if auth_context.session.get().is_some() {
+            let auth = auth_context.clone();
             spawn_local(async move {
-                let _ = auth_context.fetch_current_user().await;
+                let _ = auth.fetch_current_user().await;
             });
         }
     });
+
+    let auth_for_interval = auth_context.clone();
+    let _interval = use_interval_fn(
+        move || {
+            if let Some(session) = auth_for_interval.session.get() {
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|duration| duration.as_secs() as i64)
+                    .unwrap_or_default();
+                let remaining = session.expires_at - now;
+
+                if remaining <= 0 {
+                    let auth = auth_for_interval.clone();
+                    spawn_local(async move {
+                        let _ = auth.sign_out().await;
+                    });
+                } else if remaining < 300 {
+                    let auth = auth_for_interval.clone();
+                    spawn_local(async move {
+                        let _ = auth.refresh_session().await;
+                    });
+                }
+            }
+        },
+        60_000,
+    );
 
     children()
 }

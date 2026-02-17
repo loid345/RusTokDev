@@ -22,6 +22,8 @@ pub struct AuthUser {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 pub struct AuthSession {
     pub token: String,
+    pub refresh_token: String,
+    pub expires_at: i64,
     pub tenant: String,
 }
 
@@ -50,6 +52,6 @@ impl AuthError {
 pub use components::{GuestRoute, ProtectedRoute, RequireAuth};
 pub use context::{AuthContext, AuthProvider};
 pub use hooks::{
-    use_auth, use_auth_error, use_current_user, use_is_authenticated, use_is_loading, use_session,
-    use_tenant, use_token,
+    use_auth, use_auth_error, use_current_user, use_is_authenticated, use_is_loading,
+    use_is_token_valid, use_session, use_tenant, use_token,
 };
