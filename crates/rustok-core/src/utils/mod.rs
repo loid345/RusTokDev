@@ -157,7 +157,7 @@ pub fn html_escape(input: &str) -> String {
 
 /// Generate a random string of specified length
 pub fn random_string(len: usize) -> String {
-    use rand::Rng;
+    use rand::RngExt;
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
     let mut rng = rand::rng();

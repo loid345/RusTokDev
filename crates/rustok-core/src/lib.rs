@@ -26,7 +26,6 @@ pub mod utils;
 
 #[cfg(test)]
 mod validation_proptest;
-pub use crate::domain_err;
 pub use async_utils::{
     batch, parallel, retry, timeout, BackoffConfig, Coalescer, Debouncer, RetryError, Throttler,
     TimeoutError,

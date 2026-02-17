@@ -121,7 +121,7 @@ impl CacheBackend for RedisCacheBackend {
         let mut manager = self.manager.clone();
 
         self.circuit_breaker
-            .call(async move {
+            .call(|| async move {
                 let pong: String = redis::cmd("PING")
                     .query_async(&mut manager)
                     .await
@@ -149,7 +149,7 @@ impl CacheBackend for RedisCacheBackend {
         let redis_key = self.key(key);
 
         self.circuit_breaker
-            .call(async move {
+            .call(|| async move {
                 let value: Option<Vec<u8>> = redis::cmd("GET")
                     .arg(redis_key)
                     .query_async(&mut manager)
@@ -177,13 +177,13 @@ impl CacheBackend for RedisCacheBackend {
         let ttl_secs = ttl.as_secs();
 
         self.circuit_breaker
-            .call(async move {
+            .call(|| async move {
                 redis::cmd("SET")
                     .arg(redis_key)
                     .arg(value)
                     .arg("EX")
                     .arg(ttl_secs)
-                    .query_async::<_, ()>(&mut manager)
+                    .query_async::<()>(&mut manager)
                     .await
                     .map_err(|err| crate::Error::Cache(err.to_string()))?;
                 Ok::<(), crate::Error>(())
@@ -203,10 +203,10 @@ impl CacheBackend for RedisCacheBackend {
         let redis_key = self.key(key);
 
         self.circuit_breaker
-            .call(async move {
+            .call(|| async move {
                 redis::cmd("DEL")
                     .arg(redis_key)
-                    .query_async::<_, ()>(&mut manager)
+                    .query_async::<()>(&mut manager)
                     .await
                     .map_err(|err| crate::Error::Cache(err.to_string()))?;
                 Ok::<(), crate::Error>(())
