@@ -62,21 +62,21 @@
 
 | Path | Title | Purpose | Audience | Owner | Update triggers | Status |
 |------|-------|---------|----------|-------|----------------|--------|
-| docs/architecture.md | Architecture Overview | Базовая архитектура платформы | dev/ai | platform | архитектурные изменения | stable |
+| docs/architecture.md | Architecture Overview | Каноничный обзор архитектуры платформы | dev/ai | platform | архитектурные изменения | stable |
 | docs/QUICK_START.md | Docs Quick Start | Быстрый старт по документации | dev/ai | platform | изменения onboarding | stable |
-| docs/ARCHITECTURE_GUIDE.md | Architecture Guide | Детали архитектуры и модульности | dev/ai | platform | изменения архитектуры | stable |
-| docs/ARCHITECTURE_DIAGRAM.md | Architecture Diagram | Диаграмма компонентов | dev/ai | platform | изменения архитектуры | stable |
-| docs/ARCHITECTURE_IMPROVEMENTS_VISUAL.md | Architecture Improvements (Visual) | Визуальная схема улучшений | dev/ai | platform | изменения roadmap/архитектуры | draft |
-| docs/ARCHITECTURE_RECOMMENDATIONS.md | Architecture Recommendations | Рекомендации по улучшению | dev/ai | platform | пересмотр архитектуры | draft |
-| docs/ARCHITECTURE_RECOMMENDATIONS_EXTENDED.md | Architecture Recommendations (Extended) | Расширенные рекомендации | dev/ai | platform | пересмотр архитектуры | draft |
+| docs/ARCHITECTURE_GUIDE.md | Architecture Guide | Исторический гайд (см. architecture.md) | dev/ai | platform | изменения архитектуры | archived |
+| docs/ARCHITECTURE_DIAGRAM.md | Architecture Diagram | Диаграммы архитектуры (дополнение) | dev/ai | platform | изменения архитектуры | stable |
+| docs/ARCHITECTURE_IMPROVEMENTS_VISUAL.md | Architecture Improvements (Visual) | Исторические визуальные улучшения | dev/ai | platform | изменения roadmap/архитектуры | archived |
+| docs/ARCHITECTURE_RECOMMENDATIONS.md | Architecture Recommendations | Исторические рекомендации | dev/ai | platform | пересмотр архитектуры | archived |
+| docs/ARCHITECTURE_RECOMMENDATIONS_EXTENDED.md | Architecture Recommendations (Extended) | Исторические расширенные рекомендации | dev/ai | platform | пересмотр архитектуры | archived |
 | docs/ARCHITECTURE_REVIEW_2026-02-12.md | Architecture Review | Архитектурный обзор на дату | dev/ai | platform | новые ревью | archived |
 | docs/ARCHITECTURE_REVIEW_SUMMARY.md | Architecture Review Summary | Сводка обзора архитектуры | dev/ai | platform | новые ревью | archived |
 | docs/DATABASE_SCHEMA.md | Database Schema | Текущее описание схемы БД | dev/ai | data | изменения схемы | stable |
 | docs/I18N_ARCHITECTURE.md | I18N Architecture | Локализация и i18n подход | dev/ai | platform | изменения i18n | stable |
-| docs/MANIFEST_ADDENDUM.md | Manifest Addendum | Дополнение к манифесту | dev/ai | platform | изменения манифеста | stable |
+| docs/MANIFEST_ADDENDUM.md | Manifest Addendum | Историческое дополнение (перенесено в RUSTOK_MANIFEST) | dev/ai | platform | изменения манифеста | archived |
 | docs/STATE_MACHINE_GUIDE.md | State Machine Guide | Правила state machine | dev/ai | platform | изменения state machine | stable |
 | docs/transactional_event_publishing.md | Transactional Event Publishing | Публикация событий/transactional outbox | dev/ai | platform | изменения event/outbox | stable |
-| docs/EVENTBUS_CONSISTENCY_AUDIT.md | EventBus Consistency Audit | Аудит согласованности событий | dev/ai | platform | новые аудиты | archived |
+| docs/EVENTBUS_CONSISTENCY_AUDIT.md | EventBus Consistency Audit | Исторический аудит согласованности событий | dev/ai | platform | новые аудиты | archived |
 | docs/TENANT_CACHE_V2_MIGRATION.md | Tenant Cache v2 Migration | Миграция tenant cache | dev/ops | platform | миграции cache | archived |
 | docs/TENANT_RESOLVER_V2_MIGRATION.md | Tenant Resolver v2 Migration | Миграция tenant resolver | dev/ops | platform | миграции tenancy | archived |
 | docs/CORE_STABILIZATION_RECOMMENDATIONS.md | Core Stabilization | Рекомендации по стабилизации ядра | dev/ai | platform | пересмотр ядра | draft |

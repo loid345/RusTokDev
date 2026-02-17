@@ -1,5 +1,8 @@
 # EventBus Consistency Audit Report
 
+> **Status:** Archived. Исторический аудит.
+> Актуальные правила: [`docs/transactional_event_publishing.md`](transactional_event_publishing.md).
+>
 > **Date:** 2026-02-12  
 > **Audit Type:** P0 Critical - EventBus Usage Consistency  
 > **Status:** ✅ PASS

@@ -1,5 +1,8 @@
 # Architecture & System Logic
 
+> **Status:** Canonical architecture overview. This is the single актуальный документ по архитектуре.
+> Supplemental diagrams: [`docs/ARCHITECTURE_DIAGRAM.md`](ARCHITECTURE_DIAGRAM.md).
+
 RusTok is a high-performance, event-driven modular monolith designed for enterprise content and commerce. It balances the developer productivity of frameworks like Rails (via Loco.rs) with the uncompromising performance and safety of Rust.
 
 ---
