@@ -19,7 +19,7 @@ pub mod validation;
 
 pub use audit::{AuditEvent, AuditLogger, SecurityAudit};
 pub use headers::{SecurityHeaders, SecurityHeadersConfig};
-pub use rate_limit::{RateLimitConfig, RateLimiter, RateLimitResult};
+pub use rate_limit::{RateLimitConfig, RateLimitResult, RateLimiter};
 pub use validation::{InputValidator, SsrfProtection, ValidationResult};
 
 use serde::{Deserialize, Serialize};
@@ -69,7 +69,8 @@ pub struct SecurityFinding {
 }
 
 /// OWASP Top 10 categories
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum SecurityCategory {
     BrokenAccessControl,
     CryptographicFailures,
@@ -85,10 +86,12 @@ pub enum SecurityCategory {
 }
 
 /// Severity levels
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Severity {
     Info,
     Low,
+    Warning,
     Medium,
     High,
     Critical,
@@ -128,6 +131,7 @@ fn calculate_security_score(findings: &[SecurityFinding]) -> u8 {
             Severity::Critical => 25,
             Severity::High => 15,
             Severity::Medium => 8,
+            Severity::Warning => 5,
             Severity::Low => 3,
             Severity::Info => 0,
         })

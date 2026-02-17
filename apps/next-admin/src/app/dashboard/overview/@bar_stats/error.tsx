@@ -20,7 +20,7 @@ export default function StatsError({ error, reset }: StatsErrorProps) {
     Sentry.captureException(error);
   }, [error]);
 
-  // the reload fn ensures the refresh is deffered  until the next render phase allowing react to handle any pending states before processing
+  // the reload fn ensures the refresh is deferred  until the next render phase allowing react to handle any pending states before processing
   const reload = () => {
     startTransition(() => {
       router.refresh();

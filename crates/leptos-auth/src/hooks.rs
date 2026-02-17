@@ -42,3 +42,8 @@ pub fn use_tenant() -> Signal<Option<String>> {
     let auth = use_auth();
     Signal::derive(move || auth.get_tenant())
 }
+
+pub fn use_is_token_valid() -> Signal<bool> {
+    let auth = use_auth();
+    Signal::derive(move || !auth.is_token_expired())
+}

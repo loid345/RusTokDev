@@ -1,8 +1,9 @@
 // Sidebar Navigation Component
 use leptos::prelude::*;
-use leptos_router::components::A;
 use leptos_auth::hooks::use_current_user;
+use leptos_router::components::A;
 
+use crate::components::layout::NAV_SECTIONS;
 use crate::providers::locale::translate;
 
 #[component]

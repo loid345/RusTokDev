@@ -1,11 +1,12 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
 use leptos::prelude::*;
-use leptos_auth::hooks::{use_token, use_tenant};
+use leptos_auth::hooks::{use_tenant, use_token};
 use leptos_router::components::A;
 use leptos_router::hooks::{use_navigate, use_query_map};
 use leptos_use::use_debounce_fn;
 use serde::{Deserialize, Serialize};
 
+use crate::api::queries::{USERS_QUERY, USERS_QUERY_HASH};
 use crate::api::{request_with_persisted, ApiError};
 use crate::components::ui::{Button, Input, LanguageToggle, PageHeader};
 use crate::providers::locale::translate;
@@ -70,6 +71,28 @@ fn cursor_for_page(page: i64, limit: i64) -> String {
     STANDARD.encode(index.to_string())
 }
 
+fn users_table_skeleton() -> impl IntoView {
+    view! {
+        <div>
+            <div class="mb-4 grid gap-3 md:grid-cols-3">
+                {(0..3)
+                    .map(|_| view! { <div class="h-12 animate-pulse rounded-xl bg-slate-100"></div> })
+                    .collect_view()}
+            </div>
+            <div class="space-y-3">
+                {(0..6)
+                    .map(|_| view! { <div class="h-10 animate-pulse rounded-lg bg-slate-100"></div> })
+                    .collect_view()}
+            </div>
+            <div class="mt-4 flex items-center gap-3">
+                <div class="h-9 w-24 animate-pulse rounded-lg bg-slate-100"></div>
+                <div class="h-4 w-20 animate-pulse rounded bg-slate-100"></div>
+                <div class="h-9 w-24 animate-pulse rounded-lg bg-slate-100"></div>
+            </div>
+        </div>
+    }
+}
+
 #[component]
 pub fn Users() -> impl IntoView {
     let token = use_token();
@@ -114,7 +137,7 @@ pub fn Users() -> impl IntoView {
     });
 
     Effect::new(move |_| {
-        let s = search_query.get();
+        let s = debounced_search.get();
         let r = role_filter.get();
         let st = status_filter.get();
         let p = page.get();
@@ -163,7 +186,7 @@ pub fn Users() -> impl IntoView {
             };
             async move {
                 request_with_persisted::<UsersVariables, GraphqlUsersResponse>(
-                    "query Users($pagination: PaginationInput, $filter: UsersFilter, $search: String) { users(pagination: $pagination, filter: $filter, search: $search) { edges { cursor node { id email name role status createdAt tenantName } } pageInfo { totalCount hasNextPage endCursor } } }",
+                    USERS_QUERY,
                     UsersVariables {
                         pagination: PaginationInput {
                             first: limit_val,
@@ -175,7 +198,7 @@ pub fn Users() -> impl IntoView {
                         }),
                         search: if search_val.is_empty() { None } else { Some(search_val) },
                     },
-                    "ff1e132e28d2e1c804d8d5ade5966307e17685b9f4b39262d70ecaa4d49abb66",
+                    USERS_QUERY_HASH,
                     token_value,
                     tenant_value,
                 )
@@ -211,21 +234,10 @@ pub fn Users() -> impl IntoView {
                     {move || translate("users.graphql.title")}
                 </h4>
                 <Suspense
-                    fallback=move || view! {
-                        <p class="text-sm text-slate-500">
-                            {move || translate("users.rest.loading")}
-                        </p>
-                    }
+                    fallback=move || view! { <div>{users_table_skeleton()}</div> }
                 >
                     {move || match graphql_resource.get() {
-                        None => view! {
-                            <div>
-                                <p class="text-sm text-slate-500">
-                                    {move || translate("users.rest.pending")}
-                                </p>
-                            </div>
-                        }
-                        .into_any(),
+                        None => view! { <div>{users_table_skeleton()}</div> }.into_any(),
                         Some(Ok(response)) => {
                             let total_count = response.users.page_info.total_count;
                             let edges = response.users.edges;
@@ -303,9 +315,7 @@ pub fn Users() -> impl IntoView {
                                                                 </td>
                                                                 <td class="border-b border-slate-200 py-2">{role}</td>
                                                                 <td class="border-b border-slate-200 py-2">
-                                                                    <span class="inline-flex items-center rounded-full bg-slate-200 px-2.5 py-1 text-xs text-slate-600">
-                                                                        {status}
-                                                                    </span>
+                                                                    <Badge variant=if status.eq_ignore_ascii_case("active") { BadgeVariant::Success } else { BadgeVariant::Secondary }>{status}</Badge>
                                                                 </td>
                                                                 <td class="border-b border-slate-200 py-2">{created_at}</td>
                                                             </tr>

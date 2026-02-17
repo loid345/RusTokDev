@@ -141,7 +141,6 @@ struct AuthPayload {
     #[serde(rename = "refreshToken")]
     refresh_token: String,
     #[serde(rename = "tokenType")]
-    #[allow(dead_code)]
     token_type: String,
     #[serde(rename = "expiresIn")]
     expires_in: i32,
@@ -176,6 +175,10 @@ struct ForgotPasswordPayload {
 // ============================================================================
 
 fn get_api_url() -> String {
+    if let Some(url) = option_env!("RUSTOK_GRAPHQL_URL") {
+        return url.trim_end_matches("/api/graphql").to_string();
+    }
+
     #[cfg(target_arch = "wasm32")]
     {
         web_sys::window()
@@ -184,12 +187,15 @@ fn get_api_url() -> String {
     }
     #[cfg(not(target_arch = "wasm32"))]
     {
-        std::env::var("RUSTOK_API_URL")
-            .unwrap_or_else(|_| "http://localhost:5150".to_string())
+        std::env::var("RUSTOK_API_URL").unwrap_or_else(|_| "http://localhost:5150".to_string())
     }
 }
 
 fn get_graphql_url() -> String {
+    if let Some(url) = option_env!("RUSTOK_GRAPHQL_URL") {
+        return url.to_string();
+    }
+
     format!("{}/api/graphql", get_api_url())
 }
 
@@ -252,6 +258,7 @@ pub async fn sign_in(
         role: payload.user.role,
     };
 
+    let now = now_unix_ts();
     let session = AuthSession {
         token: payload.access_token,
         refresh_token: payload.refresh_token,
@@ -298,6 +305,7 @@ pub async fn sign_up(
         role: payload.user.role,
     };
 
+    let now = now_unix_ts();
     let session = AuthSession {
         token: payload.access_token,
         refresh_token: payload.refresh_token,
@@ -425,7 +433,7 @@ mod tests {
     }
 
     #[test]
-    fn test_graphql_url() {
+    fn test_graphql_url_shape() {
         let url = get_graphql_url();
         assert!(url.contains("/api/graphql"));
     }

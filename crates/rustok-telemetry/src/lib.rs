@@ -156,24 +156,26 @@ pub fn init(config: TelemetryConfig) -> Result<TelemetryHandles, TelemetryError>
     // Initialize subscriber with or without OpenTelemetry
     if let Some(otel_config) = config.otel {
         // Try to initialize OpenTelemetry layer
-        let subscriber = TracingRegistry::default()
-            .with(env_filter)
-            .with(fmt_layer);
-        
+        let subscriber = TracingRegistry::default().with(env_filter).with(fmt_layer);
+
         // Initialize OTel in a blocking context since we're in a sync function
         let otel_layer = tokio::task::block_in_place(|| {
             tokio::runtime::Handle::current().block_on(async {
                 match otel::init_otel_layer(otel_config).await {
                     Ok(layer) => Some(layer),
                     Err(e) => {
-                        tracing::warn!("Failed to initialize OpenTelemetry: {}, continuing without it", e);
+                        tracing::warn!(
+                            "Failed to initialize OpenTelemetry: {}, continuing without it",
+                            e
+                        );
                         None
                     }
                 }
             })
         });
 
-        if let Some(otel_layer) = otel_layer {
+        if let Some(otel_tracer) = otel_layer {
+            let otel_layer = tracing_opentelemetry::layer().with_tracer(otel_tracer);
             let subscriber = subscriber.with(otel_layer);
             tracing::subscriber::set_global_default(subscriber)
                 .map_err(|_| TelemetryError::SubscriberAlreadySet)?;

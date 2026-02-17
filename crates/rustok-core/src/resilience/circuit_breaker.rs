@@ -80,6 +80,15 @@ impl CircuitState {
             CircuitState::HalfOpen => "half_open",
         }
     }
+
+    /// Get numeric representation for metrics (0=closed, 1=open, 2=half_open)
+    pub fn as_u8(&self) -> u8 {
+        match self {
+            CircuitState::Closed => 0,
+            CircuitState::Open => 1,
+            CircuitState::HalfOpen => 2,
+        }
+    }
 }
 
 /// Circuit breaker error
@@ -153,10 +162,8 @@ impl CircuitBreaker {
         if !self.can_execute().await {
             self.total_rejected.fetch_add(1, Ordering::Relaxed);
 
-            tracing::warn!(
-                state = self.get_state().await.as_str(),
-                "Circuit breaker rejected request"
-            );
+            let state = self.get_state().await;
+            tracing::warn!(state = state.as_str(), "Circuit breaker rejected request");
 
             return Err(CircuitBreakerError::Open);
         }
@@ -172,9 +179,10 @@ impl CircuitBreaker {
                 self.record_success().await;
                 self.total_successes.fetch_add(1, Ordering::Relaxed);
 
+                let state = self.get_state().await;
                 tracing::debug!(
                     duration_ms = duration.as_millis(),
-                    state = self.get_state().await.as_str(),
+                    state = state.as_str(),
                     "Circuit breaker: success"
                 );
 
@@ -184,9 +192,10 @@ impl CircuitBreaker {
                 self.record_failure().await;
                 self.total_failures.fetch_add(1, Ordering::Relaxed);
 
+                let state = self.get_state().await;
                 tracing::warn!(
                     duration_ms = duration.as_millis(),
-                    state = self.get_state().await.as_str(),
+                    state = state.as_str(),
                     error = %err,
                     "Circuit breaker: failure"
                 );
@@ -328,6 +337,55 @@ impl CircuitBreaker {
             failure_count: state.failure_count,
             success_count: state.success_count,
         }
+    }
+
+    /// Export metrics in Prometheus exposition format
+    ///
+    /// # Example
+    /// ```
+    /// let metrics = breaker.export_prometheus_metrics("redis_cache").await;
+    /// println!("{}", metrics);
+    /// ```
+    pub async fn export_prometheus_metrics(&self, name: &str) -> String {
+        let stats = self.stats().await;
+        let state_value = stats.state.as_u8();
+
+        format!(
+            r#"# HELP circuit_breaker_state Current state of the circuit breaker (0=closed, 1=open, 2=half_open)
+# TYPE circuit_breaker_state gauge
+circuit_breaker_state{{name="{name}"}} {state}
+# HELP circuit_breaker_requests_total Total number of requests
+# TYPE circuit_breaker_requests_total counter
+circuit_breaker_requests_total{{name="{name}"}} {requests}
+# HELP circuit_breaker_successes_total Total number of successful requests
+# TYPE circuit_breaker_successes_total counter
+circuit_breaker_successes_total{{name="{name}"}} {successes}
+# HELP circuit_breaker_failures_total Total number of failed requests
+# TYPE circuit_breaker_failures_total counter
+circuit_breaker_failures_total{{name="{name}"}} {failures}
+# HELP circuit_breaker_rejected_total Total number of rejected requests (circuit open)
+# TYPE circuit_breaker_rejected_total counter
+circuit_breaker_rejected_total{{name="{name}"}} {rejected}
+# HELP circuit_breaker_state_transitions_total Total number of state transitions
+# TYPE circuit_breaker_state_transitions_total counter
+circuit_breaker_state_transitions_total{{name="{name}"}} {transitions}
+# HELP circuit_breaker_success_rate Current success rate (0.0 - 1.0)
+# TYPE circuit_breaker_success_rate gauge
+circuit_breaker_success_rate{{name="{name}"}} {success_rate}
+# HELP circuit_breaker_rejection_rate Current rejection rate (0.0 - 1.0)
+# TYPE circuit_breaker_rejection_rate gauge
+circuit_breaker_rejection_rate{{name="{name}"}} {rejection_rate}
+"#,
+            name = name,
+            state = state_value,
+            requests = stats.total_requests,
+            successes = stats.total_successes,
+            failures = stats.total_failures,
+            rejected = stats.total_rejected,
+            transitions = stats.state_transitions,
+            success_rate = stats.success_rate(),
+            rejection_rate = stats.rejection_rate(),
+        )
     }
 
     /// Force circuit to open (manual control)
@@ -573,5 +631,33 @@ mod tests {
         let stats = breaker.stats().await;
         assert_eq!(stats.total_requests, 0);
         assert_eq!(stats.state, CircuitState::Closed);
+    }
+
+    #[tokio::test]
+    async fn test_prometheus_metrics_export() {
+        let breaker = CircuitBreaker::new(CircuitBreakerConfig::default());
+
+        // Execute some operations
+        let _ = breaker.call(|| async { Ok::<_, String>(1) }).await;
+        let _ = breaker.call(|| async { Ok::<_, String>(2) }).await;
+        let _ = breaker.call(|| async { Err::<i32, _>("error") }).await;
+
+        // Export metrics
+        let metrics = breaker.export_prometheus_metrics("test_circuit").await;
+
+        // Verify metrics format
+        assert!(metrics.contains("circuit_breaker_state{name=\"test_circuit\"}"));
+        assert!(metrics.contains("circuit_breaker_requests_total{name=\"test_circuit\"} 3"));
+        assert!(metrics.contains("circuit_breaker_successes_total{name=\"test_circuit\"} 2"));
+        assert!(metrics.contains("circuit_breaker_failures_total{name=\"test_circuit\"} 1"));
+        assert!(metrics.contains("# HELP circuit_breaker_state"));
+        assert!(metrics.contains("# TYPE circuit_breaker_requests_total counter"));
+    }
+
+    #[tokio::test]
+    async fn test_circuit_state_as_u8() {
+        assert_eq!(CircuitState::Closed.as_u8(), 0);
+        assert_eq!(CircuitState::Open.as_u8(), 1);
+        assert_eq!(CircuitState::HalfOpen.as_u8(), 2);
     }
 }

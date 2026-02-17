@@ -2,6 +2,16 @@
 
 ## Context
 
+## Progress Snapshot
+
+- ✅ **Phase 1.1**: `AuthSession` stores `refresh_token` and `expires_at`.
+- ✅ **Phase 1.2**: token expiry checks and background refresh/sign-out were added in `leptos-auth`.
+- ✅ **Phase 1.3**: Dashboard stats moved from hardcoded values to GraphQL `Resource` + `Suspense` fallback.
+- ✅ **Phase 1.4**: GraphQL query strings and persisted hashes were centralized in `apps/admin/src/api/queries.rs`.
+- ✅ **Phase 1.5**: compile-time GraphQL URL override via `RUSTOK_GRAPHQL_URL` added to admin API URL resolution.
+- ✅ **Phase 2.1-2.5**: users filtering dependencies/debounce/server-side mapping/badge rendering implemented.
+- ⏳ **Phase 3+**: still pending and should be delivered incrementally.
+
 Leptos admin (`apps/admin`) is the primary admin panel for RusTok. The Next.js admin (`apps/next-admin`) serves as reference. After recent commits: `_new.rs` duplicates removed, auth migrated to `leptos-auth` crate, Clerk replaced with NextAuth+JWT in Next.js, Users page added to Next.js admin. However, critical issues remain: tokens expire silently, dashboard stats are hardcoded, filtering is duplicated client/server, no RBAC, no CRUD for users.
 
 The project has a rich crate infrastructure (`leptos-ui`, `leptos-forms`, `leptos-graphql`, `leptos-table`, `leptos-use`, `leptos-chartistry`, `leptos-shadcn-pagination`) that is **almost entirely unused** in the admin app.

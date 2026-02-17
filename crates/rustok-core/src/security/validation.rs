@@ -11,7 +11,6 @@
 use std::collections::HashSet;
 
 use regex::Regex;
-use serde::{Deserialize, Serialize};
 use url::Url;
 
 use super::{SecurityCategory, SecurityFinding, Severity};
@@ -62,7 +61,7 @@ static XSS_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
     vec![
         Regex::new(r"(?i)<script[^>]*>.*?</script>").unwrap(),
         Regex::new(r"(?i)javascript:").unwrap(),
-        Regex::new(r"(?i)on\w+\s*=\s*[\"']?[^\"']*[\"']?").unwrap(),
+        Regex::new(r#"(?i)on\w+\s*=\s*["']?[^"']*["']?"#).unwrap(),
         Regex::new(r"(?i)<\s*iframe").unwrap(),
         Regex::new(r"(?i)<\s*object").unwrap(),
         Regex::new(r"(?i)<\s*embed").unwrap(),
@@ -89,34 +88,6 @@ static PATH_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
 impl InputValidator {
     /// Create new input validator with default patterns
     pub fn new() -> Self {
-        let sql_patterns = vec![
-            Regex::new(r"(?i)(SELECT\s+.*\s+FROM|INSERT\s+INTO|UPDATE\s+.*\s+SET|DELETE\s+FROM|DROP\s+TABLE|UNION\s+SELECT|--|;--)").unwrap(),
-            Regex::new(r"(?i)(OR\s+1\s*=\s*1|AND\s+1\s*=\s*1|1\s*=\s*1)").unwrap(),
-            Regex::new(r"(?i)(EXEC\s*\(|EXECUTE\s*\(|sp_executesql)").unwrap(),
-        ];
-
-        let xss_patterns = vec![
-            Regex::new(r"(?i)<script[^>]*>.*?</script>").unwrap(),
-            Regex::new(r"(?i)javascript:").unwrap(),
-            Regex::new(r#"(?i)on\w+\s*=\s*["']?[^"']*["']?"#).unwrap(),
-            Regex::new(r"(?i)<\s*iframe").unwrap(),
-            Regex::new(r"(?i)<\s*object").unwrap(),
-            Regex::new(r"(?i)<\s*embed").unwrap(),
-        ];
-
-        let cmd_patterns = vec![
-            Regex::new(r"[;&|`]\s*\w+").unwrap(),
-            Regex::new(r"\$\(.*\)").unwrap(),
-            Regex::new(r"`.*`").unwrap(),
-        ];
-
-        let path_patterns = vec![
-            Regex::new(r"\.\./").unwrap(),
-            Regex::new(r"\.\.\\").unwrap(),
-            Regex::new(r"%2e%2e[/\\]").unwrap(),
-            Regex::new(r"\x2e\x2e[/\\]").unwrap(),
-        ];
-
         Self {
             sql_patterns: SQL_PATTERNS.clone(),
             xss_patterns: XSS_PATTERNS.clone(),
@@ -230,8 +201,9 @@ impl InputValidator {
     /// Validate UUID
     pub fn validate_uuid(&self, uuid: &str) -> ValidationResult {
         let uuid_regex = Regex::new(
-            r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-        ).unwrap();
+            r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+        )
+        .unwrap();
 
         if uuid_regex.is_match(uuid) {
             ValidationResult::Valid
@@ -248,12 +220,8 @@ impl InputValidator {
 pub struct SsrfProtection {
     /// Allowed host patterns
     allowed_hosts: HashSet<String>,
-    /// Blocked IP ranges (private, loopback, etc.)
-    blocked_ranges: Vec<std::net::IpAddr>,
     /// Blocked schemes
     blocked_schemes: HashSet<String>,
-    /// Maximum redirects to follow
-    max_redirects: u32,
 }
 
 impl Default for SsrfProtection {
@@ -272,9 +240,7 @@ impl SsrfProtection {
 
         Self {
             allowed_hosts: HashSet::new(),
-            blocked_ranges: Vec::new(),
             blocked_schemes,
-            max_redirects: 5,
         }
     }
 
@@ -296,18 +262,17 @@ impl SsrfProtection {
         };
 
         // Check scheme
-        if let Some(scheme) = parsed.scheme() {
-            if self.blocked_schemes.contains(scheme) {
-                return ValidationResult::Invalid {
-                    reason: format!("URL scheme '{}' is not allowed", scheme),
-                };
-            }
+        let scheme = parsed.scheme();
+        if self.blocked_schemes.contains(scheme) {
+            return ValidationResult::Invalid {
+                reason: format!("URL scheme '{}' is not allowed", scheme),
+            };
+        }
 
-            if scheme != "http" && scheme != "https" {
-                return ValidationResult::Invalid {
-                    reason: "Only HTTP and HTTPS URLs are allowed".to_string(),
-                };
-            }
+        if scheme != "http" && scheme != "https" {
+            return ValidationResult::Invalid {
+                reason: "Only HTTP and HTTPS URLs are allowed".to_string(),
+            };
         }
 
         // Check host

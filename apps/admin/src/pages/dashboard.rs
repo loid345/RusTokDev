@@ -1,59 +1,52 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
-use leptos_auth::hooks::{use_auth, use_current_user};
+use leptos_auth::hooks::{use_auth, use_current_user, use_tenant, use_token};
+use serde::Deserialize;
+use serde_json::json;
 
+use crate::api::queries::DASHBOARD_STATS_QUERY;
+use crate::api::request;
 use crate::components::ui::{Button, LanguageToggle, PageHeader, StatsCard};
+use crate::modules::{components_for_slot, AdminSlot};
 use crate::providers::locale::translate;
+
+#[derive(Clone, Debug, Deserialize)]
+struct DashboardStatsResponse {
+    #[serde(rename = "dashboardStats")]
+    dashboard_stats: Option<DashboardStats>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct DashboardStats {
+    #[serde(rename = "totalTenants")]
+    total_tenants: i64,
+    #[serde(rename = "totalModules")]
+    total_modules: i64,
+    #[serde(rename = "avgLatencyMs")]
+    avg_latency_ms: i64,
+    #[serde(rename = "queueDepth")]
+    queue_depth: i64,
+}
 
 #[component]
 pub fn Dashboard() -> impl IntoView {
     let auth = use_auth();
     let current_user = use_current_user();
+    let token = use_token();
+    let tenant = use_tenant();
 
-    let stats = move || {
-        vec![
-            (
-                translate("app.dashboard.stats.tenants"),
-                "28",
-                translate("app.dashboard.stats.tenantsHint"),
-                view! {
-                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                }.into_any()
-            ),
-            (
-                translate("app.dashboard.stats.modules"),
-                "12",
-                translate("app.dashboard.stats.modulesHint"),
-                view! {
-                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
-                    </svg>
-                }.into_any()
-            ),
-            (
-                translate("app.dashboard.stats.latency"),
-                "128ms",
-                translate("app.dashboard.stats.latencyHint"),
-                view! {
-                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                    </svg>
-                }.into_any()
-            ),
-            (
-                translate("app.dashboard.stats.queue"),
-                "7",
-                translate("app.dashboard.stats.queueHint"),
-                view! {
-                    <svg class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                    </svg>
-                }.into_any()
-            ),
-        ]
-    };
+    let dashboard_stats = Resource::new(
+        move || (token.get(), tenant.get()),
+        move |(token_value, tenant_value)| async move {
+            request::<_, DashboardStatsResponse>(
+                DASHBOARD_STATS_QUERY,
+                json!({}),
+                token_value,
+                tenant_value,
+            )
+            .await
+        },
+    );
 
     let activity = move || {
         vec![
@@ -115,22 +108,75 @@ pub fn Dashboard() -> impl IntoView {
                 .into_any()
             />
 
-            <div class="mb-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
-                {stats()
-                    .into_iter()
-                    .map(|(title, value, hint, icon)| {
-                        view! {
-                            <StatsCard
-                                title=title
-                                value=value
-                                icon=icon
-                                trend=hint
-                                class="transition-all hover:scale-[1.02]"
-                            />
-                        }
-                    })
-                    .collect_view()}
-            </div>
+            <Suspense
+                fallback=move || view! {
+                    <div class="mb-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                        {(0..4)
+                            .map(|_| {
+                                view! { <div class="h-32 animate-pulse rounded-2xl bg-slate-100"></div> }
+                            })
+                            .collect_view()}
+                    </div>
+                }
+            >
+                {move || {
+                    let stats = dashboard_stats
+                        .get()
+                        .and_then(|res| res.ok())
+                        .and_then(|res| res.dashboard_stats)
+                        .map(|stats| {
+                            vec![
+                                (
+                                    translate("app.dashboard.stats.tenants"),
+                                    stats.total_tenants.to_string(),
+                                    translate("app.dashboard.stats.tenantsHint"),
+                                ),
+                                (
+                                    translate("app.dashboard.stats.modules"),
+                                    stats.total_modules.to_string(),
+                                    translate("app.dashboard.stats.modulesHint"),
+                                ),
+                                (
+                                    translate("app.dashboard.stats.latency"),
+                                    format!("{}ms", stats.avg_latency_ms),
+                                    translate("app.dashboard.stats.latencyHint"),
+                                ),
+                                (
+                                    translate("app.dashboard.stats.queue"),
+                                    stats.queue_depth.to_string(),
+                                    translate("app.dashboard.stats.queueHint"),
+                                ),
+                            ]
+                        })
+                        .unwrap_or_else(|| {
+                            vec![
+                                (translate("app.dashboard.stats.tenants"), "—".to_string(), translate("app.dashboard.stats.tenantsHint")),
+                                (translate("app.dashboard.stats.modules"), "—".to_string(), translate("app.dashboard.stats.modulesHint")),
+                                (translate("app.dashboard.stats.latency"), "—".to_string(), translate("app.dashboard.stats.latencyHint")),
+                                (translate("app.dashboard.stats.queue"), "—".to_string(), translate("app.dashboard.stats.queueHint")),
+                            ]
+                        });
+
+                    view! {
+                        <div class="mb-8 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                            {stats
+                                .into_iter()
+                                .map(|(title, value, hint)| {
+                                    view! {
+                                        <StatsCard
+                                            title=title
+                                            value=value
+                                            icon=view! { <span class="text-slate-400">"•"</span> }.into_any()
+                                            trend=hint
+                                            class="transition-all hover:scale-[1.02]"
+                                        />
+                                    }
+                                })
+                                .collect_view()}
+                        </div>
+                    }
+                }}
+            </Suspense>
 
             <div class="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
                 <div class="rounded-2xl bg-white p-6 shadow-[0_18px_36px_rgba(15,23,42,0.08)]">
@@ -159,22 +205,13 @@ pub fn Dashboard() -> impl IntoView {
                         {move || translate("app.dashboard.quick.title")}
                     </h4>
                     <div class="grid gap-3">
-                        <a
-                            class="rounded-xl bg-slate-100 px-4 py-3 text-left text-sm font-semibold text-slate-900 transition hover:bg-slate-200"
-                            href="/security"
-                        >
+                        <a class="rounded-xl bg-slate-100 px-4 py-3 text-left text-sm font-semibold text-slate-900 transition hover:bg-slate-200" href="/security">
                             {move || translate("app.dashboard.quick.security")}
                         </a>
-                        <a
-                            class="rounded-xl bg-slate-100 px-4 py-3 text-left text-sm font-semibold text-slate-900 transition hover:bg-slate-200"
-                            href="/profile"
-                        >
+                        <a class="rounded-xl bg-slate-100 px-4 py-3 text-left text-sm font-semibold text-slate-900 transition hover:bg-slate-200" href="/profile">
                             {move || translate("app.dashboard.quick.profile")}
                         </a>
-                        <a
-                            class="rounded-xl bg-slate-100 px-4 py-3 text-left text-sm font-semibold text-slate-900 transition hover:bg-slate-200"
-                            href="/users"
-                        >
+                        <a class="rounded-xl bg-slate-100 px-4 py-3 text-left text-sm font-semibold text-slate-900 transition hover:bg-slate-200" href="/users">
                             {move || translate("app.dashboard.quick.users")}
                         </a>
                     </div>
@@ -187,6 +224,7 @@ pub fn Dashboard() -> impl IntoView {
                     .map(|module| (module.render)())
                     .collect_view()}
             </div>
+
         </section>
     }
 }

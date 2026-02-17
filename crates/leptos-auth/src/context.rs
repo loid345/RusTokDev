@@ -158,7 +158,19 @@ impl AuthContext {
     }
 
     pub fn is_authenticated(&self) -> bool {
-        self.user.get().is_some() && self.session.get().is_some()
+        self.user.get().is_some() && self.session.get().is_some() && !self.is_token_expired()
+    }
+
+    pub fn is_token_expired(&self) -> bool {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|duration| duration.as_secs() as i64)
+            .unwrap_or_default();
+
+        self.session
+            .get()
+            .map(|session| now >= session.expires_at - 60)
+            .unwrap_or(true)
     }
 
     pub fn get_token(&self) -> Option<String> {

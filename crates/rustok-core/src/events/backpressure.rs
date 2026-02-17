@@ -117,7 +117,7 @@ pub struct BackpressureMetrics {
 }
 
 /// Controller for managing backpressure based on queue depth
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct BackpressureController {
     config: BackpressureConfig,
     current_depth: Arc<AtomicUsize>,
@@ -132,11 +132,26 @@ impl std::fmt::Debug for BackpressureController {
         f.debug_struct("BackpressureController")
             .field("config", &self.config)
             .field("current_depth", &self.current_depth.load(Ordering::Relaxed))
-            .field("events_accepted", &self.events_accepted.load(Ordering::Relaxed))
-            .field("events_rejected", &self.events_rejected.load(Ordering::Relaxed))
+            .field(
+                "events_accepted",
+                &self.events_accepted.load(Ordering::Relaxed),
+            )
+            .field(
+                "events_rejected",
+                &self.events_rejected.load(Ordering::Relaxed),
+            )
             .field("warning_count", &self.warning_count.load(Ordering::Relaxed))
-            .field("critical_count", &self.critical_count.load(Ordering::Relaxed))
+            .field(
+                "critical_count",
+                &self.critical_count.load(Ordering::Relaxed),
+            )
             .finish()
+    }
+}
+
+impl Default for BackpressureController {
+    fn default() -> Self {
+        Self::new(BackpressureConfig::default())
     }
 }
 
@@ -151,11 +166,6 @@ impl BackpressureController {
             warning_count: Arc::new(AtomicU64::new(0)),
             critical_count: Arc::new(AtomicU64::new(0)),
         }
-    }
-
-    /// Creates a controller with default configuration
-    pub fn default() -> Self {
-        Self::new(BackpressureConfig::default())
     }
 
     /// Attempts to acquire permission to enqueue an event

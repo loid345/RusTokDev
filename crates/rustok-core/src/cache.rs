@@ -1,10 +1,13 @@
+#[cfg(feature = "redis-cache")]
+use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
 use moka::future::Cache;
 
-use crate::resilience::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError};
 use crate::context::CacheBackend;
+#[cfg(feature = "redis-cache")]
+use crate::resilience::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError};
 use crate::Result;
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -120,13 +123,13 @@ impl CacheBackend for RedisCacheBackend {
         let mut manager = self.manager.clone();
 
         self.circuit_breaker
-            .call(async move {
+            .call(|| async move {
                 let pong: String = redis::cmd("PING")
                     .query_async(&mut manager)
                     .await
                     .map_err(|err| crate::Error::Cache(err.to_string()))?;
                 if pong == "PONG" {
-                    Ok(())
+                    Ok::<(), crate::Error>(())
                 } else {
                     Err(crate::Error::Cache(format!(
                         "unexpected Redis PING response: {pong}"
@@ -148,13 +151,13 @@ impl CacheBackend for RedisCacheBackend {
         let redis_key = self.key(key);
 
         self.circuit_breaker
-            .call(async move {
+            .call(|| async move {
                 let value: Option<Vec<u8>> = redis::cmd("GET")
                     .arg(redis_key)
                     .query_async(&mut manager)
                     .await
                     .map_err(|err| crate::Error::Cache(err.to_string()))?;
-                Ok(value)
+                Ok::<Option<Vec<u8>>, crate::Error>(value)
             })
             .await
             .map_err(|e| match e {
@@ -176,7 +179,7 @@ impl CacheBackend for RedisCacheBackend {
         let ttl_secs = ttl.as_secs();
 
         self.circuit_breaker
-            .call(async move {
+            .call(|| async move {
                 redis::cmd("SET")
                     .arg(redis_key)
                     .arg(value)
@@ -202,7 +205,7 @@ impl CacheBackend for RedisCacheBackend {
         let redis_key = self.key(key);
 
         self.circuit_breaker
-            .call(async move {
+            .call(|| async move {
                 redis::cmd("DEL")
                     .arg(redis_key)
                     .query_async::<()>(&mut manager)

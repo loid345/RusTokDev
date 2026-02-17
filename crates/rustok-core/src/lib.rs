@@ -69,14 +69,13 @@ pub use resilience::{
 };
 pub use scripting::ScriptingContext;
 pub use security::{
-    run_security_audit, AuditEvent, AuditEventType, AuditLogger, FrameOptions, InputValidator,
-    RateLimitConfig, RateLimiter, RateLimitResult, SecurityAudit, SecurityAuditResult,
-    SecurityCategory, SecurityConfig, SecurityFinding, SecurityHeaders, SecurityHeadersConfig,
-    Severity, SsrfProtection, ValidationResult,
+    audit::AuditEventType, headers::FrameOptions, run_security_audit, AuditEvent, AuditLogger,
+    InputValidator, RateLimitConfig, RateLimitResult, RateLimiter, SecurityAudit,
+    SecurityAuditResult, SecurityCategory, SecurityConfig, SecurityFinding, SecurityHeaders,
+    SecurityHeadersConfig, Severity, SsrfProtection, ValidationResult,
 };
 pub use typed_error::{
-    domain_err, ErrorCategory, ErrorCode, DomainError, ErrorResponseBody, IntoTypedResult,
-    TypedResult,
+    DomainError, ErrorCategory, ErrorCode, ErrorResponseBody, IntoTypedResult, TypedResult,
 };
 pub use types::{UserRole, UserStatus};
 pub use utils::{
@@ -88,10 +87,9 @@ pub use utils::{
 };
 
 pub mod prelude {
-    pub use crate::async_utils::{
-        batch, parallel, retry, BackoffConfig, RetryError, Throttler,
-    };
+    pub use crate::async_utils::{batch, parallel, retry, BackoffConfig, RetryError, Throttler};
     pub use crate::config::{ConfigLoader, ConfigSource, Secret};
+    pub use crate::domain_err;
     pub use crate::error::{Error, Result};
     pub use crate::events::{
         event_schema, DispatcherConfig, DomainEvent, EventBus, EventBusStats, EventDispatcher,
@@ -103,13 +101,10 @@ pub mod prelude {
     };
     pub use crate::id::generate_id;
     pub use crate::metrics::{Counter, Gauge, Histogram, MetricsRegistry, Timer};
-    pub use crate::module::HealthStatus;
     pub use crate::permissions::{Action, Permission, Resource};
     pub use crate::rbac::{PermissionScope, Rbac, SecurityContext};
     pub use crate::resilience::{CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError};
-    pub use crate::typed_error::{
-        domain_err, ErrorCode, DomainError, TypedResult,
-    };
+    pub use crate::typed_error::{DomainError, ErrorCode, TypedResult};
     pub use crate::types::{UserRole, UserStatus};
     #[cfg(feature = "redis-cache")]
     pub use crate::RedisCacheBackend;

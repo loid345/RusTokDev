@@ -29,8 +29,7 @@ use std::time::Duration;
 pub fn slugify(input: &str) -> String {
     input
         .to_lowercase()
-        .replace(' ', "-")
-        .replace('_', "-")
+        .replace([' ', '_'], "-")
         .chars()
         .filter(|c| c.is_alphanumeric() || *c == '-')
         .collect::<String>()
@@ -52,11 +51,11 @@ pub fn truncate(input: &str, max_len: usize) -> String {
 
 /// Parse a duration string (e.g., "1h30m", "2d", "30s")
 pub fn parse_duration(input: &str) -> Option<Duration> {
-    let mut chars = input.chars().peekable();
+    let chars = input.chars().peekable();
     let mut total_seconds: u64 = 0;
     let mut current_num: u64 = 0;
 
-    while let Some(ch) = chars.next() {
+    for ch in chars {
         if ch.is_ascii_digit() {
             current_num = current_num * 10 + ch.to_digit(10)? as u64;
         } else {
@@ -157,13 +156,13 @@ pub fn html_escape(input: &str) -> String {
 
 /// Generate a random string of specified length
 pub fn random_string(len: usize) -> String {
-    use rand::Rng;
+    use rand::RngExt;
     const CHARSET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     (0..len)
         .map(|_| {
-            let idx = rng.gen_range(0..CHARSET.len());
+            let idx = rng.random_range(0..CHARSET.len());
             CHARSET[idx] as char
         })
         .collect()
@@ -222,7 +221,7 @@ pub fn now_seconds() -> u64 {
 }
 
 /// Chunk a vector into smaller vectors of specified size
-pub fn chunk<T>(input: Vec<T>, size: usize) -> Vec<Vec<T>> {
+pub fn chunk<T: Clone>(input: Vec<T>, size: usize) -> Vec<Vec<T>> {
     input
         .chunks(size.max(1))
         .map(|chunk| chunk.to_vec())
@@ -352,7 +351,9 @@ pub fn capitalize(input: &str) -> String {
     let mut chars = input.chars();
     match chars.next() {
         None => String::new(),
-        Some(first) => first.to_uppercase().collect::<String>() + &chars.as_str().to_lowercase(),
+        Some(first) => {
+            first.to_uppercase().collect::<String>() + chars.as_str().to_lowercase().as_str()
+        }
     }
 }
 
