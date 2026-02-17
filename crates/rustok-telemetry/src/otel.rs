@@ -174,7 +174,7 @@ fn build_tracer_provider(config: &OtelConfig) -> Result<SdkTracerProvider, OtelE
         .build();
 
     let exporter = opentelemetry_otlp::SpanExporter::builder()
-        .with_http()
+        .with_tonic()
         .with_endpoint(config.otlp_endpoint.clone())
         .build()
         .map_err(|e| OtelError::InitFailed(e.to_string()))?;
