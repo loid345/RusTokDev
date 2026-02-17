@@ -220,12 +220,8 @@ impl InputValidator {
 pub struct SsrfProtection {
     /// Allowed host patterns
     allowed_hosts: HashSet<String>,
-    /// Blocked IP ranges (private, loopback, etc.)
-    blocked_ranges: Vec<std::net::IpAddr>,
     /// Blocked schemes
     blocked_schemes: HashSet<String>,
-    /// Maximum redirects to follow
-    max_redirects: u32,
 }
 
 impl Default for SsrfProtection {
@@ -244,9 +240,7 @@ impl SsrfProtection {
 
         Self {
             allowed_hosts: HashSet::new(),
-            blocked_ranges: Vec::new(),
             blocked_schemes,
-            max_redirects: 5,
         }
     }
 
