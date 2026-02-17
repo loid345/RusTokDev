@@ -72,6 +72,28 @@ fn cursor_for_page(page: i64, limit: i64) -> String {
     STANDARD.encode(index.to_string())
 }
 
+fn users_table_skeleton() -> impl IntoView {
+    view! {
+        <div>
+            <div class="mb-4 grid gap-3 md:grid-cols-3">
+                {(0..3)
+                    .map(|_| view! { <div class="h-12 animate-pulse rounded-xl bg-slate-100"></div> })
+                    .collect_view()}
+            </div>
+            <div class="space-y-3">
+                {(0..6)
+                    .map(|_| view! { <div class="h-10 animate-pulse rounded-lg bg-slate-100"></div> })
+                    .collect_view()}
+            </div>
+            <div class="mt-4 flex items-center gap-3">
+                <div class="h-9 w-24 animate-pulse rounded-lg bg-slate-100"></div>
+                <div class="h-4 w-20 animate-pulse rounded bg-slate-100"></div>
+                <div class="h-9 w-24 animate-pulse rounded-lg bg-slate-100"></div>
+            </div>
+        </div>
+    }
+}
+
 #[component]
 pub fn Users() -> impl IntoView {
     let token = use_token();
@@ -237,21 +259,10 @@ pub fn Users() -> impl IntoView {
                     {move || translate("users.graphql.title")}
                 </h4>
                 <Suspense
-                    fallback=move || view! {
-                        <p class="text-sm text-slate-500">
-                            {move || translate("users.rest.loading")}
-                        </p>
-                    }
+                    fallback=move || view! { <div>{users_table_skeleton()}</div> }
                 >
                     {move || match graphql_resource.get() {
-                        None => view! {
-                            <div>
-                                <p class="text-sm text-slate-500">
-                                    {move || translate("users.rest.pending")}
-                                </p>
-                            </div>
-                        }
-                        .into_any(),
+                        None => view! { <div>{users_table_skeleton()}</div> }.into_any(),
                         Some(Ok(response)) => {
                             let total_count = response.users.page_info.total_count;
                             let edges = response.users.edges;
