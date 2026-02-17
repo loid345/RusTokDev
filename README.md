@@ -16,10 +16,9 @@
 [Features](#features) •
 [Why Rust?](#why-rust) •
 [Comparison](#comparison) •
-[Quick Start](#quick-start) •
-[Documentation](#documentation) •
-[Architecture](#architecture) •
-[Roadmap](#roadmap)
+[Quick Start](docs/guides/quickstart.md) •
+[Documentation](docs/index.md) •
+[Roadmap](docs/roadmap.md)
 
 </div>
 
@@ -335,72 +334,14 @@ cargo loco generate controller products --api
 
 ## 📚 Documentation
 
-### Architecture & Design
+For complete technical documentation, architecture guides, and development manuals, please refer to our:
 
-| Document | Description |
-|----------|-------------|
-| [RUSTOK_MANIFEST.md](RUSTOK_MANIFEST.md) | **Главный манифест** — философия, архитектура, стек |
-| [MODULE_MATRIX.md](docs/modules/MODULE_MATRIX.md) | Карта всех модулей и зависимостей |
-| [DATABASE_SCHEMA.md](docs/DATABASE_SCHEMA.md) | Все таблицы БД с колонками и ERD |
-| [ARCHITECTURE_GUIDE.md](docs/ARCHITECTURE_GUIDE.md) | Архитектурные принципы и решения |
-| [ROADMAP.md](docs/ROADMAP.md) | Фазы разработки (Forge → Blueprint → Construction) |
-| [IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) | Статус реализации vs документация |
+👉 **[Documentation Map](docs/index.md)**
 
-### Architecture Improvements (All Sprints ✅)
-
-| Document | Description |
-|----------|-------------|
-| [ARCHITECTURE_IMPROVEMENT_PLAN.md](ARCHITECTURE_IMPROVEMENT_PLAN.md) | **Master Plan** — Full roadmap with 17 tasks (100% complete) |
-| [IMPROVEMENTS_SUMMARY.md](IMPROVEMENTS_SUMMARY.md) | **Quick Summary** — All sprints progress and metrics |
-| [ARCHITECTURE_STATUS.md](ARCHITECTURE_STATUS.md) | **Current Status** — 9.6/10 score, 100% production ready |
-
-**Sprint 2 — Resilience (4/4 tasks):**
-| [SPRINT_2_COMPLETED.md](SPRINT_2_COMPLETED.md) | 🎉 Sprint 2 Complete — Circuit breaker, state machines |
-| [TENANT_CACHE_V2_MIGRATION.md](docs/TENANT_CACHE_V2_MIGRATION.md) | Tenant Cache V2 with moka (724→400 LOC, -45%) |
-| [CIRCUIT_BREAKER_GUIDE.md](docs/CIRCUIT_BREAKER_GUIDE.md) | Circuit Breaker + Retry + Timeout (10KB guide) |
-| [STATE_MACHINE_GUIDE.md](docs/STATE_MACHINE_GUIDE.md) | Type-Safe State Machines (16KB guide) |
-| [ERROR_HANDLING_GUIDE.md](docs/ERROR_HANDLING_GUIDE.md) | Rich Error Context + RFC 7807 (14KB guide) |
-
-**Sprint 3 — Observability (3/3 tasks):**
-| [SPRINT_3_COMPLETED.md](SPRINT_3_COMPLETED.md) | 🎉 Sprint 3 Complete — OpenTelemetry, tracing, metrics |
-| [OBSERVABILITY_QUICKSTART.md](OBSERVABILITY_QUICKSTART.md) | Quick start for observability stack |
-| [METRICS_DASHBOARD_GUIDE.md](docs/METRICS_DASHBOARD_GUIDE.md) | Grafana dashboards and SLO alerts |
-| [DISTRIBUTED_TRACING_GUIDE.md](docs/DISTRIBUTED_TRACING_GUIDE.md) | Distributed tracing with span correlation |
-
-**Sprint 4 — Testing & Security (4/4 tasks):**
-| [INTEGRATION_TESTS_GUIDE.md](docs/INTEGRATION_TESTS_GUIDE.md) | Integration tests with rstest framework |
-| [PROPERTY_BASED_TESTS_GUIDE.md](docs/PROPERTY_BASED_TESTS_GUIDE.md) | Property-based testing with proptest |
-| [BENCHMARKS_GUIDE.md](docs/BENCHMARKS_GUIDE.md) | Performance benchmarks with Criterion |
-| [SECURITY_AUDIT_GUIDE.md](docs/SECURITY_AUDIT_GUIDE.md) | OWASP Top 10 security audit (8KB guide) |
-
-### Previous Sprints
-
-| Document | Description |
-|----------|-------------|
-| [ARCHITECTURE_REVIEW_2026-02-12.md](docs/ARCHITECTURE_REVIEW_2026-02-12.md) | Complete architecture review (Score: 8.7/10 → 9.0/10) |
-| [SPRINT_1_COMPLETION.md](docs/SPRINT_1_COMPLETION.md) | Sprint 1 P0 fixes completion report |
-| [EVENTBUS_CONSISTENCY_AUDIT.md](docs/EVENTBUS_CONSISTENCY_AUDIT.md) | EventBus consistency audit (100% pass) |
-| [BACKEND_FIXES_2026-02-11.md](docs/BACKEND_FIXES_2026-02-11.md) | Backend compilation fixes and TransactionalEventBus |
-
-### Implementation Guides
-
-- [Architecture & system logic](docs/architecture.md)
-- [Module registry](docs/modules/module-registry.md)
-- [Modules overview](docs/modules/modules.md)
-- [MCP adapter](docs/mcp.md)
-- [Storefront SSR notes](docs/UI/storefront.md)
-- [Testing guidelines](docs/testing-guidelines.md)
-- [Loco.rs implementation index (includes canonical upstream snapshot)](apps/server/docs/loco/README.md)
-
-### Admin Auth (Phase 3)
-
-- [Admin auth phase 3 scope](docs/UI/admin-auth-phase3.md)
-- [Gap analysis (Leptos + Next.js)](docs/UI/admin-phase3-gap-analysis.md)
-- [Architecture (Server + Leptos + Next.js)](docs/UI/admin-phase3-architecture.md)
-- [UI parity (admin + storefront)](docs/UI/ui-parity.md)
-- [Tech parity tracker](docs/UI/tech-parity.md)
-- [Template integration plan](docs/UI/admin-template-integration-plan.md)
-- [Admin libraries parity](docs/UI/admin-libraries-parity.md)
+Key documents:
+- [System Manifest](RUSTOK_MANIFEST.md) — Core philosophy and architecture.
+- [Agent Rules](AGENTS.md) — Guidelines for AI agents.
+- [Roadmap](docs/roadmap.md) — Development phases.
 
 ---
 
@@ -478,8 +419,8 @@ cargo build --release
 
 Modules can be enabled/disabled per tenant without recompilation. The server
 tracks compiled modules in a registry and calls module lifecycle hooks when
-tenants enable or disable a module. See `docs/modules/module-registry.md` for details.
-Storefront SSR notes live in `docs/UI/storefront.md`.
+tenants enable or disable a module. See `docs/modules/registry.md` for details.
+Storefront SSR notes live in `docs/ui/storefront.md`.
 
 ```sql
 -- Stored in database

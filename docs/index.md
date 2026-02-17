@@ -1,36 +1,63 @@
-# RusToK Documentation
+# Documentation Map
 
-Welcome to the structured documentation index for the RusToK platform.
+This index serves as the central navigation hub for RusToK documentation.
 
-## Architecture
+## Root Documents
 
-- [Overview](./architecture/overview.md)
-- [Principles](./architecture/principles.md)
-- [Module map](./architecture/modules.md)
-- [Routing policy](./architecture/routing.md)
-- [Events & outbox](./architecture/events.md)
-- [Tenancy](./architecture/tenancy.md)
+- [System Manifest](../RUSTOK_MANIFEST.md) - Core architecture, philosophy, and invariants.
+- [Admin Panel Review](../ADMIN_PANEL_REVIEW.md) - Detailed review of the admin panel.
+- [Agent Rules](../AGENTS.md) - Guidelines for AI agents working on the codebase.
+- [Changelog](../CHANGELOG.md) - Version history and changes.
+- [License](../LICENSE) - MIT License.
 
-## Modules
+## Architecture (`docs/architecture/`)
 
-- [Module documentation index](./modules/_index.md)
-- [Module documentation template](./modules/_template/_index.md)
+- [Overview](./architecture/overview.md) - High-level system architecture.
+- [Database Schema](./architecture/database.md) - Database tables and relationships.
+- [API Architecture](./architecture/api.md) - API design and patterns.
+- [RBAC Enforcement](./architecture/rbac.md) - Role-based access control.
+- [Dataloader](./architecture/dataloader.md) - Efficient data fetching patterns.
+- [Modules Overview](./architecture/modules.md) - Module system and dependency matrix.
+- [Routing Policy](./architecture/routing.md) - API routing and request handling.
+- [Events & Outbox](./architecture/events.md) - Event-driven architecture details.
+- [Transactional Publishing](./architecture/events-transactional.md) - Atomic event publishing.
+- [Tenancy](./architecture/tenancy.md) - Multi-tenancy implementation.
+- [Principles](./architecture/principles.md) - Core architectural principles.
 
-## Standards
+## Guides (`docs/guides/`)
 
-- [Coding standards](./standards/coding.md)
-- [Logging & tracing](./standards/logging.md)
-- [Error handling](./standards/errors.md)
-- [Security](./standards/security.md)
-- [Performance & testing](./standards/performance.md)
+- [Quick Start](./guides/quickstart.md) - Getting started with RusToK.
+- [Observability](./guides/observability-quickstart.md) - Setting up and using observability tools.
+- [Circuit Breaker](./guides/circuit-breaker.md) - Resilience patterns.
+- [State Machines](./guides/state-machine.md) - Type-safe state machine guide.
+- [Error Handling](./guides/error-handling.md) - Error handling policies and patterns.
+- [Input Validation](./guides/input-validation.md) - Data validation standards.
+- [Rate Limiting](./guides/rate-limiting.md) - API rate limiting guide.
+- [Module Metrics](./guides/module-metrics.md) - Tracking module performance.
+- [Testing](./guides/testing.md) - General testing guidelines.
+- [Integration Testing](./guides/testing-integration.md) - Writing integration tests.
+- [Property Testing](./guides/testing-property.md) - Property-based testing guide.
+- [Security Audit](./guides/security-audit.md) - Security audit procedures.
+- [Lockfile Troubleshooting](./guides/lockfile-troubleshooting.md) - Handling Cargo.lock issues.
 
-## Releases
+## Modules (`docs/modules/`)
 
-- [2026-02-17 v4.1](./releases/2026-02-17-v4.1.md)
+- [Overview](./modules/overview.md) - General module system documentation.
+- [Registry](./modules/registry.md) - Module registry and lifecycle.
+- [Manifest](./modules/manifest.md) - Module manifest format.
 
-## Other references
+## UI (`docs/ui/`)
 
-- [Architecture guide](./ARCHITECTURE_GUIDE.md)
-- [API architecture](./api-architecture.md)
-- [Database schema](./DATABASE_SCHEMA.md)
-- [Roadmap](./ROADMAP.md)
+- [UI Overview](./ui/README.md) - Entry point for UI documentation.
+- [GraphQL Architecture](./ui/graphql-architecture.md) - Frontend GraphQL usage.
+
+## Application Documentation
+
+- [Server](../apps/server/docs/README.md)
+- [Admin Panel](../apps/admin/docs/README.md)
+- [Storefront](../apps/storefront/README.md)
+- [Next.js Storefront](../apps/next-frontend/docs/README.md)
+
+## Crate Documentation
+
+Documentation for specific crates is located in their respective `crates/*/README.md` files.
