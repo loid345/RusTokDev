@@ -1,0 +1,7 @@
+[files]
+# Localized message catalogs and fixture text intentionally contain
+# non-English words that are valid for those locales.
+extend-exclude = [
+  "crates/rustok-core/src/i18n.rs",
+  "crates/rustok-commerce/tests/catalog_service_test.rs",
+]
