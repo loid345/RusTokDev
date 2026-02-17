@@ -162,10 +162,8 @@ impl CircuitBreaker {
         if !self.can_execute().await {
             self.total_rejected.fetch_add(1, Ordering::Relaxed);
 
-            tracing::warn!(
-                state = self.get_state().await.as_str(),
-                "Circuit breaker rejected request"
-            );
+            let state = self.get_state().await;
+            tracing::warn!(state = state.as_str(), "Circuit breaker rejected request");
 
             return Err(CircuitBreakerError::Open);
         }
@@ -181,9 +179,10 @@ impl CircuitBreaker {
                 self.record_success().await;
                 self.total_successes.fetch_add(1, Ordering::Relaxed);
 
+                let state = self.get_state().await;
                 tracing::debug!(
                     duration_ms = duration.as_millis(),
-                    state = self.get_state().await.as_str(),
+                    state = state.as_str(),
                     "Circuit breaker: success"
                 );
 
@@ -193,9 +192,10 @@ impl CircuitBreaker {
                 self.record_failure().await;
                 self.total_failures.fetch_add(1, Ordering::Relaxed);
 
+                let state = self.get_state().await;
                 tracing::warn!(
                     duration_ms = duration.as_millis(),
-                    state = self.get_state().await.as_str(),
+                    state = state.as_str(),
                     error = %err,
                     "Circuit breaker: failure"
                 );
