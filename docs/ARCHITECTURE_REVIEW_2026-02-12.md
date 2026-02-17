@@ -1,5 +1,8 @@
 # RusToK — Comprehensive Architecture Review & Recommendations
 
+> **Status:** Archived. Исторический обзор.
+> Актуальный обзор архитектуры: [`docs/architecture.md`](architecture.md).
+>
 > **Дата:** 2026-02-12  
 > **Версия:** 1.0  
 > **Автор:** AI Architecture Review  

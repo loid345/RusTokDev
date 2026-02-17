@@ -1,5 +1,6 @@
 # RusToK Architecture Diagrams
 
+> **Status:** Supplemental. Диаграммы поддерживают канонический обзор: [`docs/architecture.md`](architecture.md).
 > Visual representation of the RusToK architecture
 
 ---
