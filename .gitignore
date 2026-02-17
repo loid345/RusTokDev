@@ -1,8 +1,100 @@
+# Rust build artifacts
 /target
 **/target
+Cargo.lock
+
+# IDEs and editors
 /.idea
 /.vscode
+/.idea/
+/.vscode/
+*.swp
+*.swo
+*~
 .DS_Store
+Thumbs.db
+
+# Environment files
 .env
+.env.local
+.env.*.local
+
+# Logs
 *.log
-**/node_modules
+logs/
+**/logs/
+
+# Testing and coverage
+*.profraw
+*.profdata
+coverage/
+**/coverage/
+lcov.info
+
+# Database files
+**/*.sqlite
+**/*.sqlite3
+**/*.db
+
+# WASM build artifacts
+**/dist/
+**/build/
+
+# Documentation build artifacts
+docs/book/
+
+# Local development
+/var/
+/tmp/
+
+# Node.js (for admin/storefront if using Node)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Generated files
+**/generated/
+
+# Backup files
+*.bak
+*.backup
+
+# Temporary files
+.tmp/
+tmp/
+temp/
+
+# Editor directories and files
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# Local History for Visual Studio Code
+.history/
+
+# Rust analyzer
+.rust-analyzer/
+
+# Trunk (for Leptos)
+trunk/
+*.css.map
+
+# Docker
+.dockerignore
+
+# PostgreSQL
+postgresql_data/
+
+# Redis
+dump.rdb
+
+# Sentry
+.sentryclirc
+
+# Local configuration overrides
+config.local.toml
+config.*.local.toml

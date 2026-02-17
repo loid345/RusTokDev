@@ -2,11 +2,13 @@ import { CheckCircle2, Rocket, Sparkles } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
 import { Button } from "@/components/ui/button";
+import { getModulesForSlot } from "@/modules";
 
 export default async function StorefrontHome() {
   const t = await getTranslations("Storefront");
   const features = t.raw("features") as string[];
   const chips = t.raw("chips") as string[];
+  const moduleSections = getModulesForSlot("home:afterHero");
 
   return (
     <main className="min-h-screen bg-white">
@@ -94,6 +96,14 @@ export default async function StorefrontHome() {
           </div>
         </div>
       </section>
+      {moduleSections.map((module) => (
+        <section
+          key={module.id}
+          className="mx-auto max-w-6xl px-6 pb-12"
+        >
+          {module.render()}
+        </section>
+      ))}
     </main>
   );
 }

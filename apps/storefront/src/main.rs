@@ -1,3 +1,5 @@
+mod modules;
+
 use axum::{
     http::{header, StatusCode},
     response::IntoResponse,
@@ -9,6 +11,8 @@ use leptos::prelude::{ClassAttribute, CollectView, ElementChild, GlobalAttribute
 use leptos::{component, view, IntoView};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+
+use crate::modules::{components_for_slot, StorefrontSlot};
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 struct LocaleStrings {
@@ -197,6 +201,7 @@ fn ProductCard(
 fn StorefrontShell(locale: String) -> impl IntoView {
     let strings = locale_strings(locale.as_str());
     let products = featured_products(locale.as_str());
+    let module_sections = components_for_slot(StorefrontSlot::HomeAfterHero);
     view! {
         <div class="min-h-screen bg-base-200 text-base-content">
             <header class="navbar bg-base-100 shadow">
@@ -254,6 +259,11 @@ fn StorefrontShell(locale: String) -> impl IntoView {
                         </div>
                     </div>
                 </section>
+
+                {module_sections
+                    .into_iter()
+                    .map(|module| (module.render)())
+                    .collect_view()}
 
                 <section id="catalog" class="container-app">
                     <div class="mx-auto max-w-6xl space-y-6">
@@ -366,6 +376,8 @@ async fn css_handler() -> impl IntoResponse {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    modules::init_modules();
+
     let app = Router::new()
         .route(
             "/",

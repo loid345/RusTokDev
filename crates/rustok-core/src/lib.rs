@@ -23,6 +23,9 @@ pub mod tracing;
 pub mod typed_error;
 pub mod types;
 pub mod utils;
+
+#[cfg(test)]
+mod validation_proptest;
 pub use async_utils::{
     batch, parallel, retry, timeout, BackoffConfig, Coalescer, Debouncer, RetryError, Throttler,
     TimeoutError,

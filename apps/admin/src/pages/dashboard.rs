@@ -92,6 +92,8 @@ pub fn Dashboard() -> impl IntoView {
         .and_then(|user| user.name)
         .unwrap_or_else(|| "Dashboard".to_string());
 
+    let module_sections = components_for_slot(AdminSlot::DashboardSection);
+
     view! {
         <section class="px-10 py-8">
             <PageHeader
@@ -177,6 +179,13 @@ pub fn Dashboard() -> impl IntoView {
                         </a>
                     </div>
                 </div>
+            </div>
+
+            <div class="mt-8 grid gap-6 lg:grid-cols-2">
+                {module_sections
+                    .into_iter()
+                    .map(|module| (module.render)())
+                    .collect_view()}
             </div>
         </section>
     }

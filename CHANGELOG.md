@@ -9,6 +9,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added - 2026-02-16
 
+#### Property-Based Tests - Sprint 4 Task 4.2
+- **Core Validator Property Tests** (`crates/rustok-core/src/validation_proptest.rs`)
+  - 55+ property tests for tenant validation, event validation, and event serialization
+  - Tenant validation tests: slug pattern validity, case normalization, length boundaries, reserved words, UUID validation, hostname validation, auto-detection
+  - Security properties: SQL injection patterns rejected, XSS patterns rejected, path traversal patterns rejected
+  - Event validation tests: string fields, max length, UUID validation, optional UUIDs, range validation, boundary cases
+  - Event serialization tests: roundtrip preservation, valid JSON output, structure consistency, multiple event types, UUID format preservation
+  - Added `proptest = "1.5"` to `rustok-core/Cargo.toml` dev-dependencies
+
+#### Documentation
+- **Property-Based Tests Guide** (`docs/PROPERTY_BASED_TESTS.md`)
+  - Complete documentation for property-based testing implementation
+  - Test coverage details and benefits
+  - How to run property-based tests
+  - Property definitions and explanations
+  - Best practices for adding new property tests
+  - Troubleshooting common issues
+
+- **Property-Based Tests Documentation** (`docs/PROPERTY_BASED_TESTS.md`)
+  - Comprehensive guide to property-based tests in RusToK
+  - 55+ property tests documented with explanations
+  - Integration with existing state machine tests
+  - Code quality impact and future enhancements
+
 #### GraphQL API - Admin Dashboard Support
 - **Dashboard Stats Query** (`apps/server/src/graphql/queries.rs`)
   - `dashboardStats` query providing aggregated statistics for admin dashboard

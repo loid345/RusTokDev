@@ -353,6 +353,10 @@ cargo loco generate controller products --api
 - [Архитектура и системная логика](docs/architecture.md)
 - [Module registry](docs/modules/module-registry.md)
 - [Обзор модулей](docs/modules/modules.md)
+- [Модули с UI пакетами — Быстрый старт](docs/modules/UI_PACKAGES_QUICKSTART.md) **NEW**
+- [Установка модулей с UI пакетами](docs/modules/MODULE_UI_PACKAGES_INSTALLATION.md) **NEW**
+- [Манифест модулей](docs/modules/module-manifest.md)
+- [Реализация системы установки](docs/modules/INSTALLATION_IMPLEMENTATION.md)
 - [MCP адаптер](docs/mcp.md)
 - [Заметки по Storefront SSR](docs/UI/storefront.md)
 - [Руководство по тестированию](docs/testing-guidelines.md)
