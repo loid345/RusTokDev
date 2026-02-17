@@ -1,17 +1,12 @@
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import type { AuthUser } from '@/lib/auth-api';
 
 interface UserAvatarProfileProps {
   className?: string;
   showInfo?: boolean;
-  user: AuthUser | null;
+  user: { email: string; name: string | null; role?: string } | null;
 }
 
-export function UserAvatarProfile({
-  className,
-  showInfo = false,
-  user
-}: UserAvatarProfileProps) {
+export function UserAvatarProfile({ className, showInfo = false, user }: UserAvatarProfileProps) {
   const displayName = user?.name || user?.email || '';
   const initials = displayName.slice(0, 2).toUpperCase() || 'U';
 
@@ -20,7 +15,6 @@ export function UserAvatarProfile({
       <Avatar className={className}>
         <AvatarFallback className='rounded-lg'>{initials}</AvatarFallback>
       </Avatar>
-
       {showInfo && (
         <div className='grid flex-1 text-left text-sm leading-tight'>
           <span className='truncate font-semibold'>{user?.name || user?.email || ''}</span>

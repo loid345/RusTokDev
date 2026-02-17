@@ -1,21 +1,7 @@
 'use client';
-import React, { useEffect } from 'react';
+import React from 'react';
+import { SessionProvider } from 'next-auth/react';
 import { ActiveThemeProvider } from '../themes/active-theme';
-import { useAuthStore } from '@/store/auth-store';
-
-function AuthInitializer() {
-  const loadCurrentUser = useAuthStore((s) => s.loadCurrentUser);
-  const token = useAuthStore((s) => s.token);
-
-  useEffect(() => {
-    if (token) {
-      loadCurrentUser();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return null;
-}
 
 export default function Providers({
   activeThemeValue,
@@ -26,8 +12,9 @@ export default function Providers({
 }) {
   return (
     <ActiveThemeProvider initialTheme={activeThemeValue}>
-      <AuthInitializer />
-      {children}
+      <SessionProvider>
+        {children}
+      </SessionProvider>
     </ActiveThemeProvider>
   );
 }

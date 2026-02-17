@@ -1,11 +1,11 @@
 'use client';
-
 import PageContainer from '@/components/layout/page-container';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { useCurrentUser } from '@/store/auth-store';
+import { useSession } from 'next-auth/react';
 
 export default function ProfileViewPage() {
-  const user = useCurrentUser();
+  const { data: session } = useSession();
+  const user = session?.user;
 
   return (
     <PageContainer>
@@ -14,34 +14,21 @@ export default function ProfileViewPage() {
         {user ? (
           <div className='grid gap-4 md:grid-cols-2'>
             <Card>
-              <CardHeader>
-                <CardTitle>Account Information</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle>Account Information</CardTitle></CardHeader>
               <CardContent className='space-y-3'>
-                <div>
-                  <p className='text-muted-foreground text-xs font-medium uppercase tracking-wider'>Name</p>
-                  <p className='text-sm font-medium'>{user.name || '—'}</p>
-                </div>
-                <div>
-                  <p className='text-muted-foreground text-xs font-medium uppercase tracking-wider'>Email</p>
-                  <p className='text-sm font-medium'>{user.email}</p>
-                </div>
-                <div>
-                  <p className='text-muted-foreground text-xs font-medium uppercase tracking-wider'>Role</p>
-                  <p className='text-sm font-medium'>{user.role}</p>
-                </div>
-                <div>
-                  <p className='text-muted-foreground text-xs font-medium uppercase tracking-wider'>Status</p>
-                  <p className='text-sm font-medium'>{user.status}</p>
-                </div>
-                <div>
-                  <p className='text-muted-foreground text-xs font-medium uppercase tracking-wider'>Workspace</p>
-                  <p className='text-sm font-medium'>{user.tenantSlug || '—'}</p>
-                </div>
-                <div>
-                  <p className='text-muted-foreground text-xs font-medium uppercase tracking-wider'>Member since</p>
-                  <p className='text-sm font-medium'>{new Date(user.createdAt).toLocaleDateString()}</p>
-                </div>
+                {[
+                  { label: 'Name', value: user.name || '—' },
+                  { label: 'Email', value: user.email },
+                  { label: 'Role', value: user.role },
+                  { label: 'Status', value: user.status },
+                  { label: 'Workspace', value: user.tenantSlug || '—' },
+                  { label: 'ID', value: <span className='font-mono text-xs'>{user.id}</span> }
+                ].map(({ label, value }) => (
+                  <div key={label}>
+                    <p className='text-muted-foreground text-xs font-medium uppercase tracking-wider'>{label}</p>
+                    <div className='mt-1 text-sm font-medium'>{value}</div>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           </div>

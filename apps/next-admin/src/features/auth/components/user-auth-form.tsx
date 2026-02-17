@@ -2,7 +2,7 @@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useAuthStore } from '@/store/auth-store';
+import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useState } from 'react';
 import { toast } from 'sonner';
@@ -11,28 +11,37 @@ export default function UserAuthForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get('callbackUrl') || '/dashboard/overview';
-  const login = useAuthStore((s) => s.login);
-  const isLoading = useAuthStore((s) => s.isLoading);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [tenantSlug, setTenantSlug] = useState('demo');
+  const [isLoading, setIsLoading] = useState(false);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     if (!email || !password || !tenantSlug) {
       toast.error('Please fill in all fields');
       return;
     }
 
+    setIsLoading(true);
     try {
-      await login(email.trim(), password, tenantSlug.trim());
-      toast.success('Signed in successfully');
-      router.push(callbackUrl);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Sign in failed';
-      toast.error(message);
+      const result = await signIn('credentials', {
+        email: email.trim(),
+        password,
+        tenantSlug: tenantSlug.trim(),
+        redirect: false
+      });
+
+      if (result?.error) {
+        toast.error('Invalid credentials. Check your email, password and workspace.');
+      } else {
+        toast.success('Signed in successfully');
+        router.push(callbackUrl);
+        router.refresh();
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
