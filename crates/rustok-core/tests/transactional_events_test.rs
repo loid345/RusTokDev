@@ -1,30 +1,11 @@
+mod support;
+
 use rustok_core::events::DomainEvent;
-use rustok_outbox::{OutboxTransport, SysEventsMigration, TransactionalEventBus};
-use sea_orm::{ConnectOptions, Database, DatabaseConnection};
-use sea_orm_migration::prelude::SchemaManager;
-use sea_orm_migration::MigrationTrait;
+use rustok_outbox::{OutboxTransport, TransactionalEventBus};
 use std::sync::Arc;
 use uuid::Uuid;
 
-async fn setup_test_db() -> DatabaseConnection {
-    let db_url = format!("sqlite:file:tx_events_{}?mode=memory&cache=shared", Uuid::new_v4());
-    let mut opts = ConnectOptions::new(db_url);
-    opts.max_connections(1)
-        .min_connections(1)
-        .sqlx_logging(false);
-
-    let db = Database::connect(opts)
-        .await
-        .expect("Failed to connect test sqlite database");
-
-    let schema_manager = SchemaManager::new(&db);
-    SysEventsMigration
-        .up(&schema_manager)
-        .await
-        .expect("Failed to run outbox migration");
-
-    db
-}
+use support::setup_test_db;
 
 #[tokio::test]
 async fn test_transactional_event_bus_creation() {

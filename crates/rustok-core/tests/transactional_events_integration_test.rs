@@ -1,34 +1,13 @@
+mod support;
+
 use rustok_core::events::DomainEvent;
 use rustok_outbox::entity::SysEventStatus;
-use rustok_outbox::{OutboxTransport, SysEvents, SysEventsMigration, TransactionalEventBus};
-use sea_orm::{
-    ColumnTrait, ConnectOptions, Database, DatabaseConnection, EntityTrait, QueryFilter,
-    TransactionTrait,
-};
-use sea_orm_migration::prelude::SchemaManager;
-use sea_orm_migration::MigrationTrait;
+use rustok_outbox::{OutboxTransport, SysEvents, TransactionalEventBus};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, TransactionTrait};
 use std::sync::Arc;
 use uuid::Uuid;
 
-async fn setup_test_db() -> DatabaseConnection {
-    let db_url = format!("sqlite:file:tx_events_{}?mode=memory&cache=shared", Uuid::new_v4());
-    let mut opts = ConnectOptions::new(db_url);
-    opts.max_connections(1)
-        .min_connections(1)
-        .sqlx_logging(false);
-
-    let db = Database::connect(opts)
-        .await
-        .expect("Failed to connect test sqlite database");
-
-    let schema_manager = SchemaManager::new(&db);
-    SysEventsMigration
-        .up(&schema_manager)
-        .await
-        .expect("Failed to run outbox migration");
-
-    db
-}
+use support::setup_test_db;
 
 fn count_for_tenant(events: &[rustok_outbox::SysEvent], tenant_id: Uuid) -> usize {
     events
@@ -100,7 +79,6 @@ async fn test_transactional_event_publishing_commit() {
     assert_eq!(persisted_event.event_type, "node.created");
     assert_eq!(persisted_event.schema_version, 1);
     assert_eq!(persisted_event.status, SysEventStatus::Pending);
-
 }
 
 #[tokio::test]
