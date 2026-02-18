@@ -1,65 +1,200 @@
 # Documentation Map
 
-This index serves as the central navigation hub for RusToK documentation.
+This file is the canonical map of RusToK documentation.
+
+It covers both centralized docs (`docs/`) and distributed docs located inside apps, modules, and shared libraries.
+
+## Why a "documentation tree" is needed
+
+Да, нам нужен единый файл-карта. Документация реально распределена по репозиторию (`docs/`, `apps/*`, `crates/*`), и без общей схемы новые участники часто не находят нужный контекст.
+
+Этот `docs/index.md` играет роль такой карты и должен обновляться при изменениях архитектуры, API, UI-контрактов и модулей.
+
+## Graphical documentation map
+
+```mermaid
+graph TD
+    ROOT[docs/index.md]
+
+    ROOT --> D[docs/*]
+    ROOT --> A[apps/* docs]
+    ROOT --> C[crates/* docs]
+    ROOT --> R[Root docs]
+
+    D --> DARCH[docs/architecture/*]
+    D --> DGUIDE[docs/guides/*]
+    D --> DMOD[docs/modules/*]
+    D --> DUI[docs/UI/*]
+
+    A --> ASRV[apps/server/docs/*]
+    A --> AADMIN[apps/admin/docs/*]
+    A --> ANEXTADMIN[apps/next-admin/docs/*]
+    A --> ANEXTSF[apps/next-frontend/docs/*]
+    A --> AMCP[apps/mcp/docs/*]
+
+    C --> CDOMAIN[crates/rustok-*/docs/*]
+    C --> CUI[crates/leptos-*/docs/*]
+    C --> CINFRA[crates/*/README.md]
+
+    R --> RMANIFEST[RUSTOK_MANIFEST.md]
+    R --> RCHANGELOG[CHANGELOG.md]
+    R --> RAGENTS[AGENTS.md]
+```
 
 ## Root Documents
 
 - [System Manifest](../RUSTOK_MANIFEST.md) - Core architecture, philosophy, and invariants.
-- [Admin Panel Review](../ADMIN_PANEL_REVIEW.md) - Detailed review of the admin panel.
-- [Agent Rules](../AGENTS.md) - Guidelines for AI agents working on the codebase.
-- [Changelog](../CHANGELOG.md) - Version history and changes.
+- [Admin Panel Review](../ADMIN_PANEL_REVIEW.md) - Review notes for the Leptos admin panel.
+- [Agent Rules](../AGENTS.md) - Rules for AI agents.
+- [Changelog](../CHANGELOG.md) - Version history and releases.
 - [License](../LICENSE) - MIT License.
 
-## Architecture (`docs/architecture/`)
+## Central docs (`docs/`)
 
-- [Overview](./architecture/overview.md) - High-level system architecture.
-- [Database Schema](./architecture/database.md) - Database tables and relationships.
-- [API Architecture](./architecture/api.md) - API design and patterns.
-- [RBAC Enforcement](./architecture/rbac.md) - Role-based access control.
-- [Dataloader](./architecture/dataloader.md) - Efficient data fetching patterns.
-- [Modules Overview](./architecture/modules.md) - Module system and dependency matrix.
-- [Routing Policy](./architecture/routing.md) - API routing and request handling.
-- [Events & Outbox](./architecture/events.md) - Event-driven architecture details.
-- [Transactional Publishing](./architecture/events-transactional.md) - Atomic event publishing.
-- [Tenancy](./architecture/tenancy.md) - Multi-tenancy implementation.
-- [Principles](./architecture/principles.md) - Core architectural principles.
+### Architecture (`docs/architecture/`)
 
-- [Admin Review Improvement Plan](./admin-review-improvement-plan.md) - Implementation roadmap for Leptos admin hardening.
+- [Overview](./architecture/overview.md)
+- [Database Schema](./architecture/database.md)
+- [API Architecture](./architecture/api.md)
+- [RBAC Enforcement](./architecture/rbac.md)
+- [Dataloader](./architecture/dataloader.md)
+- [Modules Overview](./architecture/modules.md)
+- [Routing Policy](./architecture/routing.md)
+- [Events & Outbox](./architecture/events.md)
+- [Transactional Publishing](./architecture/events-transactional.md)
+- [Tenancy](./architecture/tenancy.md)
+- [Principles](./architecture/principles.md)
 
-## Guides (`docs/guides/`)
+### Guides (`docs/guides/`)
 
-- [Quick Start](./guides/quickstart.md) - Getting started with RusToK.
-- [Observability](./guides/observability-quickstart.md) - Setting up and using observability tools.
-- [Circuit Breaker](./guides/circuit-breaker.md) - Resilience patterns.
-- [State Machines](./guides/state-machine.md) - Type-safe state machine guide.
-- [Error Handling](./guides/error-handling.md) - Error handling policies and patterns.
-- [Input Validation](./guides/input-validation.md) - Data validation standards.
-- [Rate Limiting](./guides/rate-limiting.md) - API rate limiting guide.
-- [Module Metrics](./guides/module-metrics.md) - Tracking module performance.
-- [Testing](./guides/testing.md) - General testing guidelines.
-- [Integration Testing](./guides/testing-integration.md) - Writing integration tests.
-- [Property Testing](./guides/testing-property.md) - Property-based testing guide.
-- [Security Audit](./guides/security-audit.md) - Security audit procedures.
-- [Lockfile Troubleshooting](./guides/lockfile-troubleshooting.md) - Handling Cargo.lock issues.
+- [Quick Start](./guides/quickstart.md)
+- [Observability](./guides/observability-quickstart.md)
+- [Circuit Breaker](./guides/circuit-breaker.md)
+- [State Machines](./guides/state-machine.md)
+- [Error Handling](./guides/error-handling.md)
+- [Input Validation](./guides/input-validation.md)
+- [Rate Limiting](./guides/rate-limiting.md)
+- [Module Metrics](./guides/module-metrics.md)
+- [Testing](./guides/testing.md)
+- [Integration Testing](./guides/testing-integration.md)
+- [Property Testing](./guides/testing-property.md)
+- [Security Audit](./guides/security-audit.md)
+- [Lockfile Troubleshooting](./guides/lockfile-troubleshooting.md)
 
-## Modules (`docs/modules/`)
+### Modules (`docs/modules/`)
 
-- [Overview](./modules/overview.md) - General module system documentation.
-- [Registry](./modules/registry.md) - Module registry and lifecycle.
-- [Manifest](./modules/manifest.md) - Module manifest format.
+- [Overview](./modules/overview.md)
+- [Registry](./modules/registry.md)
+- [Manifest](./modules/manifest.md)
+- [Module Docs Index](./modules/_index.md)
 
-## UI (`docs/ui/`)
+### UI (`docs/UI/`)
 
-- [UI Overview](./ui/README.md) - Entry point for UI documentation (layouts, navigation, breadcrumbs).
-- [GraphQL Architecture](./ui/graphql-architecture.md) - Frontend GraphQL usage.
+- [UI Overview](./UI/README.md)
+- [GraphQL Architecture](./UI/graphql-architecture.md)
+- [Admin ↔ Server Connection](./UI/admin-server-connection-quickstart.md)
+- [Leptos Storefront Notes](./UI/storefront.md)
+- [Rust UI Component Catalog](./UI/rust-ui-component-catalog.md)
 
-## Application Documentation
+## Distributed docs (`apps/*`, `crates/*`)
 
-- [Server](../apps/server/docs/README.md)
-- [Admin Panel](../apps/admin/docs/README.md)
-- [Storefront](../apps/storefront/README.md)
-- [Next.js Storefront](../apps/next-frontend/docs/README.md)
+### Application docs
 
-## Crate Documentation
+- [Server docs](../apps/server/docs/README.md)
+- [Leptos Admin docs](../apps/admin/docs/README.md)
+- [Next.js Admin README](../apps/next-admin/README.md)
+- [Next.js Admin RBAC doc](../apps/next-admin/docs/nav-rbac.md)
+- [Next.js Admin Clerk setup](../apps/next-admin/docs/clerk_setup.md)
+- [Next.js Admin themes](../apps/next-admin/docs/themes.md)
+- [Leptos Storefront README](../apps/storefront/README.md)
+- [Next.js Storefront docs](../apps/next-frontend/docs/README.md)
+- [MCP app docs](../apps/mcp/docs/README.md)
 
-Documentation for specific crates is located in their respective `crates/*/README.md` files.
+### Module and crate docs
+
+- [Domain module registry map](./modules/registry.md)
+- [Platform core README](../crates/rustok-core/README.md)
+- [Content module docs](../crates/rustok-content/docs/README.md)
+- [Commerce module docs](../crates/rustok-commerce/docs/README.md)
+- [Blog module docs](../crates/rustok-blog/docs/README.md)
+- [Forum module docs](../crates/rustok-forum/docs/README.md)
+- [Pages module docs](../crates/rustok-pages/docs/README.md)
+- [Index module docs](../crates/rustok-index/docs/README.md)
+- [Tenant module docs](../crates/rustok-tenant/docs/README.md)
+- [RBAC module docs](../crates/rustok-rbac/docs/README.md)
+- [Telemetry docs](../crates/rustok-telemetry/docs/README.md)
+
+### Custom frontend libraries docs
+
+- [leptos-auth docs](../crates/leptos-auth/docs/README.md)
+- [leptos-graphql docs](../crates/leptos-graphql/docs/README.md)
+- [leptos-hook-form docs](../crates/leptos-hook-form/docs/README.md)
+- [leptos-shadcn-pagination docs](../crates/leptos-shadcn-pagination/docs/README.md)
+- [leptos-table docs](../crates/leptos-table/docs/README.md)
+- [leptos-zod docs](../crates/leptos-zod/docs/README.md)
+- [leptos-zustand docs](../crates/leptos-zustand/docs/README.md)
+
+
+## Full distributed documentation inventory (repo-wide)
+
+Ниже — быстрый реестр по **всем приложениям и crate’ам**, чтобы можно было пройтись по коду и не пропустить локальные документы.
+
+### Apps (`apps/*`)
+
+- `apps/admin`
+  - [README](../apps/admin/README.md)
+  - [docs/README](../apps/admin/docs/README.md)
+- `apps/mcp`
+  - [README](../apps/mcp/README.md)
+  - [docs/README](../apps/mcp/docs/README.md)
+- `apps/next-admin`
+  - [README](../apps/next-admin/README.md)
+  - [docs/clerk_setup.md](../apps/next-admin/docs/clerk_setup.md)
+  - [docs/nav-rbac.md](../apps/next-admin/docs/nav-rbac.md)
+  - [docs/themes.md](../apps/next-admin/docs/themes.md)
+- `apps/next-frontend`
+  - [README](../apps/next-frontend/README.md)
+  - [docs/README](../apps/next-frontend/docs/README.md)
+- `apps/server`
+  - [README](../apps/server/README.md)
+  - [docs/README](../apps/server/docs/README.md)
+- `apps/storefront`
+  - [README](../apps/storefront/README.md)
+
+### Crates (`crates/*`)
+
+- `alloy-scripting`: [README](../crates/alloy-scripting/README.md), [docs/README](../crates/alloy-scripting/docs/README.md)
+- `leptos-auth`: [README](../crates/leptos-auth/README.md), [docs/README](../crates/leptos-auth/docs/README.md)
+- `leptos-forms`: [README](../crates/leptos-forms/README.md)
+- `leptos-graphql`: [README](../crates/leptos-graphql/README.md), [docs/README](../crates/leptos-graphql/docs/README.md)
+- `leptos-hook-form`: [README](../crates/leptos-hook-form/README.md), [docs/README](../crates/leptos-hook-form/docs/README.md)
+- `leptos-shadcn-pagination`: [README](../crates/leptos-shadcn-pagination/README.md), [docs/README](../crates/leptos-shadcn-pagination/docs/README.md)
+- `leptos-table`: [README](../crates/leptos-table/README.md), [docs/README](../crates/leptos-table/docs/README.md)
+- `leptos-ui`: [README](../crates/leptos-ui/README.md)
+- `leptos-zod`: [README](../crates/leptos-zod/README.md), [docs/README](../crates/leptos-zod/docs/README.md)
+- `leptos-zustand`: [README](../crates/leptos-zustand/README.md), [docs/README](../crates/leptos-zustand/docs/README.md)
+- `rustok-blog`: [README](../crates/rustok-blog/README.md), [docs/README](../crates/rustok-blog/docs/README.md)
+- `rustok-commerce`: [README](../crates/rustok-commerce/README.md), [docs/README](../crates/rustok-commerce/docs/README.md)
+- `rustok-content`: [README](../crates/rustok-content/README.md), [docs/README](../crates/rustok-content/docs/README.md)
+- `rustok-core`: [README](../crates/rustok-core/README.md), [docs/README](../crates/rustok-core/docs/README.md)
+- `rustok-forum`: [README](../crates/rustok-forum/README.md), [docs/README](../crates/rustok-forum/docs/README.md)
+- `rustok-iggy`: [README](../crates/rustok-iggy/README.md), [docs/README](../crates/rustok-iggy/docs/README.md)
+- `rustok-iggy-connector`: [README](../crates/rustok-iggy-connector/README.md), [docs/README](../crates/rustok-iggy-connector/docs/README.md)
+- `rustok-index`: [README](../crates/rustok-index/README.md), [docs/README](../crates/rustok-index/docs/README.md)
+- `rustok-mcp`: [README](../crates/rustok-mcp/README.md), [docs/README](../crates/rustok-mcp/docs/README.md)
+- `rustok-outbox`: [README](../crates/rustok-outbox/README.md), [docs/README](../crates/rustok-outbox/docs/README.md)
+- `rustok-pages`: [README](../crates/rustok-pages/README.md), [docs/README](../crates/rustok-pages/docs/README.md)
+- `rustok-rbac`: [README](../crates/rustok-rbac/README.md), [docs/README](../crates/rustok-rbac/docs/README.md)
+- `rustok-telemetry`: [README](../crates/rustok-telemetry/README.md), [docs/README](../crates/rustok-telemetry/docs/README.md)
+- `rustok-tenant`: [README](../crates/rustok-tenant/README.md), [docs/README](../crates/rustok-tenant/docs/README.md)
+- `rustok-test-utils`: [README](../crates/rustok-test-utils/README.md)
+- `utoipa-swagger-ui-vendored`: [README](../crates/utoipa-swagger-ui-vendored/README.md), [docs/README](../crates/utoipa-swagger-ui-vendored/docs/README.md)
+
+## Maintenance checklist
+
+When changing architecture/API/events/modules/tenancy/routing/UI contracts/observability:
+
+1. Update the relevant local docs in the changed component (`apps/*` or `crates/*`).
+2. Update the related central docs in `docs/`.
+3. Update this file (`docs/index.md`) so the map remains accurate.
+4. If module/app names changed, update [`docs/modules/registry.md`](./modules/registry.md).
