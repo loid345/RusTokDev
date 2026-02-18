@@ -4,11 +4,15 @@
 //! Run with: `cargo loco task --name cleanup --args "sessions"`
 
 use async_trait::async_trait;
+use chrono::Utc;
 use loco_rs::{
     app::AppContext,
     task::{Task, TaskInfo, Vars},
     Result,
 };
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
+
+use crate::models::sessions;
 
 /// Cleanup task for maintenance operations
 pub struct CleanupTask;
@@ -22,21 +26,19 @@ impl Task for CleanupTask {
         }
     }
 
-    async fn run(&self, _ctx: &AppContext, vars: &Vars) -> Result<()> {
+    async fn run(&self, ctx: &AppContext, vars: &Vars) -> Result<()> {
         let target = vars.cli.get("target").map_or("", String::as_str);
 
         match target {
             "sessions" => {
                 tracing::info!("Cleaning up expired sessions...");
-                // TODO: Implement session cleanup
-                // Example:
-                // entities::sessions::Entity::delete_many()
-                //     .filter(Condition::all().add(
-                //         sessions::Column::ExpiresAt.lt(chrono::Utc::now())
-                //     ))
-                //     .exec(&ctx.db)
-                //     .await?;
-                tracing::info!("Session cleanup complete");
+                let now = Utc::now();
+                let result = sessions::Entity::delete_many()
+                    .filter(sessions::Column::ExpiresAt.lt(now))
+                    .exec(&ctx.db)
+                    .await?;
+
+                tracing::info!(deleted = result.rows_affected, "Session cleanup complete");
             }
             "cache" => {
                 tracing::info!("Clearing temporary cache entries...");
@@ -45,8 +47,13 @@ impl Task for CleanupTask {
             }
             "" => {
                 tracing::info!("Running full cleanup...");
-                // Run all cleanup operations
-                tracing::info!("Full cleanup complete");
+                let now = Utc::now();
+                let result = sessions::Entity::delete_many()
+                    .filter(sessions::Column::ExpiresAt.lt(now))
+                    .exec(&ctx.db)
+                    .await?;
+
+                tracing::info!(deleted = result.rows_affected, "Full cleanup complete");
             }
             _ => {
                 tracing::warn!("Unknown cleanup target: {}", target);

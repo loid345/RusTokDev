@@ -13,6 +13,8 @@ use loco_rs::{
 };
 use std::path::Path;
 
+use sea_orm::EntityTrait;
+
 use crate::controllers;
 use crate::initializers;
 use crate::middleware;
@@ -85,16 +87,38 @@ impl Hooks for App {
             )))
     }
 
-    async fn truncate(_ctx: &AppContext) -> Result<()> {
+    async fn truncate(ctx: &AppContext) -> Result<()> {
         tracing::info!("Truncating database...");
 
-        // Truncate all tables in dependency order
-        // TODO: Implement proper truncation for all entity tables
-        // entities::sessions::Entity::delete_many().exec(&ctx.db).await?;
-        // entities::users::Entity::delete_many().exec(&ctx.db).await?;
-        // etc.
+        // Delete in dependency order to satisfy foreign key constraints.
+        let releases = crate::models::release::Entity::delete_many()
+            .exec(&ctx.db)
+            .await?;
+        let builds = crate::models::build::Entity::delete_many()
+            .exec(&ctx.db)
+            .await?;
+        let tenant_modules = crate::models::_entities::tenant_modules::Entity::delete_many()
+            .exec(&ctx.db)
+            .await?;
+        let sessions = crate::models::sessions::Entity::delete_many()
+            .exec(&ctx.db)
+            .await?;
+        let users = crate::models::users::Entity::delete_many()
+            .exec(&ctx.db)
+            .await?;
+        let tenants = crate::models::tenants::Entity::delete_many()
+            .exec(&ctx.db)
+            .await?;
 
-        tracing::info!("Database truncation complete");
+        tracing::info!(
+            releases = releases.rows_affected,
+            builds = builds.rows_affected,
+            tenant_modules = tenant_modules.rows_affected,
+            sessions = sessions.rows_affected,
+            users = users.rows_affected,
+            tenants = tenants.rows_affected,
+            "Database truncation complete"
+        );
         Ok(())
     }
 

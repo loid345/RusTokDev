@@ -12,7 +12,7 @@
 - ✅ **Phase 2.1-2.5**: users filtering dependencies/debounce/server-side mapping/badge rendering implemented.
 - ⏳ **Phase 3+**: still pending and should be delivered incrementally.
 
-Leptos admin (`apps/admin`) is the primary admin panel for RusTok. The Next.js admin (`apps/next-admin`) serves as reference. After recent commits: `_new.rs` duplicates removed, auth migrated to `leptos-auth` crate, Clerk replaced with NextAuth+JWT in Next.js, Users page added to Next.js admin. However, critical issues remain: tokens expire silently, dashboard stats are hardcoded, filtering is duplicated client/server, no RBAC, no CRUD for users.
+Leptos admin (`apps/admin`) is the primary admin panel for RusTok. The Next.js admin (`apps/next-admin`) serves as reference. After recent commits: `_new.rs` duplicates removed, auth migrated to `leptos-auth` crate, Clerk replaced with NextAuth+JWT in Next.js, Users page added to Next.js admin. However, critical issues remain: some dashboard metrics are still partial/placeholders, filtering is duplicated client/server, no RBAC, no CRUD for users.
 
 The project has a rich crate infrastructure (`leptos-ui`, `leptos-forms`, `leptos-graphql`, `leptos-table`, `leptos-use`, `leptos-chartistry`, `leptos-shadcn-pagination`) that is **almost entirely unused** in the admin app.
 
