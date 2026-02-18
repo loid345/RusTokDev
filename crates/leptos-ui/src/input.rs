@@ -1,4 +1,5 @@
-use leptos::*;
+use leptos::prelude::*;
+use leptos::ev;
 
 #[component]
 pub fn Input(

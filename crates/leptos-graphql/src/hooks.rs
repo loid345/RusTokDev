@@ -2,6 +2,8 @@
 // Reactive hooks для удобной работы с GraphQL queries и mutations
 
 use leptos::prelude::*;
+use leptos::task::spawn_local;
+use std::sync::Arc;
 use serde::{de::DeserializeOwned, Serialize};
 use serde_json::Value;
 
@@ -56,7 +58,7 @@ pub fn use_query<V, T>(
 ) -> QueryResult<T>
 where
     V: Serialize + Clone + 'static,
-    T: DeserializeOwned + Clone + 'static,
+    T: DeserializeOwned + Clone + Send + Sync + 'static,
 {
     let (data, set_data) = signal(None);
     let (error, set_error) = signal(None);
@@ -106,7 +108,7 @@ pub struct MutationResult<T> {
     pub data: ReadSignal<Option<T>>,
     pub error: ReadSignal<Option<GraphqlHttpError>>,
     pub loading: ReadSignal<bool>,
-    mutate_fn: StoredValue<Box<dyn Fn(Value)>>,
+    mutate_fn: StoredValue<Arc<dyn Fn(Value) + Send + Sync>>,
 }
 
 impl<T> MutationResult<T> {
@@ -153,13 +155,13 @@ pub fn use_mutation<T>(
     tenant: Option<String>,
 ) -> MutationResult<T>
 where
-    T: DeserializeOwned + Clone + 'static,
+    T: DeserializeOwned + Clone + Send + Sync + 'static,
 {
     let (data, set_data) = signal(None);
     let (error, set_error) = signal(None);
     let (loading, set_loading) = signal(false);
 
-    let mutate_fn = store_value(Box::new(move |variables: Value| {
+    let mutate_fn = store_value(Arc::new(move |variables: Value| {
         set_loading.set(true);
         set_error.set(None);
 
@@ -182,7 +184,7 @@ where
                 }
             }
         });
-    }) as Box<dyn Fn(Value)>);
+    }) as Arc<dyn Fn(Value) + Send + Sync>);
 
     MutationResult {
         data,
@@ -200,10 +202,10 @@ pub fn use_lazy_query<V, T>(
     query: String,
     token: Option<String>,
     tenant: Option<String>,
-) -> (QueryResult<T>, Box<dyn Fn(Option<V>)>)
+) -> (QueryResult<T>, Box<dyn Fn(Option<V>) + Send + Sync>)
 where
     V: Serialize + Clone + 'static,
-    T: DeserializeOwned + Clone + 'static,
+    T: DeserializeOwned + Clone + Send + Sync + 'static,
 {
     let (data, set_data) = signal(None);
     let (error, set_error) = signal(None);

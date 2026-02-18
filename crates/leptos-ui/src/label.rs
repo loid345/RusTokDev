@@ -1,4 +1,5 @@
-use leptos::*;
+use leptos::children::Children;
+use leptos::prelude::*;
 
 #[component]
 pub fn Label(
@@ -17,11 +18,7 @@ pub fn Label(
             class=full_class
         >
             {children()}
-            {move || if required {
-                view! { <span class="text-red-500 ml-1">"*"</span> }.into_view()
-            } else {
-                ().into_view()
-            }}
+            {move || required.then(|| view! { <span class="text-red-500 ml-1">"*"</span> })}
         </label>
     }
 }

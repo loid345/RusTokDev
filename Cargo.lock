@@ -8728,8 +8728,6 @@ checksum = "7b2093cf4c8eb1e67749a6762251bc9cd836b6fc171623bd0a9d324d37af2417"
 [[package]]
 name = "tailwind-ast"
 version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ac41127bfd988693b7beaa0a49de45bd452ebeb3bafec2387a4de25bdca6420e"
 dependencies = [
  "nom 7.1.3",
 ]
@@ -8737,8 +8735,6 @@ dependencies = [
 [[package]]
 name = "tailwind-css"
 version = "0.12.7"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36221af514120ed4edda1ad2859824523a41b8bfa466c1115437d68831d7e6b8"
 dependencies = [
  "css-color",
  "itertools 0.11.0",
@@ -8763,8 +8759,6 @@ dependencies = [
 [[package]]
 name = "tailwind-rs"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3643f54f3405876c066b3eabae1b7a9415cada15e2d31d438b1e5339a492ceca"
 dependencies = [
  "itertools 0.10.5",
  "log",
