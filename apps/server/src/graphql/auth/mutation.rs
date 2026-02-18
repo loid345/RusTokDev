@@ -11,6 +11,7 @@ use crate::context::TenantContext;
 use crate::graphql::errors::GraphQLError;
 use crate::models::{sessions, users};
 use crate::services::auth::AuthService;
+use crate::services::email::{EmailService, PasswordResetEmail, PasswordResetEmailSender};
 
 use super::types::*;
 
@@ -251,7 +252,7 @@ impl AuthMutation {
             });
         }
 
-        let _reset_token = encode_password_reset_token(
+        let reset_token = encode_password_reset_token(
             &config,
             tenant.id,
             &input.email,
@@ -259,7 +260,19 @@ impl AuthMutation {
         )
         .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
 
-        // TODO: replace with actual transactional email provider integration.
+        let email_service = EmailService::from_ctx(app_ctx)
+            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
+        let reset_url = email_service
+            .password_reset_url(app_ctx, &reset_token)
+            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
+
+        email_service
+            .send_password_reset(PasswordResetEmail {
+                to: input.email,
+                reset_url,
+            })
+            .await
+            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
 
         Ok(ForgotPasswordPayload {
             success: true,

@@ -414,11 +414,51 @@ pub fn tenant_cache_stats_v2(ctx: &AppContext) -> Option<SimplifiedTenantCacheSt
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::http::HeaderMap;
+    use uuid::Uuid;
 
     #[test]
     fn test_identifier_kind_as_str() {
         assert_eq!(TenantIdentifierKind::Uuid.as_str(), "uuid");
         assert_eq!(TenantIdentifierKind::Slug.as_str(), "slug");
         assert_eq!(TenantIdentifierKind::Host.as_str(), "host");
+    }
+
+    #[test]
+    fn test_parse_forwarded_host() {
+        let header = "for=192.0.2.60;proto=https;host=tenant.example.com";
+        assert_eq!(parse_forwarded_host(header), Some("tenant.example.com"));
+    }
+
+    #[test]
+    fn test_extract_host_prefers_x_forwarded_host() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-host", "tenant-a.example.com".parse().unwrap());
+        headers.insert(HOST, "fallback.example.com".parse().unwrap());
+
+        assert_eq!(extract_host(&headers), Some("tenant-a.example.com"));
+    }
+
+    #[test]
+    fn test_classify_and_validate_identifier_slug() {
+        let result = classify_and_validate_identifier("demo-tenant").unwrap();
+        assert_eq!(result.kind, TenantIdentifierKind::Slug);
+        assert_eq!(result.value, "demo-tenant");
+        assert_eq!(result.uuid, Uuid::nil());
+    }
+
+    #[test]
+    fn test_classify_and_validate_identifier_uuid() {
+        let raw = "00000000-0000-0000-0000-000000000001";
+        let result = classify_and_validate_identifier(raw).unwrap();
+        assert_eq!(result.kind, TenantIdentifierKind::Uuid);
+        assert_eq!(result.value, raw);
+        assert_eq!(result.uuid, Uuid::parse_str(raw).unwrap());
+    }
+
+    #[test]
+    fn test_classify_and_validate_identifier_rejects_invalid_slug() {
+        let result = classify_and_validate_identifier("../../etc/passwd");
+        assert!(result.is_err());
     }
 }

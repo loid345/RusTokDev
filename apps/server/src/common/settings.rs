@@ -16,6 +16,43 @@ pub struct RustokSettings {
     pub rate_limit: RateLimitSettings,
     #[serde(default)]
     pub events: EventSettings,
+    #[serde(default)]
+    pub email: EmailSettings,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct EmailSettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default)]
+    pub smtp: SmtpSettings,
+    #[serde(default = "default_email_from")]
+    pub from: String,
+    #[serde(default = "default_reset_base_url")]
+    pub reset_base_url: String,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SmtpSettings {
+    #[serde(default = "default_smtp_host")]
+    pub host: String,
+    #[serde(default = "default_smtp_port")]
+    pub port: u16,
+    #[serde(default)]
+    pub username: String,
+    #[serde(default)]
+    pub password: String,
+}
+
+impl Default for SmtpSettings {
+    fn default() -> Self {
+        Self {
+            host: default_smtp_host(),
+            port: default_smtp_port(),
+            username: String::new(),
+            password: String::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
@@ -197,6 +234,22 @@ fn default_burst() -> u32 {
 
 fn default_relay_interval_ms() -> u64 {
     1_000
+}
+
+fn default_email_from() -> String {
+    "no-reply@rustok.local".to_string()
+}
+
+fn default_reset_base_url() -> String {
+    "http://localhost:3000/reset-password".to_string()
+}
+
+fn default_smtp_host() -> String {
+    "localhost".to_string()
+}
+
+fn default_smtp_port() -> u16 {
+    1025
 }
 
 #[cfg(test)]

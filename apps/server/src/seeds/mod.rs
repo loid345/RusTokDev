@@ -4,7 +4,13 @@
 //! Run with: `cargo loco db seed`
 
 use loco_rs::{app::AppContext, Result};
+use sea_orm::{ActiveModelTrait, ActiveValue::Set};
 use std::path::Path;
+
+use crate::auth::hash_password;
+use crate::models::{tenants, users};
+
+const DEFAULT_DEV_SEED_PASSWORD: &str = "dev-password-123";
 
 /// Seed the database with initial data
 pub async fn seed(ctx: &AppContext, path: &Path) -> Result<()> {
@@ -30,14 +36,64 @@ pub async fn seed(ctx: &AppContext, path: &Path) -> Result<()> {
 }
 
 /// Development seed data
-async fn seed_development(_ctx: &AppContext) -> Result<()> {
+async fn seed_development(ctx: &AppContext) -> Result<()> {
     tracing::info!("Seeding development data...");
 
-    // TODO: Add development seed data
-    // - Demo tenant
-    // - Test users
-    // - Sample content
-    // - Sample products
+    let demo_tenant =
+        tenants::Entity::find_or_create(&ctx.db, "Demo Tenant", "demo", Some("demo.localhost"))
+            .await?;
+
+    seed_user(
+        ctx,
+        demo_tenant.id,
+        "admin@demo.local",
+        "Demo Admin",
+        rustok_core::UserRole::Admin,
+    )
+    .await?;
+
+    seed_user(
+        ctx,
+        demo_tenant.id,
+        "customer@demo.local",
+        "Demo Customer",
+        rustok_core::UserRole::Customer,
+    )
+    .await?;
+
+    for module in ["content", "commerce", "pages", "blog", "forum", "index"] {
+        crate::models::tenant_modules::toggle(&ctx.db, demo_tenant.id, module, true).await?;
+    }
+
+    tracing::info!(tenant_id = %demo_tenant.id, "Development seed data ensured");
+
+    Ok(())
+}
+
+async fn seed_user(
+    ctx: &AppContext,
+    tenant_id: uuid::Uuid,
+    email: &str,
+    name: &str,
+    role: rustok_core::UserRole,
+) -> Result<()> {
+    if users::Entity::find_by_email(&ctx.db, tenant_id, email)
+        .await?
+        .is_some()
+    {
+        return Ok(());
+    }
+
+    let seed_password = std::env::var("RUSTOK_DEV_SEED_PASSWORD")
+        .ok()
+        .filter(|value| !value.trim().is_empty())
+        .unwrap_or_else(|| DEFAULT_DEV_SEED_PASSWORD.to_string());
+
+    let password_hash = hash_password(&seed_password)?;
+    let mut user = users::ActiveModel::new(tenant_id, email, &password_hash);
+    user.name = Set(Some(name.to_string()));
+    user.role = Set(role);
+    user.insert(&ctx.db).await?;
 
     Ok(())
 }

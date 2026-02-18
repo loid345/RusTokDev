@@ -73,3 +73,12 @@ impl Entity {
         }
     }
 }
+
+pub async fn toggle(
+    db: &DatabaseConnection,
+    tenant_id: Uuid,
+    module_slug: &str,
+    enabled: bool,
+) -> Result<Model, DbErr> {
+    Entity::toggle(db, tenant_id, module_slug, enabled).await
+}

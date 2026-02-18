@@ -110,6 +110,7 @@ pub async fn ready(
             features: Default::default(),
             rate_limit: Default::default(),
             events: Default::default(),
+            email: Default::default(),
         });
 
     let mut checks = vec![
