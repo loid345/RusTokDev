@@ -1,5 +1,6 @@
 use crate::types::BadgeVariant;
-use leptos::*;
+use leptos::children::Children;
+use leptos::prelude::*;
 
 #[component]
 pub fn Badge(

@@ -1,4 +1,5 @@
-use leptos::*;
+use leptos::children::Children;
+use leptos::prelude::*;
 
 #[component]
 pub fn Card(#[prop(optional)] class: Option<&'static str>, children: Children) -> impl IntoView {
