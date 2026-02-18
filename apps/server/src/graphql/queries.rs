@@ -1,8 +1,10 @@
 use async_graphql::{Context, FieldError, Object, Result};
+use chrono::{Duration, Utc};
 use sea_orm::{
     ColumnTrait, Condition, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
 };
 use std::collections::HashSet;
+use uuid::Uuid;
 
 use crate::context::{AuthContext, TenantContext};
 use crate::graphql::common::{encode_cursor, PageInfo, PaginationInput};
@@ -15,7 +17,36 @@ use crate::models::_entities::tenant_modules::Column as TenantModulesColumn;
 use crate::models::_entities::tenant_modules::Entity as TenantModulesEntity;
 use crate::models::_entities::users::Column as UsersColumn;
 use crate::models::users;
+use rustok_content::entities::node::{Column as NodesColumn, Entity as NodesEntity};
 use rustok_core::ModuleRegistry;
+use rustok_outbox::entity::{Column as SysEventsColumn, Entity as SysEventsEntity};
+
+fn calculate_percent_change(current: i64, previous: i64) -> f64 {
+    if previous == 0 {
+        if current == 0 {
+            0.0
+        } else {
+            100.0
+        }
+    } else {
+        ((current - previous) as f64 / previous as f64) * 100.0
+    }
+}
+
+fn parse_tenant_id(payload: &serde_json::Value) -> Option<Uuid> {
+    payload
+        .get("tenant_id")
+        .and_then(serde_json::Value::as_str)
+        .and_then(|value| Uuid::parse_str(value).ok())
+}
+
+fn parse_order_total(payload: &serde_json::Value) -> Option<i64> {
+    payload
+        .get("event")
+        .and_then(|event| event.get("data"))
+        .and_then(|data| data.get("total"))
+        .and_then(serde_json::Value::as_i64)
+}
 
 #[derive(Default)]
 pub struct RootQuery;
@@ -210,7 +241,10 @@ impl RootQuery {
         let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
         let tenant = ctx.data::<TenantContext>()?;
 
-        // Count total users
+        let now = Utc::now();
+        let current_period_start = now - Duration::days(30);
+        let previous_period_start = current_period_start - Duration::days(30);
+
         let total_users = users::Entity::find()
             .filter(UsersColumn::TenantId.eq(tenant.id))
             .count(&app_ctx.db)
@@ -218,38 +252,94 @@ impl RootQuery {
             .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?
             as i64;
 
-        // Count total posts (nodes with kind="post")
-        // Note: Using sys_events as a proxy since we don't have direct node access
-        // This is a simplified implementation - in production, query the nodes table directly
-        let total_posts = users::Entity::find()
-            .filter(UsersColumn::TenantId.eq(tenant.id))
+        let total_posts = NodesEntity::find()
+            .filter(NodesColumn::TenantId.eq(tenant.id))
+            .filter(NodesColumn::Kind.eq("post"))
             .count(&app_ctx.db)
             .await
             .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?
-            as i64
-            / 3; // Rough estimate: ~1/3 of users create posts
+            as i64;
 
-        // TODO: Implement order counting when orders module is ready
-        let total_orders = 0;
+        let current_users = users::Entity::find()
+            .filter(UsersColumn::TenantId.eq(tenant.id))
+            .filter(UsersColumn::CreatedAt.gte(current_period_start))
+            .count(&app_ctx.db)
+            .await
+            .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?
+            as i64;
 
-        // TODO: Implement revenue calculation when commerce module is ready
-        let total_revenue = 0;
+        let previous_users = users::Entity::find()
+            .filter(UsersColumn::TenantId.eq(tenant.id))
+            .filter(UsersColumn::CreatedAt.gte(previous_period_start))
+            .filter(UsersColumn::CreatedAt.lt(current_period_start))
+            .count(&app_ctx.db)
+            .await
+            .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?
+            as i64;
 
-        // TODO: Implement change calculations with historical data
-        let users_change = 12.0; // Mock data for demo
-        let posts_change = 5.0;
-        let orders_change = 23.0;
-        let revenue_change = 8.0;
+        let current_posts = NodesEntity::find()
+            .filter(NodesColumn::TenantId.eq(tenant.id))
+            .filter(NodesColumn::Kind.eq("post"))
+            .filter(NodesColumn::CreatedAt.gte(current_period_start))
+            .count(&app_ctx.db)
+            .await
+            .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?
+            as i64;
+
+        let previous_posts = NodesEntity::find()
+            .filter(NodesColumn::TenantId.eq(tenant.id))
+            .filter(NodesColumn::Kind.eq("post"))
+            .filter(NodesColumn::CreatedAt.gte(previous_period_start))
+            .filter(NodesColumn::CreatedAt.lt(current_period_start))
+            .count(&app_ctx.db)
+            .await
+            .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?
+            as i64;
+
+        let order_events = SysEventsEntity::find()
+            .filter(SysEventsColumn::EventType.eq("order.placed"))
+            .all(&app_ctx.db)
+            .await
+            .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
+
+        let mut total_orders = 0i64;
+        let mut total_revenue = 0i64;
+        let mut current_orders = 0i64;
+        let mut previous_orders = 0i64;
+        let mut current_revenue = 0i64;
+        let mut previous_revenue = 0i64;
+
+        for event in order_events {
+            let Some(tenant_id) = parse_tenant_id(&event.payload) else {
+                continue;
+            };
+            if tenant_id != tenant.id {
+                continue;
+            }
+
+            let order_total = parse_order_total(&event.payload).unwrap_or(0);
+            total_orders += 1;
+            total_revenue += order_total;
+
+            let created_at = event.created_at;
+            if created_at >= current_period_start {
+                current_orders += 1;
+                current_revenue += order_total;
+            } else if created_at >= previous_period_start {
+                previous_orders += 1;
+                previous_revenue += order_total;
+            }
+        }
 
         Ok(DashboardStats {
             total_users,
             total_posts,
             total_orders,
             total_revenue,
-            users_change,
-            posts_change,
-            orders_change,
-            revenue_change,
+            users_change: calculate_percent_change(current_users, previous_users),
+            posts_change: calculate_percent_change(current_posts, previous_posts),
+            orders_change: calculate_percent_change(current_orders, previous_orders),
+            revenue_change: calculate_percent_change(current_revenue, previous_revenue),
         })
     }
 
