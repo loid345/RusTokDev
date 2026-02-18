@@ -7280,6 +7280,7 @@ dependencies = [
  "futures-util",
  "hex",
  "jsonwebtoken 10.3.0",
+ "lettre",
  "loco-rs",
  "migration",
  "moka",

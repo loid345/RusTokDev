@@ -1,4 +1,5 @@
 pub mod auth;
+pub mod email;
 pub mod event_bus;
 pub mod module_lifecycle;
 

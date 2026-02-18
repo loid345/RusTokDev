@@ -2,7 +2,8 @@ use sea_orm::prelude::*;
 
 use rustok_core::generate_id;
 
-use super::_entities::tenant_modules::{self, ActiveModel, Entity, Model};
+use super::_entities::tenant_modules::{self, Model};
+pub use super::_entities::tenant_modules::{ActiveModel, Entity};
 
 impl ActiveModel {
     pub fn enable(tenant_id: Uuid, module_slug: &str) -> Self {

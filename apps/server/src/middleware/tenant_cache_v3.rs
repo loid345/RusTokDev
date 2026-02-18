@@ -321,11 +321,40 @@ pub async fn tenant_cache_v3_stats(
 
 #[cfg(test)]
 mod tests {
-    #[tokio::test]
-    #[ignore]
-    async fn test_circuit_breaker_opens_on_db_failures() {}
+    use rustok_core::resilience::{
+        CircuitBreaker, CircuitBreakerConfig, CircuitBreakerError, CircuitState,
+    };
+    use std::time::Duration;
 
     #[tokio::test]
-    #[ignore]
-    async fn test_circuit_breaker_fail_fast() {}
+    async fn test_circuit_breaker_opens_on_db_failures() {
+        let breaker = CircuitBreaker::new(CircuitBreakerConfig {
+            failure_threshold: 2,
+            success_threshold: 1,
+            timeout: Duration::from_secs(60),
+            half_open_max_requests: Some(1),
+        });
+
+        let _ = breaker.call(|| async { Err::<(), _>("db down") }).await;
+        let _ = breaker
+            .call(|| async { Err::<(), _>("db still down") })
+            .await;
+
+        assert_eq!(breaker.get_state().await, CircuitState::Open);
+    }
+
+    #[tokio::test]
+    async fn test_circuit_breaker_fail_fast() {
+        let breaker = CircuitBreaker::new(CircuitBreakerConfig {
+            failure_threshold: 1,
+            success_threshold: 1,
+            timeout: Duration::from_secs(60),
+            half_open_max_requests: Some(1),
+        });
+
+        let _ = breaker.call(|| async { Err::<(), _>("db down") }).await;
+
+        let result = breaker.call(|| async { Ok::<(), &str>(()) }).await;
+        assert!(matches!(result, Err(CircuitBreakerError::Open)));
+    }
 }
