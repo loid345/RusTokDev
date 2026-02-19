@@ -90,27 +90,26 @@ graph TD
 
 | Path | Name | Description |
 |------|------|-------------|
-| `apps/server` | **Server** | Main API server built on Loco.rs. Orchestrates all domain modules. |
-| `apps/admin` | **Leptos Admin** | Back-office management interface built with Leptos (CSR/WASM). |
-| `apps/storefront` | **Leptos Storefront** | Customer-facing web interface built with Leptos (SSR). |
-| `apps/next-admin` | **Next.js Admin** | Modern React-based admin interface (Next.js). Primary admin dashboard. |
-| `apps/next-frontend` | **Next.js Storefront** | Modern React-based storefront (Next.js). |
-| `apps/mcp` | **MCP Server** | MCP stdio server process. Thin wrapper that starts `crates/rustok-mcp`. |
+| `apps/server` | **Server** | Main API server built on Loco.rs. Orchestrates all domain modules. ([CRATE_API](../../apps/server/CRATE_API.md)) |
+| `apps/admin` | **Leptos Admin** | Back-office management interface built with Leptos (CSR/WASM). ([CRATE_API](../../apps/admin/CRATE_API.md)) |
+| `apps/storefront` | **Leptos Storefront** | Customer-facing web interface built with Leptos (SSR). ([CRATE_API](../../apps/storefront/CRATE_API.md)) |
+| `apps/next-admin` | **Next.js Admin** | Modern React-based admin interface (Next.js). Primary admin dashboard. ([CRATE_API](../../apps/next-admin/CRATE_API.md)) |
+| `apps/next-frontend` | **Next.js Storefront** | Modern React-based storefront (Next.js). ([CRATE_API](../../apps/next-frontend/CRATE_API.md)) |
 
 ### Core & Infrastructure (`crates/`)
 
 | Path | Name | Description |
 |------|------|-------------|
-| `crates/rustok-core` | **Core** | Shared traits, base entities, events, cache abstractions, circuit breaker, RBAC primitives. Not a `RusToKModule`. |
-| `crates/rustok-events` | **Events Contracts** | Stable import point for `DomainEvent`/`EventEnvelope` (re-exports from core). |
-| `crates/rustok-outbox` | **Outbox** | Core infrastructure for transactional event delivery (`TransactionalEventBus`). Not a `RusToKModule` — initialized via `build_event_runtime()`. |
-| `crates/rustok-iggy` | **Iggy Transport** | L2 streaming `EventTransport` implementation with serialization, topology, DLQ, replay. |
-| `crates/rustok-iggy-connector` | **Iggy Connector** | Embedded/Remote mode switching, connection lifecycle, message I/O. |
-| `crates/rustok-mcp` | **MCP** | MCP adapter crate with embedded `rustok-mcp-server` binary. Exposes RusToK tools/resources via the MCP protocol using the `rmcp` SDK. |
-| `crates/rustok-telemetry` | **Telemetry** | Observability setup (OTLP, Tracing, Prometheus metrics). Cross-cutting, not a `RusToKModule`. |
-| `crates/rustok-tenant` | **Tenant** | Multi-tenancy isolation and management logic. Registered as `ModuleKind::Core`. |
-| `crates/rustok-rbac` | **RBAC** | Role-based access control engine. Registered as `ModuleKind::Core`. |
-| `crates/rustok-test-utils` | **Test Utils** | Shared testing helpers and mocks. `[dev-dependencies]` only — never in production binary. |
+| `crates/rustok-core` | **Core** | Shared traits, base entities, events, cache abstractions, circuit breaker, RBAC primitives. Not a `RusToKModule`. ([CRATE_API](../../crates/rustok-core/CRATE_API.md)) |
+| `crates/rustok-events` | **Events Contracts** | Stable import point for `DomainEvent`/`EventEnvelope` (re-exports from core). ([CRATE_API](../../crates/rustok-events/CRATE_API.md)) |
+| `crates/rustok-outbox` | **Outbox** | Core infrastructure for transactional event delivery (`TransactionalEventBus`). Not a `RusToKModule` — initialized via `build_event_runtime()`. ([CRATE_API](../../crates/rustok-outbox/CRATE_API.md)) |
+| `crates/rustok-iggy` | **Iggy Transport** | L2 streaming `EventTransport` implementation with serialization, topology, DLQ, replay. ([CRATE_API](../../crates/rustok-iggy/CRATE_API.md)) |
+| `crates/rustok-iggy-connector` | **Iggy Connector** | Embedded/Remote mode switching, connection lifecycle, message I/O. ([CRATE_API](../../crates/rustok-iggy-connector/CRATE_API.md)) |
+| `crates/rustok-mcp` | **MCP** | MCP adapter crate with embedded `rustok-mcp-server` binary. Exposes RusToK tools/resources via the MCP protocol using the `rmcp` SDK. ([CRATE_API](../../crates/rustok-mcp/CRATE_API.md)) |
+| `crates/rustok-telemetry` | **Telemetry** | Observability setup (OTLP, Tracing, Prometheus metrics). Cross-cutting, not a `RusToKModule`. ([CRATE_API](../../crates/rustok-telemetry/CRATE_API.md)) |
+| `crates/rustok-tenant` | **Tenant** | Multi-tenancy isolation and management logic. Registered as `ModuleKind::Core`. ([CRATE_API](../../crates/rustok-tenant/CRATE_API.md)) |
+| `crates/rustok-rbac` | **RBAC** | Role-based access control engine. Registered as `ModuleKind::Core`. ([CRATE_API](../../crates/rustok-rbac/CRATE_API.md)) |
+| `crates/rustok-test-utils` | **Test Utils** | Shared testing helpers and mocks. `[dev-dependencies]` only — never in production binary. ([CRATE_API](../../crates/rustok-test-utils/CRATE_API.md)) |
 
 ### Domain Modules (`crates/`)
 
@@ -118,14 +117,14 @@ These implement `RusToKModule` and are registered via `ModuleRegistry` in `apps/
 
 | Path | Name | Kind | Depends on |
 |------|------|------|-----------|
-| `crates/rustok-index` | **Index** | `Core` | `rustok-core` |
-| `crates/rustok-tenant` | **Tenant** | `Core` | `rustok-core` |
-| `crates/rustok-rbac` | **RBAC** | `Core` | `rustok-core` |
-| `crates/rustok-content` | **Content** | `Optional` | `rustok-core` |
-| `crates/rustok-commerce` | **Commerce** | `Optional` | `rustok-core` |
-| `crates/rustok-blog` | **Blog** | `Optional` | `rustok-content` |
-| `crates/rustok-forum` | **Forum** | `Optional` | `rustok-content` |
-| `crates/rustok-pages` | **Pages** | `Optional` | `rustok-core` |
+| `crates/rustok-index` | **Index** | `Core` | `rustok-core` ([CRATE_API](../../crates/rustok-index/CRATE_API.md)) |
+| `crates/rustok-tenant` | **Tenant** | `Core` | `rustok-core` ([CRATE_API](../../crates/rustok-tenant/CRATE_API.md)) |
+| `crates/rustok-rbac` | **RBAC** | `Core` | `rustok-core` ([CRATE_API](../../crates/rustok-rbac/CRATE_API.md)) |
+| `crates/rustok-content` | **Content** | `Optional` | `rustok-core` ([CRATE_API](../../crates/rustok-content/CRATE_API.md)) |
+| `crates/rustok-commerce` | **Commerce** | `Optional` | `rustok-core` ([CRATE_API](../../crates/rustok-commerce/CRATE_API.md)) |
+| `crates/rustok-blog` | **Blog** | `Optional` | `rustok-content` ([CRATE_API](../../crates/rustok-blog/CRATE_API.md)) |
+| `crates/rustok-forum` | **Forum** | `Optional` | `rustok-content` ([CRATE_API](../../crates/rustok-forum/CRATE_API.md)) |
+| `crates/rustok-pages` | **Pages** | `Optional` | `rustok-core` ([CRATE_API](../../crates/rustok-pages/CRATE_API.md)) |
 | `crates/alloy-scripting` | **Alloy** | Infra (not via registry) | `rustok-core` |
 
 ### Internal Frontend Libraries (`crates/`)
@@ -154,3 +153,5 @@ They are not published to crates.io. Treat them as first-party code — changes 
 > [!IMPORTANT]
 > This registry must be kept up to date. AI Agents are required to update the **Mermaid diagram** and **Component Directory** whenever a new crate or application is added, renamed, or significantly restructured.
 > Also update [`docs/index.md`](../index.md) when this registry changes.
+>
+> Перед изменением любого `crates/rustok-*` необходимо проверить и обновить соответствующий `CRATE_API.md`, если изменился публичный контракт (модули, сигнатуры, события, зависимости).

@@ -1,0 +1,25 @@
+# rustok-core / CRATE_API
+
+## Публичные модули
+`async_utils`, `auth`, `cache`, `config`, `context`, `error`, `events`, `health`, `i18n`, `id`, `metrics`, `migrations`, `module`, `permissions`, `rbac`, `registry`, `resilience`, `scripting`, `security`, `state_machine`, `tenant_validation`, `tracing`, `typed_error`, `types`, `utils`.
+
+## Основные публичные типы и сигнатуры
+- `pub trait RusToKModule` — базовый контракт модуля платформы.
+- `pub struct AppContext` — общий runtime-контекст приложения.
+- `pub enum DomainEvent`, `pub struct EventEnvelope` — события домена и обёртка для транспорта.
+- `pub trait EventTransport` — транспорт событий.
+- `pub enum Error`, `pub type Result<T>` — unified error model.
+- `pub struct ModuleRegistry` — реестр модулей и зависимостей.
+
+## События
+- Публикует: базовые доменные события через `DomainEvent` (определяет контракт, не бизнес-эмиттер).
+- Потребляет: N/A (инфраструктурный контрактный слой).
+
+## Зависимости от других rustok-крейтов
+- `rustok-telemetry`
+- `rustok-outbox`
+
+## Частые ошибки ИИ
+- Путает `AppContext` из `rustok_core::context` с локальными контекстами сервисов.
+- Импортирует `DomainEvent` из старых путей вместо `rustok_core`/`rustok-events`.
+- Считает `rustok-core` доменным модулем (`RusToKModule`) — это инфраструктурный core.
