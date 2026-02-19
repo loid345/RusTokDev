@@ -73,6 +73,17 @@
 - **Dispatcher retry**: `retry_count + 1` попыток на каждый handler.
 - **Требование к consumer-логике**: использовать идемпотентные операции (`upsert`, `delete-if-exists`, пересчет по source-of-truth), чтобы безопасно переживать at-least-once delivery.
 
+
+## Какие модули обязаны ссылаться на этот контракт
+
+Минимально — все модули, которые публикуют/обрабатывают `DomainEvent` или обеспечивают доставку:
+
+- publishers: `rustok-content`, `rustok-commerce`, `rustok-pages`, `rustok-forum`, `rustok-blog`, `apps/server` (для `BuildRequested` и orchestration-сценариев);
+- consumers/read-model: `rustok-index`;
+- transport/runtime: `rustok-outbox`, `rustok-core` (контракты `DomainEvent`/dispatcher).
+
+Если модуль не публикует и не потребляет события, ссылка опциональна.
+
 ## PR-чеклист для изменений в событиях
 
 Если в PR добавлен новый `DomainEvent` или изменен контракт существующего:
