@@ -1,7 +1,7 @@
 # RusToK — Architecture Improvement Recommendations
 
 - Date: 2026-02-19
-- Status: Proposed
+- Status: Living document (updated)
 - Author: Platform Architecture Review
 
 ---
@@ -35,9 +35,9 @@
 
 | Crate | Роль | Текущий статус |
 |---|---|---|
-| `rustok-index` | CQRS read-model, индексатор для storefront | Реализует `IndexModule`, но **не зарегистрирован** |
-| `rustok-tenant` | Tenant metadata, lifecycle хуки | Реализует `TenantModule`, но **не зарегистрирован** |
-| `rustok-rbac` | RBAC helpers, lifecycle хуки | Реализует `RbacModule`, но **не зарегистрирован** |
+| `rustok-index` | CQRS read-model, индексатор для storefront | ✅ Зарегистрирован как Core (`ModuleKind::Core`) |
+| `rustok-tenant` | Tenant metadata, lifecycle хуки | ✅ Зарегистрирован как Core (`ModuleKind::Core`) |
+| `rustok-rbac` | RBAC helpers, lifecycle хуки | ✅ Зарегистрирован как Core (`ModuleKind::Core`) |
 
 > **`rustok-outbox` — core-компонент платформы.** Он не реализует `RusToKModule` и не входит в registry, но относится к категории Core Infrastructure: `TransactionalEventBus` используется при каждой write-операции во всех domain-модулях. Инициализируется через `build_event_runtime()` в `app.rs`, а не через `ModuleRegistry`. Остановка outbox = потеря гарантий доставки событий для всей платформы.
 
@@ -52,7 +52,7 @@
 | `rustok-pages` | Domain | `rustok-core` |
 
 **Ключевые наблюдения:**
-- `rustok-index`, `rustok-tenant`, `rustok-rbac` — Категория B: реализуют `RusToKModule`, имеют lifecycle-хуки, но пока не зарегистрированы.
+- `rustok-index`, `rustok-tenant`, `rustok-rbac` — Категория B: зарегистрированы в `build_registry()` как Core-модули и проходят health/lifecycle через единый реестр.
 - `rustok-outbox` — ядро платформы, но **не через registry**: это `EventTransport`-слой, инициализируемый отдельно.
 - `rustok-test-utils` — **исключительно `[dev-dependencies]`**, в production binary не входит никогда.
 - `utoipa-swagger-ui-vendored` — vendored статика Swagger UI, не `RusToKModule`.
@@ -120,11 +120,13 @@ RUSTOK_REDIS_URL / REDIS_URL задан?
 - Все инстансы подписаны и локально инвалидируют оба ключа.
 - Метрики (hits/misses) тоже пишутся в Redis через `INCR` → `/metrics` показывает агрегат кластера.
 
-**Известная проблема:** `InMemoryCacheBackend::set_with_ttl()` **игнорирует параметр `_ttl`**, используя только глобальный TTL, заданный при создании кэша. Per-entry TTL не работает в in-memory режиме.
+**Обновление статуса:** проблема с `InMemoryCacheBackend::set_with_ttl()` закрыта (см. пункт 2.8): per-entry TTL поддерживается корректно через `moka::Expiry`.
 
 ---
 
 ## 2. Рекомендации
+
+> Ниже сохранён полный трек рекомендаций: часть пунктов уже реализована и отмечена как ✅, часть остаётся в работе/плане.
 
 ### 2.1 ✅ РЕАЛИЗОВАНО: Устранить размытую границу core / domain-module
 
@@ -276,7 +278,11 @@ pub struct EventEnvelope<E = serde_json::Value> {
 
 **Текущий статус.** Реализован Phase 1: создан crate `rustok-events` как стабильная точка импорта для событийных контрактов, с совместимым re-export `DomainEvent`/`EventEnvelope` из `rustok-core`.
 
-**Осталось до финала:** Phase 2/3 (фактический перенос определения enum и схем в `rustok-events`, затем cleanup зависимостей) остаются Breaking Change и требуют ADR.
+**Осталось до финала:**
+- **Phase 2:** перенести canonical-определение `DomainEvent`/схем payload в `rustok-events`, оставить в `rustok-core` только совместимый compatibility-layer.
+- **Phase 3:** удалить legacy re-export из `rustok-core`, обновить импорты во всех модулях и зафиксировать breaking-границу в ADR.
+
+Оба этапа остаются Breaking Change и требуют ADR перед merge в release branch.
 
 ---
 
