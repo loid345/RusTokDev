@@ -1,3 +1,5 @@
+mod manifest;
+
 use rustok_blog::BlogModule;
 use rustok_commerce::CommerceModule;
 use rustok_content::ContentModule;
@@ -21,3 +23,5 @@ pub fn build_registry() -> ModuleRegistry {
         .register(ForumModule)
         .register(PagesModule)
 }
+
+pub use manifest::validate_registry_vs_manifest;

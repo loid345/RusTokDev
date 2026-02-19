@@ -1,115 +1,74 @@
 # Документация по модулям RusToK
 
-Этот документ описывает текущее состояние модульной архитектуры в репозитории:
-- какие модульные crate'ы существуют;
-- какие из них реально зарегистрированы в `rustok-server`;
-- какие crate'ы относятся к инфраструктуре и приложениями.
+Этот документ фиксирует текущее состояние модульной архитектуры в репозитории:
+- какие `RusToKModule` зарегистрированы в `rustok-server`;
+- какие из них Core/Optional;
+- какие инфраструктурные crate'ы критичны для runtime, но не являются `RusToKModule`.
 
 ## 1. Общая картина
 
-RusToK — модульный монолит: модули компилируются в общий бинарник, но имеют
-изолированную ответственность и общий контракт `RusToKModule`.
+RusToK — модульный монолит: модули компилируются в общий бинарник и поднимаются через `ModuleRegistry`.
 
-Ключевой момент: **наличие module crate не равно runtime-регистрации**. Модуль
-должен быть явно добавлен в `build_registry()` сервера.
+Ключевой момент: **не каждый критичный компонент платформы реализует `RusToKModule`**.
+Например, `rustok-outbox` является core-инфраструктурой событий, но инициализируется через event runtime, а не через `ModuleRegistry`.
 
 **Где смотреть в коде:**
-- Runtime-регистрация: `apps/server/src/modules/mod.rs`
-- Контракт модуля/реестр: `crates/rustok-core/src/module.rs`, `crates/rustok-core/src/registry.rs`
-- Конфигурация workspace: `Cargo.toml`
+- Runtime-регистрация модулей: `apps/server/src/modules/mod.rs`
+- Синхронизация манифеста и runtime-регистрации: `apps/server/src/modules/manifest.rs`
+- Контракт модуля и виды модулей: `crates/rustok-core/src/module.rs`
+- Реестр Core/Optional: `crates/rustok-core/src/registry.rs`
+- Манифест модулей: `modules.toml`
 
 ## 2. Что реально зарегистрировано в сервере
 
 В текущей сборке в `ModuleRegistry` регистрируются:
 
+### Core (`ModuleKind::Core`)
+
+| Slug | Crate | Назначение |
+| --- | --- | --- |
+| `index` | `rustok-index` | CQRS/read-model индексатор |
+| `tenant` | `rustok-tenant` | Tenant lifecycle и метаданные |
+| `rbac` | `rustok-rbac` | RBAC lifecycle и health |
+
+### Optional (`ModuleKind::Optional`)
+
 | Slug | Crate | Назначение |
 | --- | --- | --- |
 | `content` | `rustok-content` | Базовый CMS-контент |
 | `commerce` | `rustok-commerce` | e-commerce домен |
-| `blog` | `rustok-blog` | Блоговая надстройка |
-| `forum` | `rustok-forum` | Форумный модуль |
+| `blog` | `rustok-blog` | Блоговая надстройка (depends_on: `content`) |
+| `forum` | `rustok-forum` | Форумный модуль (depends_on: `content`) |
 | `pages` | `rustok-pages` | Страницы и меню |
 
-## 3. Module crates в репозитории (с `impl RusToKModule`)
+## 3. Критичная инфраструктура вне ModuleRegistry
 
-Помимо зарегистрированных модулей, в workspace есть ещё module crate'ы:
+Эти crate'ы не являются `RusToKModule`, но относятся к ядру платформы:
 
-| Slug | Crate | Статус в `apps/server` |
+| Crate | Статус | Примечание |
 | --- | --- | --- |
-| `tenant` | `rustok-tenant` | Не регистрируется в текущем `build_registry()` |
-| `rbac` | `rustok-rbac` | Не регистрируется в текущем `build_registry()` |
-| `index` | `rustok-index` | Не регистрируется в текущем `build_registry()` |
+| `rustok-core` | Core | Контракты, базовые типы и инфраструктура |
+| `rustok-outbox` | Core | Транзакционная доставка событий (required в `modules.toml`) |
+| `rustok-telemetry` | Core infra | Сквозная observability |
 
-Это важно учитывать при чтении документации и планировании rollout по tenant-модулям.
+Также есть опциональные/технические инфраструктурные crate'ы (`rustok-iggy`, `rustok-iggy-connector`, `rustok-mcp`, `alloy-scripting`).
 
-## 4. Доменные модули и ответственность
+## 4. Приложения
 
-### `rustok-content`
-- Роль: базовый контентный модуль.
-- Основные части: `entities/`, `services/`, `dto/`.
-
-### `rustok-commerce`
-- Роль: commerce-домен (каталог, заказы, цены, склад).
-- Основные части: `entities/`, `services/`, `dto/`.
-
-### `rustok-blog`
-- Роль: блоговая надстройка поверх контента.
-
-### `rustok-forum`
-- Роль: форум (категории, темы, ответы, модерация).
-
-### `rustok-pages`
-- Роль: страницы и меню.
-
-### `rustok-index`
-- Роль: read-model / индексный модуль (CQRS).
-- Примечание: в кодовой базе есть, но в текущей серверной регистрации отсутствует.
-
-### `rustok-tenant`
-- Роль: tenant metadata/helpers.
-- Примечание: есть как module crate, но не зарегистрирован в `build_registry()`.
-
-### `rustok-rbac`
-- Роль: role-based access control helpers.
-- Примечание: есть как module crate, но не зарегистрирован в `build_registry()`.
-
-## 5. Инфраструктурные crates
-
-- `rustok-core` — контракты модулей, registry, события, базовые типы.
-- `rustok-outbox` — outbox-публикация событий.
-- `rustok-iggy` — L2 transport/replay.
-- `rustok-iggy-connector` — connector-слой для Iggy.
-- `rustok-telemetry` — tracing/metrics.
-- `rustok-mcp` — MCP toolkit/integration crate.
-- `alloy-scripting` — скриптовый движок и orchestration.
-
-## 6. Приложения
-
-- `apps/server` (`rustok-server`) — API-сервер, поднимает `ModuleRegistry`.
-- `apps/admin` (`rustok-admin`) — админ-панель.
+- `apps/server` (`rustok-server`) — API-сервер и orchestration модулей.
+- `apps/admin` (`rustok-admin`) — админ-панель на Leptos.
 - `apps/storefront` (`rustok-storefront`) — storefront на Leptos.
-- `crates/rustok-mcp` (bin `rustok-mcp-server`) — MCP stdio сервер и адаптер в одном crate.
+- `crates/rustok-mcp` (bin `rustok-mcp-server`) — MCP сервер/адаптер.
 
-## 7. Связанные документы
+## 5. Связанные документы
 
-### Основная документация
-- `docs/modules/registry.md` — актуальный реестр приложений и crate'ов.
+- `docs/modules/registry.md` — реестр приложений и crate'ов.
 - `docs/modules/manifest.md` — манифест и правила описания модулей.
-- `docs/modules/_index.md` — индекс модульной документации.
+- `docs/architecture/improvement-recommendations.md` — рекомендации и roadmap архитектуры.
 
-### Установка модулей с UI
-- `docs/modules/UI_PACKAGES_INDEX.md` — **NEW** Индекс документации по UI пакетам модулей (навигация)
-- `docs/modules/UI_PACKAGES_QUICKSTART.md` — **NEW** Быстрый старт: создание модулей с UI пакетами
-- `docs/modules/MODULE_UI_PACKAGES_INSTALLATION.md` — **NEW** Полное руководство по установке модулей с UI пакетами для админки и фронтенда
-- `docs/modules/INSTALLATION_IMPLEMENTATION.md` — реализация системы установки модулей
-
-### Технические спецификации
-- `docs/modules/flex.md` — спецификация Flex модуля
-- `docs/modules/ALLOY_MANIFEST.md` — манифест Alloy Scripting
-
-## 8. Что делать при изменениях модульного состава
+## 6. Что делать при изменениях модульного состава
 
 При добавлении/удалении модульных crate'ов или их регистрации в сервере:
 1. Обновить `apps/server/src/modules/mod.rs` (если меняется runtime-регистрация).
-2. Обновить `docs/modules/overview.md`, `docs/modules/registry.md` и `docs/modules/_index.md`.
-3. Проверить consistency с `docs/index.md`.
+2. Обновить `modules.toml` (required/depends_on/default_enabled).
+3. Обновить `docs/modules/overview.md`, `docs/modules/registry.md` и при необходимости `docs/index.md`.

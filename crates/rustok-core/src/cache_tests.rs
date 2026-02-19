@@ -159,4 +159,38 @@ mod in_memory_cache_tests {
         let expired = cache.get("key").await.unwrap();
         assert_eq!(expired, None);
     }
+
+    #[tokio::test]
+    async fn test_in_memory_cache_respects_per_entry_ttl() {
+        let cache = InMemoryCacheBackend::new(Duration::from_secs(5), 100);
+
+        cache
+            .set_with_ttl(
+                "short".to_string(),
+                b"value".to_vec(),
+                Duration::from_millis(50),
+            )
+            .await
+            .unwrap();
+
+        tokio::time::sleep(Duration::from_millis(90)).await;
+
+        let expired = cache.get("short").await.unwrap();
+        assert_eq!(expired, None);
+    }
+
+    #[tokio::test]
+    async fn test_in_memory_cache_set_uses_default_ttl() {
+        let cache = InMemoryCacheBackend::new(Duration::from_millis(50), 100);
+
+        cache
+            .set("default".to_string(), b"value".to_vec())
+            .await
+            .unwrap();
+
+        tokio::time::sleep(Duration::from_millis(90)).await;
+
+        let expired = cache.get("default").await.unwrap();
+        assert_eq!(expired, None);
+    }
 }

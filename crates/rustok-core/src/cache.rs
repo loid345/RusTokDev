@@ -1,9 +1,11 @@
 #[cfg(feature = "redis-cache")]
 use std::sync::Arc;
 use std::time::Duration;
+use std::time::Instant;
 
 use async_trait::async_trait;
 use moka::future::Cache;
+use moka::Expiry;
 
 use crate::context::CacheBackend;
 #[cfg(feature = "redis-cache")]
@@ -19,17 +21,50 @@ pub struct CacheStats {
 }
 
 pub struct InMemoryCacheBackend {
-    cache: Cache<String, Vec<u8>>,
+    cache: Cache<String, InMemoryCacheValue>,
+    default_ttl: Duration,
+}
+
+#[derive(Clone)]
+struct InMemoryCacheValue {
+    payload: Vec<u8>,
+    ttl: Duration,
+}
+
+struct InMemoryCacheExpiry;
+
+impl Expiry<String, InMemoryCacheValue> for InMemoryCacheExpiry {
+    fn expire_after_create(
+        &self,
+        _key: &String,
+        value: &InMemoryCacheValue,
+        _created_at: Instant,
+    ) -> Option<Duration> {
+        Some(value.ttl)
+    }
+
+    fn expire_after_update(
+        &self,
+        _key: &String,
+        value: &InMemoryCacheValue,
+        _updated_at: Instant,
+        _duration_until_expiry: Option<Duration>,
+    ) -> Option<Duration> {
+        Some(value.ttl)
+    }
 }
 
 impl InMemoryCacheBackend {
     pub fn new(ttl: Duration, max_capacity: u64) -> Self {
         let cache = Cache::builder()
-            .time_to_live(ttl)
-            .time_to_live(ttl)
+            .expire_after(InMemoryCacheExpiry)
             .max_capacity(max_capacity)
             .build();
-        Self { cache }
+
+        Self {
+            cache,
+            default_ttl: ttl,
+        }
     }
 }
 
@@ -88,18 +123,23 @@ impl CacheBackend for InMemoryCacheBackend {
     }
 
     async fn get(&self, key: &str) -> Result<Option<Vec<u8>>> {
-        Ok(self.cache.get(key).await)
+        Ok(self.cache.get(key).await.map(|entry| entry.payload))
     }
 
     async fn set(&self, key: String, value: Vec<u8>) -> Result<()> {
-        self.cache.insert(key, value).await;
-        Ok(())
+        self.set_with_ttl(key, value, self.default_ttl).await
     }
 
-    async fn set_with_ttl(&self, key: String, value: Vec<u8>, _ttl: Duration) -> Result<()> {
-        // Moka cache uses global TTL policy by default.
-        // For now we just insert, ignoring specific TTL.
-        self.cache.insert(key, value).await;
+    async fn set_with_ttl(&self, key: String, value: Vec<u8>, ttl: Duration) -> Result<()> {
+        self.cache
+            .insert(
+                key,
+                InMemoryCacheValue {
+                    payload: value,
+                    ttl,
+                },
+            )
+            .await;
         Ok(())
     }
 

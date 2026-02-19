@@ -32,6 +32,10 @@ impl RusToKModule for ForumModule {
     fn version(&self) -> &'static str {
         env!("CARGO_PKG_VERSION")
     }
+
+    fn dependencies(&self) -> &[&'static str] {
+        &["content"]
+    }
 }
 
 impl MigrationSource for ForumModule {

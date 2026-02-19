@@ -69,6 +69,7 @@ impl Hooks for App {
         let event_runtime = build_event_runtime(ctx).await?;
         ctx.shared_store.insert(event_runtime.transport.clone());
         let registry = modules::build_registry();
+        modules::validate_registry_vs_manifest(&registry)?;
         middleware::tenant::init_tenant_cache_infrastructure(ctx).await;
         let engine = Arc::new(alloy_scripting::create_default_engine());
         let storage = Arc::new(alloy_scripting::SeaOrmStorage::new(ctx.db.clone()));

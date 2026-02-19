@@ -27,7 +27,7 @@ graph TD
 
     subgraph Infrastructure
         CORE[crates/rustok-core]
-        OUTBOX[crates/rustok-outbox]
+        OUTBOX[crates/rustok-outbox - Core Infra]
         IGGY[crates/rustok-iggy]
         IGGY_CONN[crates/rustok-iggy-connector]
         MCP[crates/rustok-mcp]
@@ -76,7 +76,7 @@ graph TD
 | Path | Name | Description |
 |------|------|-------------|
 | `crates/rustok-core` | **Core** | Shared traits, base entities, and common utilities. |
-| `crates/rustok-outbox` | **Outbox** | Implementation of the Transactional Outbox pattern. |
+| `crates/rustok-outbox` | **Outbox** | Core infrastructure for transactional event delivery (required platform component). |
 | `crates/rustok-iggy` | **Iggy Transport** | EventTransport implementation with serialization, topology, DLQ, replay. |
 | `crates/rustok-iggy-connector` | **Iggy Connector** | Embedded/Remote mode switching, connection lifecycle, message I/O. |
 | `crates/rustok-mcp` | **MCP** | MCP adapter crate with embedded `rustok-mcp-server` binary. Exposes RusToK tools/resources via the MCP protocol using the `rmcp` SDK. |
