@@ -4,7 +4,6 @@ use sea_orm::{
     ColumnTrait, Condition, EntityTrait, Expr, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
 };
 use std::collections::HashSet;
-use uuid::Uuid;
 
 use crate::context::{AuthContext, TenantContext};
 use crate::graphql::common::{encode_cursor, PageInfo, PaginationInput};
