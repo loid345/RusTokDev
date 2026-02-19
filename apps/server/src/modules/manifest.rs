@@ -1,6 +1,6 @@
 use rustok_core::ModuleRegistry;
 use serde::Deserialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
 #[derive(Debug, Deserialize)]
@@ -13,10 +13,15 @@ struct ModuleSpec {
     #[serde(rename = "crate")]
     crate_name: String,
     required: Option<bool>,
+    depends_on: Option<Vec<String>>,
 }
 
 fn is_registry_managed_module(spec: &ModuleSpec) -> bool {
     spec.crate_name != "rustok-outbox"
+}
+
+fn normalize_deps(deps: Option<Vec<String>>) -> HashSet<String> {
+    deps.unwrap_or_default().into_iter().collect()
 }
 
 pub fn validate_registry_vs_manifest(registry: &ModuleRegistry) -> loco_rs::Result<()> {
@@ -88,6 +93,43 @@ pub fn validate_registry_vs_manifest(registry: &ModuleRegistry) -> loco_rs::Resu
         return Err(loco_rs::Error::BadRequest(format!(
             "modules.toml required flags conflict with ModuleRegistry kinds: {}",
             required_mismatch.join(", ")
+        )));
+    }
+
+    let dependency_mismatch: Vec<String> = registry
+        .list()
+        .into_iter()
+        .filter_map(|module| {
+            manifest.modules.get(module.slug()).and_then(|spec| {
+                if !is_registry_managed_module(spec) {
+                    None
+                } else {
+                    let manifest_deps = normalize_deps(spec.depends_on.clone());
+                    let registry_deps: HashSet<String> = module
+                        .dependencies()
+                        .iter()
+                        .map(|dep| dep.to_string())
+                        .collect();
+
+                    if manifest_deps == registry_deps {
+                        None
+                    } else {
+                        Some(format!(
+                            "{} (manifest={:?}, registry={:?})",
+                            module.slug(),
+                            manifest_deps,
+                            registry_deps
+                        ))
+                    }
+                }
+            })
+        })
+        .collect();
+
+    if !dependency_mismatch.is_empty() {
+        return Err(loco_rs::Error::BadRequest(format!(
+            "modules.toml depends_on conflict with ModuleRegistry dependencies: {}",
+            dependency_mismatch.join(", ")
         )));
     }
 

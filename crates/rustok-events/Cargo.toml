@@ -1,0 +1,11 @@
+[package]
+name = "rustok-events"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Shared event contracts for RusToK"
+repository.workspace = true
+
+[dependencies]
+rustok-core = { workspace = true }

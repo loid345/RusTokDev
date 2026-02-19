@@ -134,6 +134,7 @@ lazy_static = "1.5"
 
 # Internal crates
 rustok-core = { path = "crates/rustok-core" }
+rustok-events = { path = "crates/rustok-events" }
 rustok-commerce = { path = "crates/rustok-commerce" }
 rustok-blog = { path = "crates/rustok-blog" }
 rustok-content = { path = "crates/rustok-content" }

@@ -27,6 +27,7 @@ graph TD
 
     subgraph Infrastructure
         CORE[crates/rustok-core]
+        EVENTS[crates/rustok-events]
         OUTBOX[crates/rustok-outbox - Core Infra]
         IGGY[crates/rustok-iggy]
         IGGY_CONN[crates/rustok-iggy-connector]
@@ -51,6 +52,7 @@ graph TD
     SF --> L_UI
     
     COMMERCE --> CORE
+    COMMERCE --> EVENTS
     CONTENT --> CORE
     COMMERCE --> OUTBOX
     OUTBOX --> IGGY
@@ -76,6 +78,7 @@ graph TD
 | Path | Name | Description |
 |------|------|-------------|
 | `crates/rustok-core` | **Core** | Shared traits, base entities, and common utilities. |
+| `crates/rustok-events` | **Events Contracts** | Stable import point for `DomainEvent`/`EventEnvelope` (Phase 1 re-export from core). |
 | `crates/rustok-outbox` | **Outbox** | Core infrastructure for transactional event delivery (required platform component). |
 | `crates/rustok-iggy` | **Iggy Transport** | EventTransport implementation with serialization, topology, DLQ, replay. |
 | `crates/rustok-iggy-connector` | **Iggy Connector** | Embedded/Remote mode switching, connection lifecycle, message I/O. |
