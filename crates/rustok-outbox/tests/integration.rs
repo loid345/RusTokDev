@@ -1,6 +1,6 @@
+use std::any::Any;
 use std::collections::HashMap;
 use std::sync::Arc;
-use std::sync::OnceLock;
 
 use async_trait::async_trait;
 use chrono::Utc;
@@ -20,9 +20,8 @@ struct MockTransport {
 }
 
 impl MockTransport {
-    async fn fail_n_times_for(self, event_id: Uuid, n: usize) -> Self {
+    async fn fail_n_times_for(&self, event_id: Uuid, n: usize) {
         self.remaining_failures.lock().await.insert(event_id, n);
-        self
     }
 
     async fn delivered(&self) -> Vec<Uuid> {
@@ -48,18 +47,16 @@ impl EventTransport for MockTransport {
     fn reliability_level(&self) -> ReliabilityLevel {
         ReliabilityLevel::Outbox
     }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
 }
 
 type TestResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
-async fn test_guard() -> tokio::sync::MutexGuard<'static, ()> {
-    static TEST_MUTEX: OnceLock<Mutex<()>> = OnceLock::new();
-    TEST_MUTEX.get_or_init(|| Mutex::new(())).lock().await
-}
-
 #[tokio::test]
 async fn relay_delivers_successfully() -> TestResult<()> {
-    let _guard = test_guard().await;
     let Some(db) = setup_db().await? else {
         return Ok(());
     };
@@ -89,16 +86,12 @@ async fn relay_delivers_successfully() -> TestResult<()> {
 
 #[tokio::test]
 async fn relay_retries_then_succeeds() -> TestResult<()> {
-    let _guard = test_guard().await;
     let Some(db) = setup_db().await? else {
         return Ok(());
     };
     let envelope = seed_event(&db).await?;
-    let transport = Arc::new(
-        MockTransport::default()
-            .fail_n_times_for(envelope.id, 1)
-            .await,
-    );
+    let transport = Arc::new(MockTransport::default());
+    transport.fail_n_times_for(envelope.id, 1).await;
 
     let relay = OutboxRelay::new(db.clone(), transport.clone()).with_config(RelayConfig {
         batch_size: 10,
@@ -111,7 +104,6 @@ async fn relay_retries_then_succeeds() -> TestResult<()> {
     let processed_first = relay.process_pending_once().await?;
     assert_eq!(processed_first, 1);
 
-    // Make retry immediately eligible.
     let mut failed_once: entity::ActiveModel = entity::Entity::find_by_id(envelope.id)
         .one(&db)
         .await?
@@ -138,16 +130,12 @@ async fn relay_retries_then_succeeds() -> TestResult<()> {
 
 #[tokio::test]
 async fn relay_moves_to_dlq_on_max_retry() -> TestResult<()> {
-    let _guard = test_guard().await;
     let Some(db) = setup_db().await? else {
         return Ok(());
     };
     let envelope = seed_event(&db).await?;
-    let transport = Arc::new(
-        MockTransport::default()
-            .fail_n_times_for(envelope.id, 10)
-            .await,
-    );
+    let transport = Arc::new(MockTransport::default());
+    transport.fail_n_times_for(envelope.id, 10).await;
 
     let relay = OutboxRelay::new(db.clone(), transport).with_config(RelayConfig {
         batch_size: 10,
