@@ -108,6 +108,7 @@ graph TD
 - [Distributed Tracing](./standards/distributed-tracing.md)
 - [OpenTelemetry Integration](./standards/opentelemetry-integration.md)
 - [Instrumentation Examples](./standards/instrumentation-examples.md)
+- [Transactional Outbox](./standards/transactional-outbox.md)
 
 ### AI (`docs/ai/`)
 

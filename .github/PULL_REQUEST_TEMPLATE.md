@@ -56,6 +56,7 @@
 - [ ] Events are validated before publishing (using `ValidateEvent`)
 - [ ] Events are published within transactions (using `publish_in_tx`)
 - [ ] No events are lost due to transaction rollbacks
+- [ ] Проверка транзакционности + outbox выполнена (domain write + outbox write в одной транзакции)
 
 ### Performance & Reliability
 - [ ] No potential memory leaks
