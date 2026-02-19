@@ -94,4 +94,5 @@
 - [ ] Добавлен тест цепочки **event created → handler executed → projection/index updated** (или эквивалент `publish → outbox → delivery → consumer/read-model` для transactional flow).
 - [ ] Для каждого нового `DomainEvent` добавлены минимум два интеграционных теста: happy-path и repeat/idempotency.
 - [ ] Имена интеграционных тестов отражают цепочку события (например, `test_product_created_event_updates_index_projection`).
+- [ ] Применено переходное правило legacy event-flow: исторические цепочки покрываются поэтапно, но при любом изменении producer/consumer, routing, outbox/delivery или projection/index в legacy-сценарии интеграционные тесты обновляются в этом же PR.
 - [ ] Обновлены документы: этот файл + docs/модуля-публикатора + docs/модуля-consumer.

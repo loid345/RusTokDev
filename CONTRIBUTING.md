@@ -200,6 +200,7 @@ cargo tarpaulin --workspace --out html
    - Every newly introduced `DomainEvent` must include at least:
      - one happy-path integration test;
      - one repeat/idempotency integration test.
+   - **Legacy event-flow transition policy**: existing legacy flows may be covered incrementally, but any PR that touches legacy producer/consumer logic, routing, outbox/delivery, or projection/index updates must add or update the corresponding integration tests in the same PR.
 
 See `docs/testing-guidelines.md` for detailed testing strategies.
 
