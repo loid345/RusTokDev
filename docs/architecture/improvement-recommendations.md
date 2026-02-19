@@ -503,6 +503,33 @@ graph TD
 - **Документационный контроль:** любые изменения по модулям/событиям/маршрутизации синхронно отражаются в `docs/index.md` и профильных docs-файлах.
 - **ADR-контроль:** для `2.9` Phase 1 допускается без ADR (совместимый слой), а финальный перенос контракта (Phase 2/3) и `2.14` не переводятся в implementation до публикации ADR в `DECISIONS/`.
 
+### 5.5 Следующие шаги «по списку» (операционализация)
+
+Чтобы roadmap не оставался декларативным, фиксируем ближайшие шаги в формате action list.
+
+#### Ближайшие 2 недели (focus: 2.7 + 2.12)
+- [ ] Подготовить technical design для `relay_target` (`memory|iggy`) с backward-compatibility для текущего `transport = "outbox"`.
+- [ ] Добавить конфигурационные поля (`relay_target`, `relay_retry_policy`, `dlq_max_attempts`) и их валидацию на старте.
+- [ ] Реализовать `outbox_backlog_size` gauge + счётчики retry/DLQ (`outbox_retries_total`, `outbox_dlq_total`).
+- [ ] Добавить минимальный админский read endpoint для DLQ (list + фильтры по `tenant_id`, `event_type`, `created_at`).
+- [ ] Описать runbook для инцидентов: backlog growth, downstream outage, DLQ replay.
+
+#### Следующий шаг после стабилизации (focus: 2.10 + 2.13)
+- [ ] Согласовать JSON-schema для typed module config и стратегию миграции legacy `tenant_modules.settings`.
+- [ ] Вынести Alloy lifecycle в модульный контракт (`ModuleKind::Optional`) и добавить health visibility.
+- [ ] Зафиксировать RBAC-пермишены для scripting (`scripting:execute`, `scripting:manage`).
+
+#### Стратегический трек (focus: 2.9 + 2.14)
+- [ ] Подготовить ADR: границы `rustok-events` как canonical контракта событий (Phase 2/3).
+- [ ] Подготовить ADR: авторегистрация HTTP routes и границы между `core-server` и module bundles.
+- [ ] Определить migration checklist для breaking-фазы (импорты, кодогенерация схем, обратная совместимость).
+
+**Артефакты, которые должны появиться по итогам шагов:**
+- обновления в `docs/architecture/events.md` (pipeline, DLQ, replay);
+- обновления в `docs/guides/observability-quickstart.md` (новые метрики и alerts);
+- ADR-файлы в `DECISIONS/` для стратегических пунктов 2.9 и 2.14.
+
+
 ---
 
 ## 6. Связанные документы
