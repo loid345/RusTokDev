@@ -59,10 +59,42 @@ impl Default for SmtpSettings {
 pub struct EventSettings {
     #[serde(default)]
     pub transport: EventTransportKind,
+    #[serde(default)]
+    pub relay_target: RelayTargetKind,
     #[serde(default = "default_relay_interval_ms")]
     pub relay_interval_ms: u64,
     #[serde(default)]
+    pub relay_retry_policy: RelayRetryPolicy,
+    #[serde(default)]
+    pub dlq: DlqSettings,
+    #[serde(default)]
     pub iggy: IggyConfig,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct RelayRetryPolicy {
+    #[serde(default = "default_relay_max_attempts")]
+    pub max_attempts: i32,
+    #[serde(default = "default_relay_backoff_base_ms")]
+    pub base_backoff_ms: u64,
+    #[serde(default = "default_relay_backoff_max_ms")]
+    pub max_backoff_ms: u64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct DlqSettings {
+    #[serde(default = "default_dlq_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_dlq_max_attempts")]
+    pub max_attempts: i32,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, Default, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum RelayTargetKind {
+    #[default]
+    Memory,
+    Iggy,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, Default, Eq, PartialEq)]
@@ -182,6 +214,20 @@ impl RustokSettings {
             parsed.events.transport = parse_event_transport(&raw_transport)?;
         }
 
+        if parsed.events.relay_retry_policy.max_attempts <= 0 {
+            return Err(serde_json::Error::io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "rustok.events.relay_retry_policy.max_attempts must be > 0",
+            )));
+        }
+
+        if parsed.events.dlq.max_attempts <= 0 {
+            return Err(serde_json::Error::io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "rustok.events.dlq.max_attempts must be > 0",
+            )));
+        }
+
         Ok(parsed)
     }
 }
@@ -234,6 +280,26 @@ fn default_burst() -> u32 {
 
 fn default_relay_interval_ms() -> u64 {
     1_000
+}
+
+fn default_relay_max_attempts() -> i32 {
+    5
+}
+
+fn default_relay_backoff_base_ms() -> u64 {
+    1_000
+}
+
+fn default_relay_backoff_max_ms() -> u64 {
+    60_000
+}
+
+fn default_dlq_enabled() -> bool {
+    true
+}
+
+fn default_dlq_max_attempts() -> i32 {
+    10
 }
 
 fn default_email_from() -> String {

@@ -314,6 +314,8 @@ See module READMEs for specific implementation details:
 
 ## Outbox Relay Pipeline (L1 → L2)
 
+**Status (2026-02-19):** Implemented in `apps/server` event runtime (outbox relay target + retry policy wiring).
+
 Планируемый production-паттерн: write-side всегда использует outbox (L1), а relay target задаётся отдельно (`memory` для local/dev, `iggy` для highload/replay).
 
 ```toml
@@ -338,7 +340,7 @@ max_attempts = 10
 - При недоступном downstream событие остаётся в backlog и переотправляется по retry policy.
 - После исчерпания попыток событие переносится в DLQ (`sys_events_dlq`).
 
-### Admin / Replay flow (target state)
+### Admin / Replay flow
 
 - `GET /api/admin/events/dlq` — просмотр DLQ с фильтрами (`tenant_id`, `event_type`, `created_at`).
 - `POST /api/admin/events/dlq/{id}/replay` — повторная постановка события в relay queue.
