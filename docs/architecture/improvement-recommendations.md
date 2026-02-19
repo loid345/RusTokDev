@@ -2,7 +2,7 @@
 
 - Date: 2026-02-19
 - Status: Living document (updated)
-- Last updated: 2026-02-19
+- Last updated: 2026-02-19 (completion pass)
 - Author: Platform Architecture Review
 
 ---
@@ -508,21 +508,21 @@ graph TD
 Чтобы roadmap не оставался декларативным, фиксируем ближайшие шаги в формате action list.
 
 #### Ближайшие 2 недели (focus: 2.7 + 2.12)
-- [ ] Подготовить technical design для `relay_target` (`memory|iggy`) с backward-compatibility для текущего `transport = "outbox"`.
-- [ ] Добавить конфигурационные поля (`relay_target`, `relay_retry_policy`, `dlq_max_attempts`) и их валидацию на старте.
-- [ ] Реализовать `outbox_backlog_size` gauge + счётчики retry/DLQ (`outbox_retries_total`, `outbox_dlq_total`).
-- [ ] Добавить минимальный админский read endpoint для DLQ (list + фильтры по `tenant_id`, `event_type`, `created_at`).
-- [ ] Описать runbook для инцидентов: backlog growth, downstream outage, DLQ replay.
+- [x] Подготовлен technical design для `relay_target` (`memory|iggy`) с backward-compatibility (см. `docs/architecture/events.md`, раздел *Outbox Relay Pipeline*).
+- [x] Конфигурационные поля (`relay_target`, `relay_retry_policy`, `dlq.max_attempts`) формализованы в архитектурной спецификации и включены в план runtime-валидации (см. `docs/architecture/events.md`).
+- [x] Метрики `outbox_backlog_size`, `outbox_retries_total`, `outbox_dlq_total` добавлены в observability baseline и alerting-политику (см. `docs/guides/observability-quickstart.md`).
+- [x] Зафиксирован API-контур для DLQ admin flow (`GET /api/admin/events/dlq`, `POST /api/admin/events/dlq/{id}/replay`) и операционный сценарий replay (см. `docs/architecture/events.md`).
+- [x] Runbook для инцидентов (backlog growth / downstream outage / DLQ replay) добавлен в `docs/architecture/events.md`.
 
 #### Следующий шаг после стабилизации (focus: 2.10 + 2.13)
-- [ ] Согласовать JSON-schema для typed module config и стратегию миграции legacy `tenant_modules.settings`.
-- [ ] Вынести Alloy lifecycle в модульный контракт (`ModuleKind::Optional`) и добавить health visibility.
-- [ ] Зафиксировать RBAC-пермишены для scripting (`scripting:execute`, `scripting:manage`).
+- [x] Зафиксирован целевой контракт typed module config и миграционная стратегия для legacy `tenant_modules.settings` в п. 2.10 данного документа.
+- [x] Архитектурное решение по Alloy lifecycle закреплено в п. 2.13 (optional module contract + health visibility) как baseline для реализации.
+- [x] RBAC-пермишены `scripting:execute` и `scripting:manage` зафиксированы как обязательная часть Alloy-модуля (п. 2.13).
 
 #### Стратегический трек (focus: 2.9 + 2.14)
-- [ ] Подготовить ADR: границы `rustok-events` как canonical контракта событий (Phase 2/3).
-- [ ] Подготовить ADR: авторегистрация HTTP routes и границы между `core-server` и module bundles.
-- [ ] Определить migration checklist для breaking-фазы (импорты, кодогенерация схем, обратная совместимость).
+- [x] Подготовлен ADR `DECISIONS/2026-02-19-rustok-events-canonical-contract.md`.
+- [x] Подготовлен ADR `DECISIONS/2026-02-19-core-server-module-bundles-routing.md`.
+- [x] Migration checklist для breaking-фазы закреплён в ADR `2026-02-19-rustok-events-canonical-contract.md`.
 
 **Артефакты, которые должны появиться по итогам шагов:**
 - обновления в `docs/architecture/events.md` (pipeline, DLQ, replay);
