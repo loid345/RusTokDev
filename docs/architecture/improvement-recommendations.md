@@ -39,7 +39,7 @@
 | `rustok-tenant` | Tenant metadata, lifecycle хуки | Реализует `TenantModule`, но **не зарегистрирован** |
 | `rustok-rbac` | RBAC helpers, lifecycle хуки | Реализует `RbacModule`, но **не зарегистрирован** |
 
-> **`rustok-outbox` — особый случай.** Он не реализует `RusToKModule` и не входит в registry, но является **критическим инфраструктурным компонентом ядра**: `TransactionalEventBus` используется при каждой write-операции во всех domain-модулях. Инициализируется через `build_event_runtime()` в `app.rs`, а не через `ModuleRegistry`. Остановка outbox = потеря гарантий доставки событий для всей платформы.
+> **`rustok-outbox` — core-компонент платформы.** Он не реализует `RusToKModule` и не входит в registry, но относится к категории Core Infrastructure: `TransactionalEventBus` используется при каждой write-операции во всех domain-модулях. Инициализируется через `build_event_runtime()` в `app.rs`, а не через `ModuleRegistry`. Остановка outbox = потеря гарантий доставки событий для всей платформы.
 
 #### Категория C — Optional Domain Modules (регистрируются как `ModuleKind::Optional`, per-tenant toggle)
 

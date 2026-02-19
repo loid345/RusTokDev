@@ -76,6 +76,10 @@ impl RusToKModule for BlogModule {
         env!("CARGO_PKG_VERSION")
     }
 
+    fn dependencies(&self) -> &[&'static str] {
+        &["content"]
+    }
+
     fn permissions(&self) -> Vec<Permission> {
         vec![
             // Posts
