@@ -34,7 +34,13 @@ not duplicated in `docs/modules/`. Links below point directly to those locations
 
 ## Module template
 
-When creating a new module, copy the `_template` folder and fill in all sections:
+When creating a new module, copy the `_template` folder and fill in all sections.
+
+> [!IMPORTANT]
+> Если новый модуль публикует или обрабатывает `DomainEvent`, в его `crates/<name>/docs/README.md`
+> обязательно добавить секцию `Event contracts` со ссылкой на
+> `docs/architecture/event-flow-contract.md`, и обновить `docs/index.md`/`docs/modules/registry.md` при добавлении нового модуля.
+
 
 ```
 docs/modules/_template/
