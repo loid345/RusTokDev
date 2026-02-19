@@ -1,7 +1,8 @@
 # RusToK — Architecture Improvement Recommendations
 
 - Date: 2026-02-19
-- Status: Proposed
+- Status: Living document (updated)
+- Last updated: 2026-02-19
 - Author: Platform Architecture Review
 
 ---
@@ -35,9 +36,9 @@
 
 | Crate | Роль | Текущий статус |
 |---|---|---|
-| `rustok-index` | CQRS read-model, индексатор для storefront | Реализует `IndexModule`, но **не зарегистрирован** |
-| `rustok-tenant` | Tenant metadata, lifecycle хуки | Реализует `TenantModule`, но **не зарегистрирован** |
-| `rustok-rbac` | RBAC helpers, lifecycle хуки | Реализует `RbacModule`, но **не зарегистрирован** |
+| `rustok-index` | CQRS read-model, индексатор для storefront | ✅ Зарегистрирован как Core (`ModuleKind::Core`) |
+| `rustok-tenant` | Tenant metadata, lifecycle хуки | ✅ Зарегистрирован как Core (`ModuleKind::Core`) |
+| `rustok-rbac` | RBAC helpers, lifecycle хуки | ✅ Зарегистрирован как Core (`ModuleKind::Core`) |
 
 > **`rustok-outbox` — core-компонент платформы.** Он не реализует `RusToKModule` и не входит в registry, но относится к категории Core Infrastructure: `TransactionalEventBus` используется при каждой write-операции во всех domain-модулях. Инициализируется через `build_event_runtime()` в `app.rs`, а не через `ModuleRegistry`. Остановка outbox = потеря гарантий доставки событий для всей платформы.
 
@@ -52,7 +53,7 @@
 | `rustok-pages` | Domain | `rustok-core` |
 
 **Ключевые наблюдения:**
-- `rustok-index`, `rustok-tenant`, `rustok-rbac` — Категория B: реализуют `RusToKModule`, имеют lifecycle-хуки, но пока не зарегистрированы.
+- `rustok-index`, `rustok-tenant`, `rustok-rbac` — Категория B: зарегистрированы в `build_registry()` как Core-модули и проходят health/lifecycle через единый реестр.
 - `rustok-outbox` — ядро платформы, но **не через registry**: это `EventTransport`-слой, инициализируемый отдельно.
 - `rustok-test-utils` — **исключительно `[dev-dependencies]`**, в production binary не входит никогда.
 - `utoipa-swagger-ui-vendored` — vendored статика Swagger UI, не `RusToKModule`.
@@ -101,7 +102,8 @@ RUSTOK_REDIS_URL / REDIS_URL задан?
     │            ├── При open circuit → Error::Cache, warn в лог
     │            └── Ключ: prefix + ":" + key
     └── НЕТ → InMemoryCacheBackend (moka)
-                 TTL = global при инициализации
+                 set() использует default_ttl инстанса
+                 set_with_ttl() поддерживает per-entry TTL
                  Capacity = 1000 записей
 ```
 
@@ -120,11 +122,13 @@ RUSTOK_REDIS_URL / REDIS_URL задан?
 - Все инстансы подписаны и локально инвалидируют оба ключа.
 - Метрики (hits/misses) тоже пишутся в Redis через `INCR` → `/metrics` показывает агрегат кластера.
 
-**Известная проблема:** `InMemoryCacheBackend::set_with_ttl()` **игнорирует параметр `_ttl`**, используя только глобальный TTL, заданный при создании кэша. Per-entry TTL не работает в in-memory режиме.
+**Обновление статуса:** проблема с `InMemoryCacheBackend::set_with_ttl()` закрыта (см. пункт 2.8): per-entry TTL поддерживается корректно через `moka::Expiry`.
 
 ---
 
 ## 2. Рекомендации
+
+> Ниже сохранён полный трек рекомендаций: часть пунктов уже реализована и отмечена как ✅, часть остаётся в работе/плане.
 
 ### 2.1 ✅ РЕАЛИЗОВАНО: Устранить размытую границу core / domain-module
 
@@ -276,7 +280,11 @@ pub struct EventEnvelope<E = serde_json::Value> {
 
 **Текущий статус.** Реализован Phase 1: создан crate `rustok-events` как стабильная точка импорта для событийных контрактов, с совместимым re-export `DomainEvent`/`EventEnvelope` из `rustok-core`.
 
-**Осталось до финала:** Phase 2/3 (фактический перенос определения enum и схем в `rustok-events`, затем cleanup зависимостей) остаются Breaking Change и требуют ADR.
+**Осталось до финала:**
+- **Phase 2:** перенести canonical-определение `DomainEvent`/схем payload в `rustok-events`, оставить в `rustok-core` только совместимый compatibility-layer.
+- **Phase 3:** удалить legacy re-export из `rustok-core`, обновить импорты во всех модулях и зафиксировать breaking-границу в ADR.
+
+Оба этапа остаются Breaking Change и требуют ADR перед merge в release branch.
 
 ---
 
@@ -379,22 +387,22 @@ fn routes(ctx: &AppContext) -> AppRoutes {
 
 ## 3. Приоритизированный план действий
 
-| # | Рекомендация | Приоритет | Статус | Сложность | Блокирует |
-|---|---|---|---|---|---|
-| 2.1 | Ввести `ModuleKind::Core` / `Optional` | ✅ Готово | Done | — | — |
-| 2.2 | Зарегистрировать `rustok-index` | ✅ Готово | Done | — | — |
-| 2.3 | Зарегистрировать Tenant/RBAC как Core | ✅ Готово | Done | — | — |
-| 2.4 | Синхронизация `modules.toml` ↔ `build_registry()` | ✅ Готово | Done | Средняя | Ops reliability |
-| 2.8 | Исправить `set_with_ttl()` в InMemoryCache | ✅ Готово | Done | Низкая | Cache correctness |
-| 2.5 | Заполнить `dependencies()` для Blog/Forum | ✅ Готово | Done | Низкая | Data integrity |
-| 2.6 | `required` / `depends_on` в `modules.toml` | ✅ Готово | Done | Низкая | Ops tooling |
-| 2.7 | Связать L1 (Outbox) → L2 (Iggy) pipeline | 🟡 Важно | Backlog | Высокая | Event highload |
-| 2.12 | Outbox DLQ + backlog metrics | 🟢 Улучшение | Backlog | Средняя | Event reliability |
-| 2.10 | Per-tenant typed module config | 🟢 Улучшение | Backlog | Средняя | Extensibility |
-| 2.11 | `rustok-notifications` модуль | 🟢 Улучшение | Backlog | Высокая | New capability |
-| 2.13 | Alloy как `RusToKModule` | 🟢 Улучшение | Backlog | Низкая | Consistency |
-| 2.9 | Вынести `DomainEvent` из core | 🔵 Стратегически | In Progress (Phase 1) | Высокая | Extensibility |
-| 2.14 | Авторегистрация HTTP routes | 🔵 Стратегически | ADR Needed | Высокая | DX / scalability |
+| # | Рекомендация | Приоритет | Статус | Сложность | Блокирует | Owner | Целевая итерация |
+|---|---|---|---|---|---|---|---|
+| 2.1 | Ввести `ModuleKind::Core` / `Optional` | ✅ Готово | Done | — | — | Platform foundation | Завершено |
+| 2.2 | Зарегистрировать `rustok-index` | ✅ Готово | Done | — | — | Platform foundation | Завершено |
+| 2.3 | Зарегистрировать Tenant/RBAC как Core | ✅ Готово | Done | — | — | Platform foundation | Завершено |
+| 2.4 | Синхронизация `modules.toml` ↔ `build_registry()` | ✅ Готово | Done | Средняя | Ops reliability | Platform foundation | Завершено |
+| 2.8 | Исправить `set_with_ttl()` в InMemoryCache | ✅ Готово | Done | Низкая | Cache correctness | Platform foundation | Завершено |
+| 2.5 | Заполнить `dependencies()` для Blog/Forum | ✅ Готово | Done | Низкая | Data integrity | Domain modules | Завершено |
+| 2.6 | `required` / `depends_on` в `modules.toml` | ✅ Готово | Done | Низкая | Ops tooling | Platform foundation | Завершено |
+| 2.7 | Связать L1 (Outbox) → L2 (Iggy) pipeline | 🟡 Важно | Backlog | Высокая | Event highload | Platform foundation + shared infra | Итерация 2 |
+| 2.12 | Outbox DLQ + backlog metrics | 🟢 Улучшение | Backlog | Средняя | Event reliability | Platform foundation + operational tooling | Итерация 2 |
+| 2.10 | Per-tenant typed module config | 🟢 Улучшение | Backlog | Средняя | Extensibility | Platform foundation + domain modules | Итерация 3 |
+| 2.11 | `rustok-notifications` модуль | 🟢 Улучшение | Backlog | Высокая | New capability | Domain modules | Итерация 3 |
+| 2.13 | Alloy как `RusToKModule` | 🟢 Улучшение | Backlog | Низкая | Consistency | Platform foundation | Итерация 3 |
+| 2.9 | Вынести `DomainEvent` из core | 🔵 Стратегически | In Progress (Phase 1) | Высокая | Extensibility | Platform foundation (ADR) | Итерация 3+ |
+| 2.14 | Авторегистрация HTTP routes | 🔵 Стратегически | ADR Needed | Высокая | DX / scalability | Platform foundation (ADR) | После ADR |
 
 ---
 
@@ -494,6 +502,33 @@ graph TD
 - **Еженедельный checkpoint:** статус по пунктам 2.x, риски, блокеры, owner на каждый item.
 - **Документационный контроль:** любые изменения по модулям/событиям/маршрутизации синхронно отражаются в `docs/index.md` и профильных docs-файлах.
 - **ADR-контроль:** для `2.9` Phase 1 допускается без ADR (совместимый слой), а финальный перенос контракта (Phase 2/3) и `2.14` не переводятся в implementation до публикации ADR в `DECISIONS/`.
+
+### 5.5 Следующие шаги «по списку» (операционализация)
+
+Чтобы roadmap не оставался декларативным, фиксируем ближайшие шаги в формате action list.
+
+#### Ближайшие 2 недели (focus: 2.7 + 2.12)
+- [ ] Подготовить technical design для `relay_target` (`memory|iggy`) с backward-compatibility для текущего `transport = "outbox"`.
+- [ ] Добавить конфигурационные поля (`relay_target`, `relay_retry_policy`, `dlq_max_attempts`) и их валидацию на старте.
+- [ ] Реализовать `outbox_backlog_size` gauge + счётчики retry/DLQ (`outbox_retries_total`, `outbox_dlq_total`).
+- [ ] Добавить минимальный админский read endpoint для DLQ (list + фильтры по `tenant_id`, `event_type`, `created_at`).
+- [ ] Описать runbook для инцидентов: backlog growth, downstream outage, DLQ replay.
+
+#### Следующий шаг после стабилизации (focus: 2.10 + 2.13)
+- [ ] Согласовать JSON-schema для typed module config и стратегию миграции legacy `tenant_modules.settings`.
+- [ ] Вынести Alloy lifecycle в модульный контракт (`ModuleKind::Optional`) и добавить health visibility.
+- [ ] Зафиксировать RBAC-пермишены для scripting (`scripting:execute`, `scripting:manage`).
+
+#### Стратегический трек (focus: 2.9 + 2.14)
+- [ ] Подготовить ADR: границы `rustok-events` как canonical контракта событий (Phase 2/3).
+- [ ] Подготовить ADR: авторегистрация HTTP routes и границы между `core-server` и module bundles.
+- [ ] Определить migration checklist для breaking-фазы (импорты, кодогенерация схем, обратная совместимость).
+
+**Артефакты, которые должны появиться по итогам шагов:**
+- обновления в `docs/architecture/events.md` (pipeline, DLQ, replay);
+- обновления в `docs/guides/observability-quickstart.md` (новые метрики и alerts);
+- ADR-файлы в `DECISIONS/` для стратегических пунктов 2.9 и 2.14.
+
 
 ---
 
