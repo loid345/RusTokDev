@@ -15,6 +15,7 @@ use super::forum::{ForumMutation, ForumQuery};
 use super::loaders::{NodeBodyLoader, NodeLoader, NodeTranslationLoader, TenantNameLoader};
 use super::mutations::RootMutation;
 use super::observability::GraphqlObservability;
+use super::pages::{PagesMutation, PagesQuery};
 use super::queries::RootQuery;
 
 #[derive(MergedObject, Default)]
@@ -25,6 +26,7 @@ pub struct Query(
     ContentQuery,
     BlogQuery,
     ForumQuery,
+    PagesQuery,
     AlloyQuery,
 );
 
@@ -36,6 +38,7 @@ pub struct Mutation(
     ContentMutation,
     BlogMutation,
     ForumMutation,
+    PagesMutation,
     AlloyMutation,
 );
 

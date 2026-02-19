@@ -1,6 +1,6 @@
 # RusToK Server — Loco.rs Feature Support & Anti-Duplication Matrix
 
-**Date:** 2026-02-18  
+**Date:** 2026-02-19  
 **Loco.rs Version:** `0.16` (workspace dependency)  
 **Purpose:** сохранить полный обзор реализованного server-функционала (включая auth и доменные API), при этом явно зафиксировать границы: где используем Loco, где сознательно используем самопис.
 
@@ -49,8 +49,17 @@
 ### 2.3 Controllers & API surface
 
 - REST controllers: health, metrics, auth, swagger, pages.
-- Domain controllers: commerce, content, blog, forum.
-- GraphQL endpoint + domain GraphQL modules (`auth`, `commerce`, `content`, `blog`, `forum`, loaders, persisted queries).
+- Domain controllers (REST — для интеграций): commerce, content, blog, forum.
+- GraphQL endpoint (`/api/graphql`) — единственная точка входа для admin/storefront UI:
+  - Root (`queries.rs`, `mutations.rs`): health, apiVersion, currentTenant, enabledModules, moduleRegistry, tenantModules, me, user, users, dashboardStats, recentActivity; createUser, updateUser, disableUser, toggleModule.
+  - Auth (`graphql/auth/`): signIn, forgotPassword, resetPassword, signUp, refreshToken, signOut.
+  - Commerce (`graphql/commerce/`): product, products; createProduct, updateProduct, publishProduct, deleteProduct.
+  - Content (`graphql/content/`): node, nodes; createNode, updateNode, deleteNode.
+  - Blog (`graphql/blog/`): post, posts; createPost, updatePost, deletePost.
+  - Forum (`graphql/forum/`): forumCategories, forumCategory, forumTopics, forumTopic, forumReplies; createForumCategory, updateForumCategory, deleteForumCategory, createForumTopic, updateForumTopic, deleteForumTopic, createForumReply, updateForumReply, deleteForumReply.
+  - Pages (`graphql/pages/`): page, pageBySlug, pages; createPage, updatePage, publishPage, unpublishPage, deletePage.
+  - Alloy scripting (`graphql/alloy/`): скрипты и триггеры.
+  - Persisted queries + observability extensions.
 
 ### 2.4 Models / ORM / persistence
 
@@ -77,8 +86,9 @@
 
 ### 2.7 Background processing / events
 
-- Outbox relay worker запускается из `connect_workers`.
-- Event runtime создаётся из конфигурации транспорта (`memory` / `outbox` / `iggy`).
+- Event runtime строится в `after_routes` и сохраняется в `shared_store` как `Arc<EventRuntime>`.
+- `connect_workers` читает `Arc<EventRuntime>` из `shared_store`; если он отсутствует (worker-only boot), строит runtime самостоятельно.
+- Outbox relay worker запускается из `connect_workers`, если транспорт `outbox`.
 - Event-driven подход остаётся приоритетным для очередей и интеграций.
 
 ### 2.8 Tasks & Initializers
@@ -135,9 +145,9 @@
 
 `/metrics` отдаёт tenant cache метрики `rustok_tenant_cache_*` (hits, misses, entries, negative indicators).
 
-### 4.4 Tenant cache v3
+### 4.4 Единственная production-реализация
 
-`tenant_cache_v3.rs` присутствует как альтернативная реализация с circuit breaker + Moka моделью, но основной production path сейчас проходит через инфраструктуру `tenant.rs`.
+`tenant.rs` — единственный tenant middleware. Экспериментальные варианты (`tenant_v2`, `tenant_cache_v2`, `tenant_cache_v3`) удалены в рамках cleanup (2026-02-19): они не были подключены к маршрутам и создавали мёртвый код.
 
 ---
 
@@ -174,7 +184,6 @@
 - `apps/server/src/initializers/mod.rs`
 - `apps/server/src/initializers/telemetry.rs`
 - `apps/server/src/middleware/tenant.rs`
-- `apps/server/src/middleware/tenant_cache_v3.rs`
 - `apps/server/src/common/settings.rs`
 - `apps/server/config/development.yaml`
 - `apps/server/config/test.yaml`
