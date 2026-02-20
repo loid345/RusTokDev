@@ -1,3 +1,4 @@
+use nom::Parser;
 use nom::error::{ErrorKind, ParseError};
 
 use super::*;
@@ -7,7 +8,7 @@ impl<'a> AstGroup<'a> {
     #[inline]
     pub fn parse(input: &'a str) -> IResult<&'a str, Self> {
         let (rest, (head, children, important)) =
-            tuple((AstStyle::parse, Self::parse_pair, opt(char('!'))))(input)?;
+            (AstStyle::parse, Self::parse_pair, opt(char('!'))).parse(input)?;
         Ok((rest, Self { important: important.is_some(), head, children }))
     }
     #[inline]
@@ -21,13 +22,13 @@ impl<'a> AstGroupItem<'a> {
     /// [`AstGroup`] or [`AstStyle`]
     #[inline]
     pub fn parse(input: &'a str) -> IResult<&'a str, Self> {
-        alt((Self::maybe_group, Self::maybe_style))(input)
+        alt((Self::maybe_group, Self::maybe_style)).parse(input)
     }
     #[inline]
     fn parse_many(input: &'a str) -> IResult<&'a str, Vec<Self>> {
         let head = AstGroupItem::parse;
-        let rest = many0(tuple((multispace1, AstGroupItem::parse)));
-        let (rest, (first, other)) = tuple((head, rest))(input)?;
+        let rest = many0((multispace1, AstGroupItem::parse));
+        let (rest, (first, other)) = (head, rest).parse(input)?;
         let mut out = vec![first];
         out.extend(other.into_iter().map(|s| s.1));
         Ok((rest, out))
@@ -46,13 +47,14 @@ impl<'a> AstStyle<'a> {
     /// `v:v::-?a-a-a-[A]`
     #[inline]
     pub fn parse(input: &'a str) -> IResult<&'a str, Self> {
-        let (rest, (variants, negative, elements, arbitrary, important)) = tuple((
+        let (rest, (variants, negative, elements, arbitrary, important)) = (
             many0(ASTVariant::parse),
             opt(char('-')),
             opt(AstElements::parse),
             opt(AstArbitrary::parse),
             opt(char('!')),
-        ))(input)?;
+        )
+            .parse(input)?;
 
         Ok((
             rest,
@@ -71,7 +73,7 @@ impl<'a> AstElements<'a> {
     /// `a(-a)*`
     #[inline]
     pub fn parse(input: &'a str) -> IResult<&'a str, Self> {
-        let (rest, (first, other)) = tuple((Self::parse_head, many0(Self::parse_rest)))(input)?;
+        let (rest, (first, other)) = (Self::parse_head, many0(Self::parse_rest)).parse(input)?;
         let mut out = vec![first];
         out.extend(other.into_iter());
         Ok((rest, Self { elements: out }))
@@ -86,7 +88,7 @@ impl<'a> AstElements<'a> {
     }
     #[inline]
     fn parse_rest(input: &'a str) -> IResult<&'a str, &'a str> {
-        let (rest, (_, out)) = tuple((char('-'), Self::parse_head))(input)?;
+        let (rest, (_, out)) = (char('-'), Self::parse_head).parse(input)?;
         Ok((rest, out))
     }
 }
@@ -98,11 +100,10 @@ impl<'a> ASTVariant<'a> {
     /// -
     #[inline]
     pub fn parse(input: &'a str) -> IResult<&'a str, Self> {
-        let (rest, (mut v, s)) = tuple((Self::parse_one, alt((tag("::"), tag(":")))))(input)?;
+        let (rest, (mut v, s)) = (Self::parse_one, alt((tag("::"), tag(":")))).parse(input)?;
         if s == "::" {
             v.pseudo = true
-        }
-        else {
+        } else {
             v.pseudo = Self::check_pseudo(&v.names.iter().map(<_>::as_ref).collect::<Vec<_>>());
         }
         Ok((rest, v))
@@ -114,9 +115,9 @@ impl<'a> ASTVariant<'a> {
     /// - `not-last-child`
     #[inline]
     fn parse_one(input: &'a str) -> IResult<&'a str, Self> {
-        let not = opt(tuple((tag("not"), tag("-"))));
+        let not = opt((tag("not"), tag("-")));
         let vs = separated_list0(tag("-"), alphanumeric1);
-        let (rest, (not, names)) = tuple((not, vs))(input)?;
+        let (rest, (not, names)) = (not, vs).parse(input)?;
         Ok((rest, Self { not: not.is_some(), pseudo: false, names }))
     }
     /// https://developer.mozilla.org/en-US/docs/Web/CSS/Pseudo-elements#index
@@ -142,7 +143,7 @@ impl<'a> AstArbitrary<'a> {
     #[inline]
     pub fn parse(input: &'a str) -> IResult<&'a str, Self> {
         let pair = delimited(char('['), take_till1(|c| c == ']'), char(']'));
-        let (rest, (_, arbitrary)) = tuple((char('-'), pair))(input)?;
+        let (rest, (_, arbitrary)) = (char('-'), pair).parse(input)?;
         Ok((rest, Self { arbitrary }))
     }
 }
@@ -156,9 +157,13 @@ impl AstReference {
     }
 }
 
-fn delimited_paired(opening: char, closing: char) -> impl Fn(&str) -> IResult<&str, &str> {
-    move |input: &str| {
-        delimited(char(opening), take_until_unbalanced(opening, closing), char(closing))(input)
+fn delimited_paired<'a>(
+    opening: char,
+    closing: char,
+) -> impl FnMut(&'a str) -> IResult<&'a str, &'a str> {
+    move |input: &'a str| {
+        delimited(char(opening), take_until_unbalanced(opening, closing), char(closing))
+            .parse(input)
     }
 }
 
@@ -204,8 +209,7 @@ fn take_until_unbalanced(
 
         if bracket_counter == 0 {
             Ok(("", i))
-        }
-        else {
+        } else {
             Err(Err::Error(Error::from_error_kind(i, ErrorKind::TakeUntil)))
         }
     }
