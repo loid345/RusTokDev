@@ -175,34 +175,17 @@ impl CategoryService {
             )
             .await?;
 
-        let node_ids: Vec<Uuid> = items.iter().map(|item| item.id).collect();
-
-        let mut full_nodes = Vec::with_capacity(node_ids.len());
-        for id in node_ids {
-            match self.nodes.get_node(id).await {
-                Ok(node) => full_nodes.push(node),
-                Err(_) => continue,
-            }
-        }
-
-        let list = full_nodes
+        let list = items
             .into_iter()
-            .map(|node| {
-                let resolved = resolve_translation(&node.translations, locale);
-                let metadata = &node.metadata;
+            .map(|item| {
+                let metadata = &item.metadata;
                 CategoryListItem {
-                    id: node.id,
+                    id: item.id,
                     locale: locale.to_string(),
-                    effective_locale: resolved.effective_locale,
-                    name: resolved
-                        .translation
-                        .and_then(|t| t.title.clone())
-                        .unwrap_or_default(),
-                    slug: resolved
-                        .translation
-                        .and_then(|t| t.slug.clone())
-                        .unwrap_or_default(),
-                    description: resolved.translation.and_then(|t| t.excerpt.clone()),
+                    effective_locale: locale.to_string(),
+                    name: item.title.unwrap_or_default(),
+                    slug: item.slug.unwrap_or_default(),
+                    description: item.excerpt,
                     icon: metadata
                         .get("icon")
                         .and_then(|v| v.as_str())

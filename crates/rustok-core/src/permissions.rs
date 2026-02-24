@@ -25,6 +25,12 @@ pub enum Resource {
     Analytics,
     Logs,
     Webhooks,
+    // Blog domain resources
+    BlogPosts,
+    // Forum domain resources
+    ForumCategories,
+    ForumTopics,
+    ForumReplies,
 }
 
 impl fmt::Display for Resource {
@@ -49,6 +55,10 @@ impl fmt::Display for Resource {
             Self::Analytics => "analytics",
             Self::Logs => "logs",
             Self::Webhooks => "webhooks",
+            Self::BlogPosts => "blog_posts",
+            Self::ForumCategories => "forum_categories",
+            Self::ForumTopics => "forum_topics",
+            Self::ForumReplies => "forum_replies",
         };
         write!(f, "{value}")
     }
@@ -78,6 +88,10 @@ impl FromStr for Resource {
             "analytics" => Ok(Self::Analytics),
             "logs" => Ok(Self::Logs),
             "webhooks" => Ok(Self::Webhooks),
+            "blog_posts" => Ok(Self::BlogPosts),
+            "forum_categories" => Ok(Self::ForumCategories),
+            "forum_topics" => Ok(Self::ForumTopics),
+            "forum_replies" => Ok(Self::ForumReplies),
             _ => Err(format!("Unknown resource: {value}")),
         }
     }
@@ -212,4 +226,35 @@ impl Permission {
 
     pub const ANALYTICS_READ: Self = Self::new(Resource::Analytics, Action::Read);
     pub const ANALYTICS_EXPORT: Self = Self::new(Resource::Analytics, Action::Export);
+
+    pub const BLOG_POSTS_CREATE: Self = Self::new(Resource::BlogPosts, Action::Create);
+    pub const BLOG_POSTS_READ: Self = Self::new(Resource::BlogPosts, Action::Read);
+    pub const BLOG_POSTS_UPDATE: Self = Self::new(Resource::BlogPosts, Action::Update);
+    pub const BLOG_POSTS_DELETE: Self = Self::new(Resource::BlogPosts, Action::Delete);
+    pub const BLOG_POSTS_LIST: Self = Self::new(Resource::BlogPosts, Action::List);
+    pub const BLOG_POSTS_PUBLISH: Self = Self::new(Resource::BlogPosts, Action::Publish);
+    pub const BLOG_POSTS_MANAGE: Self = Self::new(Resource::BlogPosts, Action::Manage);
+
+    pub const FORUM_CATEGORIES_CREATE: Self = Self::new(Resource::ForumCategories, Action::Create);
+    pub const FORUM_CATEGORIES_READ: Self = Self::new(Resource::ForumCategories, Action::Read);
+    pub const FORUM_CATEGORIES_UPDATE: Self = Self::new(Resource::ForumCategories, Action::Update);
+    pub const FORUM_CATEGORIES_DELETE: Self = Self::new(Resource::ForumCategories, Action::Delete);
+    pub const FORUM_CATEGORIES_LIST: Self = Self::new(Resource::ForumCategories, Action::List);
+    pub const FORUM_CATEGORIES_MANAGE: Self = Self::new(Resource::ForumCategories, Action::Manage);
+
+    pub const FORUM_TOPICS_CREATE: Self = Self::new(Resource::ForumTopics, Action::Create);
+    pub const FORUM_TOPICS_READ: Self = Self::new(Resource::ForumTopics, Action::Read);
+    pub const FORUM_TOPICS_UPDATE: Self = Self::new(Resource::ForumTopics, Action::Update);
+    pub const FORUM_TOPICS_DELETE: Self = Self::new(Resource::ForumTopics, Action::Delete);
+    pub const FORUM_TOPICS_LIST: Self = Self::new(Resource::ForumTopics, Action::List);
+    pub const FORUM_TOPICS_MODERATE: Self = Self::new(Resource::ForumTopics, Action::Moderate);
+    pub const FORUM_TOPICS_MANAGE: Self = Self::new(Resource::ForumTopics, Action::Manage);
+
+    pub const FORUM_REPLIES_CREATE: Self = Self::new(Resource::ForumReplies, Action::Create);
+    pub const FORUM_REPLIES_READ: Self = Self::new(Resource::ForumReplies, Action::Read);
+    pub const FORUM_REPLIES_UPDATE: Self = Self::new(Resource::ForumReplies, Action::Update);
+    pub const FORUM_REPLIES_DELETE: Self = Self::new(Resource::ForumReplies, Action::Delete);
+    pub const FORUM_REPLIES_LIST: Self = Self::new(Resource::ForumReplies, Action::List);
+    pub const FORUM_REPLIES_MODERATE: Self = Self::new(Resource::ForumReplies, Action::Moderate);
+    pub const FORUM_REPLIES_MANAGE: Self = Self::new(Resource::ForumReplies, Action::Manage);
 }

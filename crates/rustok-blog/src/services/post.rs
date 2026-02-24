@@ -428,51 +428,45 @@ impl PostService {
             .await
             .map_err(BlogError::from)?;
 
-        let ids: Vec<Uuid> = node_list.iter().map(|n| n.id).collect();
-
-        let mut items = Vec::with_capacity(ids.len());
-        for id in ids {
-            let node = self.nodes.get_node(id).await.map_err(BlogError::from)?;
-
-            let tr = resolve_translation(&node.translations, &locale);
-            let translation = tr.translation;
-
-            let tags = node
+        let mut items = Vec::with_capacity(node_list.len());
+        for item in node_list {
+            let tags = item
                 .metadata
                 .get("tags")
                 .and_then(|t| t.as_array())
                 .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
                 .unwrap_or_default();
 
-            let category_id = node
-                .metadata
-                .get("category_id")
-                .and_then(|v| v.as_str())
-                .and_then(|s| Uuid::parse_str(s).ok());
+            let category_id = item.category_id.or_else(|| {
+                item.metadata
+                    .get("category_id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| Uuid::parse_str(s).ok())
+            });
 
-            let featured_image_url = node
+            let featured_image_url = item
                 .metadata
                 .get("featured_image_url")
                 .and_then(|v| v.as_str())
                 .map(String::from);
 
             items.push(PostSummary {
-                id: node.id,
-                title: translation.and_then(|t| t.title.clone()).unwrap_or_default(),
-                slug: translation.and_then(|t| t.slug.clone()).unwrap_or_default(),
+                id: item.id,
+                title: item.title.unwrap_or_default(),
+                slug: item.slug.unwrap_or_default(),
                 locale: locale.clone(),
-                effective_locale: tr.effective_locale,
-                excerpt: translation.and_then(|t| t.excerpt.clone()),
-                status: map_content_status(node.status),
-                author_id: node.author_id.unwrap_or_default(),
+                effective_locale: locale.clone(),
+                excerpt: item.excerpt,
+                status: map_content_status(item.status),
+                author_id: item.author_id.unwrap_or_default(),
                 author_name: None,
                 category_id,
                 category_name: None,
                 tags,
                 featured_image_url,
-                comment_count: node.reply_count as i64,
-                published_at: node.published_at.and_then(|p| p.parse().ok()),
-                created_at: node.created_at.parse().unwrap_or_else(|_| chrono::Utc::now()),
+                comment_count: 0,
+                published_at: item.published_at.and_then(|p| p.parse().ok()),
+                created_at: item.created_at.parse().unwrap_or_else(|_| chrono::Utc::now()),
             });
         }
 

@@ -150,6 +150,8 @@ pub struct NodeListItem {
     pub slug: Option<String>,
     pub excerpt: Option<String>,
     pub author_id: Option<Uuid>,
+    pub category_id: Option<Uuid>,
+    pub metadata: serde_json::Value,
     pub created_at: String,
     pub published_at: Option<String>,
 }
