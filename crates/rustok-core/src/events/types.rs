@@ -236,6 +236,33 @@ pub enum DomainEvent {
     },
 
     // ════════════════════════════════════════════════════════════════
+    // BLOG EVENTS
+    // ════════════════════════════════════════════════════════════════
+    BlogPostCreated {
+        post_id: Uuid,
+        author_id: Option<Uuid>,
+        locale: String,
+    },
+    BlogPostPublished {
+        post_id: Uuid,
+        author_id: Option<Uuid>,
+    },
+    BlogPostUnpublished {
+        post_id: Uuid,
+    },
+    BlogPostUpdated {
+        post_id: Uuid,
+        locale: String,
+    },
+    BlogPostArchived {
+        post_id: Uuid,
+        reason: Option<String>,
+    },
+    BlogPostDeleted {
+        post_id: Uuid,
+    },
+
+    // ════════════════════════════════════════════════════════════════
     // FORUM EVENTS
     // ════════════════════════════════════════════════════════════════
     ForumTopicCreated {
@@ -333,6 +360,13 @@ impl DomainEvent {
 
             Self::BuildRequested { .. } => "build.requested",
 
+            Self::BlogPostCreated { .. } => "blog.post.created",
+            Self::BlogPostPublished { .. } => "blog.post.published",
+            Self::BlogPostUnpublished { .. } => "blog.post.unpublished",
+            Self::BlogPostUpdated { .. } => "blog.post.updated",
+            Self::BlogPostArchived { .. } => "blog.post.archived",
+            Self::BlogPostDeleted { .. } => "blog.post.deleted",
+
             Self::ForumTopicCreated { .. } => "forum.topic.created",
             Self::ForumTopicReplied { .. } => "forum.topic.replied",
             Self::ForumTopicStatusChanged { .. } => "forum.topic.status_changed",
@@ -405,6 +439,14 @@ impl DomainEvent {
             // Build events (v1)
             Self::BuildRequested { .. } => 1,
 
+            // Blog events (v1)
+            Self::BlogPostCreated { .. } => 1,
+            Self::BlogPostPublished { .. } => 1,
+            Self::BlogPostUnpublished { .. } => 1,
+            Self::BlogPostUpdated { .. } => 1,
+            Self::BlogPostArchived { .. } => 1,
+            Self::BlogPostDeleted { .. } => 1,
+
             // Forum events (v1)
             Self::ForumTopicCreated { .. } => 1,
             Self::ForumTopicReplied { .. } => 1,
@@ -439,6 +481,12 @@ impl DomainEvent {
                 | Self::PriceUpdated { .. }
                 | Self::TagAttached { .. }
                 | Self::TagDetached { .. }
+                | Self::BlogPostCreated { .. }
+                | Self::BlogPostPublished { .. }
+                | Self::BlogPostUnpublished { .. }
+                | Self::BlogPostUpdated { .. }
+                | Self::BlogPostArchived { .. }
+                | Self::BlogPostDeleted { .. }
                 | Self::ForumTopicCreated { .. }
                 | Self::ForumTopicReplied { .. }
                 | Self::ForumTopicStatusChanged { .. }
@@ -739,6 +787,44 @@ impl ValidateEvent for DomainEvent {
                 validators::validate_not_nil_uuid("build_id", build_id)?;
                 validators::validate_not_empty("requested_by", requested_by)?;
                 validators::validate_max_length("requested_by", requested_by, 255)?;
+                Ok(())
+            }
+
+            // ════════════════════════════════════════════════════════════════
+            // BLOG EVENTS
+            // ════════════════════════════════════════════════════════════════
+            Self::BlogPostCreated {
+                post_id,
+                author_id,
+                locale,
+            } => {
+                validators::validate_not_nil_uuid("post_id", post_id)?;
+                validators::validate_optional_uuid("author_id", author_id)?;
+                validators::validate_not_empty("locale", locale)?;
+                validators::validate_max_length("locale", locale, 10)?;
+                Ok(())
+            }
+            Self::BlogPostPublished { post_id, author_id } => {
+                validators::validate_not_nil_uuid("post_id", post_id)?;
+                validators::validate_optional_uuid("author_id", author_id)?;
+                Ok(())
+            }
+            Self::BlogPostUnpublished { post_id }
+            | Self::BlogPostDeleted { post_id } => {
+                validators::validate_not_nil_uuid("post_id", post_id)?;
+                Ok(())
+            }
+            Self::BlogPostUpdated { post_id, locale } => {
+                validators::validate_not_nil_uuid("post_id", post_id)?;
+                validators::validate_not_empty("locale", locale)?;
+                validators::validate_max_length("locale", locale, 10)?;
+                Ok(())
+            }
+            Self::BlogPostArchived { post_id, reason } => {
+                validators::validate_not_nil_uuid("post_id", post_id)?;
+                if let Some(r) = reason {
+                    validators::validate_max_length("reason", r, 500)?;
+                }
                 Ok(())
             }
 

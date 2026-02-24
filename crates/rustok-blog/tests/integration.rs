@@ -14,7 +14,6 @@ use uuid::Uuid;
 type TestResult<T> = Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
 struct TestContext {
-    // Would contain PostService, db connection, event receiver
     tenant_id: Uuid,
     events: broadcast::Receiver<EventEnvelope>,
 }
@@ -22,7 +21,7 @@ struct TestContext {
 #[tokio::test]
 #[ignore = "Integration test requires database/migrations + indexer wiring"]
 async fn test_post_lifecycle() -> TestResult<()> {
-    let ctx = test_context().await?;
+    let _ctx = test_context().await?;
 
     let input = CreatePostInput {
         locale: "en".to_string(),
@@ -33,11 +32,14 @@ async fn test_post_lifecycle() -> TestResult<()> {
         publish: false,
         tags: vec!["rust".to_string()],
         category_id: None,
+        featured_image_url: None,
+        seo_title: None,
+        seo_description: None,
         metadata: None,
     };
 
-    // Would create post and verify event was emitted
     let _post_id = Uuid::new_v4();
+    let _ = input;
 
     Ok(())
 }
@@ -47,7 +49,6 @@ async fn test_post_lifecycle() -> TestResult<()> {
 async fn test_create_and_publish_post() -> TestResult<()> {
     let _ctx = test_context().await?;
 
-    // Create draft
     let input = CreatePostInput {
         locale: "en".to_string(),
         title: "Draft Post".to_string(),
@@ -57,12 +58,13 @@ async fn test_create_and_publish_post() -> TestResult<()> {
         publish: false,
         tags: vec![],
         category_id: None,
+        featured_image_url: None,
+        seo_title: None,
+        seo_description: None,
         metadata: None,
     };
 
-    // Would verify draft was created with Draft status
-
-    // Would publish and verify status change
+    let _ = input;
 
     Ok(())
 }
@@ -78,7 +80,7 @@ async fn test_list_posts_with_pagination() -> TestResult<()> {
         ..Default::default()
     };
 
-    // Would list posts and verify pagination
+    let _ = query;
 
     Ok(())
 }
@@ -93,7 +95,7 @@ async fn test_filter_posts_by_tag() -> TestResult<()> {
         ..Default::default()
     };
 
-    // Would filter posts by tag
+    let _ = query;
 
     Ok(())
 }
@@ -103,14 +105,11 @@ async fn test_filter_posts_by_tag() -> TestResult<()> {
 async fn test_cannot_delete_published_post() -> TestResult<()> {
     let _ctx = test_context().await?;
 
-    // Would create and publish a post
-    // Would verify deletion fails with CannotDeletePublished error
-
     Ok(())
 }
 
 async fn test_context() -> TestResult<TestContext> {
-    let (event_sender, event_receiver) = broadcast::channel(128);
+    let (_event_sender, event_receiver) = broadcast::channel(128);
 
     Ok(TestContext {
         tenant_id: Uuid::new_v4(),
@@ -118,6 +117,7 @@ async fn test_context() -> TestResult<TestContext> {
     })
 }
 
+#[allow(dead_code)]
 async fn next_event(
     receiver: &mut broadcast::Receiver<EventEnvelope>,
 ) -> TestResult<EventEnvelope> {
@@ -126,10 +126,6 @@ async fn next_event(
         .map_err(|_| "timed out waiting for event")??;
     Ok(envelope)
 }
-
-// ============================================================================
-// Unit tests (don't require database)
-// ============================================================================
 
 mod unit_tests {
     use super::*;
@@ -140,7 +136,6 @@ mod unit_tests {
         let tenant_id = Uuid::new_v4();
         let author_id = Uuid::new_v4();
 
-        // Create draft
         let post = BlogPost::new_draft(
             id,
             tenant_id,
@@ -151,31 +146,21 @@ mod unit_tests {
         );
         assert_eq!(post.to_status(), BlogPostStatus::Draft);
 
-        // Publish
         let post = post.publish();
         assert_eq!(post.to_status(), BlogPostStatus::Published);
 
-        // Archive
         let post = post.archive("Outdated".to_string());
         assert_eq!(post.to_status(), BlogPostStatus::Archived);
 
-        // Restore
         let post = post.restore_to_draft();
         assert_eq!(post.to_status(), BlogPostStatus::Draft);
     }
 
     #[test]
     fn test_comment_status_transitions() {
-        // Pending -> Approved
         assert_eq!(CommentStatus::Pending.approve(), CommentStatus::Approved);
-
-        // Approved -> Spam
         assert_eq!(CommentStatus::Approved.mark_spam(), CommentStatus::Spam);
-
-        // Spam -> Approved
         assert_eq!(CommentStatus::Spam.approve(), CommentStatus::Approved);
-
-        // Any -> Trash
         assert_eq!(CommentStatus::Pending.trash(), CommentStatus::Trash);
     }
 
@@ -183,7 +168,6 @@ mod unit_tests {
     fn test_error_conversions() {
         let id = Uuid::new_v4();
         let err = BlogError::post_not_found(id);
-
         assert!(matches!(err, BlogError::PostNotFound(_)));
 
         let err = BlogError::duplicate_slug("test-slug", "en");
@@ -203,5 +187,73 @@ mod unit_tests {
         assert_eq!(query.page(), 2);
         assert_eq!(query.per_page(), 25);
         assert_eq!(query.offset(), 25);
+    }
+
+    #[test]
+    fn test_blog_events_exist() {
+        let post_id = Uuid::new_v4();
+
+        let created = DomainEvent::BlogPostCreated {
+            post_id,
+            author_id: None,
+            locale: "en".to_string(),
+        };
+        assert_eq!(created.event_type(), "blog.post.created");
+        assert_eq!(created.schema_version(), 1);
+        assert!(created.affects_index());
+
+        let published = DomainEvent::BlogPostPublished {
+            post_id,
+            author_id: None,
+        };
+        assert_eq!(published.event_type(), "blog.post.published");
+        assert!(published.affects_index());
+
+        let unpublished = DomainEvent::BlogPostUnpublished { post_id };
+        assert_eq!(unpublished.event_type(), "blog.post.unpublished");
+        assert!(unpublished.affects_index());
+
+        let updated = DomainEvent::BlogPostUpdated {
+            post_id,
+            locale: "ru".to_string(),
+        };
+        assert_eq!(updated.event_type(), "blog.post.updated");
+        assert!(updated.affects_index());
+
+        let archived = DomainEvent::BlogPostArchived {
+            post_id,
+            reason: Some("outdated".to_string()),
+        };
+        assert_eq!(archived.event_type(), "blog.post.archived");
+        assert!(archived.affects_index());
+
+        let deleted = DomainEvent::BlogPostDeleted { post_id };
+        assert_eq!(deleted.event_type(), "blog.post.deleted");
+        assert!(deleted.affects_index());
+    }
+
+    #[test]
+    fn test_create_post_input_fields() {
+        let input = CreatePostInput {
+            locale: "ru".to_string(),
+            title: "Заголовок".to_string(),
+            body: "Тело поста".to_string(),
+            excerpt: Some("Краткое содержание".to_string()),
+            slug: Some("zagolovok".to_string()),
+            publish: false,
+            tags: vec!["rust".to_string(), "cms".to_string()],
+            category_id: None,
+            featured_image_url: Some("https://example.com/image.jpg".to_string()),
+            seo_title: Some("SEO заголовок".to_string()),
+            seo_description: Some("SEO описание для поисковиков".to_string()),
+            metadata: None,
+        };
+
+        assert_eq!(input.locale, "ru");
+        assert_eq!(input.tags.len(), 2);
+        assert!(input.featured_image_url.is_some());
+        assert!(input.seo_title.is_some());
+        assert!(input.seo_description.is_some());
+        assert!(!input.publish);
     }
 }
