@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use utoipa::ToSchema;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -15,11 +15,30 @@ pub struct UpdateReplyInput {
     pub content: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default, ToSchema, IntoParams)]
+pub struct ListRepliesFilter {
+    pub locale: Option<String>,
+    #[serde(default = "default_page")]
+    pub page: u64,
+    #[serde(default = "default_per_page")]
+    pub per_page: u64,
+}
+
+fn default_page() -> u64 {
+    1
+}
+
+fn default_per_page() -> u64 {
+    20
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ReplyResponse {
     pub id: Uuid,
     pub locale: String,
+    pub effective_locale: String,
     pub topic_id: Uuid,
+    pub author_id: Option<Uuid>,
     pub content: String,
     pub status: String,
     pub parent_reply_id: Option<Uuid>,
@@ -31,8 +50,11 @@ pub struct ReplyResponse {
 pub struct ReplyListItem {
     pub id: Uuid,
     pub locale: String,
+    pub effective_locale: String,
     pub topic_id: Uuid,
+    pub author_id: Option<Uuid>,
     pub content_preview: String,
     pub status: String,
+    pub parent_reply_id: Option<Uuid>,
     pub created_at: String,
 }

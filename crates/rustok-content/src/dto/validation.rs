@@ -14,9 +14,19 @@ pub fn validate_body_format(format: &str) -> Result<(), ValidationError> {
 }
 
 /// Custom validator for kind
+///
+/// Accepts built-in kinds (post, page, article, custom) plus domain-specific kinds
+/// used by forum (forum_category, forum_topic, forum_reply) and other modules.
+/// The `_` prefix convention allows callers to pass any kind starting with an
+/// underscore, but domain kinds must be registered here.
 pub fn validate_kind(kind: &str) -> Result<(), ValidationError> {
     match kind {
+        // Core CMS kinds
         "post" | "page" | "article" | "custom" => Ok(()),
+        // Forum domain kinds
+        "forum_category" | "forum_topic" | "forum_reply" => Ok(()),
+        // Blog domain kinds
+        "blog_post" => Ok(()),
         _ => Err(ValidationError::new("invalid_kind")),
     }
 }

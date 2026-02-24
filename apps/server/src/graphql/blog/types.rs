@@ -17,6 +17,9 @@ pub struct GqlPost {
     pub created_at: String,
     pub published_at: Option<String>,
     pub tags: Vec<String>,
+    pub featured_image_url: Option<String>,
+    pub seo_title: Option<String>,
+    pub seo_description: Option<String>,
 }
 
 #[derive(SimpleObject)]
@@ -46,16 +49,25 @@ pub struct CreatePostInput {
     pub slug: Option<String>,
     pub publish: bool,
     pub tags: Vec<String>,
+    pub category_id: Option<Uuid>,
+    pub featured_image_url: Option<String>,
+    pub seo_title: Option<String>,
+    pub seo_description: Option<String>,
 }
 
 #[derive(InputObject)]
 pub struct UpdatePostInput {
+    pub locale: Option<String>,
     pub title: Option<String>,
     pub body: Option<String>,
     pub excerpt: Option<String>,
     pub slug: Option<String>,
     pub status: Option<GqlContentStatus>,
     pub tags: Option<Vec<String>>,
+    pub category_id: Option<Uuid>,
+    pub featured_image_url: Option<String>,
+    pub seo_title: Option<String>,
+    pub seo_description: Option<String>,
 }
 
 #[derive(InputObject)]
@@ -72,16 +84,31 @@ impl From<NodeResponse> for GqlPost {
         let translation = node.translations.first();
         let body = node.bodies.first();
 
-        // Extract tags from metadata
         let tags = if let serde_json::Value::Object(map) = &node.metadata {
-            if let Some(tags_val) = map.get("tags") {
-                serde_json::from_value(tags_val.clone()).unwrap_or_default()
-            } else {
-                vec![]
-            }
+            map.get("tags")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default()
         } else {
             vec![]
         };
+
+        let featured_image_url = node
+            .metadata
+            .get("featured_image_url")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
+        let seo_title = node
+            .metadata
+            .get("seo_title")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
+        let seo_description = node
+            .metadata
+            .get("seo_description")
+            .and_then(|v| v.as_str())
+            .map(String::from);
 
         Self {
             id: node.id,
@@ -96,6 +123,9 @@ impl From<NodeResponse> for GqlPost {
             created_at: node.created_at,
             published_at: node.published_at,
             tags,
+            featured_image_url,
+            seo_title,
+            seo_description,
         }
     }
 }
@@ -125,6 +155,10 @@ impl From<CreatePostInput> for DomainCreatePostInput {
             slug: input.slug,
             publish: input.publish,
             tags: input.tags,
+            category_id: input.category_id,
+            featured_image_url: input.featured_image_url,
+            seo_title: input.seo_title,
+            seo_description: input.seo_description,
             metadata: None,
         }
     }

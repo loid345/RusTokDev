@@ -4,19 +4,22 @@
 `rustok-blog` — модуль блогового функционала платформы RusToK, построенный поверх контентного ядра.
 
 ## Что делает
-- Управляет постами блога (создание, редактирование, публикация, архивирование)
-- Поддерживает комментарии с модерацией
-- Работает с категориями и тегами
-- Интегрируется с системой индексации для поиска
-- Публикует доменные события для синхронизации
+- Управляет постами блога (создание, редактирование, публикация, архивирование, удаление)
+- Полная поддержка i18n: locale fallback chain `requested → en → first available`
+- Поля SEO: `seo_title`, `seo_description`, `featured_image_url`
+- Поля i18n в ответах: `effective_locale`, `available_locales`
+- Публикует доменные события для синхронизации с индексами
+- Типобезопасная state machine управления статусами постов
+- Работает с категориями и тегами (через metadata)
 
 ## Архитектура
 
 ### Wrapper Module
-Blog — это "wrapper" модуль, что означает:
+Blog — это "wrapper" модуль:
 - **Нет собственных таблиц** — использует таблицы `rustok-content`
-- **Добавляет бизнес-логику** — валидация, workflow, специфичные для блога правила
+- **Добавляет бизнес-логику** — валидация, workflow, SEO-поля
 - **Типобезопасная state machine** — управление статусами постов
+- **Собственные DomainEvent** — `BlogPostCreated`, `BlogPostPublished` и т.д.
 
 ### State Machine
 
@@ -47,9 +50,34 @@ Blog — это "wrapper" модуль, что означает:
 |------|------------|
 | `lib.rs` | Точка входа, экспорт API, определение модуля |
 | `error.rs` | Обработка ошибок с RichError |
+| `locale.rs` | Locale fallback chain |
 | `state_machine.rs` | Типобезопасная машина состояний |
 | `services/post.rs` | Бизнес-логика постов |
 | `dto/` | Data Transfer Objects для API |
+
+## I18n
+
+### Locale fallback chain
+1. Запрошенный locale (например `ru`)
+2. Английский locale `en`
+3. Первый доступный locale
+
+### Поля ответа
+- `locale` — запрошенный locale
+- `effective_locale` — фактически использованный locale
+- `available_locales` — все доступные locales
+
+## События
+
+Модуль публикует следующие `DomainEvent`:
+- `BlogPostCreated { post_id, author_id, locale }` — после создания поста
+- `BlogPostPublished { post_id, author_id }` — после публикации
+- `BlogPostUnpublished { post_id }` — после снятия с публикации
+- `BlogPostUpdated { post_id, locale }` — после обновления
+- `BlogPostArchived { post_id, reason }` — после архивирования
+- `BlogPostDeleted { post_id }` — после удаления
+
+Все события влияют на индекс (`affects_index() = true`).
 
 ## Использование
 
@@ -57,7 +85,6 @@ Blog — это "wrapper" модуль, что означает:
 
 ```rust
 use rustok_blog::{PostService, CreatePostInput};
-use rustok_core::SecurityContext;
 
 let service = PostService::new(db, event_bus);
 
@@ -67,26 +94,38 @@ let input = CreatePostInput {
     body: "Содержимое поста...".to_string(),
     excerpt: Some("Краткое описание".to_string()),
     slug: Some("my-first-post".to_string()),
-    publish: false, // Создать как черновик
-    tags: vec!["rust".to_string(), "tutorial".to_string()],
+    publish: false,
+    tags: vec!["rust".to_string()],
     category_id: None,
+    featured_image_url: Some("https://cdn.example.com/cover.jpg".to_string()),
+    seo_title: Some("SEO заголовок".to_string()),
+    seo_description: Some("Мета-описание для поисковых систем".to_string()),
     metadata: None,
 };
 
 let post_id = service.create_post(tenant_id, security, input).await?;
 ```
 
-### Публикация поста
+### Получение поста с i18n
 
 ```rust
-service.publish_post(post_id, tenant_id, security).await?;
+// Запрос конкретного locale с fallback
+let post = service.get_post(post_id, "ru").await?;
+println!("Effective locale: {}", post.effective_locale);
+println!("Available: {:?}", post.available_locales);
 ```
 
-### Получение постов по тегу
+### REST API
 
-```rust
-let posts = service.get_posts_by_tag(tenant_id, "rust".to_string(), 1, 10).await?;
-```
+| Метод | Путь | Описание |
+|-------|------|----------|
+| GET | `/api/blog/posts` | Список постов |
+| GET | `/api/blog/posts/:id?locale=ru` | Получить пост |
+| POST | `/api/blog/posts` | Создать пост |
+| PUT | `/api/blog/posts/:id` | Обновить пост |
+| DELETE | `/api/blog/posts/:id` | Удалить пост |
+| POST | `/api/blog/posts/:id/publish` | Опубликовать |
+| POST | `/api/blog/posts/:id/unpublish` | Снять с публикации |
 
 ## Взаимодействие
 
@@ -99,31 +138,16 @@ let posts = service.get_posts_by_tag(tenant_id, "rust".to_string(), 1, 10).await
 
 ## Permissions
 
-Модуль определяет следующие permissions:
-
 ### Posts
-- `posts:create` — создание постов
-- `posts:read` — чтение постов
-- `posts:update` — редактирование постов
-- `posts:delete` — удаление постов
-- `posts:list` — список постов
-- `posts:publish` — публикация постов
+- `posts:create`, `posts:read`, `posts:update`, `posts:delete`, `posts:list`, `posts:publish`
 
 ### Comments
-- `comments:create` — создание комментариев
-- `comments:read` — чтение комментариев
-- `comments:update` — редактирование комментариев
-- `comments:delete` — удаление комментариев
-- `comments:list` — список комментариев
-- `comments:moderate` — модерация комментариев
+- `comments:create`, `comments:read`, `comments:update`, `comments:delete`, `comments:list`, `comments:moderate`
 
 ### Categories & Tags
-- `categories:*` — управление категориями
-- `tags:*` — управление тегами
+- `categories:*`, `tags:*`
 
 ## Обработка ошибок
-
-Модуль использует `RichError` для детальной информации об ошибках:
 
 ```rust
 pub enum BlogError {
@@ -131,6 +155,8 @@ pub enum BlogError {
     CommentNotFound(Uuid),
     DuplicateSlug { slug: String, locale: String },
     CannotDeletePublished,
+    CannotPublishArchived,
+    AuthorRequired,
     Validation(String),
     // ...
 }
@@ -149,22 +175,17 @@ cargo test -p rustok-blog --features proptest
 cargo test -p rustok-blog -- --ignored
 ```
 
-## Кому нужен
-- **Admin UI** — управление постами, комментариями, категориями
-- **Storefront** — отображение блога, ленты, архивы
-- **API consumers** — RSS, интеграции с соцсетями
-
 ## Документация
 - Локальная документация: `./docs/`
 - Общая документация платформы: `/docs`
 
 ## Паспорт компонента
 - **Роль в системе:** Доменный модуль блога
-- **Основные данные:** бизнес-логика постов, комментариев, категорий, тегов
+- **Основные данные:** бизнес-логика постов, i18n, SEO-поля, события
 - **Взаимодействует с:**
   - `crates/rustok-core` (events, errors, permissions)
   - `crates/rustok-content` (storage)
   - `crates/rustok-outbox` (TransactionalEventBus)
   - `crates/rustok-index` (search indexing)
 - **Точки входа:** `crates/rustok-blog/src/lib.rs`
-- **Статус:** ✅ Production Ready
+- **Статус:** ✅ Production Ready (Phase 2)

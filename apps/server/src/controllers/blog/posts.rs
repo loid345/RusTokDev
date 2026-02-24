@@ -3,9 +3,7 @@ use axum::{
     Json,
 };
 use loco_rs::prelude::*;
-use rustok_blog::{CreatePostInput, PostService};
-use rustok_content::dto::{NodeListItem, NodeResponse};
-use rustok_content::{ListNodesFilter, NodeService, UpdateNodeInput};
+use rustok_blog::{CreatePostInput, PostListQuery, PostResponse, PostService, UpdatePostInput};
 use uuid::Uuid;
 
 use crate::context::TenantContext;
@@ -17,8 +15,9 @@ use crate::services::event_bus::transactional_event_bus_from_context;
     get,
     path = "/api/blog/posts",
     tag = "blog",
+    params(PostListQuery),
     responses(
-        (status = 200, description = "List of posts", body = Vec<NodeListItem>),
+        (status = 200, description = "List of posts", body = rustok_blog::PostListResponse),
         (status = 401, description = "Unauthorized")
     )
 )]
@@ -26,16 +25,14 @@ pub async fn list_posts(
     State(ctx): State<AppContext>,
     tenant: TenantContext,
     user: CurrentUser,
-    Query(mut filter): Query<ListNodesFilter>,
-) -> Result<Json<Vec<NodeListItem>>> {
-    let service = NodeService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
-    // Force kind="post"
-    filter.kind = Some("post".to_string());
-    let (items, _) = service
-        .list_nodes(tenant.id, user.security_context(), filter)
+    Query(query): Query<PostListQuery>,
+) -> Result<Json<rustok_blog::PostListResponse>> {
+    let service = PostService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
+    let result = service
+        .list_posts(tenant.id, user.security_context(), query)
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
-    Ok(Json(items))
+    Ok(Json(result))
 }
 
 /// Get a single blog post by ID
@@ -44,10 +41,11 @@ pub async fn list_posts(
     path = "/api/blog/posts/{id}",
     tag = "blog",
     params(
-        ("id" = Uuid, Path, description = "Post ID")
+        ("id" = Uuid, Path, description = "Post ID"),
+        ("locale" = Option<String>, Query, description = "Requested locale")
     ),
     responses(
-        (status = 200, description = "Post details", body = NodeResponse),
+        (status = 200, description = "Post details", body = PostResponse),
         (status = 404, description = "Post not found"),
         (status = 401, description = "Unauthorized")
     )
@@ -57,17 +55,15 @@ pub async fn get_post(
     _tenant: TenantContext,
     _user: CurrentUser,
     Path(id): Path<Uuid>,
-) -> Result<Json<NodeResponse>> {
-    let service = NodeService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
-    let node = service
-        .get_node(id)
+    Query(params): Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<PostResponse>> {
+    let locale = params.get("locale").map(String::as_str).unwrap_or("en");
+    let service = PostService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
+    let post = service
+        .get_post(id, locale)
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
-    // Optional: check if node.kind == "post"
-    if node.kind != "post" {
-        return Err(loco_rs::Error::NotFound);
-    }
-    Ok(Json(node))
+    Ok(Json(post))
 }
 
 /// Create a new blog post
@@ -104,7 +100,7 @@ pub async fn create_post(
     params(
         ("id" = Uuid, Path, description = "Post ID")
     ),
-    request_body = UpdateNodeInput,
+    request_body = UpdatePostInput,
     responses(
         (status = 200, description = "Post updated"),
         (status = 404, description = "Post not found"),
@@ -116,7 +112,7 @@ pub async fn update_post(
     _tenant: TenantContext,
     user: CurrentUser,
     Path(id): Path<Uuid>,
-    Json(input): Json<UpdateNodeInput>,
+    Json(input): Json<UpdatePostInput>,
 ) -> Result<()> {
     let service = PostService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     service
@@ -149,6 +145,62 @@ pub async fn delete_post(
     let service = PostService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     service
         .delete_post(id, user.security_context())
+        .await
+        .map_err(|e| Error::BadRequest(e.to_string()))?;
+    Ok(())
+}
+
+/// Publish a blog post
+#[utoipa::path(
+    post,
+    path = "/api/blog/posts/{id}/publish",
+    tag = "blog",
+    params(
+        ("id" = Uuid, Path, description = "Post ID")
+    ),
+    responses(
+        (status = 200, description = "Post published"),
+        (status = 404, description = "Post not found"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
+pub async fn publish_post(
+    State(ctx): State<AppContext>,
+    _tenant: TenantContext,
+    user: CurrentUser,
+    Path(id): Path<Uuid>,
+) -> Result<()> {
+    let service = PostService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
+    service
+        .publish_post(id, user.security_context())
+        .await
+        .map_err(|e| Error::BadRequest(e.to_string()))?;
+    Ok(())
+}
+
+/// Unpublish a blog post
+#[utoipa::path(
+    post,
+    path = "/api/blog/posts/{id}/unpublish",
+    tag = "blog",
+    params(
+        ("id" = Uuid, Path, description = "Post ID")
+    ),
+    responses(
+        (status = 200, description = "Post unpublished"),
+        (status = 404, description = "Post not found"),
+        (status = 401, description = "Unauthorized")
+    )
+)]
+pub async fn unpublish_post(
+    State(ctx): State<AppContext>,
+    _tenant: TenantContext,
+    user: CurrentUser,
+    Path(id): Path<Uuid>,
+) -> Result<()> {
+    let service = PostService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
+    service
+        .unpublish_post(id, user.security_context())
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(())

@@ -456,6 +456,8 @@ impl NodeService {
         security: SecurityContext,
     ) -> ContentResult<NodeResponse> {
         info!("Publishing node");
+        let node_model = self.find_node(node_id).await?;
+        let kind = node_model.kind.clone();
 
         self.transition_status(
             node_id,
@@ -464,12 +466,9 @@ impl NodeService {
             vec![
                 DomainEvent::NodeUpdated {
                     node_id,
-                    kind: "post".to_string(), // Will be resolved from node
+                    kind: kind.clone(),
                 },
-                DomainEvent::NodePublished {
-                    node_id,
-                    kind: "post".to_string(),
-                },
+                DomainEvent::NodePublished { node_id, kind },
             ],
         )
         .await
@@ -482,6 +481,8 @@ impl NodeService {
         security: SecurityContext,
     ) -> ContentResult<NodeResponse> {
         info!("Unpublishing node");
+        let node_model = self.find_node(node_id).await?;
+        let kind = node_model.kind.clone();
 
         self.transition_status(
             node_id,
@@ -490,12 +491,9 @@ impl NodeService {
             vec![
                 DomainEvent::NodeUpdated {
                     node_id,
-                    kind: "post".to_string(),
+                    kind: kind.clone(),
                 },
-                DomainEvent::NodeUnpublished {
-                    node_id,
-                    kind: "post".to_string(),
-                },
+                DomainEvent::NodeUnpublished { node_id, kind },
             ],
         )
         .await
@@ -508,15 +506,14 @@ impl NodeService {
         security: SecurityContext,
     ) -> ContentResult<NodeResponse> {
         info!("Archiving node");
+        let node_model = self.find_node(node_id).await?;
+        let kind = node_model.kind.clone();
 
         self.transition_status(
             node_id,
             security,
             node::ContentStatus::Archived,
-            vec![DomainEvent::NodeUpdated {
-                node_id,
-                kind: "post".to_string(),
-            }],
+            vec![DomainEvent::NodeUpdated { node_id, kind }],
         )
         .await
     }
@@ -791,6 +788,8 @@ impl NodeService {
                     slug: translation.and_then(|t| t.slug.clone()),
                     excerpt: translation.and_then(|t| t.excerpt.clone()),
                     author_id: node.author_id,
+                    category_id: node.category_id,
+                    metadata: node.metadata,
                     created_at: node.created_at.to_rfc3339(),
                     published_at: node.published_at.map(|date| date.to_rfc3339()),
                 }

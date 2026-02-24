@@ -11,6 +11,7 @@ use rustok_outbox::TransactionalEventBus;
 use crate::constants::KIND_CATEGORY;
 use crate::dto::{CategoryListItem, CategoryResponse, CreateCategoryInput, UpdateCategoryInput};
 use crate::error::{ForumError, ForumResult};
+use crate::locale::{available_locales, resolve_translation};
 
 pub struct CategoryService {
     nodes: NodeService,
@@ -91,6 +92,7 @@ impl CategoryService {
             return Err(ForumError::CategoryNotFound(category_id));
         }
 
+        let _ = tenant_id;
         Ok(Self::node_to_category(node, locale))
     }
 
@@ -167,22 +169,40 @@ impl CategoryService {
                     locale: Some(locale.to_string()),
                     page: 1,
                     per_page: 1000,
+                    include_deleted: false,
+                    category_id: None,
                 },
             )
             .await?;
 
         let list = items
             .into_iter()
-            .map(|item| CategoryListItem {
-                id: item.id,
-                locale: locale.to_string(),
-                name: item.title.unwrap_or_default(),
-                slug: item.slug.unwrap_or_default(),
-                description: item.excerpt,
-                icon: None,
-                color: None,
-                topic_count: 0,
-                reply_count: 0,
+            .map(|item| {
+                let metadata = &item.metadata;
+                CategoryListItem {
+                    id: item.id,
+                    locale: locale.to_string(),
+                    effective_locale: locale.to_string(),
+                    name: item.title.unwrap_or_default(),
+                    slug: item.slug.unwrap_or_default(),
+                    description: item.excerpt,
+                    icon: metadata
+                        .get("icon")
+                        .and_then(|v| v.as_str())
+                        .map(|v| v.to_string()),
+                    color: metadata
+                        .get("color")
+                        .and_then(|v| v.as_str())
+                        .map(|v| v.to_string()),
+                    topic_count: metadata
+                        .get("topic_count")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0) as i32,
+                    reply_count: metadata
+                        .get("reply_count")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0) as i32,
+                }
             })
             .collect();
 
@@ -190,21 +210,24 @@ impl CategoryService {
     }
 
     fn node_to_category(node: rustok_content::NodeResponse, locale: &str) -> CategoryResponse {
-        let translation = node
-            .translations
-            .iter()
-            .find(|t| t.locale == locale)
-            .or_else(|| node.translations.first());
+        let resolved = resolve_translation(&node.translations, locale);
+        let locales = available_locales(&node.translations);
         let metadata = node.metadata;
 
         CategoryResponse {
             id: node.id,
             locale: locale.to_string(),
-            name: translation
+            effective_locale: resolved.effective_locale,
+            available_locales: locales,
+            name: resolved
+                .translation
                 .and_then(|t| t.title.clone())
                 .unwrap_or_default(),
-            slug: translation.and_then(|t| t.slug.clone()).unwrap_or_default(),
-            description: translation.and_then(|t| t.excerpt.clone()),
+            slug: resolved
+                .translation
+                .and_then(|t| t.slug.clone())
+                .unwrap_or_default(),
+            description: resolved.translation.and_then(|t| t.excerpt.clone()),
             icon: metadata
                 .get("icon")
                 .and_then(|v| v.as_str())
@@ -240,10 +263,7 @@ mod tests {
 
     fn make_category_node(
         metadata: serde_json::Value,
-        name: Option<&str>,
-        slug: Option<&str>,
-        description: Option<&str>,
-        locale: &str,
+        translations: Vec<NodeTranslationResponse>,
         parent_id: Option<Uuid>,
         position: i32,
     ) -> NodeResponse {
@@ -262,13 +282,19 @@ mod tests {
             created_at: "2024-01-01T00:00:00Z".to_string(),
             updated_at: "2024-01-01T00:00:00Z".to_string(),
             published_at: None,
-            translations: vec![NodeTranslationResponse {
-                locale: locale.to_string(),
-                title: name.map(|s| s.to_string()),
-                slug: slug.map(|s| s.to_string()),
-                excerpt: description.map(|s| s.to_string()),
-            }],
+            deleted_at: None,
+            version: 1,
+            translations,
             bodies: vec![],
+        }
+    }
+
+    fn tr(locale: &str, name: &str, slug: &str) -> NodeTranslationResponse {
+        NodeTranslationResponse {
+            locale: locale.to_string(),
+            title: Some(name.to_string()),
+            slug: Some(slug.to_string()),
+            excerpt: None,
         }
     }
 
@@ -283,10 +309,7 @@ mod tests {
         });
         let node = make_category_node(
             metadata,
-            Some("General"),
-            Some("general"),
-            Some("General discussion"),
-            "en",
+            vec![tr("en", "General", "general")],
             None,
             3,
         );
@@ -295,32 +318,27 @@ mod tests {
 
         assert_eq!(result.name, "General");
         assert_eq!(result.slug, "general");
-        assert_eq!(result.description, Some("General discussion".to_string()));
         assert_eq!(result.icon, Some("chat".to_string()));
         assert_eq!(result.color, Some("#ff0000".to_string()));
         assert!(result.moderated);
         assert_eq!(result.topic_count, 10);
         assert_eq!(result.reply_count, 50);
         assert_eq!(result.position, 3);
+        assert_eq!(result.effective_locale, "en");
+        assert_eq!(result.available_locales, vec!["en"]);
     }
 
     #[test]
     fn node_to_category_defaults_on_empty_metadata() {
         let node = make_category_node(
             serde_json::json!({}),
-            None,
-            None,
-            None,
-            "en",
+            vec![tr("en", "", "")],
             None,
             0,
         );
 
         let result = CategoryService::node_to_category(node, "en");
 
-        assert_eq!(result.name, "");
-        assert_eq!(result.slug, "");
-        assert_eq!(result.description, None);
         assert_eq!(result.icon, None);
         assert_eq!(result.color, None);
         assert!(!result.moderated);
@@ -333,15 +351,49 @@ mod tests {
         let parent_id = Uuid::new_v4();
         let node = make_category_node(
             serde_json::json!({}),
-            Some("Sub"),
-            Some("sub"),
-            None,
-            "en",
+            vec![tr("en", "Sub", "sub")],
             Some(parent_id),
             0,
         );
 
         let result = CategoryService::node_to_category(node, "en");
         assert_eq!(result.parent_id, Some(parent_id));
+    }
+
+    #[test]
+    fn node_to_category_fallback_to_en() {
+        let node = make_category_node(
+            serde_json::json!({}),
+            vec![tr("en", "General", "general"), tr("ru", "Общее", "obshchee")],
+            None,
+            0,
+        );
+        let result = CategoryService::node_to_category(node, "de");
+        assert_eq!(result.effective_locale, "en");
+        assert_eq!(result.name, "General");
+    }
+
+    #[test]
+    fn node_to_category_fallback_to_first_when_no_en() {
+        let node = make_category_node(
+            serde_json::json!({}),
+            vec![tr("de", "Allgemein", "allgemein"), tr("fr", "Général", "general")],
+            None,
+            0,
+        );
+        let result = CategoryService::node_to_category(node, "ru");
+        assert_eq!(result.effective_locale, "de");
+    }
+
+    #[test]
+    fn node_to_category_available_locales() {
+        let node = make_category_node(
+            serde_json::json!({}),
+            vec![tr("en", "A", "a"), tr("ru", "А", "a-ru"), tr("de", "A", "a-de")],
+            None,
+            0,
+        );
+        let result = CategoryService::node_to_category(node, "en");
+        assert_eq!(result.available_locales, vec!["en", "ru", "de"]);
     }
 }

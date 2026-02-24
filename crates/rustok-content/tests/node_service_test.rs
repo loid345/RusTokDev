@@ -9,8 +9,8 @@ use rustok_content::entities::node::ContentStatus;
 use rustok_content::services::NodeService;
 use rustok_content::ContentError;
 use rustok_test_utils::{
-    db::setup_test_db, events::mock_event_bus, helpers::admin_context, helpers::customer_context,
-    helpers::manager_context, helpers::unique_slug,
+    db::setup_test_db, events::mock_event_bus, helpers::admin_context, helpers::manager_context,
+    helpers::unique_slug,
 };
 use sea_orm::DatabaseConnection;
 use uuid::Uuid;
@@ -136,23 +136,14 @@ async fn test_update_node_success() {
         .unwrap();
 
     let update_input = UpdateNodeInput {
-        kind: None,
         translations: Some(vec![NodeTranslationInput {
             locale: "en".to_string(),
             title: Some("Updated Title".to_string()),
             slug: None,
             excerpt: Some("Updated excerpt".to_string()),
         }]),
-        bodies: None,
         status: Some(ContentStatus::Published),
-        parent_id: None,
-        author_id: None,
-        category_id: None,
-        position: None,
-        depth: None,
-        reply_count: None,
-        metadata: None,
-        published_at: None,
+        ..UpdateNodeInput::default()
     };
 
     let result = service.update_node(node.id, security, update_input).await;
@@ -239,10 +230,10 @@ async fn test_get_by_slug_success() {
         .await
         .unwrap();
 
-    let result = service.get_by_slug(tenant_id, &slug, "en").await;
+    let result = service.get_by_slug(tenant_id, "post", "en", &slug).await;
 
     assert!(result.is_ok());
-    let node = result.unwrap();
+    let node = result.unwrap().expect("node should exist for slug");
     assert_eq!(node.id, created.id);
     assert_eq!(node.translations[0].slug, slug);
 }
@@ -388,13 +379,9 @@ async fn test_list_nodes_empty() {
     let tenant_id = Uuid::new_v4();
     let security = admin_context();
     let filter = ListNodesFilter {
-        kind: None,
-        status: None,
-        locale: None,
-        parent_id: None,
-        author_id: None,
         page: 1,
         per_page: 10,
+        ..Default::default()
     };
 
     let result = service.list_nodes(tenant_id, security, filter).await;
@@ -422,12 +409,9 @@ async fn test_list_nodes_with_filter() {
 
     let filter = ListNodesFilter {
         kind: Some("post".to_string()),
-        status: None,
-        locale: None,
-        parent_id: None,
-        author_id: None,
         page: 1,
         per_page: 10,
+        ..Default::default()
     };
 
     let result = service.list_nodes(tenant_id, security, filter).await;
@@ -454,13 +438,9 @@ async fn test_list_nodes_pagination() {
     }
 
     let filter_page1 = ListNodesFilter {
-        kind: None,
-        status: None,
-        locale: None,
-        parent_id: None,
-        author_id: None,
         page: 1,
         per_page: 3,
+        ..Default::default()
     };
 
     let result1 = service
@@ -472,13 +452,9 @@ async fn test_list_nodes_pagination() {
     assert_eq!(total1, 7);
 
     let filter_page2 = ListNodesFilter {
-        kind: None,
-        status: None,
-        locale: None,
-        parent_id: None,
-        author_id: None,
         page: 2,
         per_page: 3,
+        ..Default::default()
     };
 
     let result2 = service.list_nodes(tenant_id, security, filter_page2).await;
@@ -531,21 +507,11 @@ async fn test_update_node_metadata() {
         .unwrap();
 
     let update_input = UpdateNodeInput {
-        kind: None,
-        translations: None,
-        bodies: None,
-        status: None,
-        parent_id: None,
-        author_id: None,
-        category_id: None,
-        position: None,
-        depth: None,
-        reply_count: None,
         metadata: Some(serde_json::json!({
             "featured": true,
             "priority": "high"
         })),
-        published_at: None,
+        ..UpdateNodeInput::default()
     };
 
     let result = service.update_node(node.id, security, update_input).await;
@@ -590,18 +556,8 @@ async fn test_update_node_own_scope_prevents_author_change() {
         .unwrap();
 
     let update_input = UpdateNodeInput {
-        kind: None,
-        translations: None,
-        bodies: None,
-        status: None,
-        parent_id: None,
-        author_id: Some(Uuid::new_v4()),
-        category_id: None,
-        position: None,
-        depth: None,
-        reply_count: None,
-        metadata: None,
-        published_at: None,
+        author_id: Some(Some(Uuid::new_v4())),
+        ..UpdateNodeInput::default()
     };
 
     let result = service.update_node(node.id, manager, update_input).await;
@@ -626,23 +582,13 @@ async fn test_update_nonexistent_node() {
     let fake_id = Uuid::new_v4();
 
     let update_input = UpdateNodeInput {
-        kind: None,
         translations: Some(vec![NodeTranslationInput {
             locale: "en".to_string(),
             title: Some("Updated Title".to_string()),
             slug: None,
             excerpt: None,
         }]),
-        bodies: None,
-        status: None,
-        parent_id: None,
-        author_id: None,
-        category_id: None,
-        position: None,
-        depth: None,
-        reply_count: None,
-        metadata: None,
-        published_at: None,
+        ..UpdateNodeInput::default()
     };
 
     let result = service.update_node(fake_id, security, update_input).await;
@@ -744,13 +690,10 @@ async fn test_filter_by_status() {
         .unwrap();
 
     let filter = ListNodesFilter {
-        kind: None,
         status: Some(ContentStatus::Published),
-        locale: None,
-        parent_id: None,
-        author_id: None,
         page: 1,
         per_page: 10,
+        ..Default::default()
     };
 
     let result = service.list_nodes(tenant_id, security, filter).await;
@@ -759,4 +702,36 @@ async fn test_filter_by_status() {
     let (nodes, total) = result.unwrap();
     assert_eq!(total, 1);
     assert_eq!(nodes[0].status, ContentStatus::Published);
+}
+
+#[tokio::test]
+async fn test_list_nodes_includes_metadata_and_category_id() {
+    let (_db, service) = setup().await;
+    let tenant_id = Uuid::new_v4();
+    let security = admin_context();
+    let category_id = Uuid::new_v4();
+
+    let mut input = create_test_input();
+    input.category_id = Some(category_id);
+    input.metadata = serde_json::json!({"is_featured": true, "tags": ["news"]});
+
+    service
+        .create_node(tenant_id, security.clone(), input)
+        .await
+        .unwrap();
+
+    let filter = ListNodesFilter {
+        page: 1,
+        per_page: 10,
+        ..Default::default()
+    };
+
+    let (items, _) = service
+        .list_nodes(tenant_id, security, filter)
+        .await
+        .unwrap();
+
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].category_id, Some(category_id));
+    assert_eq!(items[0].metadata["is_featured"], true);
 }

@@ -6,22 +6,44 @@
 ## Что делает
 - Управляет категориями, темами и ответами.
 - Использует `rustok-content` как слой хранения.
-- Обеспечивает локализацию контента через `locale`.
+- Обеспечивает локализацию контента через `locale` с полной fallback-цепочкой.
+- Публикует форумные доменные события через `TransactionalEventBus` из `rustok-outbox`.
+- Проверяет статус топика перед созданием ответа (нельзя отвечать в закрытый/архивный топик).
 
 ## Как работает (простыми словами)
 1. API обращается к сервису форума.
-2. Сервис сохраняет данные через `NodeService`.
-3. Событие отправляется через `TransactionalEventBus` из `rustok-outbox` для надёжной доставки.
+2. Сервис валидирует входные данные (включая статус топика для ответов).
+3. Данные сохраняются через `NodeService` из `rustok-content`.
+4. Форумное событие публикуется через `TransactionalEventBus` из `rustok-outbox` для надёжной доставки.
 
 ## Ключевые компоненты
-- `constants.rs` — типы узлов форума.
-- `dto/` — структуры запросов и ответов (включая `locale`).
+- `constants.rs` — типы узлов и статусы форума.
+- `locale.rs` — хелперы locale fallback: `resolve_translation`, `resolve_body`, `available_locales`.
+- `dto/` — структуры запросов и ответов (с `effective_locale`, `available_locales`, `author_id`, `slug`).
 - `services/` — категории, темы, ответы, модерация.
-- `entities/` — модели SeaORM.
+- `entities/` — модели SeaORM (пока пустые — фаза 3).
+
+## i18n / Многоязычность
+Fallback-цепочка при разрешении перевода: `запрошенный → "en" → первый доступный`.
+
+Все response DTO возвращают:
+- `locale` — запрошенный locale
+- `effective_locale` — фактически использованный locale
+- `available_locales` — список всех доступных локалей (для TopicResponse, CategoryResponse)
+
+## Форумные события (DomainEvent)
+Все события определены в `rustok-core::events::DomainEvent`:
+
+| Событие | Когда |
+|---------|-------|
+| `ForumTopicCreated` | Создание темы |
+| `ForumTopicReplied` | Добавление ответа |
+| `ForumTopicStatusChanged` | close / archive темы |
+| `ForumTopicPinned` | Закрепление / открепление |
+| `ForumReplyStatusChanged` | approve / reject / hide ответа |
 
 ## Кому нужен
 Форуму, комьюнити-разделам, поддержке и контентным обсуждениям.
-
 
 ## Взаимодействие
 - crates/rustok-core
@@ -47,4 +69,3 @@
   - `crates/rustok-forum/src/lib.rs`
 - **Локальная документация:** `./docs/`
 - **Глобальная документация платформы:** `/docs/`
-

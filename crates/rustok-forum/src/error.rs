@@ -6,6 +6,9 @@ pub enum ForumError {
     #[error("Content error: {0}")]
     Content(#[from] rustok_content::ContentError),
 
+    #[error("Internal error: {0}")]
+    Internal(#[from] rustok_core::Error),
+
     #[error("Category not found: {0}")]
     CategoryNotFound(Uuid),
 

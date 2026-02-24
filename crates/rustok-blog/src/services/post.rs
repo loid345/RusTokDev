@@ -1,65 +1,82 @@
-//! Blog Post Service
-//!
-//! Provides business logic for blog post operations, wrapping the content module
-//! with blog-specific functionality.
+use tracing::instrument;
+use uuid::Uuid;
 
-use crate::dto::{CreatePostInput, PostListQuery, PostListResponse, PostResponse, PostSummary, UpdatePostInput};
-use crate::error::{BlogError, BlogResult};
-use crate::state_machine::BlogPostStatus;
 use rustok_content::{
-    BodyInput, CreateNodeInput, NodeService, NodeTranslationInput, UpdateNodeInput,
+    BodyInput, CreateNodeInput, ListNodesFilter, NodeService, NodeTranslationInput, UpdateNodeInput,
 };
-use rustok_core::SecurityContext;
+use rustok_core::{DomainEvent, SecurityContext};
 use rustok_outbox::TransactionalEventBus;
 use sea_orm::DatabaseConnection;
 use serde_json::Value;
-use tracing::{info, warn};
-use uuid::Uuid;
 
-/// Blog Post Service
-///
-/// Handles all blog post operations including CRUD, publishing, and archiving.
-/// Uses the content module for storage but adds blog-specific logic.
+use crate::dto::{CreatePostInput, PostListQuery, PostListResponse, PostResponse, PostSummary, UpdatePostInput};
+use crate::error::{BlogError, BlogResult};
+use crate::locale::{available_locales, resolve_body, resolve_translation};
+use crate::state_machine::BlogPostStatus;
+
+const KIND_POST: &str = "post";
+
 pub struct PostService {
-    node_service: NodeService,
-    #[allow(dead_code)]
-    db: DatabaseConnection,
+    nodes: NodeService,
+    event_bus: TransactionalEventBus,
 }
 
 impl PostService {
-    /// Create a new PostService instance
     pub fn new(db: DatabaseConnection, event_bus: TransactionalEventBus) -> Self {
         Self {
-            node_service: NodeService::new(db.clone(), event_bus),
-            db,
+            nodes: NodeService::new(db, event_bus.clone()),
+            event_bus,
         }
     }
 
-    /// Create a new blog post
-    ///
-    /// Creates a post in draft or published state based on the input.
-    /// Automatically handles tags by storing them in metadata.
+    #[instrument(skip(self, security, input))]
     pub async fn create_post(
         &self,
         tenant_id: Uuid,
         security: SecurityContext,
         input: CreatePostInput,
     ) -> BlogResult<Uuid> {
-        // Validate input
-        self.validate_create_input(&input)?;
+        if input.title.trim().is_empty() {
+            return Err(BlogError::validation("Title cannot be empty"));
+        }
+        if input.title.len() > 512 {
+            return Err(BlogError::validation("Title cannot exceed 512 characters"));
+        }
+        if input.body.trim().is_empty() {
+            return Err(BlogError::validation("Body cannot be empty"));
+        }
+        if input.locale.trim().is_empty() {
+            return Err(BlogError::validation("Locale cannot be empty"));
+        }
+        if input.tags.len() > 20 {
+            return Err(BlogError::validation("Cannot have more than 20 tags"));
+        }
 
-        // Build metadata with tags
+        let author_id = security.user_id.ok_or(BlogError::AuthorRequired)?;
+        let locale = input.locale.clone();
+
         let mut metadata = input.metadata.unwrap_or_else(|| serde_json::json!({}));
         if let Value::Object(map) = &mut metadata {
             map.insert("tags".to_string(), serde_json::json!(input.tags));
             if let Some(cat_id) = input.category_id {
                 map.insert("category_id".to_string(), serde_json::json!(cat_id));
             }
+            if let Some(url) = &input.featured_image_url {
+                map.insert("featured_image_url".to_string(), serde_json::json!(url));
+            }
+            if let Some(seo_title) = &input.seo_title {
+                map.insert("seo_title".to_string(), serde_json::json!(seo_title));
+            }
+            if let Some(seo_desc) = &input.seo_description {
+                map.insert("seo_description".to_string(), serde_json::json!(seo_desc));
+            }
         } else {
             metadata = serde_json::json!({
                 "tags": input.tags,
                 "category_id": input.category_id,
-                "meta": metadata,
+                "featured_image_url": input.featured_image_url,
+                "seo_title": input.seo_title,
+                "seo_description": input.seo_description,
             });
         }
 
@@ -69,82 +86,89 @@ impl PostService {
             rustok_content::entities::node::ContentStatus::Draft
         };
 
-        let author_id = security.user_id.ok_or(BlogError::AuthorRequired)?;
-
         let node = self
-            .node_service
+            .nodes
             .create_node(
                 tenant_id,
                 security.clone(),
                 CreateNodeInput {
-                    kind: "post".to_string(),
+                    kind: KIND_POST.to_string(),
                     status: Some(status),
                     parent_id: None,
                     author_id: Some(author_id),
                     category_id: input.category_id,
                     position: None,
                     depth: None,
-                    reply_count: None,
+                    reply_count: Some(0),
                     metadata,
                     translations: vec![NodeTranslationInput {
-                        locale: input.locale.clone(),
+                        locale: locale.clone(),
                         title: Some(input.title),
                         slug: input.slug,
                         excerpt: input.excerpt,
                     }],
                     bodies: vec![BodyInput {
-                        locale: input.locale,
+                        locale: locale.clone(),
                         body: Some(input.body),
-                        format: None,
+                        format: Some("markdown".to_string()),
                     }],
                 },
             )
             .await
             .map_err(BlogError::from)?;
 
-        info!(
-            post_id = %node.id,
-            tenant_id = %tenant_id,
-            published = input.publish,
-            "Blog post created"
-        );
+        let post_id = node.id;
 
-        Ok(node.id)
+        self.event_bus
+            .publish(
+                tenant_id,
+                security.user_id,
+                DomainEvent::BlogPostCreated {
+                    post_id,
+                    author_id: Some(author_id),
+                    locale,
+                },
+            )
+            .await
+            .map_err(BlogError::from)?;
+
+        Ok(post_id)
     }
 
-    /// Update an existing blog post
+    #[instrument(skip(self, security, input))]
     pub async fn update_post(
         &self,
         post_id: Uuid,
         security: SecurityContext,
         input: UpdatePostInput,
     ) -> BlogResult<()> {
-        // Build update input
+        let locale = input.locale.clone().unwrap_or_else(|| "en".to_string());
         let mut update = UpdateNodeInput::default();
 
-        // Handle title update via translations
         if input.title.is_some() || input.slug.is_some() || input.excerpt.is_some() {
-            // Note: Full translation update requires all fields
-            // This is a simplified implementation
             update.translations = Some(vec![NodeTranslationInput {
-                locale: input.locale.clone().unwrap_or_else(|| "en".to_string()),
+                locale: locale.clone(),
                 title: input.title,
                 slug: input.slug,
                 excerpt: input.excerpt,
             }]);
         }
 
-        // Handle body update via bodies
         if let Some(body) = input.body {
             update.bodies = Some(vec![BodyInput {
-                locale: input.locale.clone().unwrap_or_else(|| "en".to_string()),
+                locale: locale.clone(),
                 body: Some(body),
-                format: None,
+                format: Some("markdown".to_string()),
             }]);
         }
 
-        // Handle metadata updates (tags, category)
-        if input.tags.is_some() || input.category_id.is_some() || input.metadata.is_some() {
+        if input.tags.is_some()
+            || input.category_id.is_some()
+            || input.metadata.is_some()
+            || input.featured_image_url.is_some()
+            || input.seo_title.is_some()
+            || input.seo_description.is_some()
+        {
             let mut metadata = input.metadata.unwrap_or_else(|| serde_json::json!({}));
             if let Value::Object(map) = &mut metadata {
                 if let Some(tags) = input.tags {
@@ -152,6 +176,15 @@ impl PostService {
                 }
                 if let Some(cat_id) = input.category_id {
                     map.insert("category_id".to_string(), serde_json::json!(cat_id));
+                }
+                if let Some(url) = input.featured_image_url {
+                    map.insert("featured_image_url".to_string(), serde_json::json!(url));
+                }
+                if let Some(seo_title) = input.seo_title {
+                    map.insert("seo_title".to_string(), serde_json::json!(seo_title));
+                }
+                if let Some(seo_desc) = input.seo_description {
+                    map.insert("seo_description".to_string(), serde_json::json!(seo_desc));
                 }
             }
             update.metadata = Some(metadata);
@@ -161,145 +194,204 @@ impl PostService {
             update.expected_version = Some(version);
         }
 
-        self.node_service
-            .update_node(post_id, security)
+        let node = self.nodes.get_node(post_id).await.map_err(BlogError::from)?;
+        let tenant_id = node.tenant_id;
+
+        self.nodes
+            .update_node(post_id, security.clone(), update)
             .await
             .map_err(BlogError::from)?;
 
-        info!(
-            post_id = %post_id,
-            "Blog post updated"
-        );
+        self.event_bus
+            .publish(
+                tenant_id,
+                security.user_id,
+                DomainEvent::BlogPostUpdated {
+                    post_id,
+                    locale,
+                },
+            )
+            .await
+            .map_err(BlogError::from)?;
 
         Ok(())
     }
 
-    /// Publish a blog post
-    ///
-    /// Transitions a draft post to published state.
+    #[instrument(skip(self, security))]
     pub async fn publish_post(
         &self,
         post_id: Uuid,
         security: SecurityContext,
     ) -> BlogResult<()> {
-        self.node_service
-            .publish_node(post_id, security)
+        let node = self.nodes.get_node(post_id).await.map_err(BlogError::from)?;
+        let author_id = node.author_id;
+
+        self.nodes
+            .publish_node(post_id, security.clone())
             .await
             .map_err(BlogError::from)?;
 
-        info!(
-            post_id = %post_id,
-            "Blog post published"
-        );
+        self.event_bus
+            .publish(
+                node.tenant_id,
+                security.user_id,
+                DomainEvent::BlogPostPublished {
+                    post_id,
+                    author_id,
+                },
+            )
+            .await
+            .map_err(BlogError::from)?;
 
         Ok(())
     }
 
-    /// Unpublish a blog post
-    ///
-    /// Transitions a published post back to draft state.
+    #[instrument(skip(self, security))]
     pub async fn unpublish_post(
         &self,
         post_id: Uuid,
         security: SecurityContext,
     ) -> BlogResult<()> {
-        self.node_service
-            .unpublish_node(post_id, security)
+        let node = self.nodes.get_node(post_id).await.map_err(BlogError::from)?;
+
+        self.nodes
+            .unpublish_node(post_id, security.clone())
             .await
             .map_err(BlogError::from)?;
 
-        info!(
-            post_id = %post_id,
-            "Blog post unpublished"
-        );
+        self.event_bus
+            .publish(
+                node.tenant_id,
+                security.user_id,
+                DomainEvent::BlogPostUnpublished { post_id },
+            )
+            .await
+            .map_err(BlogError::from)?;
 
         Ok(())
     }
 
-    /// Archive a blog post
-    ///
-    /// Transitions a published post to archived state.
+    #[instrument(skip(self, security))]
     pub async fn archive_post(
         &self,
         post_id: Uuid,
         security: SecurityContext,
         reason: Option<String>,
     ) -> BlogResult<()> {
-        // Store archive reason in metadata
-        if let Some(reason) = reason {
-            warn!(
-                post_id = %post_id,
-                reason = %reason,
-                "Archive reason not yet persisted (requires metadata update)"
-            );
-        }
+        let node = self.nodes.get_node(post_id).await.map_err(BlogError::from)?;
 
-        self.node_service
-            .archive_node(post_id, security)
+        self.nodes
+            .archive_node(post_id, security.clone())
             .await
             .map_err(BlogError::from)?;
 
-        info!(
-            post_id = %post_id,
-            "Blog post archived"
-        );
+        self.event_bus
+            .publish(
+                node.tenant_id,
+                security.user_id,
+                DomainEvent::BlogPostArchived {
+                    post_id,
+                    reason: reason.clone(),
+                },
+            )
+            .await
+            .map_err(BlogError::from)?;
 
         Ok(())
     }
 
-    /// Delete a blog post
-    ///
-    /// Permanently deletes a post. Only allowed for draft or archived posts.
+    #[instrument(skip(self, security))]
     pub async fn delete_post(
         &self,
         post_id: Uuid,
         security: SecurityContext,
     ) -> BlogResult<()> {
-        self.node_service
-            .delete_node(post_id, security)
+        let node = self.nodes.get_node(post_id).await.map_err(BlogError::from)?;
+        let status = map_content_status(node.status.clone());
+        if status == BlogPostStatus::Published {
+            return Err(BlogError::CannotDeletePublished);
+        }
+
+        let tenant_id = node.tenant_id;
+
+        self.nodes
+            .delete_node(post_id, security.clone())
             .await
             .map_err(BlogError::from)?;
 
-        info!(
-            post_id = %post_id,
-            "Blog post deleted"
-        );
+        self.event_bus
+            .publish(
+                tenant_id,
+                security.user_id,
+                DomainEvent::BlogPostDeleted { post_id },
+            )
+            .await
+            .map_err(BlogError::from)?;
 
         Ok(())
     }
 
-    /// Get a single blog post by ID
-    pub async fn get_post(
-        &self,
-        post_id: Uuid,
-    ) -> BlogResult<PostResponse> {
-        let node = self.node_service.get_node(post_id).await.map_err(BlogError::from)?;
-        
-        // Extract tags from metadata
-        let tags = node.metadata
+    #[instrument(skip(self))]
+    pub async fn get_post(&self, post_id: Uuid, locale: &str) -> BlogResult<PostResponse> {
+        let node = self.nodes.get_node(post_id).await.map_err(BlogError::from)?;
+
+        let tr = resolve_translation(&node.translations, locale);
+        let br = resolve_body(&node.bodies, locale);
+        let all_locales = available_locales(&node.translations);
+
+        let translation = tr.translation;
+        let body_resp = br.body;
+
+        let tags = node
+            .metadata
             .get("tags")
             .and_then(|t| t.as_array())
             .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
             .unwrap_or_default();
 
-        let category_id = node.metadata
+        let category_id = node
+            .metadata
             .get("category_id")
             .and_then(|v| v.as_str())
             .and_then(|s| Uuid::parse_str(s).ok());
+
+        let featured_image_url = node
+            .metadata
+            .get("featured_image_url")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
+        let seo_title = node
+            .metadata
+            .get("seo_title")
+            .and_then(|v| v.as_str())
+            .map(String::from);
+
+        let seo_description = node
+            .metadata
+            .get("seo_description")
+            .and_then(|v| v.as_str())
+            .map(String::from);
 
         Ok(PostResponse {
             id: node.id,
             tenant_id: node.tenant_id,
             author_id: node.author_id.unwrap_or_default(),
-            title: node.translations.first().and_then(|t| t.title.clone()).unwrap_or_default(),
-            slug: node.translations.first().and_then(|t| t.slug.clone()).unwrap_or_default(),
-            locale: node.translations.first().map(|t| t.locale.clone()).unwrap_or_default(),
-            body: node.bodies.first().and_then(|b| b.body.clone()).unwrap_or_default(),
-            excerpt: node.translations.first().and_then(|t| t.excerpt.clone()),
+            title: translation.and_then(|t| t.title.clone()).unwrap_or_default(),
+            slug: translation.and_then(|t| t.slug.clone()).unwrap_or_default(),
+            locale: locale.to_string(),
+            effective_locale: tr.effective_locale,
+            available_locales: all_locales,
+            body: body_resp.and_then(|b| b.body.clone()).unwrap_or_default(),
+            body_format: body_resp.map(|b| b.format.clone()).unwrap_or_else(|| "markdown".to_string()),
+            excerpt: translation.and_then(|t| t.excerpt.clone()),
             status: map_content_status(node.status),
             category_id,
             category_name: None,
             tags,
+            featured_image_url,
+            seo_title,
+            seo_description,
             metadata: node.metadata,
             comment_count: node.reply_count as i64,
             view_count: 0,
@@ -310,15 +402,17 @@ impl PostService {
         })
     }
 
-    /// List blog posts with filtering and pagination
+    #[instrument(skip(self, security))]
     pub async fn list_posts(
         &self,
         tenant_id: Uuid,
         security: SecurityContext,
         query: PostListQuery,
     ) -> BlogResult<PostListResponse> {
-        let filter = rustok_content::ListNodesFilter {
-            kind: Some("post".to_string()),
+        let locale = query.locale.clone().unwrap_or_else(|| "en".to_string());
+
+        let filter = ListNodesFilter {
+            kind: Some(KIND_POST.to_string()),
             status: query.status.map(map_blog_status_to_content),
             locale: query.locale.clone(),
             author_id: query.author_id,
@@ -328,34 +422,57 @@ impl PostService {
             ..Default::default()
         };
 
-        let (nodes, total) = self.node_service
-            .list_nodes(tenant_id, security, filter)
+        let (node_list, total) = self
+            .nodes
+            .list_nodes(tenant_id, security.clone(), filter)
             .await
             .map_err(BlogError::from)?;
 
-        let items: Vec<PostSummary> = nodes
-            .into_iter()
-            .map(|node| PostSummary {
-                id: node.id,
-                title: node.title.unwrap_or_default(),
-                slug: node.slug.unwrap_or_default(),
-                locale: query.locale.clone().unwrap_or_else(|| "en".to_string()),
-                excerpt: node.excerpt,
-                status: map_content_status(node.status),
-                author_id: node.author_id.unwrap_or_default(),
+        let mut items = Vec::with_capacity(node_list.len());
+        for item in node_list {
+            let tags = item
+                .metadata
+                .get("tags")
+                .and_then(|t| t.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+                .unwrap_or_default();
+
+            let category_id = item.category_id.or_else(|| {
+                item.metadata
+                    .get("category_id")
+                    .and_then(|v| v.as_str())
+                    .and_then(|s| Uuid::parse_str(s).ok())
+            });
+
+            let featured_image_url = item
+                .metadata
+                .get("featured_image_url")
+                .and_then(|v| v.as_str())
+                .map(String::from);
+
+            items.push(PostSummary {
+                id: item.id,
+                title: item.title.unwrap_or_default(),
+                slug: item.slug.unwrap_or_default(),
+                locale: locale.clone(),
+                effective_locale: locale.clone(),
+                excerpt: item.excerpt,
+                status: map_content_status(item.status),
+                author_id: item.author_id.unwrap_or_default(),
                 author_name: None,
+                category_id,
                 category_name: None,
-                tags: vec![], // Would need to fetch from metadata
+                tags,
+                featured_image_url,
                 comment_count: 0,
-                published_at: node.published_at.and_then(|p| p.parse().ok()),
-                created_at: node.created_at.parse().unwrap_or_else(|_| chrono::Utc::now()),
-            })
-            .collect();
+                published_at: item.published_at.and_then(|p| p.parse().ok()),
+                created_at: item.created_at.parse().unwrap_or_else(|_| chrono::Utc::now()),
+            });
+        }
 
         Ok(PostListResponse::new(items, total, &query))
     }
 
-    /// Get posts by tag
     pub async fn get_posts_by_tag(
         &self,
         tenant_id: Uuid,
@@ -373,7 +490,6 @@ impl PostService {
         self.list_posts(tenant_id, security, query).await
     }
 
-    /// Get posts by category
     pub async fn get_posts_by_category(
         &self,
         tenant_id: Uuid,
@@ -391,7 +507,6 @@ impl PostService {
         self.list_posts(tenant_id, security, query).await
     }
 
-    /// Get posts by author
     pub async fn get_posts_by_author(
         &self,
         tenant_id: Uuid,
@@ -408,36 +523,8 @@ impl PostService {
         };
         self.list_posts(tenant_id, security, query).await
     }
-
-    // Private helper methods
-
-    /// Validate create input
-    fn validate_create_input(&self, input: &CreatePostInput) -> BlogResult<()> {
-        if input.title.trim().is_empty() {
-            return Err(BlogError::validation("Title cannot be empty"));
-        }
-
-        if input.title.len() > 512 {
-            return Err(BlogError::validation("Title cannot exceed 512 characters"));
-        }
-
-        if input.body.trim().is_empty() {
-            return Err(BlogError::validation("Body cannot be empty"));
-        }
-
-        if input.locale.trim().is_empty() {
-            return Err(BlogError::validation("Locale cannot be empty"));
-        }
-
-        if input.tags.len() > 20 {
-            return Err(BlogError::validation("Cannot have more than 20 tags"));
-        }
-
-        Ok(())
-    }
 }
 
-/// Map content status to blog post status
 fn map_content_status(status: rustok_content::entities::node::ContentStatus) -> BlogPostStatus {
     match status {
         rustok_content::entities::node::ContentStatus::Draft => BlogPostStatus::Draft,
@@ -446,8 +533,9 @@ fn map_content_status(status: rustok_content::entities::node::ContentStatus) -> 
     }
 }
 
-/// Map blog post status to content status
-fn map_blog_status_to_content(status: BlogPostStatus) -> rustok_content::entities::node::ContentStatus {
+fn map_blog_status_to_content(
+    status: BlogPostStatus,
+) -> rustok_content::entities::node::ContentStatus {
     match status {
         BlogPostStatus::Draft => rustok_content::entities::node::ContentStatus::Draft,
         BlogPostStatus::Published => rustok_content::entities::node::ContentStatus::Published,
@@ -460,110 +548,90 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_validate_create_input_valid() {
-        let input = CreatePostInput {
-            locale: "en".to_string(),
-            title: "Test Post".to_string(),
-            body: "Test body".to_string(),
-            excerpt: None,
-            slug: None,
-            publish: false,
-            tags: vec!["test".to_string()],
-            category_id: None,
-            metadata: None,
-        };
-
-        // Verify validation logic compiles and runs
-        assert!(input.title.len() <= 512);
-        assert!(!input.title.trim().is_empty());
-        assert!(!input.body.trim().is_empty());
-        assert!(!input.locale.trim().is_empty());
-        assert!(input.tags.len() <= 20);
+    fn status_roundtrip_draft() {
+        let s = map_content_status(rustok_content::entities::node::ContentStatus::Draft);
+        assert_eq!(s, BlogPostStatus::Draft);
+        let back = map_blog_status_to_content(s);
+        assert!(matches!(back, rustok_content::entities::node::ContentStatus::Draft));
     }
 
     #[test]
-    fn test_validate_create_input_empty_title() {
-        let input = CreatePostInput {
-            locale: "en".to_string(),
-            title: "".to_string(),
-            body: "Test body".to_string(),
-            excerpt: None,
-            slug: None,
-            publish: false,
-            tags: vec![],
-            category_id: None,
-            metadata: None,
-        };
-
-        assert!(input.title.trim().is_empty());
+    fn status_roundtrip_published() {
+        let s = map_content_status(rustok_content::entities::node::ContentStatus::Published);
+        assert_eq!(s, BlogPostStatus::Published);
+        let back = map_blog_status_to_content(s);
+        assert!(matches!(back, rustok_content::entities::node::ContentStatus::Published));
     }
 
     #[test]
-    fn test_validate_create_input_too_many_tags() {
-        let tags: Vec<String> = (0..25).map(|i| format!("tag{}", i)).collect();
-        let input = CreatePostInput {
-            locale: "en".to_string(),
-            title: "Test".to_string(),
-            body: "Body".to_string(),
-            excerpt: None,
-            slug: None,
-            publish: false,
-            tags,
-            category_id: None,
-            metadata: None,
-        };
-
-        assert!(input.tags.len() > 20);
+    fn status_roundtrip_archived() {
+        let s = map_content_status(rustok_content::entities::node::ContentStatus::Archived);
+        assert_eq!(s, BlogPostStatus::Archived);
+        let back = map_blog_status_to_content(s);
+        assert!(matches!(back, rustok_content::entities::node::ContentStatus::Archived));
     }
 
     #[test]
-    fn test_post_list_query_defaults() {
+    fn post_list_query_defaults() {
         let query = PostListQuery::default();
-
         assert_eq!(query.page(), 1);
         assert_eq!(query.per_page(), 20);
         assert_eq!(query.offset(), 0);
     }
 
     #[test]
-    fn test_post_list_query_pagination() {
+    fn post_list_query_pagination() {
         let query = PostListQuery {
             page: Some(3),
             per_page: Some(10),
             ..Default::default()
         };
-
         assert_eq!(query.page(), 3);
         assert_eq!(query.per_page(), 10);
         assert_eq!(query.offset(), 20);
     }
 
     #[test]
-    fn test_post_list_query_bounds() {
+    fn post_list_query_clamps_bounds() {
         let query = PostListQuery {
             page: Some(0),
             per_page: Some(200),
             ..Default::default()
         };
-
-        // Should be clamped to valid values
         assert_eq!(query.page(), 1);
         assert_eq!(query.per_page(), 100);
     }
 
     #[test]
-    fn test_status_mapping() {
-        assert_eq!(
-            map_content_status(rustok_content::entities::node::ContentStatus::Draft),
-            BlogPostStatus::Draft
-        );
-        assert_eq!(
-            map_content_status(rustok_content::entities::node::ContentStatus::Published),
-            BlogPostStatus::Published
-        );
-        assert_eq!(
-            map_content_status(rustok_content::entities::node::ContentStatus::Archived),
-            BlogPostStatus::Archived
-        );
+    fn create_post_input_has_new_fields() {
+        let input = CreatePostInput {
+            locale: "ru".to_string(),
+            title: "Заголовок".to_string(),
+            body: "Тело поста".to_string(),
+            excerpt: Some("Краткое содержание".to_string()),
+            slug: Some("zagolovok".to_string()),
+            publish: false,
+            tags: vec!["rust".to_string()],
+            category_id: None,
+            featured_image_url: Some("https://cdn.example.com/img.jpg".to_string()),
+            seo_title: Some("SEO заголовок".to_string()),
+            seo_description: Some("SEO описание".to_string()),
+            metadata: None,
+        };
+        assert_eq!(input.locale, "ru");
+        assert!(input.featured_image_url.is_some());
+        assert!(input.seo_title.is_some());
+        assert!(input.seo_description.is_some());
+    }
+
+    #[test]
+    fn update_post_input_defaults_to_none() {
+        let input = UpdatePostInput::default();
+        assert!(input.locale.is_none());
+        assert!(input.title.is_none());
+        assert!(input.featured_image_url.is_none());
+        assert!(input.seo_title.is_none());
+        assert!(input.seo_description.is_none());
+        assert!(input.version.is_none());
     }
 }

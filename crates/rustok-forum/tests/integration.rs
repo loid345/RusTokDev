@@ -22,6 +22,7 @@ async fn test_topic_lifecycle() -> TestResult<()> {
         locale: "en".to_string(),
         category_id: Uuid::nil(),
         title: "Test Topic".to_string(),
+        slug: None,
         body: "Hello, Forum!".to_string(),
         tags: vec!["rust".to_string()],
     };
@@ -34,7 +35,7 @@ async fn test_topic_lifecycle() -> TestResult<()> {
     let created_event = next_event(&mut ctx.events).await?;
     assert!(matches!(
         created_event.event,
-        DomainEvent::NodeCreated { node_id, .. } if node_id == topic.id
+        DomainEvent::ForumTopicCreated { topic_id, .. } if topic_id == topic.id
     ));
 
     let indexed = wait_for_index(&ctx, topic.id).await?;

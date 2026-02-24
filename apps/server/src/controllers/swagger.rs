@@ -24,12 +24,13 @@ use utoipa::OpenApi;
         crate::controllers::content::nodes::update_node,
         crate::controllers::content::nodes::delete_node,
         // Blog
-        // Blog
         crate::controllers::blog::posts::list_posts,
         crate::controllers::blog::posts::get_post,
         crate::controllers::blog::posts::create_post,
         crate::controllers::blog::posts::update_post,
         crate::controllers::blog::posts::delete_post,
+        crate::controllers::blog::posts::publish_post,
+        crate::controllers::blog::posts::unpublish_post,
         // Forum
         crate::controllers::forum::categories::list_categories,
         crate::controllers::forum::categories::get_category,
@@ -102,6 +103,12 @@ use utoipa::OpenApi;
 
             // Blog
             rustok_blog::dto::CreatePostInput,
+            rustok_blog::dto::UpdatePostInput,
+            rustok_blog::dto::PostResponse,
+            rustok_blog::dto::PostSummary,
+            rustok_blog::dto::PostListQuery,
+            rustok_blog::dto::PostListResponse,
+            rustok_blog::state_machine::BlogPostStatus,
 
             // Forum
             rustok_forum::CreateCategoryInput,
@@ -115,6 +122,7 @@ use utoipa::OpenApi;
             rustok_forum::TopicListItem,
             rustok_forum::CreateReplyInput,
             rustok_forum::UpdateReplyInput,
+            rustok_forum::ListRepliesFilter,
             rustok_forum::ReplyResponse,
             rustok_forum::ReplyListItem,
 

@@ -119,12 +119,14 @@ fn create_topic_input_fields() {
         locale: "en".to_string(),
         category_id: Uuid::nil(),
         title: "Hello".to_string(),
+        slug: None,
         body: "World".to_string(),
         tags: vec!["tag1".to_string()],
     };
     assert_eq!(input.locale, "en");
     assert_eq!(input.title, "Hello");
     assert_eq!(input.tags.len(), 1);
+    assert!(input.slug.is_none());
 }
 
 #[test]

@@ -10,24 +10,27 @@
 //! - Adds blog-specific business logic and validation
 //! - Provides a type-safe state machine for post lifecycle
 //! - Publishes blog-specific domain events
+//! - Full i18n support with locale fallback chain: requested → en → first available
 //!
 //! # Example
 //!
 //! ```rust,ignore
-//! use rustok_blog::{PostService, CreatePostInput, BlogPost};
+//! use rustok_blog::{PostService, CreatePostInput};
 //!
-//! // Create a post service
 //! let service = PostService::new(db, event_bus);
 //!
-//! // Create a draft post
 //! let input = CreatePostInput {
-//!     locale: "en".to_string(),
-//!     title: "My First Post".to_string(),
-//!     body: "Hello, World!".to_string(),
-//!     excerpt: Some("Introduction".to_string()),
+//!     locale: "ru".to_string(),
+//!     title: "Мой первый пост".to_string(),
+//!     body: "Привет, мир!".to_string(),
+//!     excerpt: Some("Введение".to_string()),
 //!     slug: Some("my-first-post".to_string()),
 //!     publish: false,
 //!     tags: vec!["rust".to_string()],
+//!     category_id: None,
+//!     featured_image_url: None,
+//!     seo_title: None,
+//!     seo_description: None,
 //!     metadata: None,
 //! };
 //!
@@ -42,20 +45,22 @@ use sea_orm_migration::MigrationTrait;
 pub mod dto;
 pub mod entities;
 pub mod error;
+pub mod locale;
 pub mod services;
 pub mod state_machine;
 
 #[cfg(test)]
 mod state_machine_proptest;
 
-pub use dto::{CreatePostInput, PostResponse, UpdatePostInput};
+pub use dto::{
+    CreatePostInput, PostListQuery, PostListResponse, PostResponse, PostSummary, UpdatePostInput,
+};
 pub use error::{BlogError, BlogResult};
 pub use services::PostService;
 pub use state_machine::{
     Archived, BlogPost, BlogPostStatus, CommentStatus, Draft, Published, ToBlogPostStatus,
 };
 
-/// Blog module instance
 pub struct BlogModule;
 
 #[async_trait]
@@ -82,27 +87,23 @@ impl RusToKModule for BlogModule {
 
     fn permissions(&self) -> Vec<Permission> {
         vec![
-            // Posts
             Permission::new(Resource::Posts, Action::Create),
             Permission::new(Resource::Posts, Action::Read),
             Permission::new(Resource::Posts, Action::Update),
             Permission::new(Resource::Posts, Action::Delete),
             Permission::new(Resource::Posts, Action::List),
             Permission::new(Resource::Posts, Action::Publish),
-            // Comments
             Permission::new(Resource::Comments, Action::Create),
             Permission::new(Resource::Comments, Action::Read),
             Permission::new(Resource::Comments, Action::Update),
             Permission::new(Resource::Comments, Action::Delete),
             Permission::new(Resource::Comments, Action::List),
             Permission::new(Resource::Comments, Action::Moderate),
-            // Categories
             Permission::new(Resource::Categories, Action::Create),
             Permission::new(Resource::Categories, Action::Read),
             Permission::new(Resource::Categories, Action::Update),
             Permission::new(Resource::Categories, Action::Delete),
             Permission::new(Resource::Categories, Action::List),
-            // Tags
             Permission::new(Resource::Tags, Action::Create),
             Permission::new(Resource::Tags, Action::Read),
             Permission::new(Resource::Tags, Action::Update),
@@ -114,7 +115,6 @@ impl RusToKModule for BlogModule {
 
 impl MigrationSource for BlogModule {
     fn migrations(&self) -> Vec<Box<dyn MigrationTrait>> {
-        // Blog module uses content module tables, no own migrations
         Vec::new()
     }
 }
@@ -137,20 +137,15 @@ mod tests {
         let module = BlogModule;
         let permissions = module.permissions();
 
-        // Check posts permissions
         assert!(permissions.iter().any(|p| {
             p.resource == Resource::Posts && p.action == Action::Create
         }));
         assert!(permissions.iter().any(|p| {
             p.resource == Resource::Posts && p.action == Action::Publish
         }));
-
-        // Check comments permissions
         assert!(permissions.iter().any(|p| {
             p.resource == Resource::Comments && p.action == Action::Moderate
         }));
-
-        // Check categories and tags
         assert!(permissions.iter().any(|p| p.resource == Resource::Categories));
         assert!(permissions.iter().any(|p| p.resource == Resource::Tags));
     }

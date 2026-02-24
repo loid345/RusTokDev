@@ -236,6 +236,65 @@ pub enum DomainEvent {
     },
 
     // ════════════════════════════════════════════════════════════════
+    // BLOG EVENTS
+    // ════════════════════════════════════════════════════════════════
+    BlogPostCreated {
+        post_id: Uuid,
+        author_id: Option<Uuid>,
+        locale: String,
+    },
+    BlogPostPublished {
+        post_id: Uuid,
+        author_id: Option<Uuid>,
+    },
+    BlogPostUnpublished {
+        post_id: Uuid,
+    },
+    BlogPostUpdated {
+        post_id: Uuid,
+        locale: String,
+    },
+    BlogPostArchived {
+        post_id: Uuid,
+        reason: Option<String>,
+    },
+    BlogPostDeleted {
+        post_id: Uuid,
+    },
+
+    // ════════════════════════════════════════════════════════════════
+    // FORUM EVENTS
+    // ════════════════════════════════════════════════════════════════
+    ForumTopicCreated {
+        topic_id: Uuid,
+        category_id: Uuid,
+        author_id: Option<Uuid>,
+        locale: String,
+    },
+    ForumTopicReplied {
+        topic_id: Uuid,
+        reply_id: Uuid,
+        author_id: Option<Uuid>,
+    },
+    ForumTopicStatusChanged {
+        topic_id: Uuid,
+        old_status: String,
+        new_status: String,
+        moderator_id: Option<Uuid>,
+    },
+    ForumTopicPinned {
+        topic_id: Uuid,
+        is_pinned: bool,
+        moderator_id: Option<Uuid>,
+    },
+    ForumReplyStatusChanged {
+        reply_id: Uuid,
+        topic_id: Uuid,
+        new_status: String,
+        moderator_id: Option<Uuid>,
+    },
+
+    // ════════════════════════════════════════════════════════════════
     // TENANT EVENTS
     // ════════════════════════════════════════════════════════════════
     TenantCreated {
@@ -300,6 +359,19 @@ impl DomainEvent {
             Self::IndexUpdated { .. } => "index.updated",
 
             Self::BuildRequested { .. } => "build.requested",
+
+            Self::BlogPostCreated { .. } => "blog.post.created",
+            Self::BlogPostPublished { .. } => "blog.post.published",
+            Self::BlogPostUnpublished { .. } => "blog.post.unpublished",
+            Self::BlogPostUpdated { .. } => "blog.post.updated",
+            Self::BlogPostArchived { .. } => "blog.post.archived",
+            Self::BlogPostDeleted { .. } => "blog.post.deleted",
+
+            Self::ForumTopicCreated { .. } => "forum.topic.created",
+            Self::ForumTopicReplied { .. } => "forum.topic.replied",
+            Self::ForumTopicStatusChanged { .. } => "forum.topic.status_changed",
+            Self::ForumTopicPinned { .. } => "forum.topic.pinned",
+            Self::ForumReplyStatusChanged { .. } => "forum.reply.status_changed",
 
             Self::TenantCreated { .. } => "tenant.created",
             Self::TenantUpdated { .. } => "tenant.updated",
@@ -367,6 +439,21 @@ impl DomainEvent {
             // Build events (v1)
             Self::BuildRequested { .. } => 1,
 
+            // Blog events (v1)
+            Self::BlogPostCreated { .. } => 1,
+            Self::BlogPostPublished { .. } => 1,
+            Self::BlogPostUnpublished { .. } => 1,
+            Self::BlogPostUpdated { .. } => 1,
+            Self::BlogPostArchived { .. } => 1,
+            Self::BlogPostDeleted { .. } => 1,
+
+            // Forum events (v1)
+            Self::ForumTopicCreated { .. } => 1,
+            Self::ForumTopicReplied { .. } => 1,
+            Self::ForumTopicStatusChanged { .. } => 1,
+            Self::ForumTopicPinned { .. } => 1,
+            Self::ForumReplyStatusChanged { .. } => 1,
+
             // Tenant events (v1)
             Self::TenantCreated { .. } => 1,
             Self::TenantUpdated { .. } => 1,
@@ -394,6 +481,15 @@ impl DomainEvent {
                 | Self::PriceUpdated { .. }
                 | Self::TagAttached { .. }
                 | Self::TagDetached { .. }
+                | Self::BlogPostCreated { .. }
+                | Self::BlogPostPublished { .. }
+                | Self::BlogPostUnpublished { .. }
+                | Self::BlogPostUpdated { .. }
+                | Self::BlogPostArchived { .. }
+                | Self::BlogPostDeleted { .. }
+                | Self::ForumTopicCreated { .. }
+                | Self::ForumTopicReplied { .. }
+                | Self::ForumTopicStatusChanged { .. }
         )
     }
 }
@@ -691,6 +787,113 @@ impl ValidateEvent for DomainEvent {
                 validators::validate_not_nil_uuid("build_id", build_id)?;
                 validators::validate_not_empty("requested_by", requested_by)?;
                 validators::validate_max_length("requested_by", requested_by, 255)?;
+                Ok(())
+            }
+
+            // ════════════════════════════════════════════════════════════════
+            // BLOG EVENTS
+            // ════════════════════════════════════════════════════════════════
+            Self::BlogPostCreated {
+                post_id,
+                author_id,
+                locale,
+            } => {
+                validators::validate_not_nil_uuid("post_id", post_id)?;
+                validators::validate_optional_uuid("author_id", author_id)?;
+                validators::validate_not_empty("locale", locale)?;
+                validators::validate_max_length("locale", locale, 10)?;
+                Ok(())
+            }
+            Self::BlogPostPublished { post_id, author_id } => {
+                validators::validate_not_nil_uuid("post_id", post_id)?;
+                validators::validate_optional_uuid("author_id", author_id)?;
+                Ok(())
+            }
+            Self::BlogPostUnpublished { post_id }
+            | Self::BlogPostDeleted { post_id } => {
+                validators::validate_not_nil_uuid("post_id", post_id)?;
+                Ok(())
+            }
+            Self::BlogPostUpdated { post_id, locale } => {
+                validators::validate_not_nil_uuid("post_id", post_id)?;
+                validators::validate_not_empty("locale", locale)?;
+                validators::validate_max_length("locale", locale, 10)?;
+                Ok(())
+            }
+            Self::BlogPostArchived { post_id, reason } => {
+                validators::validate_not_nil_uuid("post_id", post_id)?;
+                if let Some(r) = reason {
+                    validators::validate_max_length("reason", r, 500)?;
+                }
+                Ok(())
+            }
+
+            // ════════════════════════════════════════════════════════════════
+            // FORUM EVENTS
+            // ════════════════════════════════════════════════════════════════
+            Self::ForumTopicCreated {
+                topic_id,
+                category_id,
+                author_id,
+                locale,
+            } => {
+                validators::validate_not_nil_uuid("topic_id", topic_id)?;
+                validators::validate_not_nil_uuid("category_id", category_id)?;
+                validators::validate_optional_uuid("author_id", author_id)?;
+                validators::validate_not_empty("locale", locale)?;
+                validators::validate_max_length("locale", locale, 10)?;
+                Ok(())
+            }
+            Self::ForumTopicReplied {
+                topic_id,
+                reply_id,
+                author_id,
+            } => {
+                validators::validate_not_nil_uuid("topic_id", topic_id)?;
+                validators::validate_not_nil_uuid("reply_id", reply_id)?;
+                validators::validate_optional_uuid("author_id", author_id)?;
+                Ok(())
+            }
+            Self::ForumTopicStatusChanged {
+                topic_id,
+                old_status,
+                new_status,
+                moderator_id,
+            } => {
+                validators::validate_not_nil_uuid("topic_id", topic_id)?;
+                validators::validate_not_empty("old_status", old_status)?;
+                validators::validate_max_length("old_status", old_status, 50)?;
+                validators::validate_not_empty("new_status", new_status)?;
+                validators::validate_max_length("new_status", new_status, 50)?;
+                if old_status == new_status {
+                    return Err(EventValidationError::InvalidValue(
+                        "new_status",
+                        "must be different from old_status".to_string(),
+                    ));
+                }
+                validators::validate_optional_uuid("moderator_id", moderator_id)?;
+                Ok(())
+            }
+            Self::ForumTopicPinned {
+                topic_id,
+                moderator_id,
+                ..
+            } => {
+                validators::validate_not_nil_uuid("topic_id", topic_id)?;
+                validators::validate_optional_uuid("moderator_id", moderator_id)?;
+                Ok(())
+            }
+            Self::ForumReplyStatusChanged {
+                reply_id,
+                topic_id,
+                new_status,
+                moderator_id,
+            } => {
+                validators::validate_not_nil_uuid("reply_id", reply_id)?;
+                validators::validate_not_nil_uuid("topic_id", topic_id)?;
+                validators::validate_not_empty("new_status", new_status)?;
+                validators::validate_max_length("new_status", new_status, 50)?;
+                validators::validate_optional_uuid("moderator_id", moderator_id)?;
                 Ok(())
             }
 

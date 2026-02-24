@@ -13,4 +13,6 @@ pub fn routes() -> Routes {
                 .put(posts::update_post)
                 .delete(posts::delete_post),
         )
+        .add("/posts/:id/publish", post(posts::publish_post))
+        .add("/posts/:id/unpublish", post(posts::unpublish_post))
 }

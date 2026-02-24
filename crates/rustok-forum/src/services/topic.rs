@@ -5,7 +5,7 @@ use uuid::Uuid;
 use rustok_content::{
     BodyInput, CreateNodeInput, ListNodesFilter, NodeService, NodeTranslationInput, UpdateNodeInput,
 };
-use rustok_core::SecurityContext;
+use rustok_core::{DomainEvent, SecurityContext};
 use rustok_outbox::TransactionalEventBus;
 
 use crate::constants::{topic_status, KIND_TOPIC};
@@ -13,15 +13,18 @@ use crate::dto::{
     CreateTopicInput, ListTopicsFilter, TopicListItem, TopicResponse, UpdateTopicInput,
 };
 use crate::error::{ForumError, ForumResult};
+use crate::locale::{available_locales, resolve_body, resolve_translation};
 
 pub struct TopicService {
     nodes: NodeService,
+    event_bus: TransactionalEventBus,
 }
 
 impl TopicService {
     pub fn new(db: DatabaseConnection, event_bus: TransactionalEventBus) -> Self {
         Self {
-            nodes: NodeService::new(db, event_bus),
+            nodes: NodeService::new(db, event_bus.clone()),
+            event_bus,
         }
     }
 
@@ -43,6 +46,10 @@ impl TopicService {
             ));
         }
 
+        let author_id = security.user_id;
+        let category_id = input.category_id;
+        let locale = input.locale.clone();
+
         let metadata = serde_json::json!({
             "tags": input.tags,
             "is_pinned": false,
@@ -55,25 +62,25 @@ impl TopicService {
             .nodes
             .create_node(
                 tenant_id,
-                security,
+                security.clone(),
                 CreateNodeInput {
                     kind: KIND_TOPIC.to_string(),
                     status: Some(rustok_content::entities::node::ContentStatus::Published),
-                    parent_id: Some(input.category_id),
-                    author_id: None,
-                    category_id: Some(input.category_id),
+                    parent_id: Some(category_id),
+                    author_id,
+                    category_id: Some(category_id),
                     position: None,
                     depth: None,
                     reply_count: Some(0),
                     metadata,
                     translations: vec![NodeTranslationInput {
-                        locale: input.locale.clone(),
+                        locale: locale.clone(),
                         title: Some(input.title.clone()),
-                        slug: None,
+                        slug: input.slug.clone(),
                         excerpt: None,
                     }],
                     bodies: vec![BodyInput {
-                        locale: input.locale.clone(),
+                        locale: locale.clone(),
                         body: Some(input.body),
                         format: Some("markdown".to_string()),
                     }],
@@ -81,7 +88,23 @@ impl TopicService {
             )
             .await?;
 
-        Ok(Self::node_to_topic(node, &input.locale))
+        let topic_id = node.id;
+        let response = Self::node_to_topic(node, &locale);
+
+        self.event_bus
+            .publish(
+                tenant_id,
+                security.user_id,
+                DomainEvent::ForumTopicCreated {
+                    topic_id,
+                    category_id,
+                    author_id,
+                    locale,
+                },
+            )
+            .await?;
+
+        Ok(response)
     }
 
     #[instrument(skip(self))]
@@ -115,7 +138,7 @@ impl TopicService {
             Some(vec![NodeTranslationInput {
                 locale: input.locale.clone(),
                 title: Some(input.title.unwrap_or(existing.title.clone())),
-                slug: None,
+                slug: Some(existing.slug.clone()),
                 excerpt: None,
             }])
         } else {
@@ -175,22 +198,43 @@ impl TopicService {
                     locale: Some(locale.clone()),
                     page: filter.page,
                     per_page: filter.per_page,
+                    include_deleted: false,
+                    category_id: filter.category_id,
                 },
             )
             .await?;
 
         let list = items
             .into_iter()
-            .map(|item| TopicListItem {
-                id: item.id,
-                locale: locale.clone(),
-                category_id: Uuid::nil(),
-                title: item.title.unwrap_or_default(),
-                status: topic_status::OPEN.to_string(),
-                is_pinned: false,
-                is_locked: false,
-                reply_count: 0,
-                created_at: item.created_at,
+            .map(|item| {
+                let metadata = &item.metadata;
+                TopicListItem {
+                    id: item.id,
+                    locale: locale.clone(),
+                    effective_locale: locale.clone(),
+                    category_id: item.category_id.unwrap_or(Uuid::nil()),
+                    author_id: item.author_id,
+                    title: item.title.unwrap_or_default(),
+                    slug: item.slug.unwrap_or_default(),
+                    status: metadata
+                        .get("forum_status")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(topic_status::OPEN)
+                        .to_string(),
+                    is_pinned: metadata
+                        .get("is_pinned")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
+                    is_locked: metadata
+                        .get("is_locked")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(false),
+                    reply_count: metadata
+                        .get("reply_count")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0) as i32,
+                    created_at: item.created_at,
+                }
             })
             .collect();
 
@@ -198,26 +242,30 @@ impl TopicService {
     }
 
     fn node_to_topic(node: rustok_content::NodeResponse, locale: &str) -> TopicResponse {
-        let translation = node
-            .translations
-            .iter()
-            .find(|t| t.locale == locale)
-            .or_else(|| node.translations.first());
-        let body = node
-            .bodies
-            .iter()
-            .find(|b| b.locale == locale)
-            .or_else(|| node.bodies.first());
+        let resolved_tr = resolve_translation(&node.translations, locale);
+        let resolved_body = resolve_body(&node.bodies, locale);
+        let locales = available_locales(&node.translations);
         let metadata = node.metadata;
 
         TopicResponse {
             id: node.id,
             locale: locale.to_string(),
+            effective_locale: resolved_tr.effective_locale,
+            available_locales: locales,
             category_id: node.category_id.unwrap_or(Uuid::nil()),
-            title: translation
+            author_id: node.author_id,
+            title: resolved_tr
+                .translation
                 .and_then(|t| t.title.clone())
                 .unwrap_or_default(),
-            body: body.and_then(|b| b.body.clone()).unwrap_or_default(),
+            slug: resolved_tr
+                .translation
+                .and_then(|t| t.slug.clone())
+                .unwrap_or_default(),
+            body: resolved_body
+                .body
+                .and_then(|b| b.body.clone())
+                .unwrap_or_default(),
             status: metadata
                 .get("forum_status")
                 .and_then(|v| v.as_str())
@@ -260,10 +308,10 @@ mod tests {
     fn make_node(
         kind: &str,
         category_id: Option<Uuid>,
+        author_id: Option<Uuid>,
         metadata: serde_json::Value,
-        title: Option<&str>,
-        body: Option<&str>,
-        locale: &str,
+        translations: Vec<NodeTranslationResponse>,
+        bodies: Vec<BodyResponse>,
     ) -> NodeResponse {
         NodeResponse {
             id: Uuid::nil(),
@@ -271,7 +319,7 @@ mod tests {
             kind: kind.to_string(),
             status: ContentStatus::Published,
             parent_id: category_id,
-            author_id: None,
+            author_id,
             category_id,
             position: 0,
             depth: 0,
@@ -280,28 +328,35 @@ mod tests {
             created_at: "2024-01-01T00:00:00Z".to_string(),
             updated_at: "2024-01-01T00:00:00Z".to_string(),
             published_at: None,
-            translations: vec![NodeTranslationResponse {
-                locale: locale.to_string(),
-                title: title.map(|s| s.to_string()),
-                slug: None,
-                excerpt: None,
-            }],
-            bodies: body
-                .map(|b| {
-                    vec![BodyResponse {
-                        locale: locale.to_string(),
-                        body: Some(b.to_string()),
-                        format: "markdown".to_string(),
-                        updated_at: "2024-01-01T00:00:00Z".to_string(),
-                    }]
-                })
-                .unwrap_or_default(),
+            deleted_at: None,
+            version: 1,
+            translations,
+            bodies,
+        }
+    }
+
+    fn tr(locale: &str, title: &str, slug: &str) -> NodeTranslationResponse {
+        NodeTranslationResponse {
+            locale: locale.to_string(),
+            title: Some(title.to_string()),
+            slug: Some(slug.to_string()),
+            excerpt: None,
+        }
+    }
+
+    fn body(locale: &str, content: &str) -> BodyResponse {
+        BodyResponse {
+            locale: locale.to_string(),
+            body: Some(content.to_string()),
+            format: "markdown".to_string(),
+            updated_at: "2024-01-01T00:00:00Z".to_string(),
         }
     }
 
     #[test]
     fn node_to_topic_maps_fields_from_metadata() {
         let category_id = Uuid::new_v4();
+        let author_id = Uuid::new_v4();
         let metadata = serde_json::json!({
             "tags": ["rust", "forum"],
             "is_pinned": true,
@@ -312,22 +367,26 @@ mod tests {
         let node = make_node(
             KIND_TOPIC,
             Some(category_id),
+            Some(author_id),
             metadata,
-            Some("Hello World"),
-            Some("Body text"),
-            "en",
+            vec![tr("en", "Hello World", "hello-world")],
+            vec![body("en", "Body text")],
         );
 
         let result = TopicService::node_to_topic(node, "en");
 
         assert_eq!(result.title, "Hello World");
+        assert_eq!(result.slug, "hello-world");
         assert_eq!(result.body, "Body text");
         assert_eq!(result.category_id, category_id);
+        assert_eq!(result.author_id, Some(author_id));
         assert_eq!(result.tags, vec!["rust", "forum"]);
         assert!(result.is_pinned);
         assert!(!result.is_locked);
         assert_eq!(result.reply_count, 5);
         assert_eq!(result.status, "open");
+        assert_eq!(result.effective_locale, "en");
+        assert_eq!(result.available_locales, vec!["en"]);
     }
 
     #[test]
@@ -335,10 +394,10 @@ mod tests {
         let node = make_node(
             KIND_TOPIC,
             None,
+            None,
             serde_json::json!({}),
-            None,
-            None,
-            "en",
+            vec![tr("en", "", "")],
+            vec![],
         );
 
         let result = TopicService::node_to_topic(node, "en");
@@ -346,6 +405,7 @@ mod tests {
         assert_eq!(result.title, "");
         assert_eq!(result.body, "");
         assert_eq!(result.category_id, Uuid::nil());
+        assert!(result.author_id.is_none());
         assert!(result.tags.is_empty());
         assert!(!result.is_pinned);
         assert!(!result.is_locked);
@@ -354,7 +414,7 @@ mod tests {
     }
 
     #[test]
-    fn node_to_topic_falls_back_to_first_translation() {
+    fn node_to_topic_falls_back_to_en() {
         let metadata = serde_json::json!({
             "tags": [],
             "is_pinned": false,
@@ -362,11 +422,40 @@ mod tests {
             "reply_count": 0,
             "forum_status": "open"
         });
-        let mut node = make_node(KIND_TOPIC, None, metadata, Some("Fallback"), None, "de");
-        // request locale is "en" but only "de" exists
-        node.translations[0].locale = "de".to_string();
+        let node = make_node(
+            KIND_TOPIC,
+            None,
+            None,
+            metadata,
+            vec![tr("en", "Fallback EN", "fallback-en"), tr("de", "Rückfall", "rueckfall")],
+            vec![body("en", "English body")],
+        );
+
+        let result = TopicService::node_to_topic(node, "ru");
+        assert_eq!(result.effective_locale, "en");
+        assert_eq!(result.title, "Fallback EN");
+    }
+
+    #[test]
+    fn node_to_topic_falls_back_to_first_when_no_en() {
+        let metadata = serde_json::json!({
+            "tags": [],
+            "is_pinned": false,
+            "is_locked": false,
+            "reply_count": 0,
+            "forum_status": "open"
+        });
+        let node = make_node(
+            KIND_TOPIC,
+            None,
+            None,
+            metadata,
+            vec![tr("de", "Erster", "erster")],
+            vec![],
+        );
 
         let result = TopicService::node_to_topic(node, "en");
-        assert_eq!(result.title, "Fallback");
+        assert_eq!(result.effective_locale, "de");
+        assert_eq!(result.title, "Erster");
     }
 }

@@ -7,6 +7,7 @@ pub struct CreateTopicInput {
     pub locale: String,
     pub category_id: Uuid,
     pub title: String,
+    pub slug: Option<String>,
     pub body: String,
     pub tags: Vec<String>,
 }
@@ -42,8 +43,12 @@ fn default_per_page() -> u64 {
 pub struct TopicResponse {
     pub id: Uuid,
     pub locale: String,
+    pub effective_locale: String,
+    pub available_locales: Vec<String>,
     pub category_id: Uuid,
+    pub author_id: Option<Uuid>,
     pub title: String,
+    pub slug: String,
     pub body: String,
     pub status: String,
     pub tags: Vec<String>,
@@ -58,8 +63,11 @@ pub struct TopicResponse {
 pub struct TopicListItem {
     pub id: Uuid,
     pub locale: String,
+    pub effective_locale: String,
     pub category_id: Uuid,
+    pub author_id: Option<Uuid>,
     pub title: String,
+    pub slug: String,
     pub status: String,
     pub is_pinned: bool,
     pub is_locked: bool,
