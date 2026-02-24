@@ -31,6 +31,8 @@ pub struct UpdateCategoryInput {
 pub struct CategoryResponse {
     pub id: Uuid,
     pub locale: String,
+    pub effective_locale: String,
+    pub available_locales: Vec<String>,
     pub name: String,
     pub slug: String,
     pub description: Option<String>,
@@ -47,6 +49,7 @@ pub struct CategoryResponse {
 pub struct CategoryListItem {
     pub id: Uuid,
     pub locale: String,
+    pub effective_locale: String,
     pub name: String,
     pub slug: String,
     pub description: Option<String>,

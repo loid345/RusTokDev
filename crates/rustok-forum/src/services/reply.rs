@@ -3,21 +3,24 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use rustok_content::{BodyInput, CreateNodeInput, ListNodesFilter, NodeService, UpdateNodeInput};
-use rustok_core::SecurityContext;
+use rustok_core::{DomainEvent, SecurityContext};
 use rustok_outbox::TransactionalEventBus;
 
-use crate::constants::{reply_status, KIND_REPLY};
-use crate::dto::{CreateReplyInput, ReplyListItem, ReplyResponse, UpdateReplyInput};
+use crate::constants::{reply_status, topic_status, KIND_REPLY, KIND_TOPIC};
+use crate::dto::{CreateReplyInput, ListRepliesFilter, ReplyListItem, ReplyResponse, UpdateReplyInput};
 use crate::error::{ForumError, ForumResult};
+use crate::locale::resolve_body;
 
 pub struct ReplyService {
     nodes: NodeService,
+    event_bus: TransactionalEventBus,
 }
 
 impl ReplyService {
     pub fn new(db: DatabaseConnection, event_bus: TransactionalEventBus) -> Self {
         Self {
-            nodes: NodeService::new(db, event_bus),
+            nodes: NodeService::new(db, event_bus.clone()),
+            event_bus,
         }
     }
 
@@ -35,6 +38,27 @@ impl ReplyService {
             ));
         }
 
+        let topic_node = self.nodes.get_node(topic_id).await?;
+        if topic_node.kind != KIND_TOPIC {
+            return Err(ForumError::TopicNotFound(topic_id));
+        }
+
+        let topic_status_value = topic_node
+            .metadata
+            .get("forum_status")
+            .and_then(|v| v.as_str())
+            .unwrap_or(topic_status::OPEN);
+
+        if topic_status_value == topic_status::CLOSED {
+            return Err(ForumError::TopicClosed);
+        }
+        if topic_status_value == topic_status::ARCHIVED {
+            return Err(ForumError::TopicArchived);
+        }
+
+        let author_id = security.user_id;
+        let locale = input.locale.clone();
+
         let metadata = serde_json::json!({
             "parent_reply_id": input.parent_reply_id,
             "reply_status": reply_status::APPROVED,
@@ -44,12 +68,12 @@ impl ReplyService {
             .nodes
             .create_node(
                 tenant_id,
-                security,
+                security.clone(),
                 CreateNodeInput {
                     kind: KIND_REPLY.to_string(),
                     status: Some(rustok_content::entities::node::ContentStatus::Published),
                     parent_id: Some(topic_id),
-                    author_id: None,
+                    author_id,
                     category_id: None,
                     position: None,
                     depth: None,
@@ -57,7 +81,7 @@ impl ReplyService {
                     metadata,
                     translations: Vec::new(),
                     bodies: vec![BodyInput {
-                        locale: input.locale.clone(),
+                        locale: locale.clone(),
                         body: Some(input.content),
                         format: Some("markdown".to_string()),
                     }],
@@ -65,7 +89,22 @@ impl ReplyService {
             )
             .await?;
 
-        Ok(Self::node_to_reply(node, topic_id, &input.locale))
+        let reply_id = node.id;
+        let response = Self::node_to_reply(node, topic_id, &locale);
+
+        self.event_bus
+            .publish(
+                tenant_id,
+                security.user_id,
+                DomainEvent::ForumTopicReplied {
+                    topic_id,
+                    reply_id,
+                    author_id,
+                },
+            )
+            .await?;
+
+        Ok(response)
     }
 
     #[instrument(skip(self))]
@@ -123,9 +162,10 @@ impl ReplyService {
         tenant_id: Uuid,
         security: SecurityContext,
         topic_id: Uuid,
-        locale: &str,
-    ) -> ForumResult<Vec<ReplyListItem>> {
-        let (items, _) = self
+        filter: ListRepliesFilter,
+    ) -> ForumResult<(Vec<ReplyListItem>, u64)> {
+        let locale = filter.locale.clone().unwrap_or_else(|| "en".to_string());
+        let (items, total) = self
             .nodes
             .list_nodes(
                 tenant_id,
@@ -135,26 +175,57 @@ impl ReplyService {
                     status: None,
                     parent_id: Some(topic_id),
                     author_id: None,
-                    locale: Some(locale.to_string()),
-                    page: 1,
-                    per_page: 200,
+                    locale: Some(locale.clone()),
+                    page: filter.page,
+                    per_page: filter.per_page,
+                    include_deleted: false,
+                    category_id: None,
                 },
             )
             .await?;
 
-        let replies = items
+        let node_ids: Vec<Uuid> = items.iter().map(|item| item.id).collect();
+
+        let mut full_nodes = Vec::with_capacity(node_ids.len());
+        for id in node_ids {
+            match self.nodes.get_node(id).await {
+                Ok(node) => full_nodes.push(node),
+                Err(_) => continue,
+            }
+        }
+
+        let replies = full_nodes
             .into_iter()
-            .map(|item| ReplyListItem {
-                id: item.id,
-                locale: locale.to_string(),
-                topic_id,
-                content_preview: item.excerpt.unwrap_or_default(),
-                status: reply_status::APPROVED.to_string(),
-                created_at: item.created_at,
+            .map(|node| {
+                let resolved = resolve_body(&node.bodies, &locale);
+                let metadata = &node.metadata;
+                let content = resolved
+                    .body
+                    .and_then(|b| b.body.clone())
+                    .unwrap_or_default();
+                let preview: String = content.chars().take(200).collect();
+                ReplyListItem {
+                    id: node.id,
+                    locale: locale.clone(),
+                    effective_locale: resolved.effective_locale,
+                    topic_id,
+                    author_id: node.author_id,
+                    content_preview: preview,
+                    status: metadata
+                        .get("reply_status")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or(reply_status::APPROVED)
+                        .to_string(),
+                    parent_reply_id: metadata
+                        .get("parent_reply_id")
+                        .and_then(|v| v.as_str())
+                        .and_then(|s| Uuid::parse_str(s).ok()),
+                    created_at: node.created_at,
+                }
             })
             .collect();
 
-        Ok(replies)
+        Ok((replies, total))
     }
 
     fn node_to_reply(
@@ -162,18 +233,16 @@ impl ReplyService {
         topic_id: Uuid,
         locale: &str,
     ) -> ReplyResponse {
-        let body = node
-            .bodies
-            .iter()
-            .find(|b| b.locale == locale)
-            .or_else(|| node.bodies.first());
+        let resolved = resolve_body(&node.bodies, locale);
         let metadata = node.metadata;
 
         ReplyResponse {
             id: node.id,
             locale: locale.to_string(),
+            effective_locale: resolved.effective_locale,
             topic_id,
-            content: body.and_then(|b| b.body.clone()).unwrap_or_default(),
+            author_id: node.author_id,
+            content: resolved.body.and_then(|b| b.body.clone()).unwrap_or_default(),
             status: metadata
                 .get("reply_status")
                 .and_then(|v| v.as_str())
@@ -198,6 +267,7 @@ mod tests {
 
     fn make_reply_node(
         topic_id: Uuid,
+        author_id: Option<Uuid>,
         content: Option<&str>,
         locale: &str,
         status: &str,
@@ -213,7 +283,7 @@ mod tests {
             kind: KIND_REPLY.to_string(),
             status: ContentStatus::Published,
             parent_id: Some(topic_id),
-            author_id: None,
+            author_id,
             category_id: None,
             position: 0,
             depth: 0,
@@ -222,6 +292,8 @@ mod tests {
             created_at: "2024-01-01T00:00:00Z".to_string(),
             updated_at: "2024-01-01T00:00:00Z".to_string(),
             published_at: None,
+            deleted_at: None,
+            version: 1,
             translations: vec![NodeTranslationResponse {
                 locale: locale.to_string(),
                 title: None,
@@ -244,38 +316,54 @@ mod tests {
     #[test]
     fn node_to_reply_maps_fields() {
         let topic_id = Uuid::new_v4();
+        let author_id = Uuid::new_v4();
         let parent_reply_id = Uuid::new_v4();
-        let node =
-            make_reply_node(topic_id, Some("Hello!"), "en", reply_status::APPROVED, Some(parent_reply_id));
+        let node = make_reply_node(
+            topic_id,
+            Some(author_id),
+            Some("Hello!"),
+            "en",
+            reply_status::APPROVED,
+            Some(parent_reply_id),
+        );
 
         let result = ReplyService::node_to_reply(node, topic_id, "en");
 
         assert_eq!(result.topic_id, topic_id);
+        assert_eq!(result.author_id, Some(author_id));
         assert_eq!(result.content, "Hello!");
         assert_eq!(result.status, reply_status::APPROVED);
         assert_eq!(result.parent_reply_id, Some(parent_reply_id));
+        assert_eq!(result.effective_locale, "en");
     }
 
     #[test]
     fn node_to_reply_defaults_on_missing_fields() {
         let topic_id = Uuid::new_v4();
-        let node = make_reply_node(topic_id, None, "en", reply_status::PENDING, None);
+        let node = make_reply_node(topic_id, None, None, "en", reply_status::PENDING, None);
 
         let result = ReplyService::node_to_reply(node, topic_id, "en");
 
         assert_eq!(result.content, "");
         assert_eq!(result.status, reply_status::PENDING);
         assert_eq!(result.parent_reply_id, None);
+        assert!(result.author_id.is_none());
     }
 
     #[test]
     fn node_to_reply_falls_back_to_first_body_locale() {
         let topic_id = Uuid::new_v4();
-        // body locale is "de" but we request "en"
-        let mut node = make_reply_node(topic_id, Some("Hallo!"), "de", reply_status::APPROVED, None);
-        node.bodies[0].locale = "de".to_string();
+        let node = make_reply_node(
+            topic_id,
+            None,
+            Some("Hallo!"),
+            "de",
+            reply_status::APPROVED,
+            None,
+        );
 
         let result = ReplyService::node_to_reply(node, topic_id, "en");
         assert_eq!(result.content, "Hallo!");
+        assert_eq!(result.effective_locale, "de");
     }
 }

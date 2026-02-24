@@ -6,6 +6,7 @@ pub mod constants;
 pub mod dto;
 pub mod entities;
 pub mod error;
+pub mod locale;
 pub mod services;
 
 pub use constants::*;

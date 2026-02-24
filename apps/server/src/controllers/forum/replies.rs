@@ -4,19 +4,14 @@ use axum::{
 };
 use loco_rs::prelude::*;
 use rustok_forum::{
-    CreateReplyInput, ReplyListItem, ReplyResponse, ReplyService, UpdateReplyInput,
+    CreateReplyInput, ListRepliesFilter, ReplyListItem, ReplyResponse, ReplyService,
+    UpdateReplyInput,
 };
-use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::context::TenantContext;
 use crate::extractors::auth::CurrentUser;
 use crate::services::event_bus::transactional_event_bus_from_context;
-
-#[derive(Deserialize)]
-pub struct ReplyListParams {
-    pub locale: Option<String>,
-}
 
 #[utoipa::path(
     get,
@@ -24,7 +19,7 @@ pub struct ReplyListParams {
     tag = "forum",
     params(
         ("id" = Uuid, Path, description = "Topic ID"),
-        ("locale" = Option<String>, Query, description = "Locale")
+        ListRepliesFilter,
     ),
     responses(
         (status = 200, description = "List of replies", body = Vec<ReplyListItem>),
@@ -36,12 +31,11 @@ pub async fn list_replies(
     tenant: TenantContext,
     user: CurrentUser,
     Path(topic_id): Path<Uuid>,
-    Query(params): Query<ReplyListParams>,
+    Query(filter): Query<ListRepliesFilter>,
 ) -> Result<Json<Vec<ReplyListItem>>> {
-    let locale = params.locale.unwrap_or_else(|| "en".to_string());
     let service = ReplyService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
-    let replies = service
-        .list_for_topic(tenant.id, user.security_context(), topic_id, &locale)
+    let (replies, _) = service
+        .list_for_topic(tenant.id, user.security_context(), topic_id, filter)
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(Json(replies))
@@ -66,9 +60,9 @@ pub async fn get_reply(
     _tenant: TenantContext,
     _user: CurrentUser,
     Path(id): Path<Uuid>,
-    Query(params): Query<ReplyListParams>,
+    Query(filter): Query<ListRepliesFilter>,
 ) -> Result<Json<ReplyResponse>> {
-    let locale = params.locale.unwrap_or_else(|| "en".to_string());
+    let locale = filter.locale.unwrap_or_else(|| "en".to_string());
     let service = ReplyService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let reply = service
         .get(id, &locale)

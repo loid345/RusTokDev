@@ -115,6 +115,7 @@ use utoipa::OpenApi;
             rustok_forum::TopicListItem,
             rustok_forum::CreateReplyInput,
             rustok_forum::UpdateReplyInput,
+            rustok_forum::ListRepliesFilter,
             rustok_forum::ReplyResponse,
             rustok_forum::ReplyListItem,
 
