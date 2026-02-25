@@ -14,10 +14,11 @@
 UI/
 ├── tokens/base.css              ← Общие CSS custom properties --iu-* (цвета, spacing, radius, fonts, shadows)
 ├── docs/api-contracts.md        ← Единый API-контракт для всех компонентов (Button, Input, Select …)
-├── leptos/
-│   └── components/              ← Rust/Leptos реализации — БУДУТ ЗДЕСЬ (сейчас пусто)
+├── leptos/                      ← iu-leptos Rust crate (Cargo.toml, src/)
+│   ├── src/                     ← Button, Input, Textarea, Select, Checkbox, Switch, Badge, Spinner
+│   └── components/              ← deprecated placeholder (реализации в src/)
 └── next/
-    └── components/              ← React/Next.js реализации — БУДУТ ЗДЕСЬ (сейчас пусто)
+    └── components/              ← React/Next.js IU-обёртки над shadcn (Button, Input, Badge …)
 ```
 
 **Принципы (из `UI/README.md`):**

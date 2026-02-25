@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added - 2026-02-25 (continuation)
+
+#### Cleanup & Documentation
+
+**apps/admin — removed orphaned old-structure files**
+- Deleted `src/api/`, `src/components/`, `src/modules/`, `src/providers/`, `src/i18n.rs`
+- These directories were superseded by the FSD structure (`src/shared/`, `src/widgets/`, etc.) and were no longer compiled
+
+**crates/tailwind-{rs,css,ast} — added README.md**
+- Added `README.md` to all three vendored Tailwind crates (was `Readme.md` only)
+- Covers purpose, responsibilities, entry points, interactions, maintenance instructions
+
+**UI/leptos — expanded README.md**
+- Extended crate README with component index table, interactions, and links
+
+**docs/UI/rust-ui-component-catalog.md — filled with decisions**
+- Replaced all `TODO` entries with `adopt`, `pilot`, or `defer`/`reject` decisions
+- Documents which components have full Leptos ↔ Next.js parity
+- Notes components pending porting (Alert Dialog, Combobox, Skeleton in Leptos)
+
+**docs/index.md — updated map**
+- Added links to `docs/UI/fsd-restructuring-plan.md`, `UI/docs/api-contracts.md`
+- Updated `tailwind-*` links from `Readme.md` to `README.md`
+- Added `iu-leptos` and `UI/next/components` to distributed docs inventory
+
 ### Added - 2026-02-25
 
 #### FSD Restructuring — Phases 1.1–1.3 + Phase 3 (next-admin)
