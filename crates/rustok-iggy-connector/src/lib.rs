@@ -39,18 +39,13 @@ use {
 };
 
 /// Connection mode for Iggy connector
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ConnectorMode {
     /// Embedded mode - runs Iggy server within the application
+    #[default]
     Embedded,
     /// Remote mode - connects to external Iggy server
     Remote,
-}
-
-impl Default for ConnectorMode {
-    fn default() -> Self {
-        Self::Embedded
-    }
 }
 
 impl std::fmt::Display for ConnectorMode {
@@ -406,21 +401,6 @@ impl RemoteConnector {
 
         Ok((stream_id, topic_id))
     }
-
-    #[cfg(not(feature = "iggy"))]
-    async fn create_client(_config: &RemoteConnectorConfig) -> Result<(), ConnectorError> {
-        tracing::warn!("Iggy SDK not enabled, using mock client");
-        Ok(())
-    }
-
-    #[cfg(not(feature = "iggy"))]
-    async fn ensure_topology(
-        _stream_name: &str,
-        _topic_name: &str,
-        _partitions: u32,
-    ) -> Result<(), ConnectorError> {
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -613,6 +593,14 @@ impl RemoteMessageSubscriber {
 #[async_trait]
 impl MessageSubscriber for RemoteMessageSubscriber {
     async fn recv(&mut self) -> Result<Option<Vec<u8>>, ConnectorError> {
+        tracing::trace!(
+            mode = "remote",
+            stream = %self.stream,
+            topic = %self.topic,
+            partition = self.partition,
+            "Polling remote subscriber"
+        );
+
         // Would poll from Iggy client
         // For now, simulate no messages
         Ok(None)
@@ -690,8 +678,8 @@ impl IggyConnector for EmbeddedConnector {
 
         // Store topology config
         *self.stream_name.write().await = config.stream_name.clone();
-        *self.topic_name.write() = config.topic_name.clone();
-        *self.partitions.write() = config.partitions;
+        *self.topic_name.write().await = config.topic_name.clone();
+        *self.partitions.write().await = config.partitions;
 
         *self.connected.write().await = true;
 
@@ -791,6 +779,14 @@ impl EmbeddedMessageSubscriber {
 #[async_trait]
 impl MessageSubscriber for EmbeddedMessageSubscriber {
     async fn recv(&mut self) -> Result<Option<Vec<u8>>, ConnectorError> {
+        tracing::trace!(
+            mode = "embedded",
+            stream = %self.stream,
+            topic = %self.topic,
+            partition = self.partition,
+            "Polling embedded subscriber"
+        );
+
         // Would receive from embedded Iggy
         // For now, simulate no messages
         Ok(None)
@@ -847,7 +843,7 @@ mod tests {
             let key = format!("tenant-{}", i);
             let partition = calculate_partition(&key);
             assert!(
-                partition >= 1 && partition <= 8,
+                (1..=8).contains(&partition),
                 "Partition {} out of range",
                 partition
             );
