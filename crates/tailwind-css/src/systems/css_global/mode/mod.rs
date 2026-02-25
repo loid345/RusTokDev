@@ -24,4 +24,3 @@ pub enum CssInlineMode {
     /// ```
     DataValue,
 }
-

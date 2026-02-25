@@ -20,8 +20,8 @@ impl CssAttributes {
     /// * `value`: css property
     //
     /// # Returns
-///
-/// [`CssAttribute`]
+    ///
+    /// [`CssAttribute`]
     #[track_caller]
     pub fn insert<K, V>(&mut self, key: K, value: V)
     where
@@ -42,8 +42,8 @@ impl CssAttributes {
     /// * `items`:
     //
     /// # Returns
-///
-/// ()
+    ///
+    /// ()
     pub fn extend<T>(&mut self, items: T)
     where
         T: IntoIterator<Item = (String, String)>,
