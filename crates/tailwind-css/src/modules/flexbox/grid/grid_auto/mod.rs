@@ -13,7 +13,7 @@ enum GridAutoKind {
 #[derive(Debug, Clone)]
 pub struct TailwindGridAuto {
     kind: GridAutoKind,
-    // - ture: rows
+    // - true: rows
     // - false: cols
     axis: AxisXY,
 }

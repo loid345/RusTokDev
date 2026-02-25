@@ -67,7 +67,7 @@ impl TailwindInstruction {
             ["items", rest @ ..] => TailwindItems::parse(rest, arbitrary)?.boxed(),
             ["self", rest @ ..] => TailwindSelf::parse(rest, arbitrary)?.boxed(),
             ["place", rest @ ..] => TailwindPlace::adapt(rest, arbitrary)?,
-            // justify catched
+            // justify caught
             // Spacing System
             ["p" | "pl" | "pr" | "pb" | "pt" | "px" | "py", ..] => TailwindPadding::parse(pattern, arbitrary, neg)?.boxed(),
             ["m" | "ml" | "mr" | "mb" | "mt" | "mx" | "my", ..] => TailwindMargin::parse(pattern, arbitrary, neg)?.boxed(),
@@ -119,8 +119,8 @@ impl TailwindInstruction {
             ["indent", rest @ ..] => TailwindIndent::parse(rest, arbitrary)?.boxed(),
             ["align", rest @ ..] => TailwindAlign::parse(rest, arbitrary)?.boxed(),
             ["whitespace", rest @ ..] => TailwindWhiteSpace::parse(rest, arbitrary)?.boxed(),
-            // break catched
-            // content catched
+            // break caught
+            // content caught
             // Typography System Extension
             ["prose"] => return syntax_error!("prose requires @tailwindcss/typography plugin"),
             // Backgrounds System
