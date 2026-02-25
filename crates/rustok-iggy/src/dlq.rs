@@ -38,17 +38,17 @@ impl DlqManager {
     }
 
     pub fn with_stream(self, stream: String) -> Self {
-        *self.stream.write() = RwLock::new(stream);
+        *self.stream.blocking_write() = stream;
         self
     }
 
     pub fn with_topic(self, topic: String) -> Self {
-        *self.topic.write() = RwLock::new(topic);
+        *self.topic.blocking_write() = topic;
         self
     }
 
     pub fn with_max_retries(self, max_retries: u32) -> Self {
-        *self.max_retries.write() = RwLock::new(max_retries);
+        *self.max_retries.blocking_write() = max_retries;
         self
     }
 
