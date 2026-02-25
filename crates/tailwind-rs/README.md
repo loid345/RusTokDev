@@ -1,35 +1,52 @@
-# tailwind-rs (vendored)
+# tailwind-rs (vendored in RusToK)
 
-Vendored fork of [`cloud-shuttle/tailwind-rs`](https://github.com/cloud-shuttle/tailwind-rs).
+This crate is vendored locally because the upstream `leptos + tailwind-rs` toolchain was unstable for our build.
 
-See [Readme.md](./Readme.md) for full vendoring rationale and maintenance instructions.
+## Why only a part was fixed
 
-## Purpose
+We intentionally fixed and vendored only the path that RusToK actually executes in CI and local builds:
 
-HTML-mode Tailwind CSS class translator used by the `apps/admin` Trunk build pipeline.
+- `tailwind-rs` CLI integration used by `apps/admin/Trunk.toml`.
+- Core translation path through `tailwind-css`/`tailwind-ast`.
+- Compatibility patches required for current workspace dependency resolution (`tailwind-error`, `parcel_css`).
 
-## Responsibilities
+The full upstream surface was **not** completed because:
 
-- Parses HTML and translates Tailwind utility class strings into optimised CSS
-- Provides Trunk integration (called during WASM build of `apps/admin`)
-- Delegates to `tailwind-css` and `tailwind-ast` for the core parsing/instruction pipeline
+1. Upstream still contains explicit `todo!()` / `unimplemented!()` branches in error adapters and some instruction paths.
+2. `tailwind-rs` in this workspace is effectively focused on HTML processing (`feature = "html"`), not every possible parser/input mode.
+3. We prioritized build stability for RusToK apps over full parity with all Tailwind semantics.
 
-## Entry Points
+## Can we vendor the whole library?
 
-- `src/lib.rs` — top-level re-exports from `tailwind-css` with the `html` feature gate
+Yes. For easier future switch back to upstream, the best strategy is:
 
-## Interactions
+1. Keep a **full mirror** of upstream crates in our vendored paths.
+2. Keep RusToK-only fixes in **separate commits** on top of that mirror.
+3. On each upstream update, resync the mirror first, then reapply/adapt our local fixes.
 
-- **Consumed by**: `apps/admin` build (via Trunk)
-- **Depends on**: `tailwind-css`, `tailwind-ast`, `tailwind-error`, `parcel_css`, `tl`
-- **Upstream**: https://github.com/cloud-shuttle/tailwind-rs (vendored, not a git submodule)
+To reduce manual copy-paste we added:
 
-## Maintenance
+- `scripts/tailwind/vendor_tailwind_rs.sh` — syncs full upstream crates into:
+  - `crates/tailwind-rs`
+  - `crates/tailwind-css`
+  - `crates/tailwind-ast`
+  - `third_party/patches/tailwind-error`
 
-When updating, run `scripts/tailwind/vendor_tailwind_rs.sh` to re-sync from upstream, then reapply local RusToK patches. See [Readme.md](./Readme.md) for details.
+Examples:
 
-## Links
+```bash
+# sync latest default branch
+scripts/tailwind/vendor_tailwind_rs.sh
 
-- [Platform docs](../../docs/index.md)
-- [tailwind-css crate](../tailwind-css/README.md)
-- [tailwind-ast crate](../tailwind-ast/README.md)
+# sync a specific tag/branch/sha
+scripts/tailwind/vendor_tailwind_rs.sh --ref v0.2.0
+
+# check drift without changing files
+scripts/tailwind/vendor_tailwind_rs.sh --check
+```
+
+## Practical implication
+
+If a Tailwind class/syntax path reaches an unimplemented branch upstream, the local fork may still not support it yet.
+
+For product work this is acceptable as long as used classes compile in `admin`/`storefront` pipelines.
