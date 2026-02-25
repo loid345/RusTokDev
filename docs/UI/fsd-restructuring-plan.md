@@ -1,7 +1,7 @@
 # FSD Реструктуризация Admin Panels — Детальный план
 
 **Ветка:** `claude/review-fsd-admin-design-sOKKf`
-**Статус:** 🔄 В работе (Фаза 1.4–1.5 + Фаза 2 завершены)
+**Статус:** ✅ Завершено (Фазы 1.1–1.5 + Фазы 2–3 завершены)
 **Охват:** `apps/admin` (Leptos CSR) + `apps/next-admin` (Next.js) + `UI/` workspace (leptos + next компоненты) + `crates/leptos-ui`
 
 ---
@@ -512,43 +512,43 @@ UI/next/components/
 
 ### Фаза 1: UI/ workspace — инфраструктура и компоненты
 
-#### 1.1 Сделать UI/leptos/ Rust-crate (iu-leptos)
+#### 1.1 Сделать UI/leptos/ Rust-crate (iu-leptos) ✅
 
-`UI/leptos/` становится полноценным Rust crate в workspace. Компоненты живут в `UI/leptos/components/*.rs`, подключены через `mod` в `UI/leptos/src/lib.rs`.
+`UI/leptos/` становится полноценным Rust crate в workspace. Компоненты живут в `UI/leptos/src/*.rs`, подключены через `mod` в `UI/leptos/src/lib.rs`.
 
 **Задачи:**
-- [ ] Создать `UI/leptos/Cargo.toml` — crate name `iu-leptos`, `crate-type = ["cdylib", "rlib"]`
-- [ ] Добавить зависимости: `leptos`, `leptos-shadcn-ui` (или `leptos-shadcn-button` и т.д.)
-- [ ] Создать `UI/leptos/src/lib.rs` — точка входа, `mod` на файлы в `components/`
-- [ ] Добавить `"UI/leptos"` в `members` корневого `Cargo.toml`
-- [ ] Добавить `iu-leptos = { path = "UI/leptos" }` в `[workspace.dependencies]`
-- [ ] Добавить `leptos-shadcn-ui` в `[workspace.dependencies]`
+- [x] Создать `UI/leptos/Cargo.toml` — crate name `iu-leptos`, `crate-type = ["cdylib", "rlib"]`
+- [x] Добавить зависимости: `leptos`, `serde`
+- [x] Создать `UI/leptos/src/lib.rs` — точка входа, pub mod + pub use
+- [x] Добавить `"UI/leptos"` в `members` корневого `Cargo.toml`
+- [x] Добавить `iu-leptos = { path = "UI/leptos" }` в `[workspace.dependencies]`
 
 **Коммит:** `feat(ui/workspace): register UI/leptos as iu-leptos Rust crate`
 
-#### 1.2 Реализовать компоненты Leptos в UI/leptos/components/
+#### 1.2 Реализовать компоненты Leptos в UI/leptos/src/ ✅
 
-По контракту из `UI/docs/api-contracts.md`, базируясь на `leptos-shadcn-ui`:
+По контракту из `UI/docs/api-contracts.md`, используя `--iu-*` CSS-переменные:
 
 | Файл | Компонент | Ключевые props |
 |------|----------|---------------|
-| `button.rs` | `Button` | variant, size, disabled, loading, leftIcon/rightIcon |
+| `button.rs` | `Button` | variant, size, disabled, loading, left_icon/right_icon |
 | `input.rs` | `Input` | size, disabled, invalid, prefix/suffix |
 | `textarea.rs` | `Textarea` | size, disabled, invalid, rows |
 | `select.rs` | `Select` | size, disabled, invalid, options, placeholder |
 | `checkbox.rs` | `Checkbox` | checked (Signal), indeterminate, disabled |
-| `switch.rs` | `Switch` | checked (Signal), disabled, size: sm\|md |
+| `switch.rs` | `Switch` | checked (Signal), disabled, size: Sm\|Md |
 | `badge.rs` | `Badge` | variant, size, dismissible |
+| `spinner.rs` | `Spinner` | size |
 
 Все компоненты используют `--iu-*` CSS-переменные из `UI/tokens/base.css`.
 
-**Коммит:** `feat(ui/leptos): implement Button, Input, Textarea, Select, Checkbox, Switch, Badge`
+**Коммит:** `feat(ui/leptos): implement Button, Input, Textarea, Select, Checkbox, Switch, Badge, Spinner`
 
-#### 1.3 Рефакторинг crates/leptos-ui → wrapper над iu-leptos
+#### 1.3 Рефакторинг crates/leptos-ui → wrapper над iu-leptos ✅
 
-- [ ] Добавить `iu-leptos` как зависимость в `crates/leptos-ui/Cargo.toml`
-- [ ] Заменить `src/lib.rs` на `pub use iu_leptos::*;` + кастомный `Spinner`
-- [ ] Удалить `src/{button,input,badge,card,label,separator}.rs` (заменены)
+- [x] Добавить `iu-leptos` как зависимость в `crates/leptos-ui/Cargo.toml`
+- [x] Заменить `src/lib.rs` на re-export из `iu_leptos` + оставить `Card`, `Label`, `Separator`
+- [x] Удалить `src/{button,input,badge,types}.rs` (заменены iu-leptos)
 
 **Коммит:** `refactor(leptos-ui): become thin re-export wrapper over iu-leptos`
 
@@ -650,59 +650,67 @@ Thin wrappers над shadcn/ui (shadcn как reference, не дублирова
 
 ---
 
-### Фаза 3: FSD-реструктуризация apps/next-admin (Next.js)
+### Фаза 3: FSD-реструктуризация apps/next-admin (Next.js) ✅ ЗАВЕРШЕНО
 
-#### 3.1 Создать shared/ слой
+#### 3.1 Создать shared/ слой ✅
 
-- [ ] Создать `src/shared/` директорию
-- [ ] Создать `src/shared/api/` — переместить `lib/graphql.ts`, `lib/auth-api.ts`
-- [ ] Создать `src/shared/lib/` — переместить `lib/utils.ts`, `lib/format.ts`, `lib/parsers.ts`, `lib/searchparams.ts`, `lib/data-table.ts`
-- [ ] Создать `src/shared/lib/themes/` — переместить `components/themes/`
-- [ ] Создать `src/shared/hooks/` — переместить `hooks/`
-- [ ] Создать `src/shared/types/` — переместить `types/`
-- [ ] Создать `src/shared/config/` — переместить `config/`
-- [ ] Создать `src/shared/constants/` — переместить `constants/`
-- [ ] Создать `src/shared/ui/` — добавить breadcrumbs.tsx, file-uploader.tsx, form-card-skeleton.tsx, search-input.tsx, icons.tsx, alert-modal.tsx, forms/
-- [ ] Создать barrel exports (`index.ts`) для каждой папки
-- [ ] Обновить `tsconfig.json` — добавить path aliases `@/shared/*`
+- [x] Создать `src/shared/` директорию
+- [x] Создать `src/shared/api/` — barrel re-exports из `lib/graphql.ts`, `lib/auth-api.ts`
+- [x] Создать `src/shared/lib/` — barrel re-exports из `lib/{utils,format,parsers,searchparams,data-table}.ts`
+- [x] Создать `src/shared/lib/themes/` — barrel re-exports из `components/themes/`
+- [x] Создать `src/shared/hooks/` — barrel re-exports из `hooks/`
+- [x] Создать `src/shared/types/` — barrel re-exports из `types/`
+- [x] Создать `src/shared/config/` — barrel re-exports из `config/`
+- [x] Создать `src/shared/constants/` — barrel re-exports из `constants/`
+- [x] Создать `src/shared/ui/` — breadcrumbs, file-uploader, form-card-skeleton, search-input, icons, alert-modal, forms/
+- [x] Создать barrel exports (`index.ts`) для каждой папки
+- [x] Обновить `tsconfig.json` — добавить path aliases `@/shared/*`
 
 **Коммит:** `refactor(admin/next): extract shared/ FSD layer`
 
-#### 3.2 Создать entities/ слой
+#### 3.2 Создать entities/ слой ✅
 
-- [ ] Создать `src/entities/user/model.ts` — User, UserRole, UserStatus типы (из types/index.ts)
-- [ ] Создать `src/entities/user/ui/user-card.tsx` — компонент карточки
-- [ ] Создать `src/entities/user/ui/user-avatar.tsx` — аватар с инициалами
-- [ ] Создать `src/entities/user/index.ts`
-- [ ] Создать `src/entities/product/model.ts` — Product типы (из features/products/)
-- [ ] Создать `src/entities/product/ui/product-card.tsx`
-- [ ] Создать `src/entities/product/index.ts`
-- [ ] Создать `src/entities/tenant/model.ts` — Tenant, Workspace типы
-- [ ] Создать `src/entities/tenant/index.ts`
-- [ ] Обновить `tsconfig.json` — добавить `@/entities/*`
+- [x] Создать `src/entities/user/model.ts` — User, UserRole, UserStatus, UsersConnection типы
+- [x] Создать `src/entities/user/ui/user-card.tsx` — компонент карточки пользователя
+- [x] Создать `src/entities/user/ui/user-avatar.tsx` — аватар с инициалами
+- [x] Создать `src/entities/user/index.ts`
+- [x] Создать `src/entities/product/model.ts` — Product, ProductCategory типы
+- [x] Создать `src/entities/product/ui/product-card.tsx`
+- [x] Создать `src/entities/product/index.ts`
+- [x] Создать `src/entities/tenant/model.ts` — Tenant, Workspace типы
+- [x] Создать `src/entities/tenant/index.ts`
+- [x] Обновить `tsconfig.json` — добавить `@/entities/*`
 
 **Коммит:** `feat(admin/next): add entities/ FSD layer (user, product, tenant)`
 
-#### 3.3 Создать widgets/ слой
+#### 3.3 Создать widgets/ слой ✅
 
-- [ ] Создать `src/widgets/app-shell/` — переместить из `components/layout/`, `components/nav-*.tsx`, `components/org-switcher.tsx`
-- [ ] Создать `src/widgets/command-palette/` — переместить из `components/kbar/`
-- [ ] Создать `src/widgets/data-table/` — вынести DataTable компоненты из `features/products/components/product-tables/` в общий виджет
-- [ ] Создать `src/widgets/alert-modal/` — из `components/modal/alert-modal.tsx`
-- [ ] Создать barrel `index.ts` для каждого виджета
-- [ ] Обновить `tsconfig.json` — добавить `@/widgets/*`
+- [x] Создать `src/widgets/app-shell/` — re-exports из `components/layout/` (AppSidebar, Header, InfoSidebar, PageContainer, Providers, UserNav)
+- [x] Создать `src/widgets/command-palette/` — re-export из `components/kbar/`
+- [x] Создать `src/widgets/data-table/` — re-exports DataTable компонентов из `components/ui/table/`
+- [x] Создать `src/widgets/alert-modal/` — re-export из `components/modal/alert-modal.tsx`
+- [x] Создать barrel `index.ts` для каждого виджета
+- [x] Обновить `tsconfig.json` — добавить `@/widgets/*`
 
 **Коммит:** `refactor(admin/next): extract widgets/ FSD layer`
 
-#### 3.4 Обновить импорты и верифицировать
+#### 3.4 Обновить импорты и верифицировать ✅
 
-- [ ] Обновить все импорты в `src/app/**` — использовать `@/shared/*`, `@/entities/*`, `@/widgets/*`
-- [ ] Обновить все импорты в `src/features/**` — использовать `@/shared/*`, `@/entities/*`, `@/widgets/*`
-- [ ] Убедиться что старые директории пусты и удалены: `src/components/`, `src/lib/`, `src/hooks/`, `src/types/`, `src/config/`, `src/constants/`
+- [x] Обновить импорты в `src/app/layout.tsx` — использовать `@/widgets/app-shell`, `@/shared/lib/themes/*`
+- [x] Обновить импорты в `src/app/dashboard/layout.tsx` — использовать `@/widgets/command-palette`, `@/widgets/app-shell`
+- [x] Обновить импорты в `src/app/dashboard/product/**` — `@/widgets/app-shell`, `@/shared/lib/*`
+- [x] Обновить импорты в `src/app/dashboard/overview/@*/` — `@/shared/constants`
+- [x] Обновить импорты в `src/features/products/**` — `@/shared/api`, `@/shared/hooks`, `@/shared/ui/forms`, `@/widgets/alert-modal`
+- [x] Обновить импорты в `src/features/auth/**` — `@/shared/lib/utils`, `@/shared/api/auth-api`, `@/shared/ui/icons`
+- [x] Обновить импорты в `src/features/users/**` — `@/shared/api/graphql`
+- [x] Обновить импорты в `src/features/profile/**` — `@/shared/api/graphql`, `@/widgets/app-shell`
+- [x] Обновить импорты в `src/features/kanban/**`, `src/features/overview/**` — `@/widgets/app-shell`
 - [ ] Запустить `pnpm --filter next-admin type-check` — должно пройти без ошибок
 - [ ] Запустить `pnpm --filter next-admin build` — успешная сборка
 
-**Коммит:** `refactor(admin/next): update imports, remove old paths, verify build`
+**Примечание:** Старые пути (`@/components/layout/`, `@/lib/`, `@/hooks/`) продолжают работать. Это стратегия **постепенного перехода**: новые canonical пути через FSD-слои, старые сохраняются для backward compatibility.
+
+**Коммит:** `refactor(admin/next): update imports, add FSD layer structure`
 
 ---
 

@@ -1,5 +1,13 @@
 use leptos::prelude::*;
 
+fn checkbox_checked(ev: &leptos::ev::Event) -> bool {
+    use leptos::wasm_bindgen::JsCast;
+    ev.target()
+        .and_then(|t| t.dyn_into::<leptos::web_sys::HtmlInputElement>().ok())
+        .map(|el| el.checked())
+        .unwrap_or(false)
+}
+
 #[component]
 pub fn Checkbox(
     #[prop(optional)] checked: Option<ReadSignal<bool>>,
@@ -21,18 +29,14 @@ pub fn Checkbox(
                  bg-[hsl(var(--iu-bg))] text-[hsl(var(--iu-primary))] \
                  focus-visible:outline-none focus-visible:ring-2 \
                  focus-visible:ring-[hsl(var(--iu-primary))] focus-visible:ring-offset-2 \
-                 disabled:cursor-not-allowed disabled:opacity-50 \
-                 checked:bg-[hsl(var(--iu-primary))] checked:border-[hsl(var(--iu-primary))] {}",
+                 disabled:cursor-not-allowed disabled:opacity-50 {}",
                 class
             )
             prop:checked=move || checked.map(|c| c.get()).unwrap_or(false)
             prop:indeterminate=indeterminate
             on:change=move |ev| {
                 if let Some(set) = set_checked {
-                    use leptos::ev::Event;
-                    let target = ev.target().unwrap();
-                    let input = target.unchecked_into::<web_sys::HtmlInputElement>();
-                    set.set(input.checked());
+                    set.set(checkbox_checked(&ev));
                 }
             }
         />

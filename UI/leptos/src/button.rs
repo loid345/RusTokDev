@@ -1,7 +1,7 @@
 use leptos::prelude::*;
 
-use crate::types::{ButtonVariant, Size};
 use crate::spinner::Spinner;
+use crate::types::{ButtonVariant, Size};
 
 #[component]
 pub fn Button(
@@ -12,8 +12,6 @@ pub fn Button(
     #[prop(optional, into)] class: String,
     #[prop(optional)] on_click: Option<Box<dyn Fn() + 'static>>,
     #[prop(default = "button")] r#type: &'static str,
-    #[prop(optional)] left_icon: Option<AnyView>,
-    #[prop(optional)] right_icon: Option<AnyView>,
     children: Children,
 ) -> impl IntoView {
     let size_cls = match size {
@@ -24,16 +22,28 @@ pub fn Button(
     };
 
     let variant_cls = match variant {
-        ButtonVariant::Primary => "bg-[hsl(var(--iu-primary))] text-[hsl(var(--iu-primary-fg))] hover:opacity-90",
-        ButtonVariant::Secondary => "bg-[hsl(var(--iu-muted))] text-[hsl(var(--iu-muted-fg))] hover:opacity-80",
-        ButtonVariant::Ghost => "bg-transparent text-[hsl(var(--iu-fg))] hover:bg-[hsl(var(--iu-accent))]",
-        ButtonVariant::Outline => "border border-[hsl(var(--iu-border))] bg-transparent text-[hsl(var(--iu-fg))] hover:bg-[hsl(var(--iu-accent))]",
-        ButtonVariant::Destructive => "bg-[hsl(var(--iu-danger))] text-[hsl(var(--iu-danger-fg))] hover:opacity-90",
+        ButtonVariant::Primary => {
+            "bg-[hsl(var(--iu-primary))] text-[hsl(var(--iu-primary-fg))] hover:opacity-90"
+        }
+        ButtonVariant::Secondary => {
+            "bg-[hsl(var(--iu-muted))] text-[hsl(var(--iu-muted-fg))] hover:opacity-80"
+        }
+        ButtonVariant::Ghost => {
+            "bg-transparent text-[hsl(var(--iu-fg))] hover:bg-[hsl(var(--iu-accent))]"
+        }
+        ButtonVariant::Outline => {
+            "border border-[hsl(var(--iu-border))] bg-transparent \
+             text-[hsl(var(--iu-fg))] hover:bg-[hsl(var(--iu-accent))]"
+        }
+        ButtonVariant::Destructive => {
+            "bg-[hsl(var(--iu-danger))] text-[hsl(var(--iu-danger-fg))] hover:opacity-90"
+        }
     };
 
     let full_class = format!(
-        "inline-flex items-center justify-center font-medium rounded-[var(--iu-radius-md)] \
-         transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 \
+        "inline-flex items-center justify-center font-medium \
+         rounded-[var(--iu-radius-md)] transition-all \
+         focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 \
          disabled:pointer-events-none disabled:opacity-50 {} {} {}",
         size_cls, variant_cls, class
     );
@@ -53,13 +63,14 @@ pub fn Button(
                 }
             }
         >
-            {if loading {
-                view! { <Spinner size=Size::Sm /> }.into_any()
-            } else {
-                left_icon.map(|icon| icon).into_any()
+            {move || {
+                if loading {
+                    Some(view! { <Spinner size=Size::Sm /> })
+                } else {
+                    None
+                }
             }}
             {children()}
-            {(!loading).then(|| right_icon)}
         </button>
     }
 }

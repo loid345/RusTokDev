@@ -9,6 +9,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added - 2026-02-25
 
+#### FSD Restructuring — Phases 1.1–1.3 + Phase 3 (next-admin)
+
+**UI/leptos as iu-leptos Rust crate (Phase 1.1–1.2)**
+- Created `UI/leptos/Cargo.toml` — `iu-leptos` crate registered in workspace
+- Implemented 8 Leptos components in `UI/leptos/src/`: `Button`, `Input`, `Textarea`, `Select`, `Checkbox`, `Switch`, `Badge`, `Spinner`
+- All components use `--iu-*` CSS custom properties from `UI/tokens/base.css`
+- Components respect `Size`, `ButtonVariant`, `BadgeVariant` enums with `Default` derive
+- Added `iu-leptos = { path = "UI/leptos" }` to `[workspace.dependencies]`
+- Added `"UI/leptos"` to `[workspace.members]`
+
+**crates/leptos-ui refactored to thin wrapper (Phase 1.3)**
+- `leptos-ui` now re-exports from `iu-leptos` for all base components
+- Removed `src/{button,input,badge,types}.rs` (replaced by iu-leptos)
+- Kept `Card`, `Label`, `Separator` as leptos-ui-specific components
+
+**apps/next-admin FSD restructuring (Phase 3.1–3.4)**
+- Created `src/shared/` layer with 7 sub-slices:
+  - `api/` — `graphql.ts`, `auth-api.ts` barrel re-exports
+  - `lib/` — `utils`, `format`, `parsers`, `searchparams`, `data-table`, plus `themes/` sub-folder
+  - `hooks/` — all 10 hooks barrel re-exports
+  - `types/` — `NavItem`, `BaseFormFieldProps`, `DataTableRowAction` etc.
+  - `config/` — `navItems`, `data-table` config
+  - `constants/` — `data.ts`, `mock-api.ts` re-exports
+  - `ui/` — breadcrumbs, icons, search-input, form-card-skeleton, file-uploader, alert-modal, forms/
+- Created `src/entities/` layer: `user/` (model + UserAvatar + UserCard), `product/` (model + ProductCard), `tenant/` (model)
+- Created `src/widgets/` layer: `app-shell/`, `command-palette/`, `data-table/`, `alert-modal/` with barrel `index.ts`
+- Updated `tsconfig.json` with `@/shared/*`, `@/entities/*`, `@/widgets/*` path aliases
+- Updated key imports in `src/app/**` and `src/features/**` to use FSD canonical paths
+
 #### Alloy Scripting — Registered as Optional RusToKModule (improvement 2.13)
 - **AlloyModule** (`apps/server/src/modules/alloy.rs`)
   - New `AlloyModule` struct implementing `RusToKModule` with `ModuleKind::Optional`
