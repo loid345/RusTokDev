@@ -1,4 +1,4 @@
-# Unified design system: shadcn/ui class port for all Leptos apps
+# Unified design system: shadcn/ui CSS vars for all apps
 
 - Date: 2026-02-25
 - Status: Accepted
@@ -7,95 +7,73 @@
 
 RusToK имеет четыре UI-приложения на двух технологических стеках:
 
-| Приложение | Стек | Текущая дизайн-система |
-|-----------|------|----------------------|
-| `apps/admin` | Leptos CSR | shadcn CSS vars + Tailwind (migrated ✅) |
+| Приложение | Стек | Дизайн-система до |
+|-----------|------|-------------------|
+| `apps/admin` | Leptos CSR | кастомные `--iu-*` CSS vars |
 | `apps/next-admin` | Next.js / React | shadcn/ui |
-| `apps/storefront` | Leptos SSR | DaisyUI (`btn`, `card`, `badge-*` утилиты) |
-| `apps/next-frontend` | Next.js / React | кастомный Button с `bg-sky-600`, `text-slate-*` |
+| `apps/storefront` | Leptos SSR | DaisyUI |
+| `apps/next-frontend` | Next.js / React | кастомный Button, хардкодированные цвета |
 
-Вопросы, поставленные при ревью:
+При ревью были заданы три вопроса:
 
-1. **Правильно ли мы унифицировали компоненты в админках?** Должны ли они быть похожи визуально?
-2. **Применим ли тот же подход на фронтендах** (`apps/storefront` и `apps/next-frontend`)?
-3. **Можно ли перенести весь shadcn/ui под Rust/Leptos?**
+1. Правильно ли унифицировали компоненты в админках?
+2. Применим ли тот же подход на фронтендах?
+3. Можно ли перенести весь shadcn/ui под Rust/Leptos?
 
-### Анализ текущего состояния
+### Проблемы старой реализации
 
-**Админки** (`apps/admin` ↔ `apps/next-admin`):
-Унификация через shadcn — правильное решение. Обе реализации — интерфейсы управления платформой. Консистентность критична: одна команда работает в обоих, одни сценарии (таблицы, формы, модальные). shadcn-переменные дают pixel-perfect паритет без лишних зависимостей.
+**`apps/admin`**: использовал `--iu-*` CSS custom properties — собственная схема именования, несовместимая с shadcn. Визуальный паритет с `apps/next-admin` не достигался.
 
-**Фронтенды** (`apps/storefront` ↔ `apps/next-frontend`):
-Ситуация другая:
-- `apps/storefront` использует **DaisyUI** (`btn`, `card`, `badge`, `stats`, `navbar`, `hero`) — это consumer-facing витрина, где DaisyUI даёт богатый набор готовых UI-паттернов для e-commerce (карточки товаров, навигация, hero-секции)
-- `apps/next-frontend` использует кастомный Button с хардкодированными цветами (`bg-sky-600`, `border-slate-200`) — это скелет, который не следует ни shadcn ни DaisyUI последовательно
-- Семантика использования различается: витрина — это маркетинговые страницы, каталог, продуктовые страницы — не admin-интерфейс
+**`apps/storefront`**: DaisyUI — это старая зависимость от времени когда у проекта не было единой дизайн-системы. DaisyUI классы (`btn`, `badge-*`, `card-body`, `navbar`, `hero`, `stats`, `bg-base-*`) несовместимы с остальными приложениями. Leptos SSR не требует DaisyUI — рендеринг это HTML-строки, используются обычные Tailwind классы.
 
-**Полный shadcn → Leptos порт**:
-shadcn/ui содержит ~50+ компонентов. Часть реализуема как чистые CSS-классы (Button, Badge, Input, Card — уже сделано). Другая часть требует сложного JS-поведения: Dialog (focus trap, scroll lock), Combobox (virtual scroll, keyboard nav), DatePicker, Toast — это существенная работа и не оправдана если Leptos-экосистема уже имеет рабочие аналоги (Leptonic, Thaw).
+**`apps/next-frontend`**: хардкодированные цвета (`bg-sky-600`, `border-slate-200`, `text-slate-*`) — не следует ни одной системе.
 
 ## Decision
 
-### 1. Админки — текущее решение верно и остаётся
+**Единая дизайн-система для всех четырёх приложений: shadcn CSS-переменные + Tailwind.**
 
-`apps/admin` ↔ `apps/next-admin` — одинаковые shadcn CSS-переменные, одинаковый `tailwind.config`, компоненты портируются из shadcn/ui исходников. Это правильно. Продолжать этот подход.
+DaisyUI полностью удалён из `apps/storefront`. Все четыре приложения:
+- определяют shadcn-совместимый набор CSS custom properties (`--background`, `--foreground`, `--primary`, `--card`, `--muted`, `--accent`, `--destructive`, `--border`, `--input`, `--ring`, `--radius`)
+- расширяют Tailwind через один и тот же паттерн `hsl(var(--name))`
+- не используют хардкодированные цветовые значения
 
-### 2. Фронтенды — единый токен-слой, но DaisyUI остаётся для Leptos storefront
+### Leptos-компоненты (`UI/leptos/src/`)
 
-**`apps/next-frontend`** переводится на shadcn CSS-переменные и удаляет хардкодированные цвета (`bg-sky-600`, `text-slate-*`). Это скелет, который следует привести к тому же стандарту что и `apps/next-admin` (shadcn/ui компоненты, shadcn CSS vars).
+Реализованы как **прямой порт Tailwind-классов из shadcn/ui исходников**. Это обеспечивает визуальный паритет без зависимости от внешних Leptos UI-крейтов.
 
-**`apps/storefront`** (Leptos SSR) — DaisyUI **остаётся** как основная система для витрины:
-- DaisyUI оптимален для e-commerce UI (navbar, hero, card, stats, carousel) — богатая семантика из коробки
-- Это SSR-рендеринг без WASM, компоненты — HTML-строки, не нужны реактивные состояния
-- Паритет с Next.js витриной по функциям важнее чем паритет по классам
-
-**Однако**: цветовые значения в DaisyUI-теме `rustok` синхронизируются с shadcn-переменными так, чтобы `primary`, `secondary`, `accent` совпадали визуально. Одна палитра бренда — две системы классов.
-
-### 3. Полный shadcn → Leptos порт — не делать как монолит, портировать по требованию
-
-Полный порт 50+ компонентов — избыточная работа. Стратегия:
+### Полный shadcn → Leptos порт — по требованию, не монолитом
 
 | Категория | Подход |
 |-----------|--------|
-| Презентационные (Button, Badge, Input, Card, Label, Separator, Spinner) | ✅ Уже портированы. Продолжать порт по shadcn-исходникам. |
-| Простые интерактивные (Switch, Checkbox, Select, Textarea) | ✅ Уже портированы. |
-| Overlay-компоненты (Dialog, Sheet, Popover, Tooltip) | Leptonic/Thaw как временное решение → нативный порт по мере реальной потребности |
-| Сложные данные (Table, DataTable, Pagination, DatePicker) | Leptonic/Thaw или `leptos-struct-table`. Порт нативный — только если существующие решения неприемлемы |
-| Навигация (Breadcrumb, Tabs, Accordion) | Портировать нативно — CSS-only, несложно |
+| Презентационные (Button, Badge, Input, Card, Label, Separator, Spinner) | ✅ Портированы |
+| Простые интерактивные (Switch, Checkbox, Select, Textarea) | ✅ Портированы |
+| Overlay (Dialog, Sheet, Popover, Tooltip) | Leptonic/Thaw → нативный порт по мере потребности |
+| Сложные данные (Table, DatePicker, Combobox) | Leptonic/Thaw пока |
+| Навигация (Breadcrumb, Tabs, Alert, Accordion) | Портировать нативно — CSS-only, несложно |
 
-Приоритет следующих портов для `apps/admin`:
-1. `Alert` / `AlertDialog` — нужны для UX критических действий
-2. `Tabs` — для страниц настроек
-3. `Breadcrumb` — уже в header нативно, оформить как компонент
+Приоритет следующих нативных портов:
+1. `Alert` — CSS-only, нужен для информационных сообщений
+2. `AlertDialog` — нужен для confirm-диалогов
+3. `Tabs` — CSS + минимальный JS, нужен для страниц настроек
+4. `Skeleton` — CSS-only, нужен для loading states
 
 ## Consequences
 
 ### Положительные
-- Единая палитра бренда работает во всех четырёх приложениях
-- `apps/next-frontend` становится консистентным с `apps/next-admin`
-- `apps/storefront` сохраняет DaisyUI-производительность для SSR витрины
-- Минимальный внешний Leptos-UI риск — не тянем крупные нестабильные крейты
-- Новые shadcn-компоненты портируются в Leptos за часы, не дни
+- Единая палитра и паттерн стилизации во всех четырёх приложениях
+- Нет внешних UI-библиотек кроме Tailwind — нет versioning-рисков
+- Leptos-компоненты визуально идентичны React/shadcn аналогам
+- При обновлении shadcn в Next.js — обновляем только строки классов в Leptos
 
 ### Отрицательные / Trade-offs
-- `apps/storefront` и `apps/admin` используют разные CSS-классы для визуально похожих элементов (DaisyUI `btn` vs shadcn `bg-primary text-primary-foreground`) — нельзя переиспользовать Leptos-компоненты между витриной и админкой напрямую
-- При обновлении shadcn в Next.js-проектах — нужно вручную синхронизировать классы в Leptos-версиях
-- Overlay-компоненты (Dialog и пр.) временно визуально расходятся
+- При обновлении shadcn в Next.js нужно вручную синхронизировать классы в Leptos-версиях
+- Overlay-компоненты (Dialog и пр.) временно визуально расходятся (Leptonic/Thaw)
 
-### Follow-up tasks
+### Итоговое состояние после миграции
 
-**`apps/next-frontend`** — привести к shadcn стандарту:
-- [ ] Добавить shadcn CSS-переменные в `src/styles/globals.css`
-- [ ] Обновить `tailwind.config.ts` — shadcn color tokens
-- [ ] Переписать `src/components/ui/button.tsx` — shadcn variants вместо `bg-sky-600`
-- [ ] Удалить хардкодированные цвета из `page.tsx` (`text-slate-*`, `border-slate-*`, `bg-sky-*`)
-- [ ] Добавить shadcn компоненты по мере потребности
-
-**`apps/storefront`** — синхронизировать палитру бренда:
-- [ ] Обновить цвета DaisyUI-темы `rustok` в `tailwind.config.cjs` — привести `primary`, `secondary`, `accent` к значениям из shadcn CSS vars платформы
-
-**`UI/leptos/src/`** — следующие компоненты на порт:
-- [ ] `Alert` — `src/alert.rs`
-- [ ] `Tabs` — `src/tabs.rs`
-- [ ] `Breadcrumb` — `src/breadcrumb.rs`
-- [ ] `Skeleton` — `src/skeleton.rs`
+| Приложение | CSS-система | Статус |
+|-----------|------------|--------|
+| `apps/admin` | shadcn CSS vars + Tailwind | ✅ Мигрировано |
+| `apps/next-admin` | shadcn/ui (React) | ✅ Было изначально |
+| `apps/next-frontend` | shadcn CSS vars + Tailwind | ✅ Мигрировано |
+| `apps/storefront` | shadcn CSS vars + Tailwind (SSR) | ✅ Мигрировано, DaisyUI удалён |

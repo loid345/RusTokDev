@@ -10,19 +10,18 @@
 
 ## Дизайн-система по приложениям
 
-| Приложение | CSS-система | Токены | Паритет с |
-|-----------|------------|--------|-----------|
-| `apps/admin` | shadcn/ui (Tailwind) | shadcn CSS vars | `apps/next-admin` ✅ |
-| `apps/next-admin` | shadcn/ui (React) | shadcn CSS vars | `apps/admin` ✅ |
-| `apps/next-frontend` | shadcn/ui (Tailwind) | shadcn CSS vars (sky-based primary) | — |
-| `apps/storefront` | DaisyUI (SSR) | DaisyUI тема `rustok` с согласованной палитрой | `apps/next-frontend` (визуально) |
+Все четыре приложения используют единую систему — shadcn CSS-переменные + Tailwind:
 
-**Почему фронтенды не унифицированы полностью:**
-- `apps/storefront` — Leptos SSR (рендеринг в HTML-строки без WASM), DaisyUI оптимален для e-commerce: `navbar`, `hero`, `card`, `stats`, `carousel` из коробки
-- Палитра бренда (`primary`, `accent`) **синхронизирована** между DaisyUI-темой `rustok` и shadcn CSS vars, так что визуально цвета совпадают
-- Подробнее: `DECISIONS/2026-02-25-shared-design-system-shadcn-port.md`
+| Приложение | Стек | CSS entry point |
+|-----------|------|----------------|
+| `apps/admin` | Leptos CSR | `apps/admin/input.css` |
+| `apps/next-admin` | Next.js / React | `apps/next-admin/src/styles/globals.css` |
+| `apps/next-frontend` | Next.js / React | `apps/next-frontend/src/styles/globals.css` |
+| `apps/storefront` | Leptos SSR | `apps/storefront/assets/input.css` |
 
-## Подход к реализации Leptos-компонентов (admin/next-admin)
+Каждый CSS entry point определяет одинаковый набор shadcn custom properties и подключает Tailwind. Подробнее: `DECISIONS/2026-02-25-shared-design-system-shadcn-port.md`.
+
+## Подход к реализации Leptos-компонентов
 
 Leptos-компоненты (`UI/leptos/src/`) реализуются как **прямой порт Tailwind-классов из shadcn/ui** — без зависимости от внешних Leptos UI-библиотек. Это обеспечивает:
 
@@ -94,11 +93,10 @@ Leptos-компоненты (`UI/leptos/src/`) реализуются как **�
 apps/admin/input.css                        ← @import "../../UI/tokens/base.css" + shadcn vars
 apps/next-admin/src/styles/globals.css      ← shadcn vars
 apps/next-frontend/src/styles/globals.css   ← shadcn vars (sky-based primary palette)
+apps/storefront/assets/input.css            ← shadcn vars (sky-based primary palette)
 ```
 
 Переменные: `--background`, `--foreground`, `--card`, `--card-foreground`, `--primary`, `--primary-foreground`, `--secondary`, `--muted`, `--accent`, `--destructive`, `--border`, `--input`, `--ring`, `--radius`.
-
-`apps/storefront` использует DaisyUI тему `rustok` с палитрой, согласованной с платформенным `--primary` (sky-500 `#0ea5e9`).
 
 `UI/tokens/base.css` содержит дополнительные токены (`--iu-radius-*`, `--iu-font-*`, `--iu-space-*`) которые не дублируют shadcn-переменные.
 
