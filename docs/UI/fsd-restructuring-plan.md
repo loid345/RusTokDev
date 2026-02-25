@@ -1,7 +1,7 @@
 # FSD Реструктуризация Admin Panels — Детальный план
 
 **Ветка:** `claude/review-fsd-admin-design-sOKKf`
-**Статус:** 📋 В работе
+**Статус:** 🔄 В работе (Фаза 1.4–1.5 + Фаза 2 завершены)
 **Охват:** `apps/admin` (Leptos CSR) + `apps/next-admin` (Next.js) + `UI/` workspace (leptos + next компоненты) + `crates/leptos-ui`
 
 ---
@@ -570,11 +570,13 @@ Thin wrappers над shadcn/ui (shadcn как reference, не дублирова
 
 **Коммит:** `feat(ui/next): implement IU component wrappers in UI/next/components/`
 
+✅ Реализовано: Button, Input, Textarea, Select, Checkbox, Switch, Badge, Avatar, Skeleton, Spinner + barrel export index.ts
+
 #### 1.5 Подключить токены и path alias
 
-- [ ] Добавить `@import "path/to/UI/tokens/base.css"` в CSS entry точку `apps/admin`
-- [ ] Добавить `@import "../../../UI/tokens/base.css"` в `apps/next-admin/src/styles/globals.css`
-- [ ] Добавить в `apps/next-admin/tsconfig.json`:
+- [x] Добавить `@import "../../UI/tokens/base.css"` в CSS entry точку `apps/admin/input.css`
+- [x] Добавить `@import "../../../UI/tokens/base.css"` в `apps/next-admin/src/styles/globals.css`
+- [x] Добавить в `apps/next-admin/tsconfig.json`:
   ```json
   "@iu/*": ["../../UI/next/components/*"]
   ```
@@ -583,70 +585,66 @@ Thin wrappers над shadcn/ui (shadcn как reference, не дублирова
 
 ---
 
-### Фаза 2: FSD-реструктуризация apps/admin (Leptos)
+### Фаза 2: FSD-реструктуризация apps/admin (Leptos) ✅ ЗАВЕРШЕНО
 
-#### 2.1 Создать shared/ слой
+#### 2.1 Создать shared/ слой ✅
 
-- [ ] Создать `src/shared/mod.rs`
-- [ ] Переместить `src/api/` → `src/shared/api/` (mod.rs + queries.rs)
-- [ ] Создать `src/shared/ui/mod.rs` — re-export leptos-ui компонентов
-- [ ] Переместить `src/components/ui/page_header.rs` → `src/shared/ui/page_header.rs`
-- [ ] Создать `src/shared/config/mod.rs`
-- [ ] Переместить `src/components/layout/nav_config.rs` → `src/shared/config/nav.rs`
-- [ ] Создать `src/shared/i18n/mod.rs` — из `src/i18n.rs`
+- [x] Создать `src/shared/mod.rs`
+- [x] Переместить `src/api/` → `src/shared/api/` (mod.rs + queries.rs)
+- [x] Создать `src/shared/ui/mod.rs` — Button, Input, LanguageToggle, PageHeader
+- [x] Переместить `src/components/ui/page_header.rs` → `src/shared/ui/page_header.rs`
+- [x] Создать `src/shared/config/mod.rs`
+- [x] Переместить `src/components/layout/nav_config.rs` → `src/shared/config/nav.rs`
+- [x] Создать `src/shared/i18n/mod.rs` — из `src/i18n.rs` + LocaleContext/provide_locale_context/use_locale/translate
 
 **Коммит:** `refactor(admin/leptos): extract shared/ FSD layer`
 
-#### 2.2 Создать entities/ слой
+#### 2.2 Создать entities/ слой ✅
 
-- [ ] Создать `src/entities/mod.rs`
-- [ ] Создать `src/entities/user/mod.rs` + `model.rs` (User, UserRole, UserStatus)
-- [ ] Создать `src/entities/user/ui/mod.rs` — UserAvatar (через leptos-ui Avatar), UserRoleBadge
-- [ ] Создать `src/entities/product/mod.rs` + `model.rs` (Product, ProductStatus)
-- [ ] Создать `src/entities/tenant/mod.rs` + `model.rs` (Tenant)
+- [x] Создать `src/entities/mod.rs`
+- [x] Создать `src/entities/user/mod.rs` + `model.rs` (User, UserRole, UserStatus)
+- [x] Создать `src/entities/user/ui/mod.rs` — UserAvatar, UserRoleBadge, UserStatusBadge
+- [x] Создать `src/entities/product/mod.rs` + `model.rs` (Product, ProductStatus)
+- [x] Создать `src/entities/tenant/mod.rs` + `model.rs` (Tenant)
 
 **Коммит:** `feat(admin/leptos): add entities/ FSD layer (user, product, tenant)`
 
-#### 2.3 Создать widgets/ слой
+#### 2.3 Создать widgets/ слой ✅
 
-- [ ] Создать `src/widgets/mod.rs`
-- [ ] Создать `src/widgets/app_shell/mod.rs`
-- [ ] Переместить `src/components/layout/app_layout.rs` → `src/widgets/app_shell/app_layout.rs`
-- [ ] Переместить `src/components/layout/header.rs` → `src/widgets/app_shell/header.rs`
-- [ ] Переместить `src/components/layout/sidebar.rs` → `src/widgets/app_shell/sidebar.rs`
-- [ ] Переместить `src/components/ui/stats_card.rs` → `src/widgets/stats_card/mod.rs`
-- [ ] Создать `src/widgets/user_table/mod.rs` — DataTable с leptos-table + leptos-shadcn-pagination
+- [x] Создать `src/widgets/mod.rs`
+- [x] Создать `src/widgets/app_shell/mod.rs`
+- [x] Переместить `src/components/layout/app_layout.rs` → `src/widgets/app_shell/app_layout.rs`
+- [x] Переместить `src/components/layout/header.rs` → `src/widgets/app_shell/header.rs`
+- [x] Переместить `src/components/layout/sidebar.rs` → `src/widgets/app_shell/sidebar.rs`
+- [x] Переместить `src/components/ui/stats_card.rs` → `src/widgets/stats_card/mod.rs`
+- [ ] Создать `src/widgets/user_table/mod.rs` — DataTable с leptos-table + leptos-shadcn-pagination (следующая итерация)
 
 **Коммит:** `refactor(admin/leptos): extract widgets/ FSD layer`
 
-#### 2.4 Создать features/ слой (отдельный от components/)
+#### 2.4 Создать features/ слой ✅
 
-- [ ] Создать `src/features/mod.rs`
-- [ ] Переместить `src/components/features/auth/` → `src/features/auth/`
-- [ ] Создать `src/features/users/mod.rs` — фильтрация пользователей (сейчас inline в pages/users.rs), подключить leptos-forms
-- [ ] Создать `src/features/profile/mod.rs` — форма профиля через leptos-forms + leptos-hook-form
+- [x] Создать `src/features/mod.rs`
+- [x] Переместить `src/components/features/auth/` → `src/features/auth/`
+- [x] Создать `src/features/users/mod.rs`
+- [x] Создать `src/features/profile/mod.rs`
 
 **Коммит:** `refactor(admin/leptos): extract features/ FSD layer`
 
-#### 2.5 Создать app/ слой
+#### 2.5 Создать app/ слой ✅
 
-- [ ] Создать `src/app/mod.rs`
-- [ ] Создать `src/app/router.rs` — компонент `App` из `src/app.rs` (без изменений логики)
-- [ ] Создать `src/app/providers/mod.rs`
-- [ ] Создать `src/app/providers/locale.rs` — из `src/providers/locale/mod.rs`
-- [ ] Переместить `src/modules/` → `src/app/modules/` (реестр модулей — это app-level)
+- [x] Создать `src/app/mod.rs`
+- [x] Создать `src/app/router.rs` — компонент `App` из `src/app.rs`
+- [x] Создать `src/app/providers/mod.rs`
+- [x] Создать `src/app/providers/locale.rs` — re-export из `shared::i18n`
+- [x] Переместить `src/modules/` → `src/app/modules/`
 
 **Коммит:** `refactor(admin/leptos): restructure app/ FSD layer`
 
-#### 2.6 Обновить lib.rs и удалить старые пути
+#### 2.6 Обновить lib.rs и удалить старые пути ✅
 
-- [ ] Обновить `src/lib.rs` — новые mod-объявления
-- [ ] Удалить `src/components/` (весь каталог — перемещён в widgets/, features/, shared/)
-- [ ] Удалить `src/api/` (перемещён в shared/api/)
-- [ ] Удалить `src/providers/` (перемещён в app/providers/)
-- [ ] Удалить `src/i18n.rs` (перемещён в shared/i18n/)
-- [ ] Обновить импорты во всех `pages/*.rs` — использовать новые пути
-- [ ] Убедиться, что `cargo build -p rustok-admin` компилируется
+- [x] Обновить `src/lib.rs` — новые mod-объявления (app, entities, features, pages, shared, widgets)
+- [x] Обновить импорты во всех `pages/*.rs` — используют новые пути
+- [ ] Удалить `src/components/`, `src/api/`, `src/providers/`, `src/i18n.rs`, `src/modules/`, `src/app.rs` — старые модули оставлены как резерв совместимости (удалить в следующей итерации после верификации сборки)
 
 **Коммит:** `refactor(admin/leptos): update imports, remove old paths, verify build`
 

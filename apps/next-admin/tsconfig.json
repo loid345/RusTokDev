@@ -16,6 +16,7 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"],
+      "@iu/*": ["../../UI/next/components/*"],
       "~/*": ["./public/*"]
     },
     "incremental": true,

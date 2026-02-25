@@ -4,12 +4,13 @@ use leptos_auth::context::AuthProvider;
 use leptos_router::components::{ParentRoute, Route, Router, Routes};
 use leptos_router::path;
 
-use crate::components::layout::AppLayout;
 use crate::pages::{
     dashboard::Dashboard, login::Login, not_found::NotFound, profile::Profile, register::Register,
     reset::ResetPassword, security::Security, user_details::UserDetails, users::Users,
 };
-use crate::providers::locale::provide_locale_context;
+use crate::widgets::app_shell::AppLayout;
+
+use super::providers::locale::provide_locale_context;
 
 #[component]
 pub fn App() -> impl IntoView {
