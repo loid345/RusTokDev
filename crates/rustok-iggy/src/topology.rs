@@ -36,7 +36,7 @@ impl TopologyManager {
     pub async fn ensure_topology(
         &self,
         config: &IggyConfig,
-        connector: &dyn IggyConnector,
+        _connector: &dyn IggyConnector,
     ) -> Result<()> {
         let stream_name = config.topology.stream_name.clone();
         let partitions = config.topology.domain_partitions;
