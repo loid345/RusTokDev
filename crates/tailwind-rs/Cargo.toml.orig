@@ -2,7 +2,7 @@
 name = "tailwind-rs"
 version = "0.2.0"
 authors = ["Aster <192607617@qq.com>"]
-description = "Tailwind translater for html and more"
+description = "Tailwind translator for html and more"
 repository = "https://github.com/oovm/tailwind-rs"
 documentation = "https://docs.rs/tailwind-css"
 readme = "Readme.md"
