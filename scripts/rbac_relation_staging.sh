@@ -164,23 +164,42 @@ _, title, path = sys.argv
 with open(path, 'r', encoding='utf-8') as fh:
     payload = json.load(fh)
 
-print()
-print(f"## {title}")
-print()
-for key in [
+if not isinstance(payload, dict):
+    raise SystemExit(f"unexpected report format in {path}: expected JSON object")
+
+priority_keys = [
     "dry_run",
     "candidates_total",
+    "entries_total",
     "fixed_users",
+    "reverted",
     "failed_users",
+    "failed",
     "users_without_roles_total_before",
     "users_without_roles_total_after",
     "orphan_user_roles_total_before",
     "orphan_user_roles_total_after",
     "orphan_role_permissions_total_before",
     "orphan_role_permissions_total_after",
-]:
+]
+
+seen = set()
+ordered = []
+for key in priority_keys:
     if key in payload:
-        print(f"- {key}: {payload[key]}")
+        ordered.append((key, payload[key]))
+        seen.add(key)
+
+for key in sorted(payload):
+    if key in seen:
+        continue
+    ordered.append((key, payload[key]))
+
+print()
+print(f"## {title}")
+print()
+for key, value in ordered:
+    print(f"- {key}: {value}")
 PY
 }
 
