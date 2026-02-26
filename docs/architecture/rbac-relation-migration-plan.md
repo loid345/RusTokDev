@@ -19,7 +19,7 @@
   - user creation flows для `register/sign_up/create_user/accept_invite` уже заведены через назначение relation RBAC (`assign_role_permissions`).
   - `seed_user` (dev/test seed bootstrap) теперь также вызывает `assign_role_permissions` после создания пользователя.
   - parity reset-password/session invalidation ведётся отдельным remediation-потоком и ADR (см. cross-link ниже).
-- [~] **Фаза 2 — Единый Permission Resolver (начато):**
+- [x] **Фаза 2 — Единый Permission Resolver (завершено):**
   - В `AuthService` добавлены tenant-aware методы `get_user_permissions / has_permission / has_any_permission / has_all_permissions`.
   - Реализованы tenant-scoping и deduplication; сохранена семантика `resource:manage` как wildcard.
   - Переведена часть GraphQL-checks (users CRUD/read/list, alloy, content mutation/query) и RBAC extractors на relation-проверки.
@@ -31,20 +31,28 @@
   - В `AuthService` добавлен in-memory permission cache (TTL 60s) с cache hit/miss observability и инвалидацией при изменении relation-ролей пользователя.
   - В `/metrics` добавлены счётчики resolver-кэша и decision outcomes: `rustok_rbac_permission_cache_hits`, `rustok_rbac_permission_cache_misses`, `rustok_rbac_permission_checks_allowed`, `rustok_rbac_permission_checks_denied`.
   - Добавлены latency-метрики resolver-проверок/lookup и breakdown denied reasons в `/metrics`.
-- [~] **Фаза 3 — AuthContext и токены (начато):**
+- [x] **Фаза 3 — AuthContext и токены (завершено):**
   - `CurrentUser.permissions` теперь резолвятся из relation-модели, а не из `users.role`.
   - `AuthContext` в GraphQL больше не хранит `role` как policy-источник; security-context продолжает выводиться из relation-permissions.
   - В auth extractor добавлен shadow-control: warning-лог `rbac_claim_role_mismatch`, если role-claim в JWT расходится с ролью, выведенной из relation-permissions.
   - В `/metrics` добавлены счётчики `rustok_rbac_claim_role_mismatch_total` и `rustok_rbac_decision_mismatch_total` для наблюдения расхождений claim-vs-relation/shadow-decision.
-  - Полный отказ от role-claim в policy-решениях ещё не завершён (есть оставшиеся role-based места).
+  - Role claim в JWT используется как display/debug claim и для shadow-observability, но не как policy source-of-truth.
 - [ ] **Фаза 4 — Миграция данных и защитные инварианты:** не начато.
 - [ ] **Фаза 5 — Dual-read и cutover:** не начато.
 - [ ] **Фаза 6 — Cleanup legacy-модели:** не начато.
 
 ### Что осталось приоритетно на ближайший шаг
 
-1. Добрать оставшиеся runtime-проверки, где `users.role` всё ещё влияет на policy scope в доменных сервисах.
+1. Перейти к Фазе 4: выполнить data backfill и ввести защитные инварианты консистентности во всех tenant.
 2. Подготовить и согласовать ADR по final cutover (`relation-only`).
+
+### Итоговая проверка перед переходом к Фазе 4
+
+- Фазы 1–3 считаются завершёнными при текущем состоянии runtime:
+  - user lifecycle-потоки и dev seed назначают relation RBAC (`user_roles`/`role_permissions`) при создании/обновлении пользователя;
+  - централизованные permission checks идут через `AuthService` resolver (tenant-aware, wildcard, cache + metrics);
+  - `CurrentUser.permissions` и `AuthContext.permissions` резолвятся из relation-модели;
+  - claim role mismatch учитывается только как observability/shadow-сигнал и не определяет access decision.
 
 ---
 
