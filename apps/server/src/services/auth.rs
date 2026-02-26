@@ -897,6 +897,12 @@ impl RoleAssignmentStore for ServerRoleAssignmentStore {
 #[cfg(test)]
 mod tests {
     use super::AuthService;
+    use crate::models::{roles, tenants, user_roles, users};
+    use chrono::Utc;
+    use migration::Migrator;
+    use rustok_core::UserRole;
+    use rustok_test_utils::db::setup_test_db_with_migrations;
+    use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
     use std::sync::{Mutex, MutexGuard, OnceLock};
 
     const AUTHZ_MODE_ENV: &str = "RUSTOK_RBAC_AUTHZ_MODE";
@@ -961,6 +967,148 @@ mod tests {
         }
     }
 
+    #[tokio::test]
+    async fn assign_role_permissions_creates_user_roles_link() {
+        let db = setup_test_db_with_migrations::<Migrator>().await;
+        let tenant_id = rustok_core::generate_id();
+        let user_id = rustok_core::generate_id();
+
+        tenants::Entity::insert(tenants::ActiveModel {
+            id: Set(tenant_id),
+            name: Set("Test tenant".to_string()),
+            slug: Set("test-tenant-assign-role".to_string()),
+            domain: Set(None),
+            settings: Set(serde_json::json!({})),
+            is_active: Set(true),
+            created_at: Set(Utc::now().into()),
+            updated_at: Set(Utc::now().into()),
+        })
+        .exec(&db)
+        .await
+        .expect("failed to insert tenant");
+
+        users::Entity::insert(users::ActiveModel {
+            id: Set(user_id),
+            tenant_id: Set(tenant_id),
+            email: Set("assign-role@example.com".to_string()),
+            password_hash: Set("hash".to_string()),
+            name: Set(None),
+            role: Set(UserRole::Customer),
+            status: Set(rustok_core::UserStatus::Active),
+            email_verified_at: Set(None),
+            last_login_at: Set(None),
+            metadata: Set(serde_json::json!({})),
+            created_at: Set(Utc::now().into()),
+            updated_at: Set(Utc::now().into()),
+        })
+        .exec(&db)
+        .await
+        .expect("failed to insert user");
+
+        AuthService::assign_role_permissions(&db, &user_id, &tenant_id, UserRole::Manager)
+            .await
+            .expect("assign role permissions should succeed");
+
+        let tenant_role = roles::Entity::find()
+            .filter(roles::Column::TenantId.eq(tenant_id))
+            .filter(roles::Column::Slug.eq(UserRole::Manager.to_string()))
+            .one(&db)
+            .await
+            .expect("failed to load tenant role")
+            .expect("tenant role should exist");
+
+        let relation_exists = user_roles::Entity::find()
+            .filter(user_roles::Column::UserId.eq(user_id))
+            .filter(user_roles::Column::RoleId.eq(tenant_role.id))
+            .one(&db)
+            .await
+            .expect("failed to query user_roles")
+            .is_some();
+
+        assert!(relation_exists);
+    }
+
+    #[tokio::test]
+    async fn replace_user_role_replaces_tenant_role_assignment() {
+        let db = setup_test_db_with_migrations::<Migrator>().await;
+        let tenant_id = rustok_core::generate_id();
+        let user_id = rustok_core::generate_id();
+
+        tenants::Entity::insert(tenants::ActiveModel {
+            id: Set(tenant_id),
+            name: Set("Test tenant".to_string()),
+            slug: Set("test-tenant-replace-role".to_string()),
+            domain: Set(None),
+            settings: Set(serde_json::json!({})),
+            is_active: Set(true),
+            created_at: Set(Utc::now().into()),
+            updated_at: Set(Utc::now().into()),
+        })
+        .exec(&db)
+        .await
+        .expect("failed to insert tenant");
+
+        users::Entity::insert(users::ActiveModel {
+            id: Set(user_id),
+            tenant_id: Set(tenant_id),
+            email: Set("replace-role@example.com".to_string()),
+            password_hash: Set("hash".to_string()),
+            name: Set(None),
+            role: Set(UserRole::Customer),
+            status: Set(rustok_core::UserStatus::Active),
+            email_verified_at: Set(None),
+            last_login_at: Set(None),
+            metadata: Set(serde_json::json!({})),
+            created_at: Set(Utc::now().into()),
+            updated_at: Set(Utc::now().into()),
+        })
+        .exec(&db)
+        .await
+        .expect("failed to insert user");
+
+        AuthService::assign_role_permissions(&db, &user_id, &tenant_id, UserRole::Customer)
+            .await
+            .expect("initial role assignment should succeed");
+
+        AuthService::replace_user_role(&db, &user_id, &tenant_id, UserRole::Admin)
+            .await
+            .expect("role replacement should succeed");
+
+        let admin_role = roles::Entity::find()
+            .filter(roles::Column::TenantId.eq(tenant_id))
+            .filter(roles::Column::Slug.eq(UserRole::Admin.to_string()))
+            .one(&db)
+            .await
+            .expect("failed to load admin role")
+            .expect("admin role should exist");
+
+        let customer_role = roles::Entity::find()
+            .filter(roles::Column::TenantId.eq(tenant_id))
+            .filter(roles::Column::Slug.eq(UserRole::Customer.to_string()))
+            .one(&db)
+            .await
+            .expect("failed to load customer role")
+            .expect("customer role should exist");
+
+        let has_admin = user_roles::Entity::find()
+            .filter(user_roles::Column::UserId.eq(user_id))
+            .filter(user_roles::Column::RoleId.eq(admin_role.id))
+            .one(&db)
+            .await
+            .expect("failed to query admin assignment")
+            .is_some();
+
+        let has_customer = user_roles::Entity::find()
+            .filter(user_roles::Column::UserId.eq(user_id))
+            .filter(user_roles::Column::RoleId.eq(customer_role.id))
+            .one(&db)
+            .await
+            .expect("failed to query customer assignment")
+            .is_some();
+
+        assert!(has_admin);
+        assert!(!has_customer);
+    }
     #[test]
     fn claim_role_mismatch_counter_increments() {
         let before = AuthService::metrics_snapshot().claim_role_mismatch_total;
