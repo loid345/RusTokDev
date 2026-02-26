@@ -13,11 +13,11 @@ const RELATION_DUAL_READ_FLAG_ALIASES: [&str; 3] = [
 
 impl RbacAuthzMode {
     pub fn parse(value: &str) -> Self {
-        if value.trim().eq_ignore_ascii_case("dual_read") {
-            return Self::DualRead;
+        match value.trim().to_ascii_lowercase().as_str() {
+            "dual_read" | "dual-read" | "dual" => Self::DualRead,
+            "relation_only" | "relation-only" | "relation" => Self::RelationOnly,
+            _ => Self::RelationOnly,
         }
-
-        Self::RelationOnly
     }
 
     pub fn from_env() -> Self {
@@ -120,6 +120,28 @@ mod tests {
     #[test]
     fn parse_defaults_to_relation_only() {
         assert_eq!(RbacAuthzMode::parse("legacy"), RbacAuthzMode::RelationOnly);
+    }
+
+    #[test]
+    fn parse_supports_dual_read_aliases() {
+        assert_eq!(RbacAuthzMode::parse("dual-read"), RbacAuthzMode::DualRead);
+        assert_eq!(RbacAuthzMode::parse("dual"), RbacAuthzMode::DualRead);
+    }
+
+    #[test]
+    fn parse_supports_relation_only_aliases() {
+        assert_eq!(
+            RbacAuthzMode::parse("relation_only"),
+            RbacAuthzMode::RelationOnly
+        );
+        assert_eq!(
+            RbacAuthzMode::parse("relation-only"),
+            RbacAuthzMode::RelationOnly
+        );
+        assert_eq!(
+            RbacAuthzMode::parse("relation"),
+            RbacAuthzMode::RelationOnly
+        );
     }
 
     #[test]
