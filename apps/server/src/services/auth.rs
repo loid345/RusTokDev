@@ -551,6 +551,15 @@ impl AuthService {
         Self::remove_tenant_role_assignments_via_store(db, user_id, tenant_id).await
     }
 
+    pub async fn remove_user_role_assignment(
+        db: &DatabaseConnection,
+        user_id: &uuid::Uuid,
+        tenant_id: &uuid::Uuid,
+        role: UserRole,
+    ) -> Result<()> {
+        Self::remove_user_role_assignment_via_store(db, user_id, tenant_id, role).await
+    }
+
     async fn assign_role_permissions_via_store(
         db: &DatabaseConnection,
         user_id: &uuid::Uuid,
@@ -628,6 +637,32 @@ impl AuthService {
             user_roles::Entity::delete_many()
                 .filter(user_roles::Column::UserId.eq(*user_id))
                 .filter(user_roles::Column::RoleId.is_in(tenant_role_ids))
+                .exec(db)
+                .await?;
+        }
+
+        Self::invalidate_user_rbac_caches(tenant_id, user_id).await;
+
+        Ok(())
+    }
+
+    async fn remove_user_role_assignment_via_store(
+        db: &DatabaseConnection,
+        user_id: &uuid::Uuid,
+        tenant_id: &uuid::Uuid,
+        role: UserRole,
+    ) -> Result<()> {
+        let role_slug = role.to_string();
+        let tenant_role = roles::Entity::find()
+            .filter(roles::Column::TenantId.eq(*tenant_id))
+            .filter(roles::Column::Slug.eq(role_slug))
+            .one(db)
+            .await?;
+
+        if let Some(tenant_role) = tenant_role {
+            user_roles::Entity::delete_many()
+                .filter(user_roles::Column::UserId.eq(*user_id))
+                .filter(user_roles::Column::RoleId.eq(tenant_role.id))
                 .exec(db)
                 .await?;
         }

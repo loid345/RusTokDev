@@ -184,13 +184,13 @@ impl Task for CleanupTask {
                         continue;
                     }
 
-                    let result =
-                        crate::services::auth::AuthService::remove_tenant_role_assignments(
-                            &ctx.db,
-                            &entry.user_id,
-                            &entry.tenant_id,
-                        )
-                        .await;
+                    let result = crate::services::auth::AuthService::remove_user_role_assignment(
+                        &ctx.db,
+                        &entry.user_id,
+                        &entry.tenant_id,
+                        entry.role.clone(),
+                    )
+                    .await;
 
                     match result {
                         Ok(()) => reverted += 1,
