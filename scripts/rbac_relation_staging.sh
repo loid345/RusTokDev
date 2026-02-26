@@ -86,6 +86,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+if [[ "$REQUIRE_ZERO_POST_APPLY" == "true" && "$RUN_APPLY" != "true" ]]; then
+  echo "--require-zero-post-apply requires --run-apply." >&2
+  exit 1
+fi
+
+if [[ "$REQUIRE_ZERO_POST_ROLLBACK" == "true" && "$RUN_ROLLBACK_APPLY" != "true" ]]; then
+  echo "--require-zero-post-rollback requires --run-rollback-apply." >&2
+  exit 1
+fi
+
 mkdir -p "$ARTIFACTS_DIR"
 TS="$(date -u +%Y%m%dT%H%M%SZ)"
 GENERATED_ROLLBACK_FILE="$ARTIFACTS_DIR/rbac_backfill_${TS}.rollback.json"

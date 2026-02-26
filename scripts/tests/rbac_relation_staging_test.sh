@@ -43,9 +43,18 @@ JSON
           ;;
       esac
     elif [[ -n "${MOCK_REPORT_PROFILE:-}" && "$output_file" == *"post_rollback"* ]]; then
-      cat > "$output_file" <<'JSON'
+      case "$MOCK_REPORT_PROFILE" in
+        rollback_zero)
+          cat > "$output_file" <<'JSON'
+{"users_without_roles_total":0,"orphan_user_roles_total":0,"orphan_role_permissions_total":0}
+JSON
+          ;;
+        *)
+          cat > "$output_file" <<'JSON'
 {"users_without_roles_total":1,"orphan_user_roles_total":0,"orphan_role_permissions_total":0}
 JSON
+          ;;
+      esac
     else
       cat > "$output_file" <<'JSON'
 {"users_without_roles_total":1,"orphan_user_roles_total":0,"orphan_role_permissions_total":0}
@@ -178,6 +187,47 @@ test_require_zero_post_rollback_fails_on_non_zero_invariants() {
   pass "require-zero-post-rollback enforces strict zero invariants"
 }
 
+test_require_zero_post_rollback_passes_when_zero() {
+  local tmp
+  tmp="$(mktemp -d)"
+  make_mock_cargo "$tmp"
+
+  MOCK_TOUCH_ROLLBACK_FILE=1 MOCK_REPORT_PROFILE=rollback_zero RUSTOK_CARGO_BIN="$tmp/mock-cargo" "$SCRIPT" --run-apply --run-rollback-apply --require-zero-post-rollback --artifacts-dir "$tmp/artifacts" >"$tmp/out.log" 2>&1
+
+  rg -q "Done. Report:" "$tmp/out.log" || fail "expected successful run with zero rollback invariants"
+  pass "require-zero-post-rollback allows run when rollback invariants are zero"
+}
+
+test_require_zero_post_apply_requires_apply_step() {
+  local tmp
+  tmp="$(mktemp -d)"
+  make_mock_cargo "$tmp"
+
+  set +e
+  RUSTOK_CARGO_BIN="$tmp/mock-cargo" "$SCRIPT" --require-zero-post-apply --artifacts-dir "$tmp/artifacts" >"$tmp/out.log" 2>&1
+  local code=$?
+  set -e
+
+  [[ $code -eq 1 ]] || fail "expected --require-zero-post-apply without --run-apply to fail"
+  rg -q -- "--require-zero-post-apply requires --run-apply" "$tmp/out.log" || fail "expected usage guardrail message for post-apply"
+  pass "require-zero-post-apply enforces apply-step prerequisite"
+}
+
+test_require_zero_post_rollback_requires_rollback_apply_step() {
+  local tmp
+  tmp="$(mktemp -d)"
+  make_mock_cargo "$tmp"
+
+  set +e
+  RUSTOK_CARGO_BIN="$tmp/mock-cargo" "$SCRIPT" --require-zero-post-rollback --artifacts-dir "$tmp/artifacts" >"$tmp/out.log" 2>&1
+  local code=$?
+  set -e
+
+  [[ $code -eq 1 ]] || fail "expected --require-zero-post-rollback without --run-rollback-apply to fail"
+  rg -q -- "--require-zero-post-rollback requires --run-rollback-apply" "$tmp/out.log" || fail "expected usage guardrail message for post-rollback"
+  pass "require-zero-post-rollback enforces rollback-apply prerequisite"
+}
+
 main() {
   test_missing_rollback_source_fails
   test_rollback_source_allows_dry_run
@@ -187,6 +237,9 @@ main() {
   test_require_zero_post_apply_fails_on_non_zero_invariants
   test_require_zero_post_apply_passes_when_zero
   test_require_zero_post_rollback_fails_on_non_zero_invariants
+  test_require_zero_post_rollback_passes_when_zero
+  test_require_zero_post_apply_requires_apply_step
+  test_require_zero_post_rollback_requires_rollback_apply_step
   echo "All tests passed."
 }
 
