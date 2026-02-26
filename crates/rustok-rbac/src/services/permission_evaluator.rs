@@ -1,5 +1,6 @@
 use crate::services::permission_policy::{
     check_all_permissions, check_any_permission, check_permission, DeniedReasonKind,
+    PermissionCheckOutcome,
 };
 use rustok_core::Permission;
 
@@ -10,49 +11,49 @@ pub struct PermissionEvaluation {
     pub denied_reason: Option<(DeniedReasonKind, String)>,
 }
 
+impl PermissionEvaluation {
+    fn from_outcome(
+        outcome: PermissionCheckOutcome,
+        user_permissions: &[Permission],
+    ) -> PermissionEvaluation {
+        let denied_reason = outcome.denied_reason(user_permissions);
+
+        PermissionEvaluation {
+            allowed: outcome.allowed,
+            missing_permissions: outcome.missing_permissions,
+            denied_reason,
+        }
+    }
+}
+
 pub fn evaluate_single_permission(
     user_permissions: &[Permission],
     required_permission: &Permission,
 ) -> PermissionEvaluation {
-    let outcome = check_permission(user_permissions, required_permission);
-
-    let denied_reason = outcome.denied_reason(user_permissions);
-
-    PermissionEvaluation {
-        allowed: outcome.allowed,
-        missing_permissions: outcome.missing_permissions,
-        denied_reason,
-    }
+    PermissionEvaluation::from_outcome(
+        check_permission(user_permissions, required_permission),
+        user_permissions,
+    )
 }
 
 pub fn evaluate_any_permission(
     user_permissions: &[Permission],
     required_permissions: &[Permission],
 ) -> PermissionEvaluation {
-    let outcome = check_any_permission(user_permissions, required_permissions);
-
-    let denied_reason = outcome.denied_reason(user_permissions);
-
-    PermissionEvaluation {
-        allowed: outcome.allowed,
-        missing_permissions: outcome.missing_permissions,
-        denied_reason,
-    }
+    PermissionEvaluation::from_outcome(
+        check_any_permission(user_permissions, required_permissions),
+        user_permissions,
+    )
 }
 
 pub fn evaluate_all_permissions(
     user_permissions: &[Permission],
     required_permissions: &[Permission],
 ) -> PermissionEvaluation {
-    let outcome = check_all_permissions(user_permissions, required_permissions);
-
-    let denied_reason = outcome.denied_reason(user_permissions);
-
-    PermissionEvaluation {
-        allowed: outcome.allowed,
-        missing_permissions: outcome.missing_permissions,
-        denied_reason,
-    }
+    PermissionEvaluation::from_outcome(
+        check_all_permissions(user_permissions, required_permissions),
+        user_permissions,
+    )
 }
 
 #[cfg(test)]
