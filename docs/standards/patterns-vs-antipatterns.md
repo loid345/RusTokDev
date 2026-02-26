@@ -220,3 +220,6 @@
 - [Логирование](./logging.md) — structured logging
 - [Known Pitfalls](../ai/KNOWN_PITFALLS.md) — ловушки для AI-агентов
 - [Architecture Principles](../architecture/principles.md) — архитектурные принципы
+- [Граф зависимостей модулей](../architecture/diagram.md) — 12 Mermaid-диаграмм (включая dependency graph)
+- [Категории модулей A/B/C](../architecture/modules.md) — compile-time vs runtime vs optional
+- [Реестр компонентов](../modules/registry.md) — каталог всех crates, apps, packages
