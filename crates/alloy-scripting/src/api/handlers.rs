@@ -72,32 +72,25 @@ pub async fn list_scripts<S: ScriptRegistry>(
     State(state): State<Arc<AppState<S>>>,
     Query(query): Query<ListScriptsQuery>,
 ) -> ApiResult<Json<ListScriptsResponse>> {
-    let status_filter = query
-        .status
-        .as_deref()
-        .and_then(ScriptStatus::parse)
-        .unwrap_or(ScriptStatus::Active);
+    let script_query = match query.status.as_deref().and_then(ScriptStatus::parse) {
+        Some(status) => ScriptQuery::ByStatus(status),
+        None => ScriptQuery::All,
+    };
 
-    let all_scripts = state
+    let offset = query.offset();
+    let limit = query.limit();
+
+    let page = state
         .registry
-        .find(ScriptQuery::ByStatus(status_filter))
+        .find_paginated(script_query, offset, limit)
         .await
         .map_err(ApiError::from)?;
 
-    let total = all_scripts.len();
-    let offset = query.offset() as usize;
-    let limit = query.limit() as usize;
-
-    let scripts: Vec<ScriptResponse> = all_scripts
-        .into_iter()
-        .skip(offset)
-        .take(limit)
-        .map(Into::into)
-        .collect();
+    let scripts: Vec<ScriptResponse> = page.items.into_iter().map(Into::into).collect();
 
     Ok(Json(ListScriptsResponse::new(
         scripts,
-        total,
+        page.total as usize,
         query.page,
         query.per_page,
     )))

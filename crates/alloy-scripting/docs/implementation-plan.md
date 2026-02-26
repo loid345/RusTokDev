@@ -214,15 +214,24 @@ match orchestrator.run_before("deal", EventType::BeforeCreate, entity, None).awa
 - Storage operations (InMemoryStorage)
 - Script lifecycle (create → active → disabled)
 
+## Recent Improvements
+
+### v1.2 (Current)
+
+1. **Observability** — `ScriptExecutor.execute()` wrapped in `tracing::info_span!` with `script.id`, `script.name`, `execution.id`, `execution.phase` span fields для интеграции с OpenTelemetry
+2. **DB-level pagination** — добавлен `ScriptRegistry::find_paginated(query, offset, limit) -> ScriptPage` с `COUNT` + `LIMIT/OFFSET` на уровне БД; `GraphQL scripts()` и REST `GET /scripts` переведены на него
+3. **Improved log targets** — все log-сообщения из скриптов используют target `alloy::script` для удобной фильтрации в log агрегаторах
+4. **MCP integration** — 9 MCP-инструментов для управления скриптами через Claude/AI (см. `crates/rustok-mcp`)
+5. **Email validation** — RFC 5321-compliant проверка вместо примитивной `contains('@')`
+
 ## Future Improvements
 
 ### Phase 2 (Planned)
 
-1. **Audit Log** — таблица для истории выполнений
-2. **Metrics** — Prometheus metrics для observability
-3. **HTTP Bridge** — вызов внешних API из скриптов
-4. **Database Bridge** — controlled DB queries из скриптов
-5. **Tenant isolation** — фильтрация скриптов по tenant_id
+1. **Audit Log** — таблица `script_executions` для истории выполнений
+2. **HTTP Bridge** — вызов внешних API из скриптов в OnCommit-фазе
+3. **Database Bridge** — controlled DB queries из скриптов
+4. **Execution metrics** — счётчики и гистограммы выполнений по script_id/phase
 
 ### Phase 3 (Future)
 
@@ -234,4 +243,5 @@ match orchestrator.run_before("deal", EventType::BeforeCreate, entity, None).awa
 ## Migration History
 
 - **v1** — Initial implementation with basic CRUD and execution
-- **v1.1** — Added cache invalidation, pagination, validation helpers
+- **v1.1** — Added cache invalidation, pagination, validation helpers, REST router, Scheduler startup, health check
+- **v1.2** — DB-level pagination, OTel spans on executor, improved log targets, email validation, MCP tools

@@ -24,7 +24,7 @@ pub use model::{
 };
 pub use runner::{ExecutionOutcome, ExecutionResult, HookOutcome, ScriptExecutor, ScriptOrchestrator};
 pub use scheduler::{ScheduledJob, Scheduler};
-pub use storage::{InMemoryStorage, ScriptQuery, ScriptRegistry, SeaOrmStorage};
+pub use storage::{InMemoryStorage, ScriptPage, ScriptQuery, ScriptRegistry, SeaOrmStorage};
 
 pub fn create_default_engine() -> ScriptEngine {
     let config = EngineConfig::default();

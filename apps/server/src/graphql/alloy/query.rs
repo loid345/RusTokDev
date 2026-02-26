@@ -27,24 +27,18 @@ impl AlloyQuery {
             None => ScriptQuery::All,
         };
 
-        let scripts = state
+        let (offset, limit) = pagination.normalize()?;
+        let page = state
             .storage
-            .find(query)
+            .find_paginated(query, offset as u64, limit as u64)
             .await
             .map_err(|err| async_graphql::Error::new(err.to_string()))?;
 
-        let total = scripts.len() as i64;
-        let (offset, limit) = pagination.normalize()?;
-        let items = scripts
-            .into_iter()
-            .skip(offset as usize)
-            .take(limit as usize)
-            .map(GqlScript::from)
-            .collect();
+        let items = page.items.into_iter().map(GqlScript::from).collect();
 
         Ok(GqlScriptConnection {
             items,
-            page_info: crate::graphql::common::PageInfo::new(total, offset, limit),
+            page_info: crate::graphql::common::PageInfo::new(page.total as i64, offset, limit),
         })
     }
 

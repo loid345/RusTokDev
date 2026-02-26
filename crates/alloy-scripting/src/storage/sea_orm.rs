@@ -2,12 +2,13 @@ use chrono::{DateTime, Utc};
 use sea_orm::entity::prelude::*;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
+    ActiveModelTrait, ActiveValue, DatabaseConnection, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect,
 };
 
 use crate::error::{ScriptError, ScriptResult};
 use crate::model::{EventType, HttpMethod, Script, ScriptId, ScriptStatus, ScriptTrigger};
-use crate::storage::{ScriptQuery, ScriptRegistry};
+use crate::storage::{ScriptPage, ScriptQuery, ScriptRegistry};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
 #[sea_orm(table_name = "scripts")]
@@ -168,53 +169,47 @@ impl SeaOrmStorage {
                 .collect(),
         )
     }
+
+    fn apply_query(
+        select: sea_orm::Select<Entity>,
+        query: ScriptQuery,
+    ) -> sea_orm::Select<Entity> {
+        match query {
+            ScriptQuery::ById(id) => select.filter(Column::Id.eq(id)),
+            ScriptQuery::ByName(name) => select.filter(Column::Name.eq(name)),
+            ScriptQuery::ByEvent { entity_type, event } => select
+                .filter(Column::TriggerType.eq("event"))
+                .filter(Column::Status.eq(ScriptStatus::Active.as_str()))
+                .filter(Expr::cust_with_values(
+                    "trigger_config->>'entity_type' = $1",
+                    [entity_type],
+                ))
+                .filter(Expr::cust_with_values(
+                    "trigger_config->>'event' = $1",
+                    [event.as_str()],
+                )),
+            ScriptQuery::ByApiPath(path) => select
+                .filter(Column::TriggerType.eq("api"))
+                .filter(Column::Status.eq(ScriptStatus::Active.as_str()))
+                .filter(Expr::cust_with_values(
+                    "trigger_config->>'path' = $1",
+                    [path],
+                )),
+            ScriptQuery::Scheduled => select
+                .filter(Column::TriggerType.eq("cron"))
+                .filter(Column::Status.eq(ScriptStatus::Active.as_str())),
+            ScriptQuery::ByStatus(status) => {
+                select.filter(Column::Status.eq(status.as_str()))
+            }
+            ScriptQuery::All => select,
+        }
+    }
 }
 
 #[async_trait::async_trait]
 impl ScriptRegistry for SeaOrmStorage {
     async fn find(&self, query: ScriptQuery) -> ScriptResult<Vec<Script>> {
-        let mut select = Entity::find();
-
-        match query {
-            ScriptQuery::ById(id) => {
-                select = select.filter(Column::Id.eq(id));
-            }
-            ScriptQuery::ByName(name) => {
-                select = select.filter(Column::Name.eq(name));
-            }
-            ScriptQuery::ByEvent { entity_type, event } => {
-                select = select
-                    .filter(Column::TriggerType.eq("event"))
-                    .filter(Column::Status.eq(ScriptStatus::Active.as_str()))
-                    .filter(Expr::cust_with_values(
-                        "trigger_config->>'entity_type' = $1",
-                        [entity_type],
-                    ))
-                    .filter(Expr::cust_with_values(
-                        "trigger_config->>'event' = $1",
-                        [event.as_str()],
-                    ));
-            }
-            ScriptQuery::ByApiPath(path) => {
-                select = select
-                    .filter(Column::TriggerType.eq("api"))
-                    .filter(Column::Status.eq(ScriptStatus::Active.as_str()))
-                    .filter(Expr::cust_with_values(
-                        "trigger_config->>'path' = $1",
-                        [path],
-                    ));
-            }
-            ScriptQuery::Scheduled => {
-                select = select
-                    .filter(Column::TriggerType.eq("cron"))
-                    .filter(Column::Status.eq(ScriptStatus::Active.as_str()));
-            }
-            ScriptQuery::ByStatus(status) => {
-                select = select.filter(Column::Status.eq(status.as_str()));
-            }
-            ScriptQuery::All => {}
-        }
-
+        let select = Self::apply_query(Entity::find(), query);
         let models = select
             .order_by_asc(Column::Name)
             .all(&self.db)
@@ -222,6 +217,32 @@ impl ScriptRegistry for SeaOrmStorage {
             .map_err(|err| ScriptError::Storage(err.to_string()))?;
 
         models.into_iter().map(Self::model_to_script).collect()
+    }
+
+    async fn find_paginated(
+        &self,
+        query: ScriptQuery,
+        offset: u64,
+        limit: u64,
+    ) -> ScriptResult<ScriptPage> {
+        let total = Self::apply_query(Entity::find(), query.clone())
+            .order_by_asc(Column::Name)
+            .count(&self.db)
+            .await
+            .map_err(|err| ScriptError::Storage(err.to_string()))?;
+
+        let models = Self::apply_query(Entity::find(), query)
+            .order_by_asc(Column::Name)
+            .offset(offset)
+            .limit(limit)
+            .all(&self.db)
+            .await
+            .map_err(|err| ScriptError::Storage(err.to_string()))?;
+
+        let items: ScriptResult<Vec<Script>> =
+            models.into_iter().map(Self::model_to_script).collect();
+
+        Ok(ScriptPage { items: items?, total })
     }
 
     async fn get(&self, id: ScriptId) -> ScriptResult<Script> {

@@ -4,7 +4,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
-use super::traits::{ScriptQuery, ScriptRegistry};
+use super::traits::{ScriptPage, ScriptQuery, ScriptRegistry};
 use crate::error::{ScriptError, ScriptResult};
 use crate::model::{Script, ScriptId, ScriptStatus, ScriptTrigger};
 
@@ -80,6 +80,22 @@ impl ScriptRegistry for InMemoryStorage {
         };
 
         Ok(result)
+    }
+
+    async fn find_paginated(
+        &self,
+        query: ScriptQuery,
+        offset: u64,
+        limit: u64,
+    ) -> ScriptResult<ScriptPage> {
+        let all = self.find(query).await?;
+        let total = all.len() as u64;
+        let items = all
+            .into_iter()
+            .skip(offset as usize)
+            .take(limit as usize)
+            .collect();
+        Ok(ScriptPage { items, total })
     }
 
     async fn get(&self, id: ScriptId) -> ScriptResult<Script> {
