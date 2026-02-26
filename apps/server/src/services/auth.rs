@@ -4,6 +4,7 @@ use sea_orm::{
     EntityTrait, QueryFilter,
 };
 use std::collections::HashSet;
+use std::fmt::Write;
 use std::time::Instant;
 use tracing::{debug, warn};
 
@@ -25,6 +26,40 @@ impl AuthService {
             ))
     }
 
+    fn missing_permissions(
+        user_permissions: &[Permission],
+        required_permissions: &[Permission],
+    ) -> Vec<Permission> {
+        required_permissions
+            .iter()
+            .copied()
+            .filter(|permission| !Self::has_effective_permission(user_permissions, permission))
+            .collect()
+    }
+
+    fn denied_reason(
+        user_permissions: &[Permission],
+        missing_permissions: &[Permission],
+    ) -> String {
+        if user_permissions.is_empty() {
+            return "no_permissions_resolved".to_string();
+        }
+
+        if missing_permissions.is_empty() {
+            return "unknown".to_string();
+        }
+
+        let mut reason = String::from("missing_permissions:");
+        for (index, permission) in missing_permissions.iter().enumerate() {
+            if index > 0 {
+                reason.push(',');
+            }
+            let _ = write!(&mut reason, "{}", permission);
+        }
+
+        reason
+    }
+
     pub async fn has_permission(
         db: &DatabaseConnection,
         tenant_id: &uuid::Uuid,
@@ -34,12 +69,19 @@ impl AuthService {
         let started_at = Instant::now();
         let user_permissions = Self::get_user_permissions(db, tenant_id, user_id).await?;
         let allowed = Self::has_effective_permission(&user_permissions, required_permission);
+        let missing_permissions = if allowed {
+            Vec::new()
+        } else {
+            vec![*required_permission]
+        };
+        let denied_reason = Self::denied_reason(&user_permissions, &missing_permissions);
 
         debug!(
             tenant_id = %tenant_id,
             user_id = %user_id,
             required_permission = %required_permission,
             permissions_count = user_permissions.len(),
+            denied_reason = %denied_reason,
             allowed,
             latency_ms = started_at.elapsed().as_millis(),
             "rbac resolver decision (single permission check)"
@@ -50,6 +92,7 @@ impl AuthService {
                 tenant_id = %tenant_id,
                 user_id = %user_id,
                 required_permission = %required_permission,
+                denied_reason = %denied_reason,
                 "rbac deny: missing required permission"
             );
         }
@@ -73,12 +116,19 @@ impl AuthService {
         let allowed = required_permissions
             .iter()
             .any(|permission| Self::has_effective_permission(&user_permissions, permission));
+        let missing_permissions = if allowed {
+            Vec::new()
+        } else {
+            required_permissions.to_vec()
+        };
+        let denied_reason = Self::denied_reason(&user_permissions, &missing_permissions);
 
         debug!(
             tenant_id = %tenant_id,
             user_id = %user_id,
             required_permissions = ?required_permissions,
             permissions_count = user_permissions.len(),
+            denied_reason = %denied_reason,
             allowed,
             latency_ms = started_at.elapsed().as_millis(),
             "rbac resolver decision (any-permission check)"
@@ -89,6 +139,7 @@ impl AuthService {
                 tenant_id = %tenant_id,
                 user_id = %user_id,
                 required_permissions = ?required_permissions,
+                denied_reason = %denied_reason,
                 "rbac deny: none of required permissions granted"
             );
         }
@@ -109,15 +160,18 @@ impl AuthService {
         }
 
         let user_permissions = Self::get_user_permissions(db, tenant_id, user_id).await?;
-        let allowed = required_permissions
-            .iter()
-            .all(|permission| Self::has_effective_permission(&user_permissions, permission));
+        let missing_permissions =
+            Self::missing_permissions(&user_permissions, required_permissions);
+        let allowed = missing_permissions.is_empty();
+        let denied_reason = Self::denied_reason(&user_permissions, &missing_permissions);
 
         debug!(
             tenant_id = %tenant_id,
             user_id = %user_id,
             required_permissions = ?required_permissions,
             permissions_count = user_permissions.len(),
+            denied_reason = %denied_reason,
+            missing_permissions = ?missing_permissions,
             allowed,
             latency_ms = started_at.elapsed().as_millis(),
             "rbac resolver decision (all-permissions check)"
@@ -128,6 +182,8 @@ impl AuthService {
                 tenant_id = %tenant_id,
                 user_id = %user_id,
                 required_permissions = ?required_permissions,
+                denied_reason = %denied_reason,
+                missing_permissions = ?missing_permissions,
                 "rbac deny: not all required permissions granted"
             );
         }

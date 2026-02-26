@@ -36,7 +36,7 @@
 ### Что осталось приоритетно на ближайший шаг
 
 1. Добрать оставшиеся runtime-проверки, где `users.role` всё ещё влияет на policy scope в доменных сервисах.
-2. Добавить observability для resolver-решений (latency/cache/deny reasons).
+2. Добавить cache hit/miss observability для resolver-решений (latency/deny reasons уже добавлены).
 3. Подготовить и согласовать ADR по final cutover (`relation-only`).
 
 ---
