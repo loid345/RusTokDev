@@ -44,6 +44,7 @@
   - В `rustok-rbac` добавлен модульный use-case слой `permission_authorizer` (authorize single/any/all), который собирает decision (`allowed/missing/denied_reason/cache_hit`) поверх `PermissionResolver`; `AuthService` использует этот API вместо локальной сборки policy-решения.
   - Алгоритм relation-resolve (цепочка `user_roles -> roles(tenant) -> permissions`) вынесен в `rustok-rbac::resolve_permissions_from_relations` через контракт `RelationPermissionStore`; в `apps/server` оставлен SeaORM adapter к этому контракту.
   - В `rustok-rbac` добавлен модульный runtime-resolver `RuntimePermissionResolver` (+ контракт `RoleAssignmentStore`), который объединяет relation-store + cache + role-assignment use-cases; `apps/server` теперь использует его как основной resolver и удалил локальный `ServerPermissionResolver`.
+  - Public write-path RBAC операции (`assign_role_permissions`, `replace_user_role`) в `AuthService` переведены на вызов модульного `RuntimePermissionResolver`, чтобы server-слой оставался adapter-only и для assignment use-cases.
   - Реализованы tenant-scoping и deduplication; сохранена семантика `resource:manage` как wildcard.
   - Для cache-path в модульном resolver сохранён инвариант стабильного normalized output (dedup + сортировка), чтобы format результата не зависел от источника (cache или relation DB).
   - Переведена часть GraphQL-checks (users CRUD/read/list, alloy, content mutation/query) и RBAC extractors на relation-проверки.

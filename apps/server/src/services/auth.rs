@@ -527,6 +527,28 @@ impl AuthService {
         tenant_id: &uuid::Uuid,
         role: UserRole,
     ) -> Result<()> {
+        let resolver = Self::resolver(db);
+        resolver
+            .assign_role_permissions(tenant_id, user_id, role)
+            .await
+    }
+
+    pub async fn replace_user_role(
+        db: &DatabaseConnection,
+        user_id: &uuid::Uuid,
+        tenant_id: &uuid::Uuid,
+        role: UserRole,
+    ) -> Result<()> {
+        let resolver = Self::resolver(db);
+        resolver.replace_user_role(tenant_id, user_id, role).await
+    }
+
+    async fn assign_role_permissions_via_store(
+        db: &DatabaseConnection,
+        user_id: &uuid::Uuid,
+        tenant_id: &uuid::Uuid,
+        role: UserRole,
+    ) -> Result<()> {
         let role_model = Self::get_or_create_role(db, tenant_id, &role).await?;
 
         user_roles::Entity::insert(user_roles::ActiveModel {
@@ -568,7 +590,7 @@ impl AuthService {
         Ok(())
     }
 
-    pub async fn replace_user_role(
+    async fn replace_user_role_via_store(
         db: &DatabaseConnection,
         user_id: &uuid::Uuid,
         tenant_id: &uuid::Uuid,
@@ -594,7 +616,7 @@ impl AuthService {
 
         Self::invalidate_user_rbac_caches(tenant_id, user_id).await;
 
-        Self::assign_role_permissions(db, user_id, tenant_id, role).await
+        Self::assign_role_permissions_via_store(db, user_id, tenant_id, role).await
     }
 
     async fn get_or_create_role(
@@ -806,7 +828,7 @@ impl RoleAssignmentStore for ServerRoleAssignmentStore {
         user_id: &uuid::Uuid,
         role: UserRole,
     ) -> Result<()> {
-        AuthService::assign_role_permissions(&self.db, user_id, tenant_id, role).await
+        AuthService::assign_role_permissions_via_store(&self.db, user_id, tenant_id, role).await
     }
 
     async fn replace_user_role(
@@ -815,7 +837,7 @@ impl RoleAssignmentStore for ServerRoleAssignmentStore {
         user_id: &uuid::Uuid,
         role: UserRole,
     ) -> Result<()> {
-        AuthService::replace_user_role(&self.db, user_id, tenant_id, role).await
+        AuthService::replace_user_role_via_store(&self.db, user_id, tenant_id, role).await
     }
 }
 
