@@ -1,6 +1,7 @@
 use loco_rs::prelude::*;
 use sea_orm::{
-    ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
+    sea_query::OnConflict, ActiveModelTrait, ActiveValue, ColumnTrait, DatabaseConnection,
+    EntityTrait, QueryFilter,
 };
 use std::collections::HashSet;
 
@@ -143,39 +144,38 @@ impl AuthService {
     ) -> Result<()> {
         let role_model = Self::get_or_create_role(db, tenant_id, &role).await?;
 
-        let existing_user_role = user_roles::Entity::find()
-            .filter(user_roles::Column::UserId.eq(*user_id))
-            .filter(user_roles::Column::RoleId.eq(role_model.id))
-            .one(db)
-            .await?;
-
-        if existing_user_role.is_none() {
-            let user_role = user_roles::ActiveModel {
-                id: ActiveValue::Set(rustok_core::generate_id()),
-                user_id: ActiveValue::Set(*user_id),
-                role_id: ActiveValue::Set(role_model.id),
-            };
-            user_role.insert(db).await?;
-        }
+        user_roles::Entity::insert(user_roles::ActiveModel {
+            id: ActiveValue::Set(rustok_core::generate_id()),
+            user_id: ActiveValue::Set(*user_id),
+            role_id: ActiveValue::Set(role_model.id),
+        })
+        .on_conflict(
+            OnConflict::columns([user_roles::Column::UserId, user_roles::Column::RoleId])
+                .do_nothing()
+                .to_owned(),
+        )
+        .exec(db)
+        .await?;
 
         for permission in Rbac::permissions_for_role(&role).iter() {
             if let Some(permission_model) =
                 Self::get_or_create_permission(db, tenant_id, permission).await?
             {
-                let existing_role_permission = role_permissions::Entity::find()
-                    .filter(role_permissions::Column::RoleId.eq(role_model.id))
-                    .filter(role_permissions::Column::PermissionId.eq(permission_model.id))
-                    .one(db)
-                    .await?;
-
-                if existing_role_permission.is_none() {
-                    let role_permission = role_permissions::ActiveModel {
-                        id: ActiveValue::Set(rustok_core::generate_id()),
-                        role_id: ActiveValue::Set(role_model.id),
-                        permission_id: ActiveValue::Set(permission_model.id),
-                    };
-                    role_permission.insert(db).await?;
-                }
+                role_permissions::Entity::insert(role_permissions::ActiveModel {
+                    id: ActiveValue::Set(rustok_core::generate_id()),
+                    role_id: ActiveValue::Set(role_model.id),
+                    permission_id: ActiveValue::Set(permission_model.id),
+                })
+                .on_conflict(
+                    OnConflict::columns([
+                        role_permissions::Column::RoleId,
+                        role_permissions::Column::PermissionId,
+                    ])
+                    .do_nothing()
+                    .to_owned(),
+                )
+                .exec(db)
+                .await?;
             }
         }
 
