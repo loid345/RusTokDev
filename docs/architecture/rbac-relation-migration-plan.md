@@ -59,7 +59,7 @@
   - `CurrentUser.permissions` теперь резолвятся из relation-модели, а не из `users.role`.
   - `AuthContext` в GraphQL больше не хранит `role` как policy-источник; security-context продолжает выводиться из relation-permissions.
   - В auth extractor добавлен shadow-control: warning-лог `rbac_claim_role_mismatch`, если role-claim в JWT расходится с ролью, выведенной из relation-permissions.
-  - В `/metrics` добавлены счётчики `rustok_rbac_claim_role_mismatch_total` и `rustok_rbac_decision_mismatch_total` для наблюдения расхождений claim-vs-relation/shadow-decision.
+  - В `/metrics` добавлены счётчики `rustok_rbac_claim_role_mismatch_total` (только claim-vs-relation) и `rustok_rbac_decision_mismatch_total` (только relation-vs-legacy dual-read) для раздельной observability.
   - Role claim в JWT используется как display/debug claim и для shadow-observability, но не как policy source-of-truth.
 - [~] **Фаза 4 — Миграция данных и защитные инварианты (в работе):**
   - Добавлена maintenance-задача `cleanup --args "rbac-report"` для отчёта по инвариантам (`users_without_roles`, `orphan_user_roles`, `orphan_role_permissions`).
