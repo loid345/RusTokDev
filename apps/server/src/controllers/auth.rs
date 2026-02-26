@@ -460,9 +460,19 @@ async fn confirm_reset(
         .await?
         .ok_or_else(|| Error::Unauthorized("Invalid reset token".into()))?;
 
+    let user_id = user.id;
     let mut user_active: users::ActiveModel = user.into();
     user_active.password_hash = Set(hash_password(&params.password)?);
     user_active.update(&ctx.db).await?;
+
+    let now = Utc::now();
+    sessions::Entity::update_many()
+        .col_expr(sessions::Column::RevokedAt, Expr::value(now))
+        .filter(sessions::Column::TenantId.eq(tenant.id))
+        .filter(sessions::Column::UserId.eq(user_id))
+        .filter(sessions::Column::RevokedAt.is_null())
+        .exec(&ctx.db)
+        .await?;
 
     format::json(GenericStatusResponse { status: "ok" })
 }

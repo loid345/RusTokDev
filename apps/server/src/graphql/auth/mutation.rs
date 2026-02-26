@@ -154,10 +154,17 @@ impl AuthMutation {
         let auth = ctx.data_opt::<crate::context::AuthContext>();
 
         if let Some(auth) = auth {
-            // Invalidate all sessions for current user in tenant.
-            sessions::Entity::delete_many()
+            // Invalidate only current session for parity with REST logout behavior.
+            // Keep operation idempotent: missing/already revoked session still returns success.
+            sessions::Entity::update_many()
+                .col_expr(
+                    sessions::Column::RevokedAt,
+                    sea_orm::sea_query::Expr::value(Utc::now()),
+                )
                 .filter(sessions::Column::TenantId.eq(auth.tenant_id))
                 .filter(sessions::Column::UserId.eq(auth.user_id))
+                .filter(sessions::Column::Id.eq(auth.session_id))
+                .filter(sessions::Column::RevokedAt.is_null())
                 .exec(&app_ctx.db)
                 .await
                 .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
@@ -360,9 +367,15 @@ impl AuthMutation {
             .await
             .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
 
-        sessions::Entity::delete_many()
+        sessions::Entity::update_many()
+            .col_expr(
+                sessions::Column::RevokedAt,
+                sea_orm::sea_query::Expr::value(Utc::now()),
+            )
             .filter(sessions::Column::TenantId.eq(tenant.id))
             .filter(sessions::Column::UserId.eq(user_id))
+            .filter(sessions::Column::RevokedAt.is_null())
+            .filter(sessions::Column::Id.ne(auth.session_id))
             .exec(&app_ctx.db)
             .await
             .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
@@ -405,9 +418,14 @@ impl AuthMutation {
             .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
 
         // Revoke active sessions after password reset.
-        sessions::Entity::delete_many()
+        sessions::Entity::update_many()
+            .col_expr(
+                sessions::Column::RevokedAt,
+                sea_orm::sea_query::Expr::value(Utc::now()),
+            )
             .filter(sessions::Column::TenantId.eq(tenant.id))
             .filter(sessions::Column::UserId.eq(user_id))
+            .filter(sessions::Column::RevokedAt.is_null())
             .exec(&app_ctx.db)
             .await
             .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
