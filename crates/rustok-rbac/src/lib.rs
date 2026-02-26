@@ -17,6 +17,9 @@ pub use services::permission_policy::{
 };
 
 pub use services::permission_resolver::{PermissionResolution, PermissionResolver};
+pub use services::relation_permission_resolver::{
+    resolve_permissions_from_relations, RelationPermissionStore,
+};
 
 use async_trait::async_trait;
 use rustok_core::module::{HealthStatus, MigrationSource, ModuleKind, RusToKModule};
