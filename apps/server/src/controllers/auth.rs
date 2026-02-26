@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Json,
 };
-use chrono::{Duration, Utc};
+use chrono::Utc;
 use loco_rs::prelude::*;
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder,
@@ -15,9 +15,8 @@ use std::net::SocketAddr;
 use utoipa::ToSchema;
 
 use crate::auth::{
-    decode_email_verification_token, decode_invite_token, decode_password_reset_token,
-    encode_access_token, encode_email_verification_token, encode_password_reset_token,
-    generate_refresh_token, hash_password, hash_refresh_token, verify_password, AuthConfig,
+    decode_email_verification_token, decode_invite_token, encode_email_verification_token,
+    encode_password_reset_token, hash_password, hash_refresh_token, AuthConfig,
 };
 use crate::common::settings::RustokSettings;
 use crate::extractors::{auth::CurrentUser, tenant::CurrentTenant};
@@ -25,7 +24,7 @@ use crate::models::{
     sessions,
     users::{self, ActiveModel as UserActiveModel, Entity as Users},
 };
-use crate::services::auth::AuthService;
+use crate::services::{auth::AuthService, auth_lifecycle::AuthLifecycleService};
 
 const DEFAULT_RESET_TOKEN_TTL_SECS: u64 = 15 * 60;
 const DEFAULT_VERIFY_TOKEN_TTL_SECS: u64 = 24 * 60 * 60;
@@ -176,41 +175,21 @@ async fn register(
     CurrentTenant(tenant): CurrentTenant,
     Json(params): Json<RegisterParams>,
 ) -> Result<Response> {
-    let config = AuthConfig::from_ctx(&ctx)?;
-
-    if Users::find_by_email(&ctx.db, tenant.id, &params.email)
-        .await?
-        .is_some()
-    {
-        return Err(Error::BadRequest("Email already exists".into()));
-    }
-
-    let password_hash = hash_password(&params.password)?;
-    let mut user = UserActiveModel::new(tenant.id, &params.email, &password_hash);
-    user.name = Set(params.name);
-    let user = user.insert(&ctx.db).await?;
+    let (user, tokens) = AuthLifecycleService::register(
+        &ctx,
+        tenant.id,
+        &params.email,
+        &params.password,
+        params.name,
+    )
+    .await?;
 
     let user_role = user.role.clone();
-    AuthService::assign_role_permissions(&ctx.db, &user.id, &tenant.id, user_role.clone()).await?;
-
-    let now = Utc::now();
-    let refresh_token = generate_refresh_token();
-    let token_hash = hash_refresh_token(&refresh_token);
-    let expires_at = now + Duration::seconds(config.refresh_expiration as i64);
-
-    let session =
-        sessions::ActiveModel::new(tenant.id, user.id, token_hash, expires_at, None, None)
-            .insert(&ctx.db)
-            .await?;
-
-    let access_token =
-        encode_access_token(&config, user.id, tenant.id, user_role.clone(), session.id)?;
-
     format::json(AuthResponse {
-        access_token,
-        refresh_token,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
         token_type: "Bearer",
-        expires_in: config.access_expiration,
+        expires_in: tokens.expires_in,
         user: UserInfo {
             id: user.id,
             email: user.email,
@@ -230,48 +209,27 @@ async fn login(
     headers: axum::http::HeaderMap,
     Json(params): Json<LoginParams>,
 ) -> Result<Response> {
-    let config = AuthConfig::from_ctx(&ctx)?;
-
-    let user = Users::find_by_email(&ctx.db, tenant.id, &params.email)
-        .await?
-        .ok_or_else(|| Error::Unauthorized("Invalid credentials".into()))?;
-
-    if !verify_password(&params.password, &user.password_hash)? {
-        return Err(Error::Unauthorized("Invalid credentials".into()));
-    }
-
-    let now = Utc::now();
-    let refresh_token = generate_refresh_token();
-    let token_hash = hash_refresh_token(&refresh_token);
-    let expires_at = now + Duration::seconds(config.refresh_expiration as i64);
     let user_agent = headers
         .get(USER_AGENT)
         .and_then(|value| value.to_str().ok())
         .map(|value| value.to_string());
-    let session = sessions::ActiveModel::new(
+
+    let (user, tokens) = AuthLifecycleService::login(
+        &ctx,
         tenant.id,
-        user.id,
-        token_hash,
-        expires_at,
+        &params.email,
+        &params.password,
         Some(addr.ip().to_string()),
         user_agent,
     )
-    .insert(&ctx.db)
     .await?;
 
-    let mut user_active: users::ActiveModel = user.clone().into();
-    user_active.last_login_at = Set(Some(now.into()));
-    let user = user_active.update(&ctx.db).await?;
-
     let user_role = user.role.clone();
-    let access_token =
-        encode_access_token(&config, user.id, tenant.id, user_role.clone(), session.id)?;
-
     format::json(AuthResponse {
-        access_token,
-        refresh_token,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
         token_type: "Bearer",
-        expires_in: config.access_expiration,
+        expires_in: tokens.expires_in,
         user: UserInfo {
             id: user.id,
             email: user.email,
@@ -289,47 +247,15 @@ async fn refresh(
     CurrentTenant(tenant): CurrentTenant,
     Json(params): Json<RefreshRequest>,
 ) -> Result<Response> {
-    let config = AuthConfig::from_ctx(&ctx)?;
-    let token_hash = hash_refresh_token(&params.refresh_token);
-
-    let session = sessions::Entity::find_by_token_hash(&ctx.db, tenant.id, &token_hash)
-        .await?
-        .ok_or_else(|| Error::Unauthorized("Invalid refresh token".into()))?;
-
-    if !session.is_active() {
-        return Err(Error::Unauthorized("Session expired".into()));
-    }
-
-    let user = Users::find_by_id(session.user_id)
-        .one(&ctx.db)
-        .await?
-        .ok_or_else(|| Error::Unauthorized("User not found".into()))?;
-
-    if !user.is_active() {
-        return Err(Error::Unauthorized("User is inactive".into()));
-    }
-
-    let now = Utc::now();
-    let new_refresh_token = generate_refresh_token();
-    let new_token_hash = hash_refresh_token(&new_refresh_token);
-    let expires_at = now + Duration::seconds(config.refresh_expiration as i64);
-
-    let session_id = session.id;
-    let mut session_model: sessions::ActiveModel = session.into();
-    session_model.token_hash = Set(new_token_hash);
-    session_model.expires_at = Set(expires_at.into());
-    session_model.last_used_at = Set(Some(now.into()));
-    session_model.update(&ctx.db).await?;
+    let (user, tokens) =
+        AuthLifecycleService::refresh(&ctx, tenant.id, &params.refresh_token).await?;
 
     let user_role = user.role.clone();
-    let access_token =
-        encode_access_token(&config, user.id, tenant.id, user_role.clone(), session_id)?;
-
     format::json(AuthResponse {
-        access_token,
-        refresh_token: new_refresh_token,
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
         token_type: "Bearer",
-        expires_in: config.access_expiration,
+        expires_in: tokens.expires_in,
         user: UserInfo {
             id: user.id,
             email: user.email,
@@ -449,29 +375,7 @@ async fn confirm_reset(
     CurrentTenant(tenant): CurrentTenant,
     Json(params): Json<ConfirmResetParams>,
 ) -> Result<Response> {
-    let config = AuthConfig::from_ctx(&ctx)?;
-    let claims = decode_password_reset_token(&config, &params.token)?;
-
-    if claims.tenant_id != tenant.id {
-        return Err(Error::Unauthorized("Invalid reset token".into()));
-    }
-
-    let user = Users::find_by_email(&ctx.db, tenant.id, &claims.sub)
-        .await?
-        .ok_or_else(|| Error::Unauthorized("Invalid reset token".into()))?;
-
-    let user_id = user.id;
-    let mut user_active: users::ActiveModel = user.into();
-    user_active.password_hash = Set(hash_password(&params.password)?);
-    user_active.update(&ctx.db).await?;
-
-    let now = Utc::now();
-    sessions::Entity::update_many()
-        .col_expr(sessions::Column::RevokedAt, Expr::value(now))
-        .filter(sessions::Column::TenantId.eq(tenant.id))
-        .filter(sessions::Column::UserId.eq(user_id))
-        .filter(sessions::Column::RevokedAt.is_null())
-        .exec(&ctx.db)
+    AuthLifecycleService::confirm_password_reset(&ctx, tenant.id, &params.token, &params.password)
         .await?;
 
     format::json(GenericStatusResponse { status: "ok" })
@@ -607,23 +511,15 @@ async fn change_password(
     current: CurrentUser,
     Json(params): Json<ChangePasswordParams>,
 ) -> Result<Response> {
-    if !verify_password(&params.current_password, &current.user.password_hash)? {
-        return Err(Error::Unauthorized("Invalid credentials".into()));
-    }
-
-    let mut user_active: users::ActiveModel = current.user.clone().into();
-    user_active.password_hash = Set(hash_password(&params.new_password)?);
-    user_active.update(&ctx.db).await?;
-
-    let now = Utc::now();
-    sessions::Entity::update_many()
-        .col_expr(sessions::Column::RevokedAt, Expr::value(now))
-        .filter(sessions::Column::TenantId.eq(tenant.id))
-        .filter(sessions::Column::UserId.eq(current.user.id))
-        .filter(sessions::Column::RevokedAt.is_null())
-        .filter(sessions::Column::Id.ne(current.session_id))
-        .exec(&ctx.db)
-        .await?;
+    AuthLifecycleService::change_password(
+        &ctx,
+        tenant.id,
+        current.user.id,
+        current.session_id,
+        &params.current_password,
+        &params.new_password,
+    )
+    .await?;
 
     format::json(GenericStatusResponse { status: "ok" })
 }

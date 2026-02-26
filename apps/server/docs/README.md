@@ -17,3 +17,5 @@
 - Dev onboarding: `seed_development` creates/updates an idempotent demo tenant (`demo`), demo users, and enables core modules for local environments.
 - Build pipeline: `BuildService::request_build` now publishes `BuildRequested` via configurable `BuildEventPublisher`; `EventBusBuildEventPublisher` maps it to `DomainEvent::BuildRequested`, while default noop publisher logs skipped dispatch when no runtime wiring is provided.
 - Auth/session lifecycle: GraphQL `sign_out`, `change_password`, `reset_password` теперь используют soft-revoke через `sessions.revoked_at` (вместо hard delete) и выровнены по поведению с REST (`sign_out` отзывает только текущую сессию, `change_password` — все остальные, `reset_password` — все активные).
+
+- Auth/lifecycle extraction: REST handlers и GraphQL mutations для `register/sign_in`, `login/sign_in`, `refresh`, `change_password`, `reset_password` теперь маршрутизируют бизнес-логику через общий `AuthLifecycleService` (transport adapters остаются тонкими).

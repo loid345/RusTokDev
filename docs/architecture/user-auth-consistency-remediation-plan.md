@@ -148,21 +148,21 @@ REST/GraphQL должны вызывать этот сервис, оставая
 
 - [x] `create_user`: гарантировать назначение связей после создания пользователя.
 - [x] `confirm_reset` (REST): добавить отзыв active sessions.
-- [ ] Вынести общий `AuthLifecycleService` и перевести:
-  - [ ] register/sign_up
-  - [ ] login/sign_in
-  - [ ] refresh
-  - [ ] reset flows
-  - [ ] change_password
+- [x] Вынести общий `AuthLifecycleService` и перевести:
+  - [x] register/sign_up
+  - [x] login/sign_in
+  - [x] refresh
+  - [x] reset flows
+  - [x] change_password
 - [ ] Унифицировать маппинг ошибок (REST status codes и GraphQL errors).
 - [x] Выравнять session invalidation semantics между REST и GraphQL для `sign_out`/`change_password`/`reset_password` (soft-revoke через `revoked_at`).
 
 ## 5.2 Документационные задачи
 
 - [ ] ADR: "Auth lifecycle unification + session invalidation policy".
-- [ ] Обновить `docs/architecture/api.md` (REST/GraphQL adapters + service layer).
+- [x] Обновить `docs/architecture/api.md` (REST/GraphQL adapters + service layer).
 - [ ] Обновить `docs/architecture/rbac.md` ссылкой на разделение ответственности между этим планом и RBAC migration plan.
-- [ ] Обновить `apps/server/docs/README.md` кратким changelog по auth behavior.
+- [x] Обновить `apps/server/docs/README.md` кратким changelog по auth behavior.
 
 ---
 

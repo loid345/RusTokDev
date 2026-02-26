@@ -14,6 +14,12 @@ RusToK использует гибридный подход: GraphQL для UI-�
 | Health | `/api/health` | Статус сервиса и модулей |
 | Metrics | `/metrics` | Prometheus метрики |
 
+## Auth transport consistency
+
+Для auth/user сценариев (`register/sign_in`, `login/sign_in`, `refresh`, `change_password`, `reset_password`) REST и GraphQL работают как thin adapters и используют общий application service `AuthLifecycleService` (`apps/server/src/services/auth_lifecycle.rs`).
+
+Это снижает дублирование бизнес-логики между transport-слоями и фиксирует единые policy для session invalidation.
+
 ## GraphQL схема
 
 GraphQL схема формируется из per-domain объектов через `MergedObject`:
