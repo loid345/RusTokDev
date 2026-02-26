@@ -13,14 +13,8 @@ use std::time::Instant;
 
 use crate::middleware::tenant::tenant_cache_stats;
 use crate::services::auth::AuthService;
+use crate::services::rbac_consistency::{load_rbac_consistency_stats, RbacConsistencyStats};
 use tracing::warn;
-
-#[derive(Debug, Clone, Copy, Default)]
-struct RbacConsistencyStats {
-    users_without_roles_total: i64,
-    orphan_user_roles_total: i64,
-    orphan_role_permissions_total: i64,
-}
 
 static RBAC_CONSISTENCY_QUERY_FAILURES_TOTAL: AtomicU64 = AtomicU64::new(0);
 static RBAC_CONSISTENCY_QUERY_LATENCY_MS_TOTAL: AtomicU64 = AtomicU64::new(0);
@@ -109,7 +103,14 @@ outbox_retries_total {retries_total}\n",
 async fn render_rbac_metrics(ctx: &AppContext) -> String {
     let stats = AuthService::metrics_snapshot();
     let started_at = Instant::now();
-    let consistency = load_rbac_consistency_stats(ctx).await;
+    let consistency = match load_rbac_consistency_stats(ctx).await {
+        Ok(stats) => stats,
+        Err(error) => {
+            RBAC_CONSISTENCY_QUERY_FAILURES_TOTAL.fetch_add(1, Ordering::Relaxed);
+            warn!(error = %error, "failed to load RBAC consistency stats");
+            RbacConsistencyStats::default()
+        }
+    };
     let latency_ms = started_at.elapsed().as_millis() as u64;
     RBAC_CONSISTENCY_QUERY_LATENCY_MS_TOTAL.fetch_add(latency_ms, Ordering::Relaxed);
     RBAC_CONSISTENCY_QUERY_LATENCY_SAMPLES.fetch_add(1, Ordering::Relaxed);
@@ -120,60 +121,6 @@ async fn render_rbac_metrics(ctx: &AppContext) -> String {
         consistency.orphan_user_roles_total,
         consistency.orphan_role_permissions_total,
     )
-}
-
-async fn load_rbac_consistency_stats(ctx: &AppContext) -> RbacConsistencyStats {
-    match ctx
-        .db
-        .query_one(Statement::from_string(
-            DbBackend::Postgres,
-            "SELECT
-                 (SELECT COUNT(*)
-                  FROM users u
-                  LEFT JOIN user_roles ur ON ur.user_id = u.id
-                  WHERE ur.id IS NULL) AS users_without_roles_total,
-                 (SELECT COUNT(*)
-                  FROM user_roles ur
-                  LEFT JOIN roles r ON r.id = ur.role_id
-                  WHERE r.id IS NULL) AS orphan_user_roles_total,
-                 (SELECT COUNT(*)
-                  FROM role_permissions rp
-                  LEFT JOIN permissions p ON p.id = rp.permission_id
-                  WHERE p.id IS NULL) AS orphan_role_permissions_total"
-                .to_string(),
-        ))
-        .await
-    {
-        Ok(Some(row)) => RbacConsistencyStats {
-            users_without_roles_total: parse_consistency_metric(&row, "users_without_roles_total"),
-            orphan_user_roles_total: parse_consistency_metric(&row, "orphan_user_roles_total"),
-            orphan_role_permissions_total: parse_consistency_metric(
-                &row,
-                "orphan_role_permissions_total",
-            ),
-        },
-        Ok(None) => {
-            RBAC_CONSISTENCY_QUERY_FAILURES_TOTAL.fetch_add(1, Ordering::Relaxed);
-            warn!("rbac consistency stats query returned no rows");
-            RbacConsistencyStats::default()
-        }
-        Err(error) => {
-            RBAC_CONSISTENCY_QUERY_FAILURES_TOTAL.fetch_add(1, Ordering::Relaxed);
-            warn!(error = %error, "failed to load RBAC consistency stats");
-            RbacConsistencyStats::default()
-        }
-    }
-}
-
-fn parse_consistency_metric(row: &sea_orm::QueryResult, column: &str) -> i64 {
-    match row.try_get::<i64>("", column) {
-        Ok(value) => value,
-        Err(error) => {
-            RBAC_CONSISTENCY_QUERY_FAILURES_TOTAL.fetch_add(1, Ordering::Relaxed);
-            warn!(column, error = %error, "failed to parse RBAC consistency metric");
-            0
-        }
-    }
 }
 
 fn format_rbac_metrics(
@@ -231,14 +178,6 @@ rustok_rbac_consistency_query_latency_samples {consistency_query_latency_samples
     )
 }
 
-
-    #[test]
-    fn rbac_metrics_render_consistency_values() {
-        let payload = format_rbac_metrics(AuthService::metrics_snapshot(), 7, 3, 1);
-        assert!(payload.contains("rustok_rbac_users_without_roles_total 7"));
-        assert!(payload.contains("rustok_rbac_orphan_user_roles_total 3"));
-        assert!(payload.contains("rustok_rbac_orphan_role_permissions_total 1"));
-    }
 #[cfg(test)]
 mod tests {
     use super::format_rbac_metrics;
