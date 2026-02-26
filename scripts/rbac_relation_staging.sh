@@ -105,7 +105,9 @@ if [[ -n "$ROLLBACK_SOURCE" ]]; then
 fi
 REPORT_FILE="$ARTIFACTS_DIR/rbac_relation_stage_report_${TS}.md"
 PRECHECK_JSON="$ARTIFACTS_DIR/rbac_report_pre_${TS}.json"
+DRYRUN_JSON="$ARTIFACTS_DIR/rbac_backfill_dry_run_${TS}.json"
 POST_APPLY_JSON="$ARTIFACTS_DIR/rbac_report_post_apply_${TS}.json"
+POST_APPLY_BACKFILL_JSON="$ARTIFACTS_DIR/rbac_backfill_apply_${TS}.json"
 POST_ROLLBACK_JSON="$ARTIFACTS_DIR/rbac_report_post_rollback_${TS}.json"
 
 build_args() {
@@ -141,6 +143,42 @@ value = payload.get(key)
 if not isinstance(value, int):
     raise SystemExit(f"invalid or missing integer metric '{key}' in {path}")
 print(value)
+PY
+}
+
+append_backfill_summary() {
+  local title="$1"
+  local file="$2"
+
+  if [[ ! -f "$file" ]]; then
+    return 0
+  fi
+
+  python - "$title" "$file" >> "$REPORT_FILE" <<'PY'
+import json
+import sys
+
+_, title, path = sys.argv
+with open(path, 'r', encoding='utf-8') as fh:
+    payload = json.load(fh)
+
+print()
+print(f"## {title}")
+print()
+for key in [
+    "dry_run",
+    "candidates_total",
+    "fixed_users",
+    "failed_users",
+    "users_without_roles_total_before",
+    "users_without_roles_total_after",
+    "orphan_user_roles_total_before",
+    "orphan_user_roles_total_after",
+    "orphan_role_permissions_total_before",
+    "orphan_role_permissions_total_after",
+]:
+    if key in payload:
+        print(f"- {key}: {payload[key]}")
 PY
 }
 
@@ -233,11 +271,11 @@ run_step() {
 run_step "01_pre_report" "target=rbac-report output=${PRECHECK_JSON}"
 
 # 2) Dry-run backfill
-run_step "02_backfill_dry_run" "$(build_args rbac-backfill) dry_run=true rollback_file=${GENERATED_ROLLBACK_FILE}"
+run_step "02_backfill_dry_run" "$(build_args rbac-backfill) dry_run=true rollback_file=${GENERATED_ROLLBACK_FILE} report_file=${DRYRUN_JSON}"
 
 # 3) Apply backfill (optional)
 if [[ "$RUN_APPLY" == "true" ]]; then
-  run_step "03_backfill_apply" "$(build_args rbac-backfill) rollback_file=${GENERATED_ROLLBACK_FILE}"
+  run_step "03_backfill_apply" "$(build_args rbac-backfill) rollback_file=${GENERATED_ROLLBACK_FILE} report_file=${POST_APPLY_BACKFILL_JSON}"
   run_step "04_post_report" "target=rbac-report output=${POST_APPLY_JSON}"
   if [[ "$REQUIRE_ZERO_POST_APPLY" == "true" ]]; then
     enforce_zero_invariants "$POST_APPLY_JSON" "post-apply"
@@ -270,7 +308,9 @@ cat > "$REPORT_FILE" <<REPORT
 - Artifacts directory: ${ARTIFACTS_DIR}
 - Generated rollback snapshot path: ${GENERATED_ROLLBACK_FILE}
 - Pre-check JSON report: ${PRECHECK_JSON}
+- Dry-run backfill JSON report: ${DRYRUN_JSON}
 - Post-apply JSON report: ${POST_APPLY_JSON}
+- Post-apply backfill JSON report: ${POST_APPLY_BACKFILL_JSON}
 - Post-rollback JSON report: ${POST_ROLLBACK_JSON}
 - Effective rollback source: ${ROLLBACK_FILE}
 - Apply step enabled: ${RUN_APPLY}
@@ -292,6 +332,8 @@ $(for f in "$ARTIFACTS_DIR"/${TS}_*.log; do
 done)
 REPORT
 
+append_backfill_summary "Backfill dry-run summary" "$DRYRUN_JSON"
+append_backfill_summary "Backfill apply summary" "$POST_APPLY_BACKFILL_JSON"
 append_invariant_summary "Invariant diff: pre-check vs post-apply" "$PRECHECK_JSON" "$POST_APPLY_JSON"
 append_invariant_summary "Invariant diff: pre-check vs post-rollback" "$PRECHECK_JSON" "$POST_ROLLBACK_JSON"
 

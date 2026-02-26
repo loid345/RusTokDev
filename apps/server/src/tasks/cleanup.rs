@@ -151,6 +151,28 @@ impl Task for CleanupTask {
                 }
 
                 let after = load_rbac_consistency_stats(ctx).await?;
+
+                if let Some(path) = vars.cli.get("report_file") {
+                    write_backfill_report_file(
+                        path,
+                        BackfillExecutionReport {
+                            dry_run,
+                            candidates_total: users_without_tenant_roles.len(),
+                            fixed_users,
+                            failed_users,
+                            users_without_roles_total_before: before.users_without_roles_total,
+                            orphan_user_roles_total_before: before.orphan_user_roles_total,
+                            orphan_role_permissions_total_before: before
+                                .orphan_role_permissions_total,
+                            users_without_roles_total_after: after.users_without_roles_total,
+                            orphan_user_roles_total_after: after.orphan_user_roles_total,
+                            orphan_role_permissions_total_after: after
+                                .orphan_role_permissions_total,
+                        },
+                    )?;
+                    tracing::info!(report_file = %path, "RBAC backfill report file saved");
+                }
+
                 tracing::info!(
                     fixed_users,
                     failed_users,
@@ -250,6 +272,20 @@ impl Task for CleanupTask {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+struct BackfillExecutionReport {
+    dry_run: bool,
+    candidates_total: usize,
+    fixed_users: usize,
+    failed_users: usize,
+    users_without_roles_total_before: i64,
+    orphan_user_roles_total_before: i64,
+    orphan_role_permissions_total_before: i64,
+    users_without_roles_total_after: i64,
+    orphan_user_roles_total_after: i64,
+    orphan_role_permissions_total_after: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 struct BackfillRollbackEntry {
     user_id: uuid::Uuid,
     tenant_id: uuid::Uuid,
@@ -286,6 +322,18 @@ fn write_rbac_report_file(
     })?;
     std::fs::write(path, payload)
         .map_err(|error| loco_rs::Error::string(format!("rbac report write failed: {error}")))?;
+    Ok(())
+}
+
+fn write_backfill_report_file(path: &str, report: BackfillExecutionReport) -> Result<()> {
+    let payload = serde_json::to_vec_pretty(&report).map_err(|error| {
+        loco_rs::Error::string(format!(
+            "rbac backfill report serialization failed: {error}"
+        ))
+    })?;
+    std::fs::write(path, payload).map_err(|error| {
+        loco_rs::Error::string(format!("rbac backfill report write failed: {error}"))
+    })?;
     Ok(())
 }
 
@@ -350,7 +398,8 @@ fn parse_role_set(cli: &HashMap<String, String>, key: &str) -> Result<HashSet<Us
 mod tests {
     use super::{
         is_flag_enabled, parse_limit, parse_role_set, parse_uuid_set, read_rollback_file,
-        write_rbac_report_file, write_rollback_file, BackfillRollbackEntry,
+        write_backfill_report_file, write_rbac_report_file, write_rollback_file,
+        BackfillExecutionReport, BackfillRollbackEntry,
     };
     use rustok_core::UserRole;
     use std::collections::HashMap;
@@ -429,6 +478,37 @@ mod tests {
         assert_eq!(payload["users_without_roles_total"], 3);
         assert_eq!(payload["orphan_user_roles_total"], 2);
         assert_eq!(payload["orphan_role_permissions_total"], 1);
+    }
+
+    #[test]
+    fn backfill_report_file_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("rbac_backfill_report.json");
+        let path_str = path.to_string_lossy().to_string();
+
+        write_backfill_report_file(
+            &path_str,
+            BackfillExecutionReport {
+                dry_run: true,
+                candidates_total: 4,
+                fixed_users: 0,
+                failed_users: 0,
+                users_without_roles_total_before: 4,
+                orphan_user_roles_total_before: 2,
+                orphan_role_permissions_total_before: 1,
+                users_without_roles_total_after: 4,
+                orphan_user_roles_total_after: 2,
+                orphan_role_permissions_total_after: 1,
+            },
+        )
+        .unwrap();
+
+        let payload: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        assert_eq!(payload["dry_run"], true);
+        assert_eq!(payload["candidates_total"], 4);
+        assert_eq!(payload["users_without_roles_total_before"], 4);
+        assert_eq!(payload["users_without_roles_total_after"], 4);
     }
 
     #[test]
