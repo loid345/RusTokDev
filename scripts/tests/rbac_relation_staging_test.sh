@@ -29,6 +29,12 @@ if [[ "$args" == *"target=rbac-report"* ]]; then
     if [[ -n "${MOCK_SKIP_REPORT_OUTPUT:-}" ]]; then
       exit 0
     fi
+    if [[ -n "${MOCK_SKIP_POST_APPLY_REPORT_OUTPUT:-}" && "$output_file" == *"post_apply"* ]]; then
+      exit 0
+    fi
+    if [[ -n "${MOCK_SKIP_POST_ROLLBACK_REPORT_OUTPUT:-}" && "$output_file" == *"post_rollback"* ]]; then
+      exit 0
+    fi
     mkdir -p "$(dirname "$output_file")"
     if [[ -n "${MOCK_REPORT_PROFILE:-}" && "$output_file" == *"post_apply"* ]]; then
       case "$MOCK_REPORT_PROFILE" in
@@ -232,6 +238,22 @@ test_require_zero_post_apply_fails_when_report_missing() {
   pass "require-zero-post-apply fails if report artifact is missing"
 }
 
+
+test_require_zero_post_rollback_fails_when_report_missing() {
+  local tmp
+  tmp="$(mktemp -d)"
+  make_mock_cargo "$tmp"
+
+  set +e
+  MOCK_TOUCH_ROLLBACK_FILE=1 MOCK_SKIP_POST_ROLLBACK_REPORT_OUTPUT=1 RUSTOK_CARGO_BIN="$tmp/mock-cargo" "$SCRIPT" --run-apply --run-rollback-apply --require-zero-post-rollback --artifacts-dir "$tmp/artifacts" >"$tmp/out.log" 2>&1
+  local code=$?
+  set -e
+
+  [[ $code -eq 1 ]] || fail "expected strict zero-check to fail when post-rollback report file is missing"
+  rg -q "report file is missing" "$tmp/out.log" || fail "expected missing rollback report file error"
+  pass "require-zero-post-rollback fails if report artifact is missing"
+}
+
 test_require_zero_post_rollback_requires_rollback_apply_step() {
   local tmp
   tmp="$(mktemp -d)"
@@ -259,6 +281,7 @@ main() {
   test_require_zero_post_rollback_passes_when_zero
   test_require_zero_post_apply_requires_apply_step
   test_require_zero_post_apply_fails_when_report_missing
+  test_require_zero_post_rollback_fails_when_report_missing
   test_require_zero_post_rollback_requires_rollback_apply_step
   echo "All tests passed."
 }
