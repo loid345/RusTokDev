@@ -7,6 +7,7 @@ use sea_orm::{
 };
 use std::collections::HashSet;
 use std::fmt::Write;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 use tracing::{debug, warn};
 
@@ -23,6 +24,19 @@ static USER_PERMISSION_CACHE: Lazy<Cache<(uuid::Uuid, uuid::Uuid), Vec<Permissio
             .time_to_live(Duration::from_secs(60))
             .build()
     });
+
+#[derive(Debug, Clone, Copy)]
+pub struct RbacResolverMetricsSnapshot {
+    pub permission_cache_hits: u64,
+    pub permission_cache_misses: u64,
+    pub permission_checks_allowed: u64,
+    pub permission_checks_denied: u64,
+}
+
+static RBAC_PERMISSION_CACHE_HITS: AtomicU64 = AtomicU64::new(0);
+static RBAC_PERMISSION_CACHE_MISSES: AtomicU64 = AtomicU64::new(0);
+static RBAC_PERMISSION_CHECKS_ALLOWED: AtomicU64 = AtomicU64::new(0);
+static RBAC_PERMISSION_CHECKS_DENIED: AtomicU64 = AtomicU64::new(0);
 
 impl AuthService {
     fn has_effective_permission(
@@ -80,6 +94,23 @@ impl AuthService {
             .await;
     }
 
+    fn record_permission_check_result(allowed: bool) {
+        if allowed {
+            RBAC_PERMISSION_CHECKS_ALLOWED.fetch_add(1, Ordering::Relaxed);
+        } else {
+            RBAC_PERMISSION_CHECKS_DENIED.fetch_add(1, Ordering::Relaxed);
+        }
+    }
+
+    pub fn metrics_snapshot() -> RbacResolverMetricsSnapshot {
+        RbacResolverMetricsSnapshot {
+            permission_cache_hits: RBAC_PERMISSION_CACHE_HITS.load(Ordering::Relaxed),
+            permission_cache_misses: RBAC_PERMISSION_CACHE_MISSES.load(Ordering::Relaxed),
+            permission_checks_allowed: RBAC_PERMISSION_CHECKS_ALLOWED.load(Ordering::Relaxed),
+            permission_checks_denied: RBAC_PERMISSION_CHECKS_DENIED.load(Ordering::Relaxed),
+        }
+    }
+
     pub async fn has_permission(
         db: &DatabaseConnection,
         tenant_id: &uuid::Uuid,
@@ -116,6 +147,8 @@ impl AuthService {
                 "rbac deny: missing required permission"
             );
         }
+
+        Self::record_permission_check_result(allowed);
 
         Ok(allowed)
     }
@@ -164,6 +197,8 @@ impl AuthService {
             );
         }
 
+        Self::record_permission_check_result(allowed);
+
         Ok(allowed)
     }
 
@@ -208,6 +243,8 @@ impl AuthService {
             );
         }
 
+        Self::record_permission_check_result(allowed);
+
         Ok(allowed)
     }
 
@@ -220,6 +257,7 @@ impl AuthService {
         let cache_key = Self::cache_key(tenant_id, user_id);
 
         if let Some(cached_permissions) = USER_PERMISSION_CACHE.get(&cache_key).await {
+            RBAC_PERMISSION_CACHE_HITS.fetch_add(1, Ordering::Relaxed);
             debug!(
                 tenant_id = %tenant_id,
                 user_id = %user_id,
@@ -231,6 +269,8 @@ impl AuthService {
 
             return Ok(cached_permissions);
         }
+
+        RBAC_PERMISSION_CACHE_MISSES.fetch_add(1, Ordering::Relaxed);
 
         let resolved_permissions =
             Self::load_user_permissions_from_db(db, tenant_id, user_id).await?;

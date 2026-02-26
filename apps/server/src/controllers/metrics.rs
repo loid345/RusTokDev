@@ -10,6 +10,7 @@ use sea_orm::{
 };
 
 use crate::middleware::tenant::tenant_cache_stats;
+use crate::services::auth::AuthService;
 
 pub async fn metrics(State(ctx): State<AppContext>) -> Result<Response> {
     match rustok_telemetry::metrics_handle() {
@@ -18,6 +19,7 @@ pub async fn metrics(State(ctx): State<AppContext>) -> Result<Response> {
             payload.push('\n');
             payload.push_str(&render_tenant_cache_metrics(&ctx).await);
             payload.push_str(&render_outbox_metrics(&ctx).await);
+            payload.push_str(&render_rbac_metrics());
 
             Ok((
                 StatusCode::OK,
@@ -87,5 +89,19 @@ async fn render_outbox_metrics(ctx: &AppContext) -> String {
         "outbox_backlog_size {backlog_size}\n\
 outbox_dlq_total {dlq_total}\n\
 outbox_retries_total {retries_total}\n",
+    )
+}
+
+fn render_rbac_metrics() -> String {
+    let stats = AuthService::metrics_snapshot();
+    format!(
+        "rustok_rbac_permission_cache_hits {cache_hits}\n\
+rustok_rbac_permission_cache_misses {cache_misses}\n\
+rustok_rbac_permission_checks_allowed {checks_allowed}\n\
+rustok_rbac_permission_checks_denied {checks_denied}\n",
+        cache_hits = stats.permission_cache_hits,
+        cache_misses = stats.permission_cache_misses,
+        checks_allowed = stats.permission_checks_allowed,
+        checks_denied = stats.permission_checks_denied,
     )
 }
