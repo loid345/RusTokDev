@@ -132,23 +132,30 @@ impl AuthService {
         let shadow = compare_shadow_decision(&legacy_role, shadow_check, relation_allowed);
         if shadow.mismatch() {
             Self::record_decision_mismatch();
-            let (required_permission, required_permissions) = match shadow_check {
-                ShadowCheck::Single(permission) => (Some(permission), None),
-                ShadowCheck::Any(permissions) | ShadowCheck::All(permissions) => {
-                    (None, Some(permissions))
+            match shadow_check {
+                ShadowCheck::Single(required_permission) => {
+                    warn!(
+                        tenant_id = %tenant_id,
+                        user_id = %user_id,
+                        required_permission = %required_permission,
+                        legacy_role = %legacy_role,
+                        relation_allowed = shadow.relation_allowed,
+                        legacy_allowed = shadow.legacy_allowed,
+                        "rbac_decision_mismatch"
+                    );
                 }
-            };
-
-            warn!(
-                tenant_id = %tenant_id,
-                user_id = %user_id,
-                required_permission = ?required_permission,
-                required_permissions = ?required_permissions,
-                legacy_role = %legacy_role,
-                relation_allowed = shadow.relation_allowed,
-                legacy_allowed = shadow.legacy_allowed,
-                "rbac_decision_mismatch"
-            );
+                ShadowCheck::Any(required_permissions) | ShadowCheck::All(required_permissions) => {
+                    warn!(
+                        tenant_id = %tenant_id,
+                        user_id = %user_id,
+                        required_permissions = ?required_permissions,
+                        legacy_role = %legacy_role,
+                        relation_allowed = shadow.relation_allowed,
+                        legacy_allowed = shadow.legacy_allowed,
+                        "rbac_decision_mismatch"
+                    );
+                }
+            }
         }
 
         Ok(())
@@ -279,15 +286,14 @@ impl AuthService {
 
         Self::record_permission_check_result(allowed);
         Self::record_permission_check_latency(latency_ms);
-        if let Err(error) =
-            Self::shadow_compare_decision(
-                db,
-                tenant_id,
-                user_id,
-                ShadowCheck::Single(required_permission),
-                allowed,
-            )
-                .await
+        if let Err(error) = Self::shadow_compare_decision(
+            db,
+            tenant_id,
+            user_id,
+            ShadowCheck::Single(required_permission),
+            allowed,
+        )
+        .await
         {
             Self::record_shadow_compare_failure();
             warn!(
@@ -342,15 +348,14 @@ impl AuthService {
 
         Self::record_permission_check_result(allowed);
         Self::record_permission_check_latency(latency_ms);
-        if let Err(error) =
-            Self::shadow_compare_decision(
-                db,
-                tenant_id,
-                user_id,
-                ShadowCheck::Any(required_permissions),
-                allowed,
-            )
-                .await
+        if let Err(error) = Self::shadow_compare_decision(
+            db,
+            tenant_id,
+            user_id,
+            ShadowCheck::Any(required_permissions),
+            allowed,
+        )
+        .await
         {
             Self::record_shadow_compare_failure();
             warn!(
@@ -408,15 +413,14 @@ impl AuthService {
 
         Self::record_permission_check_result(allowed);
         Self::record_permission_check_latency(latency_ms);
-        if let Err(error) =
-            Self::shadow_compare_decision(
-                db,
-                tenant_id,
-                user_id,
-                ShadowCheck::All(required_permissions),
-                allowed,
-            )
-                .await
+        if let Err(error) = Self::shadow_compare_decision(
+            db,
+            tenant_id,
+            user_id,
+            ShadowCheck::All(required_permissions),
+            allowed,
+        )
+        .await
         {
             Self::record_shadow_compare_failure();
             warn!(
