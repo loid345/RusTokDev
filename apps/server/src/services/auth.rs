@@ -631,6 +631,15 @@ mod tests {
     use rustok_core::{Action, Permission, Resource};
 
     #[test]
+    fn claim_role_mismatch_counter_increments() {
+        let before = AuthService::metrics_snapshot().claim_role_mismatch_total;
+        AuthService::record_claim_role_mismatch();
+        let after = AuthService::metrics_snapshot().claim_role_mismatch_total;
+
+        assert_eq!(after, before + 1);
+    }
+
+    #[test]
     fn denied_reason_reports_no_permissions_resolved() {
         let (denied_reason_kind, denied_reason) =
             AuthService::denied_reason_for_denial(&[], &[Permission::USERS_READ]);

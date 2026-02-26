@@ -121,3 +121,14 @@ rustok_rbac_claim_role_mismatch_total {claim_role_mismatch_total}\n",
         claim_role_mismatch_total = stats.claim_role_mismatch_total,
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use super::render_rbac_metrics;
+
+    #[test]
+    fn rbac_metrics_include_claim_role_mismatch_counter() {
+        let payload = render_rbac_metrics();
+        assert!(payload.contains("rustok_rbac_claim_role_mismatch_total"));
+    }
+}
