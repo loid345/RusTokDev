@@ -9,12 +9,15 @@ use sea_orm::{
     ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, PaginatorTrait, QueryFilter, Statement,
 };
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Instant;
 
 use crate::middleware::tenant::tenant_cache_stats;
 use crate::services::auth::AuthService;
 use tracing::warn;
 
 static RBAC_CONSISTENCY_QUERY_FAILURES_TOTAL: AtomicU64 = AtomicU64::new(0);
+static RBAC_CONSISTENCY_QUERY_LATENCY_MS_TOTAL: AtomicU64 = AtomicU64::new(0);
+static RBAC_CONSISTENCY_QUERY_LATENCY_SAMPLES: AtomicU64 = AtomicU64::new(0);
 
 pub async fn metrics(State(ctx): State<AppContext>) -> Result<Response> {
     match rustok_telemetry::metrics_handle() {
@@ -98,6 +101,10 @@ outbox_retries_total {retries_total}\n",
 
 async fn render_rbac_metrics(ctx: &AppContext) -> String {
     let stats = AuthService::metrics_snapshot();
+    let started_at = Instant::now();
+    let latency_ms = started_at.elapsed().as_millis() as u64;
+    RBAC_CONSISTENCY_QUERY_LATENCY_MS_TOTAL.fetch_add(latency_ms, Ordering::Relaxed);
+    RBAC_CONSISTENCY_QUERY_LATENCY_SAMPLES.fetch_add(1, Ordering::Relaxed);
     match ctx
         .db
     {
@@ -152,7 +159,22 @@ rustok_rbac_consistency_query_failures_total {consistency_query_failures_total}\
              LEFT JOIN roles r ON r.id = ur.role_id
              WHERE r.id IS NULL"
                 .to_string(),
-        ))
+    let consistency_query_latency_ms_total =
+        RBAC_CONSISTENCY_QUERY_LATENCY_MS_TOTAL.load(Ordering::Relaxed);
+    let consistency_query_latency_samples =
+        RBAC_CONSISTENCY_QUERY_LATENCY_SAMPLES.load(Ordering::Relaxed);
+rustok_rbac_consistency_query_failures_total {consistency_query_failures_total}\n\
+rustok_rbac_consistency_query_latency_ms_total {consistency_query_latency_ms_total}\n\
+rustok_rbac_consistency_query_latency_samples {consistency_query_latency_samples}\n",
+        consistency_query_latency_ms_total = consistency_query_latency_ms_total,
+        consistency_query_latency_samples = consistency_query_latency_samples,
+    #[test]
+    fn rbac_metrics_include_consistency_query_latency_counters() {
+        let payload = format_rbac_metrics(AuthService::metrics_snapshot(), 0, 0, 0);
+        assert!(payload.contains("rustok_rbac_consistency_query_latency_ms_total"));
+        assert!(payload.contains("rustok_rbac_consistency_query_latency_samples"));
+    }
+
         .await
         .ok()
         .flatten()
