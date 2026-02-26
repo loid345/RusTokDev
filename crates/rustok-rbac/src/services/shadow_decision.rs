@@ -19,6 +19,16 @@ pub enum ShadowCheck<'a> {
     All(&'a [Permission]),
 }
 
+impl ShadowCheck<'_> {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ShadowCheck::Single(_) => "single",
+            ShadowCheck::Any(_) => "any",
+            ShadowCheck::All(_) => "all",
+        }
+    }
+}
+
 pub fn compare_single_permission(
     legacy_role: &UserRole,
     required_permission: &Permission,
@@ -118,5 +128,15 @@ mod tests {
         assert!(!single.mismatch());
         assert!(!any.mismatch());
         assert!(all.mismatch());
+    }
+
+    #[test]
+    fn shadow_check_string_representation_is_stable() {
+        let required = permission(Resource::User, Action::Read);
+        let required_set = [required.clone()];
+
+        assert_eq!(ShadowCheck::Single(&required).as_str(), "single");
+        assert_eq!(ShadowCheck::Any(&required_set).as_str(), "any");
+        assert_eq!(ShadowCheck::All(&required_set).as_str(), "all");
     }
 }

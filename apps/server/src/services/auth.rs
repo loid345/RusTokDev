@@ -129,6 +129,7 @@ impl AuthService {
             return Ok(());
         };
 
+        let shadow_mode = shadow_check.as_str();
         let shadow = compare_shadow_decision(&legacy_role, shadow_check, relation_allowed);
         if shadow.mismatch() {
             Self::record_decision_mismatch();
@@ -137,6 +138,7 @@ impl AuthService {
                     warn!(
                         tenant_id = %tenant_id,
                         user_id = %user_id,
+                        shadow_check = shadow_mode,
                         required_permission = %required_permission,
                         legacy_role = %legacy_role,
                         relation_allowed = shadow.relation_allowed,
@@ -148,6 +150,7 @@ impl AuthService {
                     warn!(
                         tenant_id = %tenant_id,
                         user_id = %user_id,
+                        shadow_check = shadow_mode,
                         required_permissions = ?required_permissions,
                         legacy_role = %legacy_role,
                         relation_allowed = shadow.relation_allowed,
