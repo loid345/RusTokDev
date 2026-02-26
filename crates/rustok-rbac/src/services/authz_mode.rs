@@ -4,19 +4,35 @@ pub enum RbacAuthzMode {
     DualRead,
 }
 
+const AUTHZ_MODE_ENV: &str = "RUSTOK_RBAC_AUTHZ_MODE";
+const RELATION_DUAL_READ_FLAG_ALIASES: [&str; 3] = [
+    "RUSTOK_RBAC_RELATION_DUAL_READ_ENABLED",
+    "RBAC_RELATION_DUAL_READ_ENABLED",
+    "rbac_relation_dual_read_enabled",
+];
+
 impl RbacAuthzMode {
     pub fn parse(value: &str) -> Self {
-        if value.trim().eq_ignore_ascii_case("dual_read") {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "dual_read" | "dual-read" | "dual" => Self::DualRead,
+            "relation_only" | "relation-only" | "relation" => Self::RelationOnly,
+            _ => Self::RelationOnly,
+        }
+    }
+
+    pub fn from_env() -> Self {
+        if let Ok(raw_mode) = std::env::var(AUTHZ_MODE_ENV) {
+            return Self::parse(&raw_mode);
+        }
+
+        if RELATION_DUAL_READ_FLAG_ALIASES
+            .iter()
+            .any(|name| env_flag_enabled(name))
+        {
             return Self::DualRead;
         }
 
         Self::RelationOnly
-    }
-
-    pub fn from_env() -> Self {
-        std::env::var("RUSTOK_RBAC_AUTHZ_MODE")
-            .map(|raw| Self::parse(&raw))
-            .unwrap_or(Self::RelationOnly)
     }
 
     pub fn is_dual_read(self) -> bool {
@@ -24,9 +40,77 @@ impl RbacAuthzMode {
     }
 }
 
+fn env_flag_enabled(name: &str) -> bool {
+    std::env::var(name)
+        .map(|raw| {
+            matches!(
+                raw.trim().to_ascii_lowercase().as_str(),
+                "1" | "true" | "yes" | "on" | "enabled"
+            )
+        })
+        .unwrap_or(false)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::RbacAuthzMode;
+    use super::{RbacAuthzMode, AUTHZ_MODE_ENV, RELATION_DUAL_READ_FLAG_ALIASES};
+    use std::sync::{Mutex, MutexGuard, OnceLock};
+
+    struct EnvVarGuard {
+        _lock: MutexGuard<'static, ()>,
+        name: &'static str,
+        previous: Option<String>,
+    }
+
+    impl EnvVarGuard {
+        fn lock(name: &'static str) -> Self {
+            static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+            let lock = LOCK
+                .get_or_init(|| Mutex::new(()))
+                .lock()
+                .expect("env lock");
+            let previous = std::env::var(name).ok();
+            Self {
+                _lock: lock,
+                name,
+                previous,
+            }
+        }
+
+        fn set(&self, value: &str) {
+            // SAFETY: tests serialize environment mutations via `EnvVarGuard` lock.
+            unsafe {
+                std::env::set_var(self.name, value);
+            }
+        }
+
+        fn remove(&self) {
+            // SAFETY: tests serialize environment mutations via `EnvVarGuard` lock.
+            unsafe {
+                std::env::remove_var(self.name);
+            }
+        }
+
+        fn restore(&self) {
+            if let Some(previous) = self.previous.as_ref() {
+                // SAFETY: tests serialize environment mutations via `EnvVarGuard` lock.
+                unsafe {
+                    std::env::set_var(self.name, previous);
+                }
+            } else {
+                // SAFETY: tests serialize environment mutations via `EnvVarGuard` lock.
+                unsafe {
+                    std::env::remove_var(self.name);
+                }
+            }
+        }
+    }
+
+    impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            self.restore();
+        }
+    }
 
     #[test]
     fn parse_dual_read_case_insensitive() {
@@ -36,5 +120,51 @@ mod tests {
     #[test]
     fn parse_defaults_to_relation_only() {
         assert_eq!(RbacAuthzMode::parse("legacy"), RbacAuthzMode::RelationOnly);
+    }
+
+    #[test]
+    fn parse_supports_dual_read_aliases() {
+        assert_eq!(RbacAuthzMode::parse("dual-read"), RbacAuthzMode::DualRead);
+        assert_eq!(RbacAuthzMode::parse("dual"), RbacAuthzMode::DualRead);
+    }
+
+    #[test]
+    fn parse_supports_relation_only_aliases() {
+        assert_eq!(
+            RbacAuthzMode::parse("relation_only"),
+            RbacAuthzMode::RelationOnly
+        );
+        assert_eq!(
+            RbacAuthzMode::parse("relation-only"),
+            RbacAuthzMode::RelationOnly
+        );
+        assert_eq!(
+            RbacAuthzMode::parse("relation"),
+            RbacAuthzMode::RelationOnly
+        );
+    }
+
+    #[test]
+    fn from_env_supports_all_legacy_dual_read_flag_aliases() {
+        let mode_env = EnvVarGuard::lock(AUTHZ_MODE_ENV);
+        mode_env.remove();
+
+        for name in RELATION_DUAL_READ_FLAG_ALIASES {
+            let alias = EnvVarGuard::lock(name);
+            alias.set("true");
+            assert_eq!(RbacAuthzMode::from_env(), RbacAuthzMode::DualRead);
+        }
+    }
+
+    #[test]
+    fn authz_mode_env_has_priority_over_legacy_flag_aliases() {
+        let mode_env = EnvVarGuard::lock(AUTHZ_MODE_ENV);
+        mode_env.set("relation_only");
+
+        for name in RELATION_DUAL_READ_FLAG_ALIASES {
+            let alias = EnvVarGuard::lock(name);
+            alias.set("true");
+            assert_eq!(RbacAuthzMode::from_env(), RbacAuthzMode::RelationOnly);
+        }
     }
 }

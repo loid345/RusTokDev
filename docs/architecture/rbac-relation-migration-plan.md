@@ -30,7 +30,7 @@
 
 - [x] **Фаза 0 — Архитектурное решение и подготовка (частично):**
   - План и архитектурные ссылки зафиксированы в `docs/architecture/*` и `docs/index.md`.
-  - ADR про RBAC source-of-truth в relation-модели — **в работе** (не закрыт этим шагом).
+  - ADR про RBAC source-of-truth в relation-модели принят: `DECISIONS/2026-02-26-rbac-relation-source-of-truth-cutover.md`.
 - [x] **Фаза 1 — Быстрые исправления консистентности (базовые пункты):**
   - user creation flows для `register/sign_up/create_user/accept_invite` уже заведены через назначение relation RBAC (`assign_role_permissions`).
   - `seed_user` (dev/test seed bootstrap) теперь также вызывает `assign_role_permissions` после создания пользователя.
@@ -70,8 +70,9 @@
   - Добавлен helper-скрипт `scripts/rbac_relation_staging.sh` для staged rehearsal (pre-report, dry-run, optional apply, optional rollback, markdown-отчёт + таймстемпированные логи в `artifacts/rbac-staging`); helper формирует machine-readable JSON-инварианты через `cleanup target=rbac-report output=<file>` (pre/post apply/post rollback), добавляет в markdown-отчёт diff-таблицу инвариантов (`pre -> post`, delta) и поддерживает stop-the-line флаг `--fail-on-regression`; rollback-шаги требуют валидный snapshot (`--run-apply` в том же запуске или `--rollback-source=<file>`).
   - Добавлены smoke-тесты helper-скрипта (`scripts/tests/rbac_relation_staging_test.sh`) с mock cargo-path для проверки rollback guardrails и snapshot-source сценариев.
 - [~] **Фаза 5 — Dual-read и cutover (частично):**
-  - В `AuthService` добавлен runtime shadow dual-read для `has_permission/has_any_permission/has_all_permissions` под env-флагом `RUSTOK_RBAC_AUTHZ_MODE=dual_read` (relation decision остаётся авторитативным).
+  - В `AuthService` добавлен runtime shadow dual-read для `has_permission/has_any_permission/has_all_permissions` под env-флагом `RUSTOK_RBAC_AUTHZ_MODE=dual_read` (также поддерживаются алиасы `dual-read` и `dual`) (relation decision остаётся авторитативным).
   - Режим rollout-конфигурации (`RbacAuthzMode`: `relation_only`/`dual_read`) перенесён в `crates/rustok-rbac` как модульный контракт, `apps/server` использует его без локального enum-дублирования.
+  - Для rollout-совместимости `RbacAuthzMode` поддерживает legacy toggle `RUSTOK_RBAC_RELATION_DUAL_READ_ENABLED` (aliases: `RBAC_RELATION_DUAL_READ_ENABLED`, `rbac_relation_dual_read_enabled`) (если `RUSTOK_RBAC_AUTHZ_MODE` не задан), чтобы staged cutover можно было выполнять без одномоментного переезда всех окружений на новый env-ключ.
   - Legacy-vs-relation shadow decision semantics вынесены в модульный `rustok-rbac::shadow_decision`; `apps/server` оставляет только загрузку legacy-ролей, метрики и logging/feature-flag orchestration.
   - Для server-adapter слоя shadow orchestration унифицирован через `ShadowCheck` + `compare_shadow_decision` (single/any/all без дублирования policy-веток в `AuthService`).
   - В `rustok-rbac` добавлен модульный dual-read orchestrator `evaluate_dual_read` (`DualReadOutcome`), поэтому `apps/server` больше не держит локальную decision-ветвистость для `skip/compare` и использует модульный исход dual-read-решения.
@@ -374,7 +375,7 @@
 
 ### 9.1 Фаза 0 — Подготовка
 
-- [ ] ADR создан в `DECISIONS/` и согласован platform/team leads.
+- [x] ADR создан в `DECISIONS/` и согласован platform/team leads (`2026-02-26-rbac-relation-source-of-truth-cutover.md`).
 - [ ] Определён владелец migration-program (DRI) и резервный DRI.
 - [ ] Определён freeze-период для изменения RBAC API-контрактов.
 - [ ] Зафиксированы feature flags:
