@@ -40,6 +40,13 @@ pub struct RbacResolverMetricsSnapshot {
     pub denied_unknown: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeniedReasonKind {
+    NoPermissionsResolved,
+    MissingPermissions,
+    Unknown,
+}
+
 static RBAC_PERMISSION_CACHE_HITS: AtomicU64 = AtomicU64::new(0);
 static RBAC_PERMISSION_CACHE_MISSES: AtomicU64 = AtomicU64::new(0);
 static RBAC_PERMISSION_CHECKS_ALLOWED: AtomicU64 = AtomicU64::new(0);
@@ -78,13 +85,16 @@ impl AuthService {
     fn denied_reason(
         user_permissions: &[Permission],
         missing_permissions: &[Permission],
-    ) -> String {
+    ) -> (DeniedReasonKind, String) {
         if user_permissions.is_empty() {
-            return "no_permissions_resolved".to_string();
+            return (
+                DeniedReasonKind::NoPermissionsResolved,
+                "no_permissions_resolved".to_string(),
+            );
         }
 
         if missing_permissions.is_empty() {
-            return "unknown".to_string();
+            return (DeniedReasonKind::Unknown, "unknown".to_string());
         }
 
         let mut reason = String::from("missing_permissions:");
@@ -95,21 +105,21 @@ impl AuthService {
             let _ = write!(&mut reason, "{}", permission);
         }
 
-        reason
+        (DeniedReasonKind::MissingPermissions, reason)
     }
 
-    fn denied_reason_bucket(denied_reason: &str) {
-        if denied_reason == "no_permissions_resolved" {
-            RBAC_DENIED_NO_PERMISSIONS_RESOLVED.fetch_add(1, Ordering::Relaxed);
-            return;
+    fn denied_reason_bucket(denied_reason_kind: DeniedReasonKind) {
+        match denied_reason_kind {
+            DeniedReasonKind::NoPermissionsResolved => {
+                RBAC_DENIED_NO_PERMISSIONS_RESOLVED.fetch_add(1, Ordering::Relaxed);
+            }
+            DeniedReasonKind::MissingPermissions => {
+                RBAC_DENIED_MISSING_PERMISSIONS.fetch_add(1, Ordering::Relaxed);
+            }
+            DeniedReasonKind::Unknown => {
+                RBAC_DENIED_UNKNOWN.fetch_add(1, Ordering::Relaxed);
+            }
         }
-
-        if denied_reason.starts_with("missing_permissions:") {
-            RBAC_DENIED_MISSING_PERMISSIONS.fetch_add(1, Ordering::Relaxed);
-            return;
-        }
-
-        RBAC_DENIED_UNKNOWN.fetch_add(1, Ordering::Relaxed);
     }
 
     fn cache_key(tenant_id: &uuid::Uuid, user_id: &uuid::Uuid) -> (uuid::Uuid, uuid::Uuid) {
@@ -175,7 +185,8 @@ impl AuthService {
         } else {
             vec![*required_permission]
         };
-        let denied_reason = Self::denied_reason(&user_permissions, &missing_permissions);
+        let (denied_reason_kind, denied_reason) =
+            Self::denied_reason(&user_permissions, &missing_permissions);
         let latency_ms = started_at.elapsed().as_millis() as u64;
 
         debug!(
@@ -202,7 +213,7 @@ impl AuthService {
         Self::record_permission_check_result(allowed);
         Self::record_permission_check_latency(latency_ms);
         if !allowed {
-            Self::denied_reason_bucket(&denied_reason);
+            Self::denied_reason_bucket(denied_reason_kind);
         }
 
         Ok(allowed)
@@ -229,7 +240,8 @@ impl AuthService {
         } else {
             required_permissions.to_vec()
         };
-        let denied_reason = Self::denied_reason(&user_permissions, &missing_permissions);
+        let (denied_reason_kind, denied_reason) =
+            Self::denied_reason(&user_permissions, &missing_permissions);
         let latency_ms = started_at.elapsed().as_millis() as u64;
 
         debug!(
@@ -256,7 +268,7 @@ impl AuthService {
         Self::record_permission_check_result(allowed);
         Self::record_permission_check_latency(latency_ms);
         if !allowed {
-            Self::denied_reason_bucket(&denied_reason);
+            Self::denied_reason_bucket(denied_reason_kind);
         }
 
         Ok(allowed)
@@ -278,7 +290,8 @@ impl AuthService {
         let missing_permissions =
             Self::missing_permissions(&user_permissions, required_permissions);
         let allowed = missing_permissions.is_empty();
-        let denied_reason = Self::denied_reason(&user_permissions, &missing_permissions);
+        let (denied_reason_kind, denied_reason) =
+            Self::denied_reason(&user_permissions, &missing_permissions);
         let latency_ms = started_at.elapsed().as_millis() as u64;
 
         debug!(
@@ -307,7 +320,7 @@ impl AuthService {
         Self::record_permission_check_result(allowed);
         Self::record_permission_check_latency(latency_ms);
         if !allowed {
-            Self::denied_reason_bucket(&denied_reason);
+            Self::denied_reason_bucket(denied_reason_kind);
         }
 
         Ok(allowed)
@@ -600,7 +613,9 @@ mod tests {
 
     #[test]
     fn denied_reason_reports_no_permissions_resolved() {
-        let denied_reason = AuthService::denied_reason(&[], &[Permission::USERS_READ]);
+        let (denied_reason_kind, denied_reason) =
+            AuthService::denied_reason(&[], &[Permission::USERS_READ]);
+        assert_eq!(denied_reason_kind, DeniedReasonKind::NoPermissionsResolved);
         assert_eq!(denied_reason, "no_permissions_resolved");
     }
 
@@ -616,9 +631,10 @@ mod tests {
     }
 
     #[test]
-    fn denied_reason_bucket_classifies_missing_permissions() {
-        let denied_reason =
+    fn denied_reason_classifies_missing_permissions() {
+        let (denied_reason_kind, denied_reason) =
             AuthService::denied_reason(&[Permission::USERS_READ], &[Permission::USERS_UPDATE]);
+        assert_eq!(denied_reason_kind, DeniedReasonKind::MissingPermissions);
         assert!(denied_reason.starts_with("missing_permissions:"));
     }
 }
