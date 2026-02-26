@@ -12,8 +12,7 @@ use tracing::{debug, warn};
 
 use rustok_core::{Action, Permission, Rbac, Resource, UserRole};
 use rustok_rbac::{
-    denied_reason_for_denial, has_effective_permission_in_set, missing_permissions,
-    DeniedReasonKind,
+    check_all_permissions, check_any_permission, check_permission, DeniedReasonKind,
 };
 
 use crate::models::_entities::{permissions, role_permissions, roles, user_roles, users};
@@ -316,20 +315,10 @@ impl AuthService {
     ) -> Result<bool> {
         let started_at = Instant::now();
         let user_permissions = Self::get_user_permissions(db, tenant_id, user_id).await?;
-        let allowed = has_effective_permission_in_set(&user_permissions, required_permission);
-        let missing_permissions = if allowed {
-            Vec::new()
-        } else {
-            vec![*required_permission]
-        };
-        let denied = if allowed {
-            None
-        } else {
-            Some(denied_reason_for_denial(
-                &user_permissions,
-                &missing_permissions,
-            ))
-        };
+        let outcome = check_permission(&user_permissions, required_permission);
+        let allowed = outcome.allowed;
+        let denied = outcome.denied_reason(&user_permissions);
+        let missing_permissions = outcome.missing_permissions;
         let latency_ms = started_at.elapsed().as_millis() as u64;
 
         debug!(
@@ -386,27 +375,11 @@ impl AuthService {
     ) -> Result<bool> {
         let started_at = Instant::now();
 
-        if required_permissions.is_empty() {
-            return Ok(true);
-        }
-
         let user_permissions = Self::get_user_permissions(db, tenant_id, user_id).await?;
-        let allowed = required_permissions
-            .iter()
-            .any(|permission| has_effective_permission_in_set(&user_permissions, permission));
-        let missing_permissions = if allowed {
-            Vec::new()
-        } else {
-            required_permissions.to_vec()
-        };
-        let denied = if allowed {
-            None
-        } else {
-            Some(denied_reason_for_denial(
-                &user_permissions,
-                &missing_permissions,
-            ))
-        };
+        let outcome = check_any_permission(&user_permissions, required_permissions);
+        let allowed = outcome.allowed;
+        let denied = outcome.denied_reason(&user_permissions);
+        let missing_permissions = outcome.missing_permissions;
         let latency_ms = started_at.elapsed().as_millis() as u64;
 
         debug!(
@@ -463,21 +436,11 @@ impl AuthService {
     ) -> Result<bool> {
         let started_at = Instant::now();
 
-        if required_permissions.is_empty() {
-            return Ok(true);
-        }
-
         let user_permissions = Self::get_user_permissions(db, tenant_id, user_id).await?;
-        let missing_permissions = missing_permissions(&user_permissions, required_permissions);
-        let allowed = missing_permissions.is_empty();
-        let denied = if allowed {
-            None
-        } else {
-            Some(denied_reason_for_denial(
-                &user_permissions,
-                &missing_permissions,
-            ))
-        };
+        let outcome = check_all_permissions(&user_permissions, required_permissions);
+        let allowed = outcome.allowed;
+        let denied = outcome.denied_reason(&user_permissions);
+        let missing_permissions = outcome.missing_permissions;
         let latency_ms = started_at.elapsed().as_millis() as u64;
 
         debug!(
@@ -834,7 +797,7 @@ mod tests {
     #[test]
     fn denied_reason_reports_no_permissions_resolved() {
         let (denied_reason_kind, denied_reason) =
-            denied_reason_for_denial(&[], &[Permission::USERS_READ]);
+            rustok_rbac::denied_reason_for_denial(&[], &[Permission::USERS_READ]);
         assert_eq!(denied_reason_kind, DeniedReasonKind::NoPermissionsResolved);
         assert_eq!(denied_reason, "no_permissions_resolved");
     }
@@ -844,15 +807,17 @@ mod tests {
         let user_permissions = vec![Permission::new(Resource::Users, Action::Manage)];
         let required_permissions = vec![Permission::USERS_READ, Permission::USERS_UPDATE];
 
-        let missing_permissions = missing_permissions(&user_permissions, &required_permissions);
+        let outcome = check_all_permissions(&user_permissions, &required_permissions);
 
-        assert!(missing_permissions.is_empty());
+        assert!(outcome.missing_permissions.is_empty());
     }
 
     #[test]
     fn denied_reason_classifies_missing_permissions() {
-        let (denied_reason_kind, denied_reason) =
-            denied_reason_for_denial(&[Permission::USERS_READ], &[Permission::USERS_UPDATE]);
+        let (denied_reason_kind, denied_reason) = rustok_rbac::denied_reason_for_denial(
+            &[Permission::USERS_READ],
+            &[Permission::USERS_UPDATE],
+        );
         assert_eq!(denied_reason_kind, DeniedReasonKind::MissingPermissions);
         assert!(denied_reason.starts_with("missing_permissions:"));
     }

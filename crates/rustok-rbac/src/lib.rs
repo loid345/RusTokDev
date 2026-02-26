@@ -4,8 +4,8 @@ pub mod error;
 pub mod services;
 
 pub use services::permission_policy::{
-    denied_reason_for_denial, has_effective_permission_in_set, missing_permissions,
-    DeniedReasonKind,
+    check_all_permissions, check_any_permission, check_permission, denied_reason_for_denial,
+    has_effective_permission_in_set, missing_permissions, DeniedReasonKind, PermissionCheckOutcome,
 };
 
 use async_trait::async_trait;

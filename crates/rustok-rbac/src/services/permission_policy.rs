@@ -8,6 +8,28 @@ pub enum DeniedReasonKind {
     Unknown,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PermissionCheckOutcome {
+    pub allowed: bool,
+    pub missing_permissions: Vec<Permission>,
+}
+
+impl PermissionCheckOutcome {
+    pub fn denied_reason(
+        &self,
+        user_permissions: &[Permission],
+    ) -> Option<(DeniedReasonKind, String)> {
+        if self.allowed {
+            return None;
+        }
+
+        Some(denied_reason_for_denial(
+            user_permissions,
+            &self.missing_permissions,
+        ))
+    }
+}
+
 pub fn has_effective_permission_in_set(
     user_permissions: &[Permission],
     required_permission: &Permission,
@@ -28,6 +50,68 @@ pub fn missing_permissions(
         .copied()
         .filter(|permission| !has_effective_permission_in_set(user_permissions, permission))
         .collect()
+}
+
+pub fn check_permission(
+    user_permissions: &[Permission],
+    required_permission: &Permission,
+) -> PermissionCheckOutcome {
+    let allowed = has_effective_permission_in_set(user_permissions, required_permission);
+    let missing_permissions = if allowed {
+        Vec::new()
+    } else {
+        vec![*required_permission]
+    };
+
+    PermissionCheckOutcome {
+        allowed,
+        missing_permissions,
+    }
+}
+
+pub fn check_any_permission(
+    user_permissions: &[Permission],
+    required_permissions: &[Permission],
+) -> PermissionCheckOutcome {
+    if required_permissions.is_empty() {
+        return PermissionCheckOutcome {
+            allowed: true,
+            missing_permissions: Vec::new(),
+        };
+    }
+
+    let allowed = required_permissions
+        .iter()
+        .any(|permission| has_effective_permission_in_set(user_permissions, permission));
+
+    let missing_permissions = if allowed {
+        Vec::new()
+    } else {
+        required_permissions.to_vec()
+    };
+
+    PermissionCheckOutcome {
+        allowed,
+        missing_permissions,
+    }
+}
+
+pub fn check_all_permissions(
+    user_permissions: &[Permission],
+    required_permissions: &[Permission],
+) -> PermissionCheckOutcome {
+    if required_permissions.is_empty() {
+        return PermissionCheckOutcome {
+            allowed: true,
+            missing_permissions: Vec::new(),
+        };
+    }
+
+    let missing_permissions = missing_permissions(user_permissions, required_permissions);
+    PermissionCheckOutcome {
+        allowed: missing_permissions.is_empty(),
+        missing_permissions,
+    }
 }
 
 pub fn denied_reason_for_denial(
@@ -59,8 +143,8 @@ pub fn denied_reason_for_denial(
 #[cfg(test)]
 mod tests {
     use super::{
-        denied_reason_for_denial, has_effective_permission_in_set, missing_permissions,
-        DeniedReasonKind,
+        check_all_permissions, check_any_permission, check_permission, denied_reason_for_denial,
+        has_effective_permission_in_set, missing_permissions, DeniedReasonKind,
     };
     use rustok_core::{Action, Permission, Resource};
 
@@ -80,6 +164,28 @@ mod tests {
         let required = vec![Permission::USERS_READ, Permission::USERS_UPDATE];
 
         assert!(missing_permissions(&permissions, &required).is_empty());
+    }
+
+    #[test]
+    fn check_permission_reports_missing_for_single_permission() {
+        let outcome = check_permission(&[Permission::USERS_READ], &Permission::USERS_UPDATE);
+
+        assert!(!outcome.allowed);
+        assert_eq!(outcome.missing_permissions, vec![Permission::USERS_UPDATE]);
+    }
+
+    #[test]
+    fn check_any_permission_accepts_empty_requirements() {
+        let outcome = check_any_permission(&[], &[]);
+        assert!(outcome.allowed);
+        assert!(outcome.missing_permissions.is_empty());
+    }
+
+    #[test]
+    fn check_all_permissions_accepts_empty_requirements() {
+        let outcome = check_all_permissions(&[], &[]);
+        assert!(outcome.allowed);
+        assert!(outcome.missing_permissions.is_empty());
     }
 
     #[test]

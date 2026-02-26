@@ -10,6 +10,10 @@
 - Re-export policy helpers at crate root:
   - `has_effective_permission_in_set`
   - `missing_permissions`
+  - `check_permission`
+  - `check_any_permission`
+  - `check_all_permissions`
+  - `PermissionCheckOutcome`
   - `denied_reason_for_denial`
   - `DeniedReasonKind`
 
