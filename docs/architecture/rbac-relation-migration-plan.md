@@ -43,7 +43,7 @@
   - Для staged rollout в backfill добавлены safety-controls: `dry_run=true` (без изменений данных), `limit=<N>` (батчевый прогон) и `continue_on_error=true` (best-effort режим при частичных ошибках).
 - [~] **Фаза 5 — Dual-read и cutover (частично):**
   - В `AuthService` добавлен runtime shadow dual-read для `has_permission/has_any_permission/has_all_permissions` под env-флагом `RUSTOK_RBAC_AUTHZ_MODE=dual_read` (relation decision остаётся авторитативным).
-  - При расхождении relation-vs-legacy-role увеличивается `rustok_rbac_decision_mismatch_total` и пишется warning-лог `rbac_decision_mismatch`.
+  - При расхождении relation-vs-legacy-role увеличивается `rustok_rbac_decision_mismatch_total` и пишется warning-лог `rbac_decision_mismatch`; ошибки самого shadow-path отдельно учитываются в `rustok_rbac_shadow_compare_failures_total`.
   - Для снижения накладных расходов dual-read legacy role lookup покрыт in-memory TTL-кэшем в `AuthService`.
   - Shadow-сравнение выполняется fail-open: ошибки shadow path логируются и не влияют на авторитативное relation-based allow/deny решение.
 - [ ] **Фаза 6 — Cleanup legacy-модели:** не начато.

@@ -69,6 +69,7 @@ pub struct RbacResolverMetricsSnapshot {
     pub denied_unknown: u64,
     pub claim_role_mismatch_total: u64,
     pub decision_mismatch_total: u64,
+    pub shadow_compare_failures_total: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -91,6 +92,7 @@ static RBAC_DENIED_MISSING_PERMISSIONS: AtomicU64 = AtomicU64::new(0);
 static RBAC_DENIED_UNKNOWN: AtomicU64 = AtomicU64::new(0);
 static RBAC_CLAIM_ROLE_MISMATCH_TOTAL: AtomicU64 = AtomicU64::new(0);
 static RBAC_DECISION_MISMATCH_TOTAL: AtomicU64 = AtomicU64::new(0);
+static RBAC_SHADOW_COMPARE_FAILURES_TOTAL: AtomicU64 = AtomicU64::new(0);
 
 impl AuthService {
     fn authz_mode() -> RbacAuthzMode {
@@ -331,6 +333,10 @@ impl AuthService {
         RBAC_DECISION_MISMATCH_TOTAL.fetch_add(1, Ordering::Relaxed);
     }
 
+    pub fn record_shadow_compare_failure() {
+        RBAC_SHADOW_COMPARE_FAILURES_TOTAL.fetch_add(1, Ordering::Relaxed);
+    }
+
     pub fn metrics_snapshot() -> RbacResolverMetricsSnapshot {
         RbacResolverMetricsSnapshot {
             permission_cache_hits: RBAC_PERMISSION_CACHE_HITS.load(Ordering::Relaxed),
@@ -351,6 +357,8 @@ impl AuthService {
             denied_unknown: RBAC_DENIED_UNKNOWN.load(Ordering::Relaxed),
             claim_role_mismatch_total: RBAC_CLAIM_ROLE_MISMATCH_TOTAL.load(Ordering::Relaxed),
             decision_mismatch_total: RBAC_DECISION_MISMATCH_TOTAL.load(Ordering::Relaxed),
+            shadow_compare_failures_total: RBAC_SHADOW_COMPARE_FAILURES_TOTAL
+                .load(Ordering::Relaxed),
         }
     }
 
@@ -411,6 +419,7 @@ impl AuthService {
         )
         .await
         {
+            Self::record_shadow_compare_failure();
             warn!(
                 tenant_id = %tenant_id,
                 user_id = %user_id,
@@ -487,6 +496,7 @@ impl AuthService {
         )
         .await
         {
+            Self::record_shadow_compare_failure();
             warn!(
                 tenant_id = %tenant_id,
                 user_id = %user_id,
@@ -560,6 +570,7 @@ impl AuthService {
         )
         .await
         {
+            Self::record_shadow_compare_failure();
             warn!(
                 tenant_id = %tenant_id,
                 user_id = %user_id,
@@ -862,6 +873,15 @@ mod tests {
         let before = AuthService::metrics_snapshot().claim_role_mismatch_total;
         AuthService::record_claim_role_mismatch();
         let after = AuthService::metrics_snapshot().claim_role_mismatch_total;
+
+        assert_eq!(after, before + 1);
+    }
+
+    #[test]
+    fn shadow_compare_failure_counter_increments() {
+        let before = AuthService::metrics_snapshot().shadow_compare_failures_total;
+        AuthService::record_shadow_compare_failure();
+        let after = AuthService::metrics_snapshot().shadow_compare_failures_total;
 
         assert_eq!(after, before + 1);
     }
