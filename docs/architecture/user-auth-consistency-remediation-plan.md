@@ -146,8 +146,8 @@ REST/GraphQL должны вызывать этот сервис, оставая
 
 ## 5.1 Кодовые задачи
 
-- [ ] `create_user`: гарантировать назначение связей после создания пользователя.
-- [ ] `confirm_reset` (REST): добавить отзыв active sessions.
+- [x] `create_user`: гарантировать назначение связей после создания пользователя.
+- [x] `confirm_reset` (REST): добавить отзыв active sessions.
 - [ ] Вынести общий `AuthLifecycleService` и перевести:
   - [ ] register/sign_up
   - [ ] login/sign_in
@@ -155,6 +155,7 @@ REST/GraphQL должны вызывать этот сервис, оставая
   - [ ] reset flows
   - [ ] change_password
 - [ ] Унифицировать маппинг ошибок (REST status codes и GraphQL errors).
+- [x] Выравнять session invalidation semantics между REST и GraphQL для `sign_out`/`change_password`/`reset_password` (soft-revoke через `revoked_at`).
 
 ## 5.2 Документационные задачи
 

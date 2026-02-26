@@ -1,6 +1,6 @@
 use async_graphql::{Context, FieldError, Object, Result};
 use rustok_core::auth::password::hash_password;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set, TransactionTrait};
 
 use crate::context::{AuthContext, TenantContext};
 use crate::graphql::errors::GraphQLError;
@@ -9,6 +9,7 @@ use crate::graphql::types::{
 };
 use crate::models::_entities::users::Column as UsersColumn;
 use crate::models::users;
+use crate::services::auth::AuthService;
 use crate::services::module_lifecycle::{ModuleLifecycleService, ToggleModuleError};
 use rustok_core::ModuleRegistry;
 
@@ -47,16 +48,24 @@ impl RootMutation {
         let password_hash = hash_password(&input.password)
             .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
 
+        let user_role = input
+            .role
+            .map(Into::into)
+            .unwrap_or(rustok_core::UserRole::Customer);
+
+        let tx = app_ctx
+            .db
+            .begin()
+            .await
+            .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
+
         let mut model = users::ActiveModel::new(tenant.id, &input.email, &password_hash);
 
         if let Some(name) = input.name {
             model.name = Set(Some(name));
         }
 
-        if let Some(role) = input.role {
-            let role: rustok_core::UserRole = role.into();
-            model.role = Set(role);
-        }
+        model.role = Set(user_role.clone());
 
         if let Some(status) = input.status {
             let status: rustok_core::UserStatus = status.into();
@@ -64,7 +73,15 @@ impl RootMutation {
         }
 
         let user = model
-            .insert(&app_ctx.db)
+            .insert(&tx)
+            .await
+            .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
+
+        AuthService::assign_role_permissions(&tx, &user.id, &tenant.id, user_role)
+            .await
+            .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
+
+        tx.commit()
             .await
             .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
 
