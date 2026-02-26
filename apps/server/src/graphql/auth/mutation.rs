@@ -1,16 +1,12 @@
 use async_graphql::{Context, FieldError, Object, Result};
-use chrono::{Duration, Utc};
-use loco_rs::prelude::AppContext;
+use loco_rs::prelude::*;
 use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set};
 
-use crate::auth::{
-    decode_password_reset_token, encode_access_token, encode_password_reset_token,
-    generate_refresh_token, hash_password, hash_refresh_token, verify_password, AuthConfig,
-};
+use crate::auth::{encode_password_reset_token, AuthConfig};
 use crate::context::TenantContext;
 use crate::graphql::errors::GraphQLError;
-use crate::models::{sessions, users};
-use crate::services::auth::AuthService;
+use crate::models::users;
+use crate::services::auth_lifecycle::{AuthLifecycleError, AuthLifecycleService};
 use crate::services::email::{EmailService, PasswordResetEmail, PasswordResetEmailSender};
 
 use crate::context::AuthContext;
@@ -18,6 +14,21 @@ use crate::context::AuthContext;
 use super::types::*;
 
 const DEFAULT_RESET_TOKEN_TTL_SECS: u64 = 15 * 60;
+
+fn map_auth_lifecycle_error(error: AuthLifecycleError) -> FieldError {
+    match error {
+        AuthLifecycleError::EmailAlreadyExists => FieldError::new("Email already exists"),
+        AuthLifecycleError::InvalidCredentials => FieldError::new("Invalid credentials"),
+        AuthLifecycleError::UserInactive => FieldError::new("User is inactive"),
+        AuthLifecycleError::InvalidRefreshToken => FieldError::new("Invalid refresh token"),
+        AuthLifecycleError::SessionExpired => FieldError::new("Session expired"),
+        AuthLifecycleError::UserNotFound => FieldError::new("User not found"),
+        AuthLifecycleError::InvalidResetToken => FieldError::new("Invalid reset token"),
+        AuthLifecycleError::Internal(err) => {
+            <FieldError as GraphQLError>::internal_error(&err.to_string())
+        }
+    }
+}
 
 #[derive(Default)]
 pub struct AuthMutation;
@@ -28,57 +39,28 @@ impl AuthMutation {
     async fn sign_in(&self, ctx: &Context<'_>, input: SignInInput) -> Result<AuthPayload> {
         let app_ctx = ctx.data::<AppContext>()?;
         let tenant = ctx.data::<TenantContext>()?;
-        let config = AuthConfig::from_ctx(app_ctx)
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
 
-        let user = users::Entity::find_by_email(&app_ctx.db, tenant.id, &input.email)
-            .await
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?
-            .ok_or_else(|| FieldError::new("Invalid credentials"))?;
-
-        if !verify_password(&input.password, &user.password_hash)
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?
-        {
-            return Err(FieldError::new("Invalid credentials"));
-        }
-
-        let now = Utc::now();
-        let refresh_token = generate_refresh_token();
-        let token_hash = hash_refresh_token(&refresh_token);
-        let expires_at = now + Duration::seconds(config.refresh_expiration as i64);
-
-        let session = sessions::ActiveModel::new(
-            tenant.id, user.id, token_hash, expires_at,
-            None, // IP address (not available in GraphQL context)
-            None, // User agent (not available in GraphQL context)
+        let (user, tokens) = AuthLifecycleService::login(
+            app_ctx,
+            tenant.id,
+            &input.email,
+            &input.password,
+            None,
+            None,
         )
-        .insert(&app_ctx.db)
         .await
-        .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
-
-        // Update last login
-        let mut user_active: users::ActiveModel = user.clone().into();
-        user_active.last_login_at = Set(Some(now.into()));
-        let user = user_active
-            .update(&app_ctx.db)
-            .await
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
-
-        let user_role = user.role.clone();
-        let access_token =
-            encode_access_token(&config, user.id, tenant.id, user_role.clone(), session.id)
-                .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
+        .map_err(map_auth_lifecycle_error)?;
 
         Ok(AuthPayload {
-            access_token,
-            refresh_token,
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
             token_type: "Bearer".to_string(),
-            expires_in: config.access_expiration as i32,
+            expires_in: tokens.expires_in as i32,
             user: AuthUser {
                 id: user.id.to_string(),
                 email: user.email,
                 name: user.name,
-                role: user_role.to_string(),
+                role: user.role.to_string(),
                 status: user.status.to_string(),
             },
         })
@@ -88,89 +70,30 @@ impl AuthMutation {
     async fn sign_up(&self, ctx: &Context<'_>, input: SignUpInput) -> Result<AuthPayload> {
         let app_ctx = ctx.data::<AppContext>()?;
         let tenant = ctx.data::<TenantContext>()?;
-        let config = AuthConfig::from_ctx(app_ctx)
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
 
-        // Check if user already exists
-        if users::Entity::find_by_email(&app_ctx.db, tenant.id, &input.email)
-            .await
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?
-            .is_some()
-        {
-            return Err(FieldError::new("Email already exists"));
-        }
-
-        let password_hash = hash_password(&input.password)
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
-
-        let mut user_model = users::ActiveModel::new(tenant.id, &input.email, &password_hash);
-        user_model.name = Set(input.name);
-
-        let user = user_model
-            .insert(&app_ctx.db)
-            .await
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
-
-        let user_role = user.role.clone();
-
-        // Assign role permissions
-        AuthService::assign_role_permissions(&app_ctx.db, &user.id, &tenant.id, user_role.clone())
-            .await
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
-
-        let now = Utc::now();
-        let refresh_token = generate_refresh_token();
-        let token_hash = hash_refresh_token(&refresh_token);
-        let expires_at = now + Duration::seconds(config.refresh_expiration as i64);
-
-        let session =
-            sessions::ActiveModel::new(tenant.id, user.id, token_hash, expires_at, None, None)
-                .insert(&app_ctx.db)
-                .await
-                .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
-
-        let access_token =
-            encode_access_token(&config, user.id, tenant.id, user_role.clone(), session.id)
-                .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
+        let (user, tokens) = AuthLifecycleService::register(
+            app_ctx,
+            tenant.id,
+            &input.email,
+            &input.password,
+            input.name,
+        )
+        .await
+        .map_err(map_auth_lifecycle_error)?;
 
         Ok(AuthPayload {
-            access_token,
-            refresh_token,
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
             token_type: "Bearer".to_string(),
-            expires_in: config.access_expiration as i32,
+            expires_in: tokens.expires_in as i32,
             user: AuthUser {
                 id: user.id.to_string(),
                 email: user.email,
                 name: user.name,
-                role: user_role.to_string(),
+                role: user.role.to_string(),
                 status: user.status.to_string(),
             },
         })
-    }
-
-    /// Sign out (invalidate current session)
-    async fn sign_out(&self, ctx: &Context<'_>) -> Result<SignOutPayload> {
-        let app_ctx = ctx.data::<AppContext>()?;
-        let auth = ctx.data_opt::<crate::context::AuthContext>();
-
-        if let Some(auth) = auth {
-            // Invalidate only current session for parity with REST logout behavior.
-            // Keep operation idempotent: missing/already revoked session still returns success.
-            sessions::Entity::update_many()
-                .col_expr(
-                    sessions::Column::RevokedAt,
-                    sea_orm::sea_query::Expr::value(Utc::now()),
-                )
-                .filter(sessions::Column::TenantId.eq(auth.tenant_id))
-                .filter(sessions::Column::UserId.eq(auth.user_id))
-                .filter(sessions::Column::Id.eq(auth.session_id))
-                .filter(sessions::Column::RevokedAt.is_null())
-                .exec(&app_ctx.db)
-                .await
-                .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
-        }
-
-        Ok(SignOutPayload { success: true })
     }
 
     /// Refresh access token using refresh token
@@ -181,57 +104,22 @@ impl AuthMutation {
     ) -> Result<AuthPayload> {
         let app_ctx = ctx.data::<AppContext>()?;
         let tenant = ctx.data::<TenantContext>()?;
-        let config = AuthConfig::from_ctx(app_ctx)
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
 
-        let token_hash = hash_refresh_token(&input.refresh_token);
-
-        let session = sessions::Entity::find_by_token_hash(&app_ctx.db, tenant.id, &token_hash)
-            .await
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?
-            .ok_or_else(|| FieldError::new("Invalid refresh token"))?;
-
-        if !session.is_active() {
-            return Err(FieldError::new("Session expired"));
-        }
-
-        let user = users::Entity::find_by_id(session.user_id)
-            .one(&app_ctx.db)
-            .await
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?
-            .ok_or_else(|| FieldError::new("User not found"))?;
-
-        let user_role = user.role.clone();
-        let access_token =
-            encode_access_token(&config, user.id, tenant.id, user_role.clone(), session.id)
-                .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
-
-        // Optionally generate new refresh token
-        let new_refresh_token = generate_refresh_token();
-        let new_token_hash = hash_refresh_token(&new_refresh_token);
-        let now = Utc::now();
-        let new_expires_at = now + Duration::seconds(config.refresh_expiration as i64);
-
-        let mut session_active: sessions::ActiveModel = session.into();
-        session_active.token_hash = Set(new_token_hash);
-        session_active.expires_at = Set(new_expires_at.into());
-        session_active.last_used_at = Set(Some(now.into()));
-
-        session_active
-            .update(&app_ctx.db)
-            .await
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
+        let (user, tokens) =
+            AuthLifecycleService::refresh(app_ctx, tenant.id, &input.refresh_token)
+                .await
+                .map_err(map_auth_lifecycle_error)?;
 
         Ok(AuthPayload {
-            access_token,
-            refresh_token: new_refresh_token,
+            access_token: tokens.access_token,
+            refresh_token: tokens.refresh_token,
             token_type: "Bearer".to_string(),
-            expires_in: config.access_expiration as i32,
+            expires_in: tokens.expires_in as i32,
             user: AuthUser {
                 id: user.id.to_string(),
                 email: user.email,
                 name: user.name,
-                role: user_role.to_string(),
+                role: user.role.to_string(),
                 status: user.status.to_string(),
             },
         })
@@ -343,42 +231,16 @@ impl AuthMutation {
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
         let tenant = ctx.data::<TenantContext>()?;
 
-        let user = users::Entity::find_by_id(auth.user_id)
-            .filter(crate::models::_entities::users::Column::TenantId.eq(tenant.id))
-            .one(&app_ctx.db)
-            .await
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?
-            .ok_or_else(|| FieldError::new("User not found"))?;
-
-        if !verify_password(&input.current_password, &user.password_hash)
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?
-        {
-            return Err(FieldError::new("Current password is incorrect"));
-        }
-
-        let new_hash = hash_password(&input.new_password)
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
-
-        let user_id = user.id;
-        let mut model: users::ActiveModel = user.into();
-        model.password_hash = Set(new_hash);
-        model
-            .update(&app_ctx.db)
-            .await
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
-
-        sessions::Entity::update_many()
-            .col_expr(
-                sessions::Column::RevokedAt,
-                sea_orm::sea_query::Expr::value(Utc::now()),
-            )
-            .filter(sessions::Column::TenantId.eq(tenant.id))
-            .filter(sessions::Column::UserId.eq(user_id))
-            .filter(sessions::Column::RevokedAt.is_null())
-            .filter(sessions::Column::Id.ne(auth.session_id))
-            .exec(&app_ctx.db)
-            .await
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
+        AuthLifecycleService::change_password(
+            app_ctx,
+            tenant.id,
+            auth.user_id,
+            auth.session_id,
+            &input.current_password,
+            &input.new_password,
+        )
+        .await
+        .map_err(map_auth_lifecycle_error)?;
 
         Ok(ChangePasswordPayload { success: true })
     }
@@ -391,45 +253,35 @@ impl AuthMutation {
     ) -> Result<ResetPasswordPayload> {
         let app_ctx = ctx.data::<AppContext>()?;
         let tenant = ctx.data::<TenantContext>()?;
-        let config = AuthConfig::from_ctx(app_ctx)
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
 
-        let claims = decode_password_reset_token(&config, &input.token)
-            .map_err(|_| FieldError::new("Invalid reset token"))?;
-
-        if claims.tenant_id != tenant.id {
-            return Err(FieldError::new("Invalid reset token"));
-        }
-
-        let user = users::Entity::find_by_email(&app_ctx.db, tenant.id, &claims.sub)
-            .await
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?
-            .ok_or_else(|| FieldError::new("Invalid reset token"))?;
-
-        let new_password_hash = hash_password(&input.new_password)
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
-
-        let user_id = user.id;
-        let mut user_active: users::ActiveModel = user.into();
-        user_active.password_hash = Set(new_password_hash);
-        user_active
-            .update(&app_ctx.db)
-            .await
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
-
-        // Revoke active sessions after password reset.
-        sessions::Entity::update_many()
-            .col_expr(
-                sessions::Column::RevokedAt,
-                sea_orm::sea_query::Expr::value(Utc::now()),
-            )
-            .filter(sessions::Column::TenantId.eq(tenant.id))
-            .filter(sessions::Column::UserId.eq(user_id))
-            .filter(sessions::Column::RevokedAt.is_null())
-            .exec(&app_ctx.db)
-            .await
-            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
+        AuthLifecycleService::confirm_password_reset(
+            app_ctx,
+            tenant.id,
+            &input.token,
+            &input.new_password,
+        )
+        .await
+        .map_err(map_auth_lifecycle_error)?;
 
         Ok(ResetPasswordPayload { success: true })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{map_auth_lifecycle_error, AuthLifecycleError};
+
+    #[test]
+    fn maps_invalid_refresh_token_message() {
+        let err = map_auth_lifecycle_error(AuthLifecycleError::InvalidRefreshToken);
+        assert!(err.to_string().contains("Invalid refresh token"));
+    }
+
+    #[test]
+    fn maps_internal_to_internal_graphql_error() {
+        let err = map_auth_lifecycle_error(AuthLifecycleError::Internal(
+            loco_rs::prelude::Error::InternalServerError,
+        ));
+        assert!(!err.to_string().is_empty());
     }
 }
