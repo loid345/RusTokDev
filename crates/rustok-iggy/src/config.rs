@@ -88,8 +88,8 @@ impl Default for RemoteConfig {
         Self {
             addresses: vec!["127.0.0.1:8090".to_string()],
             protocol: "tcp".to_string(),
-            username: "rustok".to_string(),
-            password: String::new(),
+            username: "iggy".to_string(),
+            password: "iggy".to_string(),
             tls_enabled: false,
         }
     }
@@ -206,7 +206,7 @@ mod tests {
 
         assert_eq!(config.addresses, vec!["127.0.0.1:8090"]);
         assert_eq!(config.protocol, "tcp");
-        assert_eq!(config.username, "rustok");
+        assert_eq!(config.username, "iggy");
         assert!(!config.tls_enabled);
     }
 

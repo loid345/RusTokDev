@@ -16,5 +16,26 @@ services:
       timeout: 5s
       retries: 5
 
+  iggy:
+    image: apache/iggy:0.7.0
+    container_name: rustok_iggy
+    environment:
+      - IGGY_ROOT_USERNAME=iggy
+      - IGGY_ROOT_PASSWORD=iggy
+      - IGGY_TCP_ENABLED=true
+      - IGGY_TCP_ADDRESS=0.0.0.0:8090
+      - IGGY_HTTP_ENABLED=false
+      - IGGY_QUIC_ENABLED=false
+    ports:
+      - "8090:8090"
+    volumes:
+      - iggy_data:/iggy/local_data
+    healthcheck:
+      test: ["CMD-SHELL", "iggy --tcp-server-address localhost:8090 --username iggy --password iggy ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
+  iggy_data:
