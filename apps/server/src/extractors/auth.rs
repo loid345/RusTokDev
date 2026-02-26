@@ -14,6 +14,7 @@ use axum_extra::{
 };
 use loco_rs::prelude::*;
 use rustok_core::Permission;
+use tracing::warn;
 
 use crate::services::auth::AuthService;
 
@@ -87,6 +88,18 @@ where
     let permissions = AuthService::get_user_permissions(&ctx.db, &tenant_id, &user.id)
         .await
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Database error"))?;
+
+    let inferred_role = infer_user_role_from_permissions(&permissions);
+    if claims.role != inferred_role {
+        AuthService::record_claim_role_mismatch();
+        warn!(
+            user_id = %user.id,
+            tenant_id = %tenant_id,
+            claimed_role = %claims.role,
+            inferred_role = %inferred_role,
+            "rbac_claim_role_mismatch"
+        );
+    }
 
     Ok(CurrentUser {
         user,

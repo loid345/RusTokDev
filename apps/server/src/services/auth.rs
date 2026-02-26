@@ -38,6 +38,7 @@ pub struct RbacResolverMetricsSnapshot {
     pub denied_no_permissions_resolved: u64,
     pub denied_missing_permissions: u64,
     pub denied_unknown: u64,
+    pub claim_role_mismatch_total: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -58,6 +59,7 @@ static RBAC_PERMISSION_LOOKUP_LATENCY_SAMPLES: AtomicU64 = AtomicU64::new(0);
 static RBAC_DENIED_NO_PERMISSIONS_RESOLVED: AtomicU64 = AtomicU64::new(0);
 static RBAC_DENIED_MISSING_PERMISSIONS: AtomicU64 = AtomicU64::new(0);
 static RBAC_DENIED_UNKNOWN: AtomicU64 = AtomicU64::new(0);
+static RBAC_CLAIM_ROLE_MISMATCH_TOTAL: AtomicU64 = AtomicU64::new(0);
 
 impl AuthService {
     fn has_effective_permission(
@@ -150,6 +152,10 @@ impl AuthService {
         RBAC_PERMISSION_LOOKUP_LATENCY_SAMPLES.fetch_add(1, Ordering::Relaxed);
     }
 
+    pub fn record_claim_role_mismatch() {
+        RBAC_CLAIM_ROLE_MISMATCH_TOTAL.fetch_add(1, Ordering::Relaxed);
+    }
+
     pub fn metrics_snapshot() -> RbacResolverMetricsSnapshot {
         RbacResolverMetricsSnapshot {
             permission_cache_hits: RBAC_PERMISSION_CACHE_HITS.load(Ordering::Relaxed),
@@ -168,6 +174,7 @@ impl AuthService {
                 .load(Ordering::Relaxed),
             denied_missing_permissions: RBAC_DENIED_MISSING_PERMISSIONS.load(Ordering::Relaxed),
             denied_unknown: RBAC_DENIED_UNKNOWN.load(Ordering::Relaxed),
+            claim_role_mismatch_total: RBAC_CLAIM_ROLE_MISMATCH_TOTAL.load(Ordering::Relaxed),
         }
     }
 
@@ -622,6 +629,15 @@ impl AuthService {
 mod tests {
     use super::AuthService;
     use rustok_core::{Action, Permission, Resource};
+
+    #[test]
+    fn claim_role_mismatch_counter_increments() {
+        let before = AuthService::metrics_snapshot().claim_role_mismatch_total;
+        AuthService::record_claim_role_mismatch();
+        let after = AuthService::metrics_snapshot().claim_role_mismatch_total;
+
+        assert_eq!(after, before + 1);
+    }
 
     #[test]
     fn denied_reason_reports_no_permissions_resolved() {
