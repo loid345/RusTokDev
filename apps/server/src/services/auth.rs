@@ -129,36 +129,17 @@ impl AuthService {
             return Ok(());
         };
 
-        let shadow_mode = shadow_check.as_str();
         let shadow = compare_shadow_decision(&legacy_role, shadow_check, relation_allowed);
         if shadow.mismatch() {
             Self::record_decision_mismatch();
-            match shadow_check {
-                ShadowCheck::Single(required_permission) => {
-                    warn!(
-                        tenant_id = %tenant_id,
-                        user_id = %user_id,
-                        shadow_check = shadow_mode,
-                        required_permission = %required_permission,
-                        legacy_role = %legacy_role,
-                        relation_allowed = shadow.relation_allowed,
-                        legacy_allowed = shadow.legacy_allowed,
-                        "rbac_decision_mismatch"
-                    );
-                }
-                ShadowCheck::Any(required_permissions) | ShadowCheck::All(required_permissions) => {
-                    warn!(
-                        tenant_id = %tenant_id,
-                        user_id = %user_id,
-                        shadow_check = shadow_mode,
-                        required_permissions = ?required_permissions,
-                        legacy_role = %legacy_role,
-                        relation_allowed = shadow.relation_allowed,
-                        legacy_allowed = shadow.legacy_allowed,
-                        "rbac_decision_mismatch"
-                    );
-                }
-            }
+            Self::log_shadow_mismatch(
+                tenant_id,
+                user_id,
+                shadow_check,
+                &legacy_role,
+                shadow.relation_allowed,
+                shadow.legacy_allowed,
+            );
         }
 
         Ok(())
@@ -180,6 +161,43 @@ impl AuthService {
 
     fn cache_key(tenant_id: &uuid::Uuid, user_id: &uuid::Uuid) -> (uuid::Uuid, uuid::Uuid) {
         (*tenant_id, *user_id)
+    }
+
+    fn log_shadow_mismatch(
+        tenant_id: &uuid::Uuid,
+        user_id: &uuid::Uuid,
+        shadow_check: ShadowCheck<'_>,
+        legacy_role: &UserRole,
+        relation_allowed: bool,
+        legacy_allowed: bool,
+    ) {
+        let shadow_mode = shadow_check.as_str();
+        match shadow_check {
+            ShadowCheck::Single(required_permission) => {
+                warn!(
+                    tenant_id = %tenant_id,
+                    user_id = %user_id,
+                    shadow_check = shadow_mode,
+                    required_permission = %required_permission,
+                    legacy_role = %legacy_role,
+                    relation_allowed,
+                    legacy_allowed,
+                    "rbac_decision_mismatch"
+                );
+            }
+            ShadowCheck::Any(required_permissions) | ShadowCheck::All(required_permissions) => {
+                warn!(
+                    tenant_id = %tenant_id,
+                    user_id = %user_id,
+                    shadow_check = shadow_mode,
+                    required_permissions = ?required_permissions,
+                    legacy_role = %legacy_role,
+                    relation_allowed,
+                    legacy_allowed,
+                    "rbac_decision_mismatch"
+                );
+            }
+        }
     }
 
     pub async fn invalidate_user_permissions_cache(tenant_id: &uuid::Uuid, user_id: &uuid::Uuid) {
