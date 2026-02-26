@@ -1,4 +1,5 @@
 pub mod admin_events;
+pub mod alloy;
 pub mod auth;
 pub mod blog;
 pub mod commerce;

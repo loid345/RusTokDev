@@ -135,7 +135,7 @@ Rhai engine configured with:
 - `strict_variables` — нет доступа к неопределённым переменным
 - `allow_shadowing` — разрешено переопределение переменных
 - No filesystem access (default)
-- No network access (default)
+- HTTP access via `http_get` / `http_post` / `http_request` (OnCommit/Manual/Scheduled phases only)
 
 ## API Endpoints
 
@@ -214,15 +214,30 @@ match orchestrator.run_before("deal", EventType::BeforeCreate, entity, None).awa
 - Storage operations (InMemoryStorage)
 - Script lifecycle (create → active → disabled)
 
+## Recent Improvements
+
+### v1.3 (Current)
+
+1. **Audit Log** — `script_executions` table + `SeaOrmExecutionLog` для хранения истории выполнений; `run_script` GraphQL mutation логирует результат с `user_id` и `tenant_id`
+2. **HTTP Bridge** — `http_get(url)`, `http_post(url, body)`, `http_request(method, url, body, headers)` доступны в OnCommit/After/Manual/Scheduled фазах
+3. **Tenant isolation** — `SeaOrmStorage::with_tenant(db, tenant_id)` и `.for_tenant(tenant_id)` для создания изолированного registry; все queries фильтруют по `tenant_id` когда задан
+4. **ExecutionResult.phase** — добавлено поле `phase: ExecutionPhase` в `ExecutionResult` для хранения фазы выполнения
+
+### v1.2
+
+1. **Observability** — `ScriptExecutor.execute()` wrapped in `tracing::info_span!` с OTel-совместимыми span fields
+2. **DB-level pagination** — `ScriptRegistry::find_paginated(query, offset, limit) -> ScriptPage` с `COUNT` + `LIMIT/OFFSET`
+3. **Improved log targets** — target `alloy::script` для всех script-generated logs
+4. **MCP integration** — 9 MCP-инструментов для управления скриптами через AI (см. `crates/rustok-mcp`)
+5. **Email validation** — RFC 5321-compliant проверка
+
 ## Future Improvements
 
 ### Phase 2 (Planned)
 
-1. **Audit Log** — таблица для истории выполнений
-2. **Metrics** — Prometheus metrics для observability
-3. **HTTP Bridge** — вызов внешних API из скриптов
-4. **Database Bridge** — controlled DB queries из скриптов
-5. **Tenant isolation** — фильтрация скриптов по tenant_id
+1. **Database Bridge** — controlled DB queries из скриптов
+2. **Execution metrics** — счётчики и гистограммы выполнений по script_id/phase
+3. **REST audit endpoint** — `GET /scripts/:id/executions` для просмотра истории
 
 ### Phase 3 (Future)
 
@@ -234,4 +249,6 @@ match orchestrator.run_before("deal", EventType::BeforeCreate, entity, None).awa
 ## Migration History
 
 - **v1** — Initial implementation with basic CRUD and execution
-- **v1.1** — Added cache invalidation, pagination, validation helpers
+- **v1.1** — Added cache invalidation, pagination, validation helpers, REST router, Scheduler startup, health check
+- **v1.2** — DB-level pagination, OTel spans on executor, improved log targets, email validation, MCP tools
+- **v1.3** — Audit log (`script_executions`), HTTP bridge, tenant isolation in SeaOrmStorage, ExecutionResult.phase

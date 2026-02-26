@@ -3,6 +3,7 @@ pub mod bridge;
 pub mod context;
 pub mod engine;
 pub mod error;
+pub mod execution_log;
 pub mod integration;
 pub mod migration;
 pub mod model;
@@ -16,6 +17,7 @@ pub use bridge::Bridge;
 pub use context::{ExecutionContext, ExecutionPhase};
 pub use engine::{EngineConfig, ScriptEngine};
 pub use error::{ScriptError, ScriptResult};
+pub use execution_log::{ExecutionLogEntry, ScriptExecutionsMigration, SeaOrmExecutionLog};
 pub use integration::{BeforeHookResult, HookExecutor, ScriptableEntity};
 pub use migration::ScriptsMigration;
 pub use model::{
@@ -24,7 +26,7 @@ pub use model::{
 };
 pub use runner::{ExecutionOutcome, ExecutionResult, HookOutcome, ScriptExecutor, ScriptOrchestrator};
 pub use scheduler::{ScheduledJob, Scheduler};
-pub use storage::{InMemoryStorage, ScriptQuery, ScriptRegistry, SeaOrmStorage};
+pub use storage::{InMemoryStorage, ScriptPage, ScriptQuery, ScriptRegistry, SeaOrmStorage};
 
 pub fn create_default_engine() -> ScriptEngine {
     let config = EngineConfig::default();

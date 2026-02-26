@@ -9,19 +9,19 @@ pub fn register_utils(engine: &mut Engine) {
     engine.register_fn(
         "log",
         |script_name: &str, message: &str| {
-            info!(target: "script", script = script_name, "{}", message);
+            info!(target: "alloy::script", script.name = script_name, "{}", message);
         },
     );
     engine.register_fn(
         "log_warn",
         |script_name: &str, message: &str| {
-            warn!(target: "script", script = script_name, "{}", message);
+            warn!(target: "alloy::script", script.name = script_name, "{}", message);
         },
     );
     engine.register_fn(
         "log_error",
         |script_name: &str, message: &str| {
-            error!(target: "script", script = script_name, "{}", message);
+            error!(target: "alloy::script", script.name = script_name, "{}", message);
         },
     );
 
@@ -36,15 +36,15 @@ pub fn register_utils(engine: &mut Engine) {
 }
 
 fn log_info(message: &str) {
-    info!(target: "script", "{}", message);
+    info!(target: "alloy::script", "{}", message);
 }
 
 fn log_warn(message: &str) {
-    warn!(target: "script", "{}", message);
+    warn!(target: "alloy::script", "{}", message);
 }
 
 fn log_error(message: &str) {
-    error!(target: "script", "{}", message);
+    error!(target: "alloy::script", "{}", message);
 }
 
 fn now_timestamp() -> String {

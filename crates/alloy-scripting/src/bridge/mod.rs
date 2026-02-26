@@ -1,9 +1,56 @@
+mod http;
 mod utils;
 
 use crate::context::ExecutionPhase;
 use rhai::Engine;
 
 pub use utils::register_utils;
+
+fn validate_email_address(email: &str) -> bool {
+    let parts: Vec<&str> = email.splitn(2, '@').collect();
+    if parts.len() != 2 {
+        return false;
+    }
+    let local = parts[0];
+    let domain = parts[1];
+
+    if local.is_empty() || local.len() > 64 {
+        return false;
+    }
+
+    let domain_parts: Vec<&str> = domain.split('.').collect();
+    if domain_parts.len() < 2 {
+        return false;
+    }
+
+    let tld = domain_parts.last().unwrap_or(&"");
+    if tld.len() < 2 {
+        return false;
+    }
+
+    for part in &domain_parts {
+        if part.is_empty() {
+            return false;
+        }
+        if part.starts_with('-') || part.ends_with('-') {
+            return false;
+        }
+        if !part.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+            return false;
+        }
+    }
+
+    let valid_local = local.chars().all(|c| {
+        c.is_ascii_alphanumeric()
+            || matches!(
+                c,
+                '.' | '_' | '+' | '-' | '!' | '#' | '$' | '%' | '&' | '\'' | '*' | '/'
+                    | '=' | '?' | '^' | '`' | '{' | '|' | '}' | '~'
+            )
+    });
+
+    valid_local && !local.starts_with('.') && !local.ends_with('.') && !local.contains("..")
+}
 
 pub struct Bridge;
 
@@ -31,18 +78,7 @@ impl Bridge {
 
     fn register_validation_helpers(engine: &mut Engine) {
         engine.register_fn("validate_email", |email: &str| -> bool {
-            let parts: Vec<&str> = email.splitn(2, '@').collect();
-            if parts.len() != 2 {
-                return false;
-            }
-            let local = parts[0];
-            let domain = parts[1];
-            !local.is_empty()
-                && !domain.is_empty()
-                && domain.contains('.')
-                && !domain.starts_with('.')
-                && !domain.ends_with('.')
-                && domain.len() > 2
+            validate_email_address(email)
         });
 
         engine.register_fn("validate_required", |value: &str| -> bool {
@@ -62,13 +98,37 @@ impl Bridge {
         });
     }
 
-    fn register_db_services(_engine: &mut Engine) {
-        // Placeholder for future DB service integration
-        // Will be implemented when database access from scripts is needed
+    fn register_db_services(_engine: &mut Engine) {}
+
+    fn register_external_services(engine: &mut Engine) {
+        http::register_http(engine);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_email_valid() {
+        assert!(validate_email_address("user@example.com"));
+        assert!(validate_email_address("user+tag@example.com"));
+        assert!(validate_email_address("user.name@sub.example.org"));
+        assert!(validate_email_address("user_name@example.co.uk"));
     }
 
-    fn register_external_services(_engine: &mut Engine) {
-        // Placeholder for future external service integration
-        // Will be implemented when HTTP client, etc. are needed
+    #[test]
+    fn test_validate_email_invalid() {
+        assert!(!validate_email_address("@."));
+        assert!(!validate_email_address("a@b."));
+        assert!(!validate_email_address("notanemail"));
+        assert!(!validate_email_address("@example.com"));
+        assert!(!validate_email_address("user@"));
+        assert!(!validate_email_address("user@-example.com"));
+        assert!(!validate_email_address("user@example-.com"));
+        assert!(!validate_email_address(".user@example.com"));
+        assert!(!validate_email_address("user.@example.com"));
+        assert!(!validate_email_address("us..er@example.com"));
+        assert!(!validate_email_address("user@example.c"));
     }
 }

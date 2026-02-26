@@ -2,7 +2,7 @@ use chrono::Utc;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use tracing::{debug, warn};
+use tracing::{debug, warn, Instrument};
 
 use crate::context::ExecutionContext;
 use crate::engine::ScriptEngine;
@@ -38,13 +38,29 @@ impl<R: ScriptRegistry> ScriptExecutor<R> {
         ctx: &ExecutionContext,
         entity: Option<EntityProxy>,
     ) -> ExecutionResult {
+        let span = tracing::info_span!(
+            "alloy.script.execute",
+            script.id = %script.id,
+            script.name = %script.name,
+            execution.id = %ctx.execution_id,
+            execution.phase = ?ctx.phase,
+        );
+        self.execute_inner(script, ctx, entity).instrument(span).await
+    }
+
+    async fn execute_inner(
+        &self,
+        script: &Script,
+        ctx: &ExecutionContext,
+        entity: Option<EntityProxy>,
+    ) -> ExecutionResult {
         let execution_id = ctx.execution_id;
         let started_at = Utc::now();
         let start_instant = Instant::now();
 
         if ctx.call_depth > self.max_chain_depth {
             warn!(
-                script_id = %script.id,
+                script.id = %script.id,
                 depth = ctx.call_depth,
                 max_depth = self.max_chain_depth,
                 "Max call depth exceeded"
@@ -53,6 +69,7 @@ impl<R: ScriptRegistry> ScriptExecutor<R> {
                 script_id: script.id,
                 script_name: script.name.clone(),
                 execution_id,
+                phase: ctx.phase,
                 started_at,
                 finished_at: Utc::now(),
                 outcome: ExecutionOutcome::Failed {
@@ -69,8 +86,8 @@ impl<R: ScriptRegistry> ScriptExecutor<R> {
         };
 
         debug!(
-            script_id = %script.id,
-            script_name = %script.name,
+            script.id = %script.id,
+            script.name = %script.name,
             phase = ?ctx.phase,
             "Executing script"
         );
@@ -87,7 +104,7 @@ impl<R: ScriptRegistry> ScriptExecutor<R> {
                     .unwrap_or_else(HashMap::new);
 
                 debug!(
-                    script_id = %script.id,
+                    script.id = %script.id,
                     changes_count = entity_changes.len(),
                     "Script completed successfully"
                 );
@@ -99,7 +116,7 @@ impl<R: ScriptRegistry> ScriptExecutor<R> {
             }
             Err(ScriptError::Aborted(reason)) => {
                 debug!(
-                    script_id = %script.id,
+                    script.id = %script.id,
                     reason = %reason,
                     "Script aborted"
                 );
@@ -107,7 +124,7 @@ impl<R: ScriptRegistry> ScriptExecutor<R> {
             }
             Err(error) => {
                 warn!(
-                    script_id = %script.id,
+                    script.id = %script.id,
                     error = %error,
                     "Script failed"
                 );
@@ -119,7 +136,7 @@ impl<R: ScriptRegistry> ScriptExecutor<R> {
         let elapsed = start_instant.elapsed();
         if elapsed > self.engine.config().timeout {
             warn!(
-                script_id = %script.id,
+                script.id = %script.id,
                 elapsed_ms = elapsed.as_millis(),
                 timeout_ms = self.engine.config().timeout.as_millis(),
                 "Script exceeded timeout"
@@ -130,6 +147,7 @@ impl<R: ScriptRegistry> ScriptExecutor<R> {
             script_id: script.id,
             script_name: script.name.clone(),
             execution_id,
+            phase: ctx.phase,
             started_at,
             finished_at: Utc::now(),
             outcome,

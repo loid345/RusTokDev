@@ -10,6 +10,16 @@ use rmcp::{
 };
 use rustok_core::registry::ModuleRegistry;
 
+use crate::alloy_tools::{
+    alloy_create_script, alloy_delete_script, alloy_get_script, alloy_list_scripts,
+    alloy_run_script, alloy_script_helpers, alloy_update_script, alloy_validate_script,
+    alloy_list_entity_types, AlloyMcpState, CreateScriptRequest, DeleteScriptRequest,
+    GetScriptRequest, ListScriptsRequest, RunScriptRequest, UpdateScriptRequest,
+    ValidateScriptRequest, ALL_ALLOY_TOOLS, TOOL_ALLOY_CREATE_SCRIPT, TOOL_ALLOY_DELETE_SCRIPT,
+    TOOL_ALLOY_GET_SCRIPT, TOOL_ALLOY_LIST_ENTITY_TYPES, TOOL_ALLOY_LIST_SCRIPTS,
+    TOOL_ALLOY_RUN_SCRIPT, TOOL_ALLOY_SCRIPT_HELPERS, TOOL_ALLOY_UPDATE_SCRIPT,
+    TOOL_ALLOY_VALIDATE_SCRIPT,
+};
 use crate::tools::{
     list_modules, list_modules_filtered, module_details, module_details_by_slug, module_exists,
     McpHealthResponse, McpState, McpToolResponse, ModuleDetailsResponse, ModuleListResponse,
@@ -18,6 +28,7 @@ use crate::tools::{
     TOOL_LIST_MODULES, TOOL_MCP_HEALTH, TOOL_MODULE_DETAILS, TOOL_MODULE_EXISTS, TOOL_PAGES_MODULE,
     TOOL_QUERY_MODULES,
 };
+use alloy_scripting::storage::ScriptRegistry;
 
 /// Configuration for the MCP server
 pub struct McpServerConfig {
@@ -46,16 +57,27 @@ impl McpServerConfig {
 }
 
 /// MCP Server handler for RusToK modules
-#[derive(Clone)]
-pub struct RusToKMcpServer {
+pub struct RusToKMcpServer<R: ScriptRegistry + 'static = alloy_scripting::InMemoryStorage> {
     state: Arc<McpState>,
+    alloy: Option<Arc<AlloyMcpState<R>>>,
     enabled_tools: Option<Arc<HashSet<String>>>,
 }
 
-impl RusToKMcpServer {
+impl<R: ScriptRegistry + 'static> Clone for RusToKMcpServer<R> {
+    fn clone(&self) -> Self {
+        Self {
+            state: Arc::clone(&self.state),
+            alloy: self.alloy.as_ref().map(Arc::clone),
+            enabled_tools: self.enabled_tools.as_ref().map(Arc::clone),
+        }
+    }
+}
+
+impl RusToKMcpServer<alloy_scripting::InMemoryStorage> {
     pub fn new(registry: ModuleRegistry) -> Self {
         Self {
             state: Arc::new(McpState { registry }),
+            alloy: None,
             enabled_tools: None,
         }
     }
@@ -63,6 +85,29 @@ impl RusToKMcpServer {
     pub fn with_enabled_tools(registry: ModuleRegistry, enabled_tools: HashSet<String>) -> Self {
         Self {
             state: Arc::new(McpState { registry }),
+            alloy: None,
+            enabled_tools: Some(Arc::new(enabled_tools)),
+        }
+    }
+}
+
+impl<R: ScriptRegistry + 'static> RusToKMcpServer<R> {
+    pub fn with_alloy(registry: ModuleRegistry, alloy: AlloyMcpState<R>) -> Self {
+        Self {
+            state: Arc::new(McpState { registry }),
+            alloy: Some(Arc::new(alloy)),
+            enabled_tools: None,
+        }
+    }
+
+    pub fn with_alloy_and_enabled_tools(
+        registry: ModuleRegistry,
+        alloy: AlloyMcpState<R>,
+        enabled_tools: HashSet<String>,
+    ) -> Self {
+        Self {
+            state: Arc::new(McpState { registry }),
+            alloy: Some(Arc::new(alloy)),
             enabled_tools: Some(Arc::new(enabled_tools)),
         }
     }
@@ -127,7 +172,7 @@ impl RusToKMcpServer {
     }
 
     fn available_tool_names(&self) -> Vec<&'static str> {
-        let tools = vec![
+        let mut tools = vec![
             TOOL_LIST_MODULES,
             TOOL_QUERY_MODULES,
             TOOL_MODULE_EXISTS,
@@ -139,6 +184,10 @@ impl RusToKMcpServer {
             TOOL_MCP_HEALTH,
         ];
 
+        if self.alloy.is_some() {
+            tools.extend_from_slice(ALL_ALLOY_TOOLS);
+        }
+
         match &self.enabled_tools {
             Some(enabled) => tools
                 .into_iter()
@@ -147,9 +196,15 @@ impl RusToKMcpServer {
             None => tools,
         }
     }
+
+    fn serialize_response<T: serde::Serialize>(value: T) -> Result<String, rmcp::ErrorData> {
+        serde_json::to_string(&value).map_err(|e| {
+            rmcp::ErrorData::internal_error(format!("Failed to serialize response: {}", e), None)
+        })
+    }
 }
 
-impl ServerHandler for RusToKMcpServer {
+impl<R: ScriptRegistry + Send + Sync + 'static> ServerHandler for RusToKMcpServer<R> {
     async fn call_tool(
         &self,
         request: CallToolRequestParams,
@@ -158,34 +213,18 @@ impl ServerHandler for RusToKMcpServer {
         tracing::info!(tool = %request.name, "MCP tool call");
 
         if !self.tool_allowed(request.name.as_ref()) {
-            let content = serde_json::to_string(&McpToolResponse::<()>::error(
+            let content = Self::serialize_response(McpToolResponse::<()>::error(
                 "tool_disabled",
                 "Tool is disabled by configuration",
-            ))
-            .map_err(|e| {
-                rmcp::ErrorData::internal_error(
-                    format!("Failed to serialize response: {}", e),
-                    None,
-                )
-            })?;
-            return Ok(CallToolResult::success(vec![rmcp::model::Content::text(
-                content,
-            )]));
+            ))?;
+            return Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]));
         }
 
         match request.name.as_ref() {
             TOOL_LIST_MODULES => {
                 let result = self.list_modules_internal().await;
-                let content =
-                    serde_json::to_string(&McpToolResponse::success(result)).map_err(|e| {
-                        rmcp::ErrorData::internal_error(
-                            format!("Failed to serialize response: {}", e),
-                            None,
-                        )
-                    })?;
-                Ok(CallToolResult::success(vec![rmcp::model::Content::text(
-                    content,
-                )]))
+                let content = Self::serialize_response(McpToolResponse::success(result))?;
+                Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]))
             }
             TOOL_QUERY_MODULES => {
                 let args = request
@@ -196,16 +235,8 @@ impl ServerHandler for RusToKMcpServer {
                         rmcp::ErrorData::invalid_params(format!("Invalid arguments: {}", e), None)
                     })?;
                 let result = self.list_modules_filtered_internal(req).await;
-                let content =
-                    serde_json::to_string(&McpToolResponse::success(result)).map_err(|e| {
-                        rmcp::ErrorData::internal_error(
-                            format!("Failed to serialize response: {}", e),
-                            None,
-                        )
-                    })?;
-                Ok(CallToolResult::success(vec![rmcp::model::Content::text(
-                    content,
-                )]))
+                let content = Self::serialize_response(McpToolResponse::success(result))?;
+                Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]))
             }
             TOOL_MODULE_EXISTS => {
                 let args = request
@@ -216,16 +247,8 @@ impl ServerHandler for RusToKMcpServer {
                         rmcp::ErrorData::invalid_params(format!("Invalid arguments: {}", e), None)
                     })?;
                 let result = self.module_exists_internal(&req.slug).await;
-                let content =
-                    serde_json::to_string(&McpToolResponse::success(result)).map_err(|e| {
-                        rmcp::ErrorData::internal_error(
-                            format!("Failed to serialize response: {}", e),
-                            None,
-                        )
-                    })?;
-                Ok(CallToolResult::success(vec![rmcp::model::Content::text(
-                    content,
-                )]))
+                let content = Self::serialize_response(McpToolResponse::success(result))?;
+                Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]))
             }
             TOOL_MODULE_DETAILS => {
                 let args = request
@@ -236,83 +259,144 @@ impl ServerHandler for RusToKMcpServer {
                         rmcp::ErrorData::invalid_params(format!("Invalid arguments: {}", e), None)
                     })?;
                 let result = self.module_details_internal(&req.slug).await;
-                let content =
-                    serde_json::to_string(&McpToolResponse::success(result)).map_err(|e| {
-                        rmcp::ErrorData::internal_error(
-                            format!("Failed to serialize response: {}", e),
-                            None,
-                        )
-                    })?;
-                Ok(CallToolResult::success(vec![rmcp::model::Content::text(
-                    content,
-                )]))
+                let content = Self::serialize_response(McpToolResponse::success(result))?;
+                Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]))
             }
             TOOL_CONTENT_MODULE => {
                 let result = self.module_details_by_slug_internal(MODULE_CONTENT);
-                let content =
-                    serde_json::to_string(&McpToolResponse::success(result)).map_err(|e| {
-                        rmcp::ErrorData::internal_error(
-                            format!("Failed to serialize response: {}", e),
-                            None,
-                        )
-                    })?;
-                Ok(CallToolResult::success(vec![rmcp::model::Content::text(
-                    content,
-                )]))
+                let content = Self::serialize_response(McpToolResponse::success(result))?;
+                Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]))
             }
             TOOL_BLOG_MODULE => {
                 let result = self.module_details_by_slug_internal(MODULE_BLOG);
-                let content =
-                    serde_json::to_string(&McpToolResponse::success(result)).map_err(|e| {
-                        rmcp::ErrorData::internal_error(
-                            format!("Failed to serialize response: {}", e),
-                            None,
-                        )
-                    })?;
-                Ok(CallToolResult::success(vec![rmcp::model::Content::text(
-                    content,
-                )]))
+                let content = Self::serialize_response(McpToolResponse::success(result))?;
+                Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]))
             }
             TOOL_FORUM_MODULE => {
                 let result = self.module_details_by_slug_internal(MODULE_FORUM);
-                let content =
-                    serde_json::to_string(&McpToolResponse::success(result)).map_err(|e| {
-                        rmcp::ErrorData::internal_error(
-                            format!("Failed to serialize response: {}", e),
-                            None,
-                        )
-                    })?;
-                Ok(CallToolResult::success(vec![rmcp::model::Content::text(
-                    content,
-                )]))
+                let content = Self::serialize_response(McpToolResponse::success(result))?;
+                Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]))
             }
             TOOL_PAGES_MODULE => {
                 let result = self.module_details_by_slug_internal(MODULE_PAGES);
-                let content =
-                    serde_json::to_string(&McpToolResponse::success(result)).map_err(|e| {
-                        rmcp::ErrorData::internal_error(
-                            format!("Failed to serialize response: {}", e),
-                            None,
-                        )
-                    })?;
-                Ok(CallToolResult::success(vec![rmcp::model::Content::text(
-                    content,
-                )]))
+                let content = Self::serialize_response(McpToolResponse::success(result))?;
+                Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]))
             }
             TOOL_MCP_HEALTH => {
                 let tool_count = self.available_tool_names().len();
                 let result = self.health_response(tool_count);
-                let content =
-                    serde_json::to_string(&McpToolResponse::success(result)).map_err(|e| {
-                        rmcp::ErrorData::internal_error(
-                            format!("Failed to serialize response: {}", e),
-                            None,
-                        )
-                    })?;
-                Ok(CallToolResult::success(vec![rmcp::model::Content::text(
-                    content,
-                )]))
+                let content = Self::serialize_response(McpToolResponse::success(result))?;
+                Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]))
             }
+
+            // ── Alloy tools ──────────────────────────────────────────────────────────
+            name if ALL_ALLOY_TOOLS.contains(&name) => {
+                let alloy = match &self.alloy {
+                    Some(a) => Arc::clone(a),
+                    None => {
+                        let content = Self::serialize_response(McpToolResponse::<()>::error(
+                            "not_configured",
+                            "Alloy scripting is not configured in this MCP server",
+                        ))?;
+                        return Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]));
+                    }
+                };
+
+                match name {
+                    TOOL_ALLOY_LIST_SCRIPTS => {
+                        let req: ListScriptsRequest = parse_optional_args(request.arguments)?;
+                        let result = alloy_list_scripts(&alloy, req).await;
+                        let content = Self::serialize_response(match result {
+                            Ok(v) => McpToolResponse::success(v),
+                            Err(e) => McpToolResponse::error("alloy_error", e),
+                        })?;
+                        Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]))
+                    }
+                    TOOL_ALLOY_GET_SCRIPT => {
+                        let args = require_args(request.arguments)?;
+                        let req: GetScriptRequest =
+                            serde_json::from_value(serde_json::Value::Object(args))
+                                .map_err(|e| rmcp::ErrorData::invalid_params(e.to_string(), None))?;
+                        let result = alloy_get_script(&alloy, req).await;
+                        let content = Self::serialize_response(match result {
+                            Ok(v) => McpToolResponse::success(v),
+                            Err(e) => McpToolResponse::error("alloy_error", e),
+                        })?;
+                        Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]))
+                    }
+                    TOOL_ALLOY_CREATE_SCRIPT => {
+                        let args = require_args(request.arguments)?;
+                        let req: CreateScriptRequest =
+                            serde_json::from_value(serde_json::Value::Object(args))
+                                .map_err(|e| rmcp::ErrorData::invalid_params(e.to_string(), None))?;
+                        let result = alloy_create_script(&alloy, req).await;
+                        let content = Self::serialize_response(match result {
+                            Ok(v) => McpToolResponse::success(v),
+                            Err(e) => McpToolResponse::error("alloy_error", e),
+                        })?;
+                        Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]))
+                    }
+                    TOOL_ALLOY_UPDATE_SCRIPT => {
+                        let args = require_args(request.arguments)?;
+                        let req: UpdateScriptRequest =
+                            serde_json::from_value(serde_json::Value::Object(args))
+                                .map_err(|e| rmcp::ErrorData::invalid_params(e.to_string(), None))?;
+                        let result = alloy_update_script(&alloy, req).await;
+                        let content = Self::serialize_response(match result {
+                            Ok(v) => McpToolResponse::success(v),
+                            Err(e) => McpToolResponse::error("alloy_error", e),
+                        })?;
+                        Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]))
+                    }
+                    TOOL_ALLOY_DELETE_SCRIPT => {
+                        let args = require_args(request.arguments)?;
+                        let req: DeleteScriptRequest =
+                            serde_json::from_value(serde_json::Value::Object(args))
+                                .map_err(|e| rmcp::ErrorData::invalid_params(e.to_string(), None))?;
+                        let result = alloy_delete_script(&alloy, req).await;
+                        let content = Self::serialize_response(match result {
+                            Ok(v) => McpToolResponse::success(v),
+                            Err(e) => McpToolResponse::error("alloy_error", e),
+                        })?;
+                        Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]))
+                    }
+                    TOOL_ALLOY_VALIDATE_SCRIPT => {
+                        let args = require_args(request.arguments)?;
+                        let req: ValidateScriptRequest =
+                            serde_json::from_value(serde_json::Value::Object(args))
+                                .map_err(|e| rmcp::ErrorData::invalid_params(e.to_string(), None))?;
+                        let result = alloy_validate_script(&alloy, req);
+                        let content = Self::serialize_response(McpToolResponse::success(result))?;
+                        Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]))
+                    }
+                    TOOL_ALLOY_RUN_SCRIPT => {
+                        let args = require_args(request.arguments)?;
+                        let req: RunScriptRequest =
+                            serde_json::from_value(serde_json::Value::Object(args))
+                                .map_err(|e| rmcp::ErrorData::invalid_params(e.to_string(), None))?;
+                        let result = alloy_run_script(&alloy, req).await;
+                        let content = Self::serialize_response(match result {
+                            Ok(v) => McpToolResponse::success(v),
+                            Err(e) => McpToolResponse::error("alloy_error", e),
+                        })?;
+                        Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]))
+                    }
+                    TOOL_ALLOY_LIST_ENTITY_TYPES => {
+                        let result = alloy_list_entity_types();
+                        let content =
+                            Self::serialize_response(McpToolResponse::success(result))?;
+                        Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]))
+                    }
+                    TOOL_ALLOY_SCRIPT_HELPERS => {
+                        let result = alloy_script_helpers();
+                        let content =
+                            Self::serialize_response(McpToolResponse::success(result))?;
+                        Ok(CallToolResult::success(vec![rmcp::model::Content::text(content)]))
+                    }
+                    _ => unreachable!("ALL_ALLOY_TOOLS exhausted"),
+                }
+            }
+
             _ => Err(rmcp::ErrorData::new(
                 rmcp::model::ErrorCode::METHOD_NOT_FOUND,
                 format!("Unknown tool: {}", request.name),
@@ -342,6 +426,48 @@ impl ServerHandler for RusToKMcpServer {
 
         let module_query_schema =
             match serde_json::to_value(schema_for!(crate::tools::ModuleQueryRequest)) {
+                Ok(serde_json::Value::Object(map)) => map,
+                _ => serde_json::Map::new(),
+            };
+
+        let list_scripts_schema =
+            match serde_json::to_value(schema_for!(crate::alloy_tools::ListScriptsRequest)) {
+                Ok(serde_json::Value::Object(map)) => map,
+                _ => serde_json::Map::new(),
+            };
+
+        let get_script_schema =
+            match serde_json::to_value(schema_for!(crate::alloy_tools::GetScriptRequest)) {
+                Ok(serde_json::Value::Object(map)) => map,
+                _ => serde_json::Map::new(),
+            };
+
+        let create_script_schema =
+            match serde_json::to_value(schema_for!(crate::alloy_tools::CreateScriptRequest)) {
+                Ok(serde_json::Value::Object(map)) => map,
+                _ => serde_json::Map::new(),
+            };
+
+        let update_script_schema =
+            match serde_json::to_value(schema_for!(crate::alloy_tools::UpdateScriptRequest)) {
+                Ok(serde_json::Value::Object(map)) => map,
+                _ => serde_json::Map::new(),
+            };
+
+        let delete_script_schema =
+            match serde_json::to_value(schema_for!(crate::alloy_tools::DeleteScriptRequest)) {
+                Ok(serde_json::Value::Object(map)) => map,
+                _ => serde_json::Map::new(),
+            };
+
+        let validate_script_schema =
+            match serde_json::to_value(schema_for!(crate::alloy_tools::ValidateScriptRequest)) {
+                Ok(serde_json::Value::Object(map)) => map,
+                _ => serde_json::Map::new(),
+            };
+
+        let run_script_schema =
+            match serde_json::to_value(schema_for!(crate::alloy_tools::RunScriptRequest)) {
                 Ok(serde_json::Value::Object(map)) => map,
                 _ => serde_json::Map::new(),
             };
@@ -390,9 +516,59 @@ impl ServerHandler for RusToKMcpServer {
             Tool::new(
                 TOOL_MCP_HEALTH,
                 "MCP readiness and configuration status",
-                empty_schema,
+                empty_schema.clone(),
             ),
         ];
+
+        if self.alloy.is_some() {
+            tools.extend([
+                Tool::new(
+                    TOOL_ALLOY_LIST_SCRIPTS,
+                    "List Alloy scripts with optional status filter",
+                    list_scripts_schema,
+                ),
+                Tool::new(
+                    TOOL_ALLOY_GET_SCRIPT,
+                    "Get a single Alloy script by name or UUID",
+                    get_script_schema,
+                ),
+                Tool::new(
+                    TOOL_ALLOY_CREATE_SCRIPT,
+                    "Create a new Alloy Rhai script",
+                    create_script_schema,
+                ),
+                Tool::new(
+                    TOOL_ALLOY_UPDATE_SCRIPT,
+                    "Update an existing Alloy script (code, description, status)",
+                    update_script_schema,
+                ),
+                Tool::new(
+                    TOOL_ALLOY_DELETE_SCRIPT,
+                    "Delete an Alloy script by UUID",
+                    delete_script_schema,
+                ),
+                Tool::new(
+                    TOOL_ALLOY_VALIDATE_SCRIPT,
+                    "Validate Rhai script syntax without executing",
+                    validate_script_schema,
+                ),
+                Tool::new(
+                    TOOL_ALLOY_RUN_SCRIPT,
+                    "Execute an Alloy script manually with optional params and entity context",
+                    run_script_schema,
+                ),
+                Tool::new(
+                    TOOL_ALLOY_LIST_ENTITY_TYPES,
+                    "List all known entity types in the platform",
+                    empty_schema.clone(),
+                ),
+                Tool::new(
+                    TOOL_ALLOY_SCRIPT_HELPERS,
+                    "List available Rhai helper functions with signatures and descriptions",
+                    empty_schema,
+                ),
+            ]);
+        }
 
         if let Some(enabled) = &self.enabled_tools {
             tools.retain(|tool| enabled.contains(&tool.name) || tool.name == TOOL_MCP_HEALTH);
@@ -414,13 +590,13 @@ impl ServerHandler for RusToKMcpServer {
                 version: env!("CARGO_PKG_VERSION").to_string(),
                 title: Some("RusToK MCP Server".to_string()),
                 description: Some(
-                    "MCP server for exploring RusToK modules. Use list_modules to see all available modules and module_exists to check specific modules.".to_string(),
+                    "MCP server for exploring RusToK modules and managing Alloy scripts. Use list_modules to see available modules, alloy_list_scripts to manage scripts.".to_string(),
                 ),
                 icons: None,
                 website_url: None,
             },
             instructions: Some(
-                "MCP server for exploring RusToK modules. Use list_modules to see all available modules and module_exists to check specific modules.".to_string(),
+                "MCP server for RusToK. Use list_modules/module_exists for module discovery, alloy_* tools for script management.".to_string(),
             ),
         }
     }
@@ -429,13 +605,29 @@ impl ServerHandler for RusToKMcpServer {
 /// Serve the MCP server over stdio
 pub async fn serve_stdio(config: McpServerConfig) -> Result<()> {
     let server = match config.enabled_tools {
-        Some(enabled_tools) => RusToKMcpServer::with_enabled_tools(config.registry, enabled_tools),
+        Some(enabled_tools) => {
+            RusToKMcpServer::with_enabled_tools(config.registry, enabled_tools)
+        }
         None => RusToKMcpServer::new(config.registry),
     };
 
-    // Serve over stdio transport using rmcp's stdio transport
-    // The server runs until stdin is closed or an error occurs
     stdio::serve(server)
         .await
         .map_err(|e| anyhow::anyhow!("MCP server error: {}", e))
+}
+
+fn require_args(
+    args: Option<serde_json::Map<String, serde_json::Value>>,
+) -> Result<serde_json::Map<String, serde_json::Value>, rmcp::ErrorData> {
+    args.ok_or_else(|| rmcp::ErrorData::invalid_params("Missing arguments", None))
+}
+
+fn parse_optional_args<T: serde::de::DeserializeOwned + Default>(
+    args: Option<serde_json::Map<String, serde_json::Value>>,
+) -> Result<T, rmcp::ErrorData> {
+    match args {
+        Some(map) => serde_json::from_value(serde_json::Value::Object(map))
+            .map_err(|e| rmcp::ErrorData::invalid_params(e.to_string(), None)),
+        None => Ok(T::default()),
+    }
 }

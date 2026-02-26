@@ -4,4 +4,4 @@ mod traits;
 
 pub use memory::InMemoryStorage;
 pub use sea_orm::{Entity as ScriptsEntity, SeaOrmStorage};
-pub use traits::{ScriptQuery, ScriptRegistry};
+pub use traits::{ScriptPage, ScriptQuery, ScriptRegistry};

@@ -81,10 +81,11 @@ impl Hooks for App {
             engine.clone(),
             storage.clone(),
         ));
-        let alloy_state = crate::graphql::alloy::AlloyState::new(engine.clone(), storage.clone(), orchestrator);
+        let execution_log = Arc::new(alloy_scripting::SeaOrmExecutionLog::new(ctx.db.clone()));
+        let alloy_state = crate::graphql::alloy::AlloyState::new(engine.clone(), storage.clone(), orchestrator.clone(), execution_log);
 
-        let executor = alloy_scripting::ScriptExecutor::new(engine, storage.clone());
-        let scheduler = Arc::new(alloy_scripting::Scheduler::new(executor, storage));
+        let executor = alloy_scripting::ScriptExecutor::new(engine.clone(), storage.clone());
+        let scheduler = Arc::new(alloy_scripting::Scheduler::new(executor, storage.clone()));
         tokio::spawn(async move {
             if let Err(err) = scheduler.load_jobs().await {
                 tracing::warn!("Failed to load scheduler jobs: {}", err);
@@ -92,7 +93,15 @@ impl Hooks for App {
             scheduler.start().await;
         });
 
+        let alloy_app_state = Arc::new(alloy_scripting::AppState {
+            registry: storage,
+            orchestrator,
+            engine,
+        });
+        let alloy_rest_router = controllers::alloy::router(alloy_app_state);
+
         Ok(router
+            .nest("/api/alloy", alloy_rest_router)
             .layer(Extension(registry))
             .layer(Extension(alloy_state))
             .layer(axum_middleware::from_fn_with_state(

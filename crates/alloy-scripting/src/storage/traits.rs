@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use crate::error::ScriptResult;
 use crate::model::{EventType, Script, ScriptId, ScriptStatus};
 
+#[derive(Clone)]
 pub enum ScriptQuery {
     ById(ScriptId),
     ByName(String),
@@ -16,9 +17,20 @@ pub enum ScriptQuery {
     All,
 }
 
+pub struct ScriptPage {
+    pub items: Vec<Script>,
+    pub total: u64,
+}
+
 #[async_trait]
 pub trait ScriptRegistry: Send + Sync {
     async fn find(&self, query: ScriptQuery) -> ScriptResult<Vec<Script>>;
+    async fn find_paginated(
+        &self,
+        query: ScriptQuery,
+        offset: u64,
+        limit: u64,
+    ) -> ScriptResult<ScriptPage>;
     async fn get(&self, id: ScriptId) -> ScriptResult<Script>;
     async fn get_by_name(&self, name: &str) -> ScriptResult<Script>;
     async fn save(&self, script: Script) -> ScriptResult<Script>;
