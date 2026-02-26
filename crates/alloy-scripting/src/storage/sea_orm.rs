@@ -36,6 +36,7 @@ pub enum Relation {}
 
 impl ActiveModelBehavior for ActiveModel {}
 
+#[derive(Clone)]
 pub struct SeaOrmStorage {
     db: DatabaseConnection,
 }

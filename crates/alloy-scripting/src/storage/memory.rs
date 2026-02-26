@@ -8,6 +8,7 @@ use super::traits::{ScriptQuery, ScriptRegistry};
 use crate::error::{ScriptError, ScriptResult};
 use crate::model::{Script, ScriptId, ScriptStatus, ScriptTrigger};
 
+#[derive(Clone)]
 pub struct InMemoryStorage {
     scripts: Arc<RwLock<HashMap<ScriptId, Script>>>,
 }
