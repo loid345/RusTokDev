@@ -13,9 +13,9 @@ use tracing::{debug, warn};
 use rustok_core::{Action, Permission, Rbac, Resource, UserRole};
 use rustok_rbac::{
     authorize_all_permissions, authorize_any_permission, authorize_permission,
-    compare_all_permissions, compare_any_permissions, compare_single_permission,
-    invalidate_cached_permissions, DeniedReasonKind, PermissionCache, PermissionResolver,
-    RbacAuthzMode, RelationPermissionStore, RoleAssignmentStore, RuntimePermissionResolver,
+    compare_shadow_decision, invalidate_cached_permissions, DeniedReasonKind, PermissionCache,
+    PermissionResolver, RbacAuthzMode, RelationPermissionStore, RoleAssignmentStore,
+    RuntimePermissionResolver, ShadowCheck,
 };
 
 use crate::models::_entities::{permissions, role_permissions, roles, user_roles, users};
@@ -109,11 +109,11 @@ impl AuthService {
         Ok(None)
     }
 
-    async fn shadow_compare_permission_decision(
+    async fn shadow_compare_decision(
         db: &DatabaseConnection,
         tenant_id: &uuid::Uuid,
         user_id: &uuid::Uuid,
-        required_permission: &Permission,
+        shadow_check: ShadowCheck<'_>,
         relation_allowed: bool,
     ) -> Result<()> {
         if !Self::is_dual_read_enabled() {
@@ -129,81 +129,16 @@ impl AuthService {
             return Ok(());
         };
 
-        let shadow = compare_single_permission(&legacy_role, required_permission, relation_allowed);
+        let shadow = compare_shadow_decision(&legacy_role, shadow_check, relation_allowed);
         if shadow.mismatch() {
             Self::record_decision_mismatch();
-            warn!(
-                tenant_id = %tenant_id,
-                user_id = %user_id,
-                required_permission = %required_permission,
-                legacy_role = %legacy_role,
-                relation_allowed = shadow.relation_allowed,
-                legacy_allowed = shadow.legacy_allowed,
-                "rbac_decision_mismatch"
-            );
-        }
-
-        Ok(())
-    }
-
-    async fn shadow_compare_any_permission_decision(
-        db: &DatabaseConnection,
-        tenant_id: &uuid::Uuid,
-        user_id: &uuid::Uuid,
-        required_permissions: &[Permission],
-        relation_allowed: bool,
-    ) -> Result<()> {
-        if !Self::is_dual_read_enabled() {
-            return Ok(());
-        }
-
-        let Some(legacy_role) = Self::load_legacy_role(db, tenant_id, user_id).await? else {
-            return Ok(());
-        };
-
-        let shadow = compare_any_permissions(&legacy_role, required_permissions, relation_allowed);
-        if shadow.mismatch() {
-            Self::record_decision_mismatch();
-            warn!(
-                tenant_id = %tenant_id,
-                user_id = %user_id,
-                required_permissions = ?required_permissions,
-                legacy_role = %legacy_role,
-                relation_allowed = shadow.relation_allowed,
-                legacy_allowed = shadow.legacy_allowed,
-                "rbac_decision_mismatch"
-            );
-        }
-
-        Ok(())
-    }
-
-    async fn shadow_compare_all_permission_decision(
-        db: &DatabaseConnection,
-        tenant_id: &uuid::Uuid,
-        user_id: &uuid::Uuid,
-        required_permissions: &[Permission],
-        relation_allowed: bool,
-    ) -> Result<()> {
-        if !Self::is_dual_read_enabled() {
-            return Ok(());
-        }
-
-        let Some(legacy_role) = Self::load_legacy_role(db, tenant_id, user_id).await? else {
-            return Ok(());
-        };
-
-        let shadow = compare_all_permissions(&legacy_role, required_permissions, relation_allowed);
-        if shadow.mismatch() {
-            Self::record_decision_mismatch();
-            warn!(
-                tenant_id = %tenant_id,
-                user_id = %user_id,
-                required_permissions = ?required_permissions,
-                legacy_role = %legacy_role,
-                relation_allowed = shadow.relation_allowed,
-                legacy_allowed = shadow.legacy_allowed,
-                "rbac_decision_mismatch"
+            Self::log_shadow_mismatch(
+                tenant_id,
+                user_id,
+                shadow_check,
+                &legacy_role,
+                shadow.relation_allowed,
+                shadow.legacy_allowed,
             );
         }
 
@@ -226,6 +161,43 @@ impl AuthService {
 
     fn cache_key(tenant_id: &uuid::Uuid, user_id: &uuid::Uuid) -> (uuid::Uuid, uuid::Uuid) {
         (*tenant_id, *user_id)
+    }
+
+    fn log_shadow_mismatch(
+        tenant_id: &uuid::Uuid,
+        user_id: &uuid::Uuid,
+        shadow_check: ShadowCheck<'_>,
+        legacy_role: &UserRole,
+        relation_allowed: bool,
+        legacy_allowed: bool,
+    ) {
+        let shadow_mode = shadow_check.as_str();
+        match shadow_check {
+            ShadowCheck::Single(required_permission) => {
+                warn!(
+                    tenant_id = %tenant_id,
+                    user_id = %user_id,
+                    shadow_check = shadow_mode,
+                    required_permission = %required_permission,
+                    legacy_role = %legacy_role,
+                    relation_allowed,
+                    legacy_allowed,
+                    "rbac_decision_mismatch"
+                );
+            }
+            ShadowCheck::Any(required_permissions) | ShadowCheck::All(required_permissions) => {
+                warn!(
+                    tenant_id = %tenant_id,
+                    user_id = %user_id,
+                    shadow_check = shadow_mode,
+                    required_permissions = ?required_permissions,
+                    legacy_role = %legacy_role,
+                    relation_allowed,
+                    legacy_allowed,
+                    "rbac_decision_mismatch"
+                );
+            }
+        }
     }
 
     pub async fn invalidate_user_permissions_cache(tenant_id: &uuid::Uuid, user_id: &uuid::Uuid) {
@@ -335,11 +307,11 @@ impl AuthService {
 
         Self::record_permission_check_result(allowed);
         Self::record_permission_check_latency(latency_ms);
-        if let Err(error) = Self::shadow_compare_permission_decision(
+        if let Err(error) = Self::shadow_compare_decision(
             db,
             tenant_id,
             user_id,
-            required_permission,
+            ShadowCheck::Single(required_permission),
             allowed,
         )
         .await
@@ -397,11 +369,11 @@ impl AuthService {
 
         Self::record_permission_check_result(allowed);
         Self::record_permission_check_latency(latency_ms);
-        if let Err(error) = Self::shadow_compare_any_permission_decision(
+        if let Err(error) = Self::shadow_compare_decision(
             db,
             tenant_id,
             user_id,
-            required_permissions,
+            ShadowCheck::Any(required_permissions),
             allowed,
         )
         .await
@@ -462,11 +434,11 @@ impl AuthService {
 
         Self::record_permission_check_result(allowed);
         Self::record_permission_check_latency(latency_ms);
-        if let Err(error) = Self::shadow_compare_all_permission_decision(
+        if let Err(error) = Self::shadow_compare_decision(
             db,
             tenant_id,
             user_id,
-            required_permissions,
+            ShadowCheck::All(required_permissions),
             allowed,
         )
         .await
