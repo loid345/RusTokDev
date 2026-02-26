@@ -525,7 +525,10 @@ impl AuthService {
         user_id: &uuid::Uuid,
         tenant_id: &uuid::Uuid,
     ) -> Result<()> {
-        Self::remove_tenant_role_assignments_via_store(db, user_id, tenant_id).await
+        let resolver = Self::resolver(db);
+        resolver
+            .remove_tenant_role_assignments(tenant_id, user_id)
+            .await
     }
 
     pub async fn remove_user_role_assignment(
@@ -534,7 +537,10 @@ impl AuthService {
         tenant_id: &uuid::Uuid,
         role: UserRole,
     ) -> Result<()> {
-        Self::remove_user_role_assignment_via_store(db, user_id, tenant_id, role).await
+        let resolver = Self::resolver(db);
+        resolver
+            .remove_user_role_assignment(tenant_id, user_id, role)
+            .await
     }
 
     async fn assign_role_permissions_via_store(
@@ -868,6 +874,23 @@ impl RoleAssignmentStore for ServerRoleAssignmentStore {
         role: UserRole,
     ) -> Result<()> {
         AuthService::replace_user_role_via_store(&self.db, user_id, tenant_id, role).await
+    }
+
+    async fn remove_tenant_role_assignments(
+        &self,
+        tenant_id: &uuid::Uuid,
+        user_id: &uuid::Uuid,
+    ) -> Result<()> {
+        AuthService::remove_tenant_role_assignments_via_store(&self.db, user_id, tenant_id).await
+    }
+
+    async fn remove_user_role_assignment(
+        &self,
+        tenant_id: &uuid::Uuid,
+        user_id: &uuid::Uuid,
+        role: UserRole,
+    ) -> Result<()> {
+        AuthService::remove_user_role_assignment_via_store(&self.db, user_id, tenant_id, role).await
     }
 }
 

@@ -111,6 +111,23 @@ mod tests {
         ) -> Result<(), Self::Error> {
             Ok(())
         }
+
+        async fn remove_tenant_role_assignments(
+            &self,
+            _tenant_id: &uuid::Uuid,
+            _user_id: &uuid::Uuid,
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        async fn remove_user_role_assignment(
+            &self,
+            _tenant_id: &uuid::Uuid,
+            _user_id: &uuid::Uuid,
+            _role: UserRole,
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
     }
 
     #[tokio::test]

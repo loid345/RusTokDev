@@ -61,6 +61,19 @@ pub trait PermissionResolver {
         user_id: &uuid::Uuid,
         role: UserRole,
     ) -> Result<(), Self::Error>;
+
+    async fn remove_tenant_role_assignments(
+        &self,
+        tenant_id: &uuid::Uuid,
+        user_id: &uuid::Uuid,
+    ) -> Result<(), Self::Error>;
+
+    async fn remove_user_role_assignment(
+        &self,
+        tenant_id: &uuid::Uuid,
+        user_id: &uuid::Uuid,
+        role: UserRole,
+    ) -> Result<(), Self::Error>;
 }
 
 #[cfg(test)]
@@ -98,6 +111,23 @@ mod tests {
         }
 
         async fn replace_user_role(
+            &self,
+            _tenant_id: &uuid::Uuid,
+            _user_id: &uuid::Uuid,
+            _role: UserRole,
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        async fn remove_tenant_role_assignments(
+            &self,
+            _tenant_id: &uuid::Uuid,
+            _user_id: &uuid::Uuid,
+        ) -> Result<(), Self::Error> {
+            Ok(())
+        }
+
+        async fn remove_user_role_assignment(
             &self,
             _tenant_id: &uuid::Uuid,
             _user_id: &uuid::Uuid,

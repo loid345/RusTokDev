@@ -56,6 +56,19 @@ pub trait RoleAssignmentStore {
         user_id: &uuid::Uuid,
         role: UserRole,
     ) -> Result<(), Self::Error>;
+
+    async fn remove_tenant_role_assignments(
+        &self,
+        tenant_id: &uuid::Uuid,
+        user_id: &uuid::Uuid,
+    ) -> Result<(), Self::Error>;
+
+    async fn remove_user_role_assignment(
+        &self,
+        tenant_id: &uuid::Uuid,
+        user_id: &uuid::Uuid,
+        role: UserRole,
+    ) -> Result<(), Self::Error>;
 }
 
 #[async_trait]
@@ -100,6 +113,29 @@ where
     ) -> Result<(), Self::Error> {
         self.assignment_store
             .replace_user_role(tenant_id, user_id, role)
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn remove_tenant_role_assignments(
+        &self,
+        tenant_id: &uuid::Uuid,
+        user_id: &uuid::Uuid,
+    ) -> Result<(), Self::Error> {
+        self.assignment_store
+            .remove_tenant_role_assignments(tenant_id, user_id)
+            .await
+            .map_err(Into::into)
+    }
+
+    async fn remove_user_role_assignment(
+        &self,
+        tenant_id: &uuid::Uuid,
+        user_id: &uuid::Uuid,
+        role: UserRole,
+    ) -> Result<(), Self::Error> {
+        self.assignment_store
+            .remove_user_role_assignment(tenant_id, user_id, role)
             .await
             .map_err(Into::into)
     }
@@ -159,6 +195,8 @@ mod tests {
     struct StubAssignmentStore {
         assigned: Arc<Mutex<Vec<(uuid::Uuid, uuid::Uuid, UserRole)>>>,
         replaced: Arc<Mutex<Vec<(uuid::Uuid, uuid::Uuid, UserRole)>>>,
+        removed_tenant: Arc<Mutex<Vec<(uuid::Uuid, uuid::Uuid)>>>,
+        removed_single: Arc<Mutex<Vec<(uuid::Uuid, uuid::Uuid, UserRole)>>>,
         fail_assign: bool,
     }
 
@@ -256,6 +294,31 @@ mod tests {
                 .push((*tenant_id, *user_id, role));
             Ok(())
         }
+
+        async fn remove_tenant_role_assignments(
+            &self,
+            tenant_id: &uuid::Uuid,
+            user_id: &uuid::Uuid,
+        ) -> Result<(), Self::Error> {
+            self.removed_tenant
+                .lock()
+                .await
+                .push((*tenant_id, *user_id));
+            Ok(())
+        }
+
+        async fn remove_user_role_assignment(
+            &self,
+            tenant_id: &uuid::Uuid,
+            user_id: &uuid::Uuid,
+            role: UserRole,
+        ) -> Result<(), Self::Error> {
+            self.removed_single
+                .lock()
+                .await
+                .push((*tenant_id, *user_id, role));
+            Ok(())
+        }
     }
 
     #[tokio::test]
@@ -312,12 +375,34 @@ mod tests {
             .replace_user_role(&tenant_id, &user_id, UserRole::Admin)
             .await
             .unwrap();
+        resolver
+            .remove_tenant_role_assignments(&tenant_id, &user_id)
+            .await
+            .unwrap();
+        resolver
+            .remove_user_role_assignment(&tenant_id, &user_id, UserRole::Editor)
+            .await
+            .unwrap();
 
         let assigned = resolver.assignment_store.assigned.lock().await.clone();
         let replaced = resolver.assignment_store.replaced.lock().await.clone();
+        let removed_tenant = resolver
+            .assignment_store
+            .removed_tenant
+            .lock()
+            .await
+            .clone();
+        let removed_single = resolver
+            .assignment_store
+            .removed_single
+            .lock()
+            .await
+            .clone();
 
         assert_eq!(assigned, vec![(tenant_id, user_id, UserRole::Editor)]);
         assert_eq!(replaced, vec![(tenant_id, user_id, UserRole::Admin)]);
+        assert_eq!(removed_tenant, vec![(tenant_id, user_id)]);
+        assert_eq!(removed_single, vec![(tenant_id, user_id, UserRole::Editor)]);
     }
 
     #[tokio::test]
