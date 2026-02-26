@@ -4,6 +4,18 @@
 
 ## Документы
 
+## Core modules baseline (critical for platform runtime)
+
+Для `apps/server` обязательный core-контур состоит из:
+- `rustok-index` (`ModuleKind::Core`)
+- `rustok-tenant` (`ModuleKind::Core`)
+- `rustok-rbac` (`ModuleKind::Core`)
+- `rustok-core` (compile-time core infrastructure)
+- `rustok-outbox` (transactional event delivery core infrastructure)
+- `rustok-telemetry` (observability core infrastructure)
+
+Агентам: при работе с server считать этот набор обязательным и не добавлять дополнительную обвязку, дублирующую уже существующий core-контур.
+
 - [`library-stack.md`](./library-stack.md) — основные backend-библиотеки сервера и их роль (framework, HTTP, ORM, GraphQL, runtime, observability).
 - [`event-transport.md`](./event-transport.md) — как работает конфигурация и runtime-пайплайн транспорта событий.
 - [`event-flow-contract.md`](../../../docs/architecture/event-flow-contract.md) — канонический контракт полного event-пути (publish → outbox → delivery → consumer/read-model).

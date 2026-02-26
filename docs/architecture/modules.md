@@ -24,13 +24,16 @@ RusToK реализован как **Modular Monolith**: все модули к�
 
 ## Категория B — Core Platform Modules (`ModuleKind::Core`)
 
-Реализуют `RusToKModule`, обязательны для работы платформы, нельзя отключить:
+Реализуют `RusToKModule`, обязательны для работы платформы, нельзя отключить.
+В документации и в server-контексте они считаются критичным core-модульным baseline:
 
 | Crate | Slug | Назначение |
 |-------|------|-----------|
 | `rustok-index` | `index` | CQRS read-model, индексатор для storefront |
 | `rustok-tenant` | `tenant` | Tenant metadata, lifecycle hooks |
 | `rustok-rbac` | `rbac` | RBAC helpers, lifecycle hooks |
+
+Итоговый критичный core-baseline платформы: `rustok-index`, `rustok-tenant`, `rustok-rbac`, `rustok-core`, `rustok-outbox`, `rustok-telemetry`.
 
 ## Категория C — Optional Domain Modules (`ModuleKind::Optional`)
 

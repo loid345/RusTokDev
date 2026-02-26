@@ -117,18 +117,22 @@ graph TD
 ### Domain Modules (`crates/`)
 
 These implement `RusToKModule` and are registered via `ModuleRegistry` in `apps/server`.
+Core modules are mandatory for the platform runtime; optional modules are additive domain capabilities.
 
 | Path | Name | Kind | Depends on |
 |------|------|------|-----------|
-| `crates/rustok-index` | **Index** | `Core` | `rustok-core` ([CRATE_API](../../crates/rustok-index/CRATE_API.md)) |
-| `crates/rustok-tenant` | **Tenant** | `Core` | `rustok-core` ([CRATE_API](../../crates/rustok-tenant/CRATE_API.md)) |
-| `crates/rustok-rbac` | **RBAC** | `Core` | `rustok-core` ([CRATE_API](../../crates/rustok-rbac/CRATE_API.md)) |
+| `crates/rustok-index` | **Index** | `Core` (mandatory) | `rustok-core` ([CRATE_API](../../crates/rustok-index/CRATE_API.md)) |
+| `crates/rustok-tenant` | **Tenant** | `Core` (mandatory) | `rustok-core` ([CRATE_API](../../crates/rustok-tenant/CRATE_API.md)) |
+| `crates/rustok-rbac` | **RBAC** | `Core` (mandatory) | `rustok-core` ([CRATE_API](../../crates/rustok-rbac/CRATE_API.md)) |
 | `crates/rustok-content` | **Content** | `Optional` | `rustok-core` ([CRATE_API](../../crates/rustok-content/CRATE_API.md)) |
 | `crates/rustok-commerce` | **Commerce** | `Optional` | `rustok-core` ([CRATE_API](../../crates/rustok-commerce/CRATE_API.md)) |
 | `crates/rustok-blog` | **Blog** | `Optional` | `rustok-content` ([CRATE_API](../../crates/rustok-blog/CRATE_API.md)) |
 | `crates/rustok-forum` | **Forum** | `Optional` | `rustok-content` ([CRATE_API](../../crates/rustok-forum/CRATE_API.md)) |
 | `crates/rustok-pages` | **Pages** | `Optional` | `rustok-core` ([CRATE_API](../../crates/rustok-pages/CRATE_API.md)) |
 | `crates/alloy-scripting` | **Alloy Scripting** | `Optional` | `rustok-core` (registered via `AlloyModule` in `apps/server/src/modules/alloy.rs`) |
+
+
+> Core platform baseline (critical): `rustok-index`, `rustok-tenant`, `rustok-rbac`, `rustok-core`, `rustok-outbox`, `rustok-telemetry`.
 
 ### Internal Frontend Libraries (`crates/`)
 
