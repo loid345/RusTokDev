@@ -231,6 +231,14 @@ rustok_rbac_consistency_query_latency_samples {consistency_query_latency_samples
     )
 }
 
+
+    #[test]
+    fn rbac_metrics_render_consistency_values() {
+        let payload = format_rbac_metrics(AuthService::metrics_snapshot(), 7, 3, 1);
+        assert!(payload.contains("rustok_rbac_users_without_roles_total 7"));
+        assert!(payload.contains("rustok_rbac_orphan_user_roles_total 3"));
+        assert!(payload.contains("rustok_rbac_orphan_role_permissions_total 1"));
+    }
 #[cfg(test)]
 mod tests {
     use super::format_rbac_metrics;
