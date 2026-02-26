@@ -48,6 +48,10 @@ graph TD
 
 - [AI Context](./AI_CONTEXT.md) — обязательный стартовый контекст для AI-сессий перед анализом и генерацией кода.
 
+## Platform Verification
+
+- [Platform Verification Plan](./PLATFORM_VERIFICATION_PLAN.md) — Глобальный чеклист верификации всей платформы (18 фаз, 300+ проверок).
+
 ## Root Documents
 
 - [System Manifest](../RUSTOK_MANIFEST.md) — Философия, принципы и архитектурные инварианты платформы.
