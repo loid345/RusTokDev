@@ -310,3 +310,35 @@ impl AuthLifecycleService {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{AuthLifecycleError, Error};
+
+    #[test]
+    fn maps_email_exists_to_bad_request() {
+        let err: Error = AuthLifecycleError::EmailAlreadyExists.into();
+        match err {
+            Error::BadRequest(msg) => assert_eq!(msg, "Email already exists"),
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn maps_invalid_credentials_to_unauthorized() {
+        let err: Error = AuthLifecycleError::InvalidCredentials.into();
+        match err {
+            Error::Unauthorized(msg) => assert_eq!(msg, "Invalid credentials"),
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn keeps_internal_error_as_is() {
+        let err: Error = AuthLifecycleError::Internal(Error::Unauthorized("inner".into())).into();
+        match err {
+            Error::Unauthorized(msg) => assert_eq!(msg, "inner"),
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+}

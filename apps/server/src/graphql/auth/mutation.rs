@@ -266,3 +266,22 @@ impl AuthMutation {
         Ok(ResetPasswordPayload { success: true })
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{map_auth_lifecycle_error, AuthLifecycleError};
+
+    #[test]
+    fn maps_invalid_refresh_token_message() {
+        let err = map_auth_lifecycle_error(AuthLifecycleError::InvalidRefreshToken);
+        assert!(err.to_string().contains("Invalid refresh token"));
+    }
+
+    #[test]
+    fn maps_internal_to_internal_graphql_error() {
+        let err = map_auth_lifecycle_error(AuthLifecycleError::Internal(
+            loco_rs::prelude::Error::InternalServerError,
+        ));
+        assert!(!err.to_string().is_empty());
+    }
+}
