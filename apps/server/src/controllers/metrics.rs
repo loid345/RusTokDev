@@ -105,7 +105,8 @@ rustok_rbac_permission_lookup_latency_ms_total {lookup_latency_ms_total}\n\
 rustok_rbac_permission_lookup_latency_samples {lookup_latency_samples}\n\
 rustok_rbac_permission_denied_reason_no_permissions_resolved {denied_no_permissions_resolved}\n\
 rustok_rbac_permission_denied_reason_missing_permissions {denied_missing_permissions}\n\
-rustok_rbac_permission_denied_reason_unknown {denied_unknown}\n",
+rustok_rbac_permission_denied_reason_unknown {denied_unknown}\n\
+rustok_rbac_claim_role_mismatch_total {claim_role_mismatch_total}\n",
         cache_hits = stats.permission_cache_hits,
         cache_misses = stats.permission_cache_misses,
         checks_allowed = stats.permission_checks_allowed,
@@ -117,5 +118,6 @@ rustok_rbac_permission_denied_reason_unknown {denied_unknown}\n",
         denied_no_permissions_resolved = stats.denied_no_permissions_resolved,
         denied_missing_permissions = stats.denied_missing_permissions,
         denied_unknown = stats.denied_unknown,
+        claim_role_mismatch_total = stats.claim_role_mismatch_total,
     )
 }
