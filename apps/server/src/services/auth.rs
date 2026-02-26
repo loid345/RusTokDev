@@ -13,7 +13,22 @@ use tracing::{debug, warn};
 
 use rustok_core::{Action, Permission, Rbac, Resource, UserRole};
 
-use crate::models::_entities::{permissions, role_permissions, roles, user_roles};
+use crate::models::_entities::{permissions, role_permissions, roles, user_roles, users};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RbacAuthzMode {
+    RelationOnly,
+    DualRead,
+}
+
+impl RbacAuthzMode {
+    fn from_env() -> Self {
+        match std::env::var("RUSTOK_RBAC_AUTHZ_MODE") {
+            Ok(raw) if raw.trim().eq_ignore_ascii_case("dual_read") => Self::DualRead,
+            _ => Self::RelationOnly,
+        }
+    }
+}
 
 pub struct AuthService;
 
@@ -64,6 +79,128 @@ static RBAC_CLAIM_ROLE_MISMATCH_TOTAL: AtomicU64 = AtomicU64::new(0);
 static RBAC_DECISION_MISMATCH_TOTAL: AtomicU64 = AtomicU64::new(0);
 
 impl AuthService {
+    fn authz_mode() -> RbacAuthzMode {
+        RbacAuthzMode::from_env()
+    }
+
+    fn is_dual_read_enabled() -> bool {
+        Self::authz_mode() == RbacAuthzMode::DualRead
+    }
+
+    async fn load_legacy_role(
+        db: &DatabaseConnection,
+        tenant_id: &uuid::Uuid,
+        user_id: &uuid::Uuid,
+    ) -> Result<Option<UserRole>> {
+        let user = users::Entity::find_by_id(*user_id)
+            .filter(users::Column::TenantId.eq(*tenant_id))
+            .one(db)
+            .await?;
+
+        Ok(user.map(|model| model.role))
+    }
+
+    async fn shadow_compare_permission_decision(
+        db: &DatabaseConnection,
+        tenant_id: &uuid::Uuid,
+        user_id: &uuid::Uuid,
+        required_permission: &Permission,
+        relation_allowed: bool,
+    ) -> Result<()> {
+        if !Self::is_dual_read_enabled() {
+            return Ok(());
+        }
+
+        let Some(legacy_role) = Self::load_legacy_role(db, tenant_id, user_id).await? else {
+            debug!(
+                tenant_id = %tenant_id,
+                user_id = %user_id,
+                "rbac dual-read skipped: user not found for legacy role"
+            );
+            return Ok(());
+        };
+
+        let legacy_allowed = Rbac::has_permission(&legacy_role, required_permission);
+        if legacy_allowed != relation_allowed {
+            Self::record_decision_mismatch();
+            warn!(
+                tenant_id = %tenant_id,
+                user_id = %user_id,
+                required_permission = %required_permission,
+                legacy_role = %legacy_role,
+                relation_allowed,
+                legacy_allowed,
+                "rbac_decision_mismatch"
+            );
+        }
+
+        Ok(())
+    }
+
+    async fn shadow_compare_any_permission_decision(
+        db: &DatabaseConnection,
+        tenant_id: &uuid::Uuid,
+        user_id: &uuid::Uuid,
+        required_permissions: &[Permission],
+        relation_allowed: bool,
+    ) -> Result<()> {
+        if !Self::is_dual_read_enabled() {
+            return Ok(());
+        }
+
+        let Some(legacy_role) = Self::load_legacy_role(db, tenant_id, user_id).await? else {
+            return Ok(());
+        };
+
+        let legacy_allowed = Rbac::has_any_permission(&legacy_role, required_permissions);
+        if legacy_allowed != relation_allowed {
+            Self::record_decision_mismatch();
+            warn!(
+                tenant_id = %tenant_id,
+                user_id = %user_id,
+                required_permissions = ?required_permissions,
+                legacy_role = %legacy_role,
+                relation_allowed,
+                legacy_allowed,
+                "rbac_decision_mismatch"
+            );
+        }
+
+        Ok(())
+    }
+
+    async fn shadow_compare_all_permission_decision(
+        db: &DatabaseConnection,
+        tenant_id: &uuid::Uuid,
+        user_id: &uuid::Uuid,
+        required_permissions: &[Permission],
+        relation_allowed: bool,
+    ) -> Result<()> {
+        if !Self::is_dual_read_enabled() {
+            return Ok(());
+        }
+
+        let Some(legacy_role) = Self::load_legacy_role(db, tenant_id, user_id).await? else {
+            return Ok(());
+        };
+
+        let legacy_allowed = Rbac::has_all_permissions(&legacy_role, required_permissions);
+        if legacy_allowed != relation_allowed {
+            Self::record_decision_mismatch();
+            warn!(
+                tenant_id = %tenant_id,
+                user_id = %user_id,
+                required_permissions = ?required_permissions,
+                legacy_role = %legacy_role,
+                relation_allowed,
+                legacy_allowed,
+                "rbac_decision_mismatch"
+            );
+        }
+
+        Ok(())
+    }
+
     pub fn has_effective_permission_in_set(
         user_permissions: &[Permission],
         required_permission: &Permission,
@@ -235,6 +372,14 @@ impl AuthService {
 
         Self::record_permission_check_result(allowed);
         Self::record_permission_check_latency(latency_ms);
+        Self::shadow_compare_permission_decision(
+            db,
+            tenant_id,
+            user_id,
+            required_permission,
+            allowed,
+        )
+        .await?;
 
         Ok(allowed)
     }
@@ -294,6 +439,14 @@ impl AuthService {
 
         Self::record_permission_check_result(allowed);
         Self::record_permission_check_latency(latency_ms);
+        Self::shadow_compare_any_permission_decision(
+            db,
+            tenant_id,
+            user_id,
+            required_permissions,
+            allowed,
+        )
+        .await?;
 
         Ok(allowed)
     }
@@ -350,6 +503,14 @@ impl AuthService {
 
         Self::record_permission_check_result(allowed);
         Self::record_permission_check_latency(latency_ms);
+        Self::shadow_compare_all_permission_decision(
+            db,
+            tenant_id,
+            user_id,
+            required_permissions,
+            allowed,
+        )
+        .await?;
 
         Ok(allowed)
     }
@@ -675,5 +836,18 @@ mod tests {
         );
         assert_eq!(denied_reason_kind, DeniedReasonKind::MissingPermissions);
         assert!(denied_reason.starts_with("missing_permissions:"));
+    }
+
+    #[test]
+    fn rbac_authz_mode_defaults_to_relation_only() {
+        unsafe { std::env::remove_var("RUSTOK_RBAC_AUTHZ_MODE") };
+        assert_eq!(RbacAuthzMode::from_env(), RbacAuthzMode::RelationOnly);
+    }
+
+    #[test]
+    fn rbac_authz_mode_supports_dual_read() {
+        unsafe { std::env::set_var("RUSTOK_RBAC_AUTHZ_MODE", "dual_read") };
+        assert_eq!(RbacAuthzMode::from_env(), RbacAuthzMode::DualRead);
+        unsafe { std::env::remove_var("RUSTOK_RBAC_AUTHZ_MODE") };
     }
 }
