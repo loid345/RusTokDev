@@ -81,6 +81,9 @@
   - При расхождении relation-vs-legacy-role увеличивается `rustok_rbac_decision_mismatch_total` и пишется warning-лог `rbac_decision_mismatch`; ошибки самого shadow-path отдельно учитываются в `rustok_rbac_shadow_compare_failures_total`.
   - Для снижения накладных расходов dual-read legacy role lookup покрыт in-memory TTL-кэшем в `AuthService`.
   - Shadow-сравнение выполняется fail-open: ошибки shadow path логируются и не влияют на авторитативное relation-based allow/deny решение.
+  - Добавлен cutover baseline helper `scripts/rbac_cutover_baseline.sh`: скрипт снимает серию `/metrics` snapshot'ов, считает deltas по `rustok_rbac_decision_mismatch_total`/`rustok_rbac_shadow_compare_failures_total`/`rustok_rbac_permission_checks_{allowed,denied}`, формирует markdown+json отчёт в `artifacts/rbac-cutover` и по умолчанию включает strict gate (`mismatch_delta == 0`) для dual-read окна наблюдения.
+  - В baseline helper добавлены дополнительные stop-the-line guardrails: обязательный минимальный объём decision-трафика в окне (`--min-decision-delta`, default `1`) и fail-fast при обнаружении reset-а счётчиков (уменьшение counter-метрик между последовательными samples). Для аудита и post-mortem helper по умолчанию сохраняет raw `/metrics` snapshots по всем sample-точкам (`rbac_cutover_samples_*`), с опциональным отключением через `--no-save-samples`.
+  - Добавлены тесты helper'а (`scripts/tests/rbac_cutover_baseline_test.sh` + smoke `scripts/test_rbac_cutover_baseline.sh`) с mocked curl-path (`RUSTOK_CURL_BIN`) для проверки mismatch-gate и генерации baseline артефактов.
 - [ ] **Фаза 6 — Cleanup legacy-модели:** не начато.
 
 ### Что осталось приоритетно на ближайший шаг
@@ -430,6 +433,7 @@
 - [ ] Dual-read включён в production.
 - [ ] Mismatch-метрика собирается и алертится.
 - [ ] Зафиксирован baseline и окно наблюдения.
+  - [x] Добавлен автоматизированный helper baseline-съёма (`scripts/rbac_cutover_baseline.sh`) с JSON/markdown артефактами и strict mismatch-gate.
 - [ ] Переключение на relation-only выполнено под feature flag.
 - [ ] Проведён пост-релизный аудит 401/403/latency.
 
