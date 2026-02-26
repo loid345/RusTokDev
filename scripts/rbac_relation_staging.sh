@@ -191,7 +191,9 @@ enforce_zero_invariants() {
   local stage="$2"
 
   if [[ ! -f "$file" ]]; then
-    return 0
+    echo "Invariant zero-check failed for ${stage}: report file is missing (${file})." >&2
+    echo "See report: ${REPORT_FILE}" >&2
+    exit 1
   fi
 
   local users_without_roles
