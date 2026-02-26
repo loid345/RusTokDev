@@ -20,6 +20,8 @@ Options:
   --run-rollback-apply        Run actual rollback (dangerous; explicit)
   --rollback-source <file>    Use existing rollback snapshot file instead of generated one
   --fail-on-regression        Exit non-zero if post-check invariants regress vs pre-check
+  --require-zero-post-apply   Exit non-zero if post-apply invariants are not all zero
+  --require-zero-post-rollback Exit non-zero if post-rollback invariants are not all zero
   --artifacts-dir <dir>       Output folder for logs/report (default: artifacts/rbac-staging)
   --help                      Show this message
 
@@ -42,6 +44,8 @@ RUN_ROLLBACK_DRY="false"
 RUN_ROLLBACK_APPLY="false"
 ROLLBACK_SOURCE=""
 FAIL_ON_REGRESSION="false"
+REQUIRE_ZERO_POST_APPLY="false"
+REQUIRE_ZERO_POST_ROLLBACK="false"
 ARTIFACTS_DIR="artifacts/rbac-staging"
 CARGO_BIN="${RUSTOK_CARGO_BIN:-cargo}"
 
@@ -67,6 +71,10 @@ while [[ $# -gt 0 ]]; do
       ROLLBACK_SOURCE="$2"; shift 2 ;;
     --fail-on-regression)
       FAIL_ON_REGRESSION="true"; shift ;;
+    --require-zero-post-apply)
+      REQUIRE_ZERO_POST_APPLY="true"; shift ;;
+    --require-zero-post-rollback)
+      REQUIRE_ZERO_POST_ROLLBACK="true"; shift ;;
     --artifacts-dir)
       ARTIFACTS_DIR="$2"; shift 2 ;;
     --help)
@@ -168,6 +176,29 @@ append_invariant_summary() {
   fi
 }
 
+enforce_zero_invariants() {
+  local file="$1"
+  local stage="$2"
+
+  if [[ ! -f "$file" ]]; then
+    return 0
+  fi
+
+  local users_without_roles
+  local orphan_user_roles
+  local orphan_role_permissions
+  users_without_roles="$(extract_metric_from_json "$file" "users_without_roles_total")"
+  orphan_user_roles="$(extract_metric_from_json "$file" "orphan_user_roles_total")"
+  orphan_role_permissions="$(extract_metric_from_json "$file" "orphan_role_permissions_total")"
+
+  if (( users_without_roles > 0 || orphan_user_roles > 0 || orphan_role_permissions > 0 )); then
+    echo "Invariant zero-check failed for ${stage}." >&2
+    echo "Expected all invariants to be 0, got: users_without_roles_total=${users_without_roles}, orphan_user_roles_total=${orphan_user_roles}, orphan_role_permissions_total=${orphan_role_permissions}." >&2
+    echo "See report: ${REPORT_FILE}" >&2
+    exit 1
+  fi
+}
+
 require_rollback_source() {
   local reason="$1"
   if [[ ! -f "$ROLLBACK_FILE" ]]; then
@@ -196,6 +227,9 @@ run_step "02_backfill_dry_run" "$(build_args rbac-backfill) dry_run=true rollbac
 if [[ "$RUN_APPLY" == "true" ]]; then
   run_step "03_backfill_apply" "$(build_args rbac-backfill) rollback_file=${GENERATED_ROLLBACK_FILE}"
   run_step "04_post_report" "target=rbac-report output=${POST_APPLY_JSON}"
+  if [[ "$REQUIRE_ZERO_POST_APPLY" == "true" ]]; then
+    enforce_zero_invariants "$POST_APPLY_JSON" "post-apply"
+  fi
 else
   echo "Skipping apply step (use --run-apply to enable)."
 fi
@@ -211,6 +245,9 @@ if [[ "$RUN_ROLLBACK_APPLY" == "true" ]]; then
   require_rollback_source "rollback apply"
   run_step "06_rollback_apply" "target=rbac-backfill-rollback source=${ROLLBACK_FILE} continue_on_error=${CONTINUE_ON_ERROR}"
   run_step "07_post_rollback_report" "target=rbac-report output=${POST_ROLLBACK_JSON}"
+  if [[ "$REQUIRE_ZERO_POST_ROLLBACK" == "true" ]]; then
+    enforce_zero_invariants "$POST_ROLLBACK_JSON" "post-rollback"
+  fi
 fi
 
 cat > "$REPORT_FILE" <<REPORT
@@ -232,6 +269,8 @@ cat > "$REPORT_FILE" <<REPORT
 - Excluded roles: ${EXCLUDE_ROLES:-<none>}
 - Continue on error: ${CONTINUE_ON_ERROR}
 - Fail on regression: ${FAIL_ON_REGRESSION}
+- Require zero invariants after apply: ${REQUIRE_ZERO_POST_APPLY}
+- Require zero invariants after rollback: ${REQUIRE_ZERO_POST_ROLLBACK}
 
 ## Generated logs
 

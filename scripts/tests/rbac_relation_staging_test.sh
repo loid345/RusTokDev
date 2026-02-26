@@ -137,12 +137,56 @@ test_report_contains_invariant_diff_section() {
   pass "report includes invariant diff summary"
 }
 
+test_require_zero_post_apply_fails_on_non_zero_invariants() {
+  local tmp
+  tmp="$(mktemp -d)"
+  make_mock_cargo "$tmp"
+
+  set +e
+  MOCK_TOUCH_ROLLBACK_FILE=1 RUSTOK_CARGO_BIN="$tmp/mock-cargo" "$SCRIPT" --run-apply --require-zero-post-apply --artifacts-dir "$tmp/artifacts" >"$tmp/out.log" 2>&1
+  local code=$?
+  set -e
+
+  [[ $code -eq 1 ]] || fail "expected --require-zero-post-apply to fail on non-zero invariants"
+  rg -q "Invariant zero-check failed for post-apply" "$tmp/out.log" || fail "expected zero-check failure message"
+  pass "require-zero-post-apply enforces strict zero invariants"
+}
+
+test_require_zero_post_apply_passes_when_zero() {
+  local tmp
+  tmp="$(mktemp -d)"
+  make_mock_cargo "$tmp"
+
+  MOCK_TOUCH_ROLLBACK_FILE=1 MOCK_REPORT_PROFILE=improved RUSTOK_CARGO_BIN="$tmp/mock-cargo" "$SCRIPT" --run-apply --require-zero-post-apply --artifacts-dir "$tmp/artifacts" >"$tmp/out.log" 2>&1
+
+  rg -q "Done. Report:" "$tmp/out.log" || fail "expected successful run with zero invariants"
+  pass "require-zero-post-apply allows run when invariants are zero"
+}
+
+test_require_zero_post_rollback_fails_on_non_zero_invariants() {
+  local tmp
+  tmp="$(mktemp -d)"
+  make_mock_cargo "$tmp"
+
+  set +e
+  MOCK_TOUCH_ROLLBACK_FILE=1 RUSTOK_CARGO_BIN="$tmp/mock-cargo" "$SCRIPT" --run-apply --run-rollback-apply --require-zero-post-rollback --artifacts-dir "$tmp/artifacts" >"$tmp/out.log" 2>&1
+  local code=$?
+  set -e
+
+  [[ $code -eq 1 ]] || fail "expected --require-zero-post-rollback to fail on non-zero invariants"
+  rg -q "Invariant zero-check failed for post-rollback" "$tmp/out.log" || fail "expected rollback zero-check failure message"
+  pass "require-zero-post-rollback enforces strict zero invariants"
+}
+
 main() {
   test_missing_rollback_source_fails
   test_rollback_source_allows_dry_run
   test_apply_creates_snapshot_and_rollback_apply_uses_it
   test_fail_on_regression_blocks_run
   test_report_contains_invariant_diff_section
+  test_require_zero_post_apply_fails_on_non_zero_invariants
+  test_require_zero_post_apply_passes_when_zero
+  test_require_zero_post_rollback_fails_on_non_zero_invariants
   echo "All tests passed."
 }
 
