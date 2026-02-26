@@ -108,6 +108,8 @@ graph TD
 ### Standards (`docs/standards/`)
 
 - [Coding Standards](./standards/coding.md)
+- [Patterns vs Antipatterns](./standards/patterns-vs-antipatterns.md) — **сводная таблица** правильных и неправильных подходов
+- [Forbidden Actions (NEVER DO)](./standards/forbidden-actions.md) — **жёсткие запреты** с объяснением последствий
 - [Error Handling](./standards/errors.md)
 - [Security](./standards/security.md)
 - [Logging](./standards/logging.md)

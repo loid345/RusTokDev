@@ -39,7 +39,9 @@
 17. [Фаза 16: Синхронизация документации с кодом](#фаза-16-синхронизация-документации)
 18. [Фаза 17: CI/CD и DevOps](#фаза-17-cicd)
 19. [Фаза 18: Безопасность](#фаза-18-безопасность)
-20. [Итоговый отчёт](#итоговый-отчёт)
+20. [Фаза 19: Антипаттерны и качество кода](#фаза-19-антипаттерны-и-качество-кода)
+21. [Фаза 20: Правильность написания кода](#фаза-20-правильность-написания-кода-code-correctness)
+22. [Итоговый отчёт](#итоговый-отчёт)
 
 ---
 
@@ -1191,6 +1193,168 @@
 
 ---
 
+## Фаза 19: Антипаттерны и качество кода
+
+**Справочные документы:**
+- [Паттерны vs Антипаттерны](./standards/patterns-vs-antipatterns.md)
+- [Запрещённые действия](./standards/forbidden-actions.md)
+- [Known Pitfalls](./ai/KNOWN_PITFALLS.md)
+
+### 19.1 Критические антипаттерны (MUST FIX)
+
+Поиск запрещённых паттернов в production коде. Каждый найденный экземпляр — обязательное исправление.
+
+#### Tenant Isolation violations
+- [ ] Поиск `find().all(&db)` без `.filter(...tenant_id...)` в domain crates
+  - `grep -rn "\.all(&" crates/rustok-content/src/ crates/rustok-commerce/src/ crates/rustok-blog/src/ crates/rustok-forum/src/ crates/rustok-pages/src/`
+- [ ] Поиск `find_by_id` без tenant_id проверки
+- [ ] Поиск DELETE без tenant_id filter
+- [ ] Проверка: каждая domain-таблица имеет `tenant_id` column в миграции
+- [ ] Проверка: каждый SeaORM entity имеет `tenant_id` поле
+
+#### Unsafe event publishing
+- [ ] Поиск `publish(` без `_in_tx` в domain services
+  - `grep -rn "event_bus\.publish(" crates/rustok-*/src/services/` — каждый вызов должен быть `publish_in_tx`
+- [ ] Проверка: каждый DomainEvent в crates содержит `tenant_id` field
+
+#### Hardcoded secrets
+- [ ] Поиск hardcoded passwords/secrets/keys в Rust коде
+  - `grep -rn "password\|secret\|api_key" --include="*.rs" | grep -v test | grep -v "// " | grep "="`
+- [ ] Поиск в .ts/.tsx файлах
+- [ ] Проверка: `.env` файлы отсутствуют в git (только `.env.dev.example`)
+
+#### Panics в production
+- [ ] Поиск `unwrap()` в production коде (исключая tests)
+  - `grep -rn "\.unwrap()" crates/rustok-*/src/ apps/server/src/ --include="*.rs" | grep -v "#\[cfg(test)\]" | grep -v "mod tests"`
+- [ ] Поиск `expect()` в production коде (проверить каждый: оправдан или нет)
+  - `grep -rn "\.expect(" crates/rustok-*/src/ apps/server/src/ --include="*.rs" | grep -v test`
+- [ ] Поиск `panic!` в production коде
+
+### 19.2 RBAC coverage audit
+
+- [ ] Список ВСЕХ handlers в `apps/server/src/controllers/` — каждый имеет RBAC extractor или явно помечен как public
+- [ ] Список ВСЕХ GraphQL mutations — каждый имеет permission check
+- [ ] Список ВСЕХ GraphQL queries (non-public) — каждый имеет permission check
+- [ ] Проверка: нет `CurrentUser` без RBAC check (кроме public endpoints)
+
+### 19.3 Async safety
+
+- [ ] Поиск `std::thread::sleep` в async коде
+  - `grep -rn "std::thread::sleep" --include="*.rs" apps/ crates/`
+- [ ] Поиск `std::fs::` в async коде (должно быть `tokio::fs::`)
+  - `grep -rn "std::fs::" --include="*.rs" apps/server/src/ crates/rustok-*/src/`
+- [ ] Поиск неограниченных `tokio::spawn` в циклах без Semaphore
+- [ ] Проверка: нет `block_on()` внутри async context
+
+### 19.4 Error handling quality
+
+- [ ] Все domain crates используют `thiserror` (не `anyhow` в lib)
+- [ ] Нет `String` errors — типизированные ошибки
+- [ ] Controllers используют `loco_rs::Result` (не custom error types)
+- [ ] GraphQL resolvers корректно конвертируют errors в extensions
+
+### 19.5 Code metrics
+
+- [ ] Нет функций > 40 строк (проверить top-10 самых длинных функций)
+- [ ] Нет модулей > 1000 строк
+- [ ] Нет функций с > 6 аргументами
+- [ ] `DomainEvent` enum не превышает разумного размера (проверить `rustok-core/src/events/types.rs`)
+
+### 19.6 State machine correctness
+
+- [ ] Каждый state machine модуль имеет `*_proptest.rs`
+  - `rustok-content/src/state_machine_proptest.rs`
+  - `rustok-commerce/src/state_machine_proptest.rs`
+  - `rustok-blog/src/state_machine_proptest.rs`
+- [ ] Невалидные переходы возвращают ошибку (не panic)
+- [ ] Нет string-based status checks (`if status == "published"`)
+
+### 19.7 DTO consistency
+
+- [ ] Каждый domain module имеет отдельные `CreateInput`/`UpdateInput`/`Response` DTOs
+- [ ] Entities из БД НЕ возвращаются напрямую в API
+- [ ] DTOs имеют `#[derive(Validate)]` для input validation
+- [ ] Response DTOs не содержат internal fields (например, `password_hash`)
+
+### 19.8 Event handling quality
+
+- [ ] Каждый event handler idempotent (retry-safe)
+- [ ] Каждый новый DomainEvent имеет integration test
+- [ ] Каждый event handler имеет idempotency test
+- [ ] Event payloads содержат все необходимые поля для обработки (не требуют дополнительных DB queries)
+
+### 19.9 Frontend antipatterns
+
+#### Leptos
+- [ ] Нет прямых `fetch()` — используется `leptos-graphql`
+- [ ] Нет ручного JWT management — используется `leptos-auth`
+- [ ] Нет prop drilling > 3 уровней — используется `leptos-zustand`
+- [ ] Admin — CSR (WASM), Storefront — SSR
+
+#### Next.js
+- [ ] Нет `any` типов в TypeScript коде
+  - `grep -rn ": any" apps/next-admin/src/ apps/next-frontend/src/ --include="*.ts" --include="*.tsx"`
+- [ ] Нет `@ts-ignore` / `@ts-expect-error`
+- [ ] Shared code в `packages/` (не copy-paste между apps)
+- [ ] Нет дублирования GraphQL queries между next-admin и next-frontend
+
+### 19.10 Logging quality
+
+- [ ] Service methods имеют `#[instrument]` decorator
+- [ ] Нет логирования PII (email, password, token)
+  - `grep -rn "password\|email\|token" --include="*.rs" | grep "tracing::" | grep -v "// "`
+- [ ] Нет `println!` / `eprintln!` в production коде (должно быть `tracing::`)
+  - `grep -rn "println!\|eprintln!" crates/rustok-*/src/ apps/server/src/ --include="*.rs"`
+- [ ] Structured fields вместо string formatting в tracing
+
+### 19.11 Dependency antipatterns
+
+- [ ] `rustok-core` не зависит от domain crates (нет circular dependencies)
+- [ ] Domain crates не вызывают друг друга напрямую (через events)
+- [ ] `rustok-test-utils` — только в `[dev-dependencies]`
+- [ ] Нет `path` dependencies на crates вне workspace
+
+---
+
+## Фаза 20: Правильность написания кода (Code Correctness)
+
+### 20.1 Type Safety
+
+- [ ] ID типы используют newtype pattern (`TenantId(Uuid)`) — не голые `Uuid`
+- [ ] Status поля — enum, не `String`
+- [ ] Phantom types для state-aware structs (если применимо)
+- [ ] Нет `as` casts для числовых типов без проверки (use `TryFrom`)
+
+### 20.2 Concurrency correctness
+
+- [ ] `Arc<Mutex<>>` используется вместо `Mutex<>` для shared state между tasks
+- [ ] `RwLock` для read-heavy shared state
+- [ ] Нет race conditions в cache operations (singleflight pattern)
+- [ ] `Select!` корректно обрабатывает cancellation
+
+### 20.3 Resource management
+
+- [ ] DB connections возвращаются в pool (нет leaked connections)
+- [ ] Files закрываются (RAII через `Drop`)
+- [ ] HTTP clients имеют timeouts
+- [ ] Retry logic с exponential backoff (не busy-loop)
+
+### 20.4 Serialization correctness
+
+- [ ] `serde(rename_all = "camelCase")` для JSON APIs (если convention)
+- [ ] `#[serde(skip_serializing)]` для sensitive fields
+- [ ] DateTime сериализуется в ISO 8601
+- [ ] UUID сериализуется как string (не binary)
+
+### 20.5 Migration correctness
+
+- [ ] Каждая миграция имеет `up()` и `down()` (reversible)
+- [ ] Foreign keys с `ON DELETE CASCADE` или `ON DELETE SET NULL` (не orphans)
+- [ ] Indexes на часто фильтруемые поля (`tenant_id`, `slug`, `status`)
+- [ ] `UNIQUE` constraints где бизнес-логика требует уникальности
+
+---
+
 ## Итоговый отчёт
 
 После прохождения всех фаз заполнить итоговую таблицу:
@@ -1216,12 +1380,17 @@
 | 16 | Документация | | | | |
 | 17 | CI/CD | | | | |
 | 18 | Безопасность | | | | |
+| 19 | Антипаттерны и качество кода | | | | |
+| 20 | Правильность написания кода | | | | |
 | **ИТОГО** | | | | | |
 
 ---
 
 ## Связанные документы
 
+- [Паттерны vs Антипаттерны](./standards/patterns-vs-antipatterns.md) — сводная таблица правильного и неправильного
+- [Запрещённые действия](./standards/forbidden-actions.md) — что ни в коем случае нельзя делать
+- [Known Pitfalls](./ai/KNOWN_PITFALLS.md) — ловушки для агентов
 - [Architecture Overview](./architecture/overview.md)
 - [API Architecture](./architecture/api.md)
 - [RBAC Enforcement](./architecture/rbac.md)
