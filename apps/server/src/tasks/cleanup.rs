@@ -13,6 +13,7 @@ use loco_rs::{
 use rustok_core::UserRole;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use std::collections::{HashMap, HashSet};
 
 use crate::models::sessions;
@@ -59,6 +60,11 @@ impl Task for CleanupTask {
                     orphan_role_permissions_total = stats.orphan_role_permissions_total,
                     "RBAC consistency report"
                 );
+
+                if let Some(path) = vars.cli.get("output") {
+                    write_rbac_report_file(path, stats)?;
+                    tracing::info!(report_file = %path, "RBAC consistency report file saved");
+                }
             }
             "rbac-backfill" => {
                 let dry_run = is_flag_enabled(&vars.cli, "dry_run");
@@ -266,6 +272,23 @@ fn read_rollback_file(path: &str) -> Result<Vec<BackfillRollbackEntry>> {
         .map_err(|error| loco_rs::Error::string(format!("rollback file parse failed: {error}")))
 }
 
+fn write_rbac_report_file(
+    path: &str,
+    stats: crate::services::rbac_consistency::RbacConsistencyStats,
+) -> Result<()> {
+    let payload = serde_json::to_vec_pretty(&json!({
+        "users_without_roles_total": stats.users_without_roles_total,
+        "orphan_user_roles_total": stats.orphan_user_roles_total,
+        "orphan_role_permissions_total": stats.orphan_role_permissions_total,
+    }))
+    .map_err(|error| {
+        loco_rs::Error::string(format!("rbac report serialization failed: {error}"))
+    })?;
+    std::fs::write(path, payload)
+        .map_err(|error| loco_rs::Error::string(format!("rbac report write failed: {error}")))?;
+    Ok(())
+}
+
 fn is_flag_enabled(cli: &HashMap<String, String>, key: &str) -> bool {
     matches!(
         cli.get(key).map(String::as_str),
@@ -327,7 +350,7 @@ fn parse_role_set(cli: &HashMap<String, String>, key: &str) -> Result<HashSet<Us
 mod tests {
     use super::{
         is_flag_enabled, parse_limit, parse_role_set, parse_uuid_set, read_rollback_file,
-        write_rollback_file, BackfillRollbackEntry,
+        write_rbac_report_file, write_rollback_file, BackfillRollbackEntry,
     };
     use rustok_core::UserRole;
     use std::collections::HashMap;
@@ -383,6 +406,29 @@ mod tests {
         assert_eq!(parsed.len(), 2);
         assert!(parsed.contains(&UserRole::Admin));
         assert!(parsed.contains(&UserRole::Customer));
+    }
+
+    #[test]
+    fn rbac_report_file_roundtrip() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("rbac_report.json");
+        let path_str = path.to_string_lossy().to_string();
+
+        write_rbac_report_file(
+            &path_str,
+            crate::services::rbac_consistency::RbacConsistencyStats {
+                users_without_roles_total: 3,
+                orphan_user_roles_total: 2,
+                orphan_role_permissions_total: 1,
+            },
+        )
+        .unwrap();
+
+        let payload: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(path).unwrap()).unwrap();
+        assert_eq!(payload["users_without_roles_total"], 3);
+        assert_eq!(payload["orphan_user_roles_total"], 2);
+        assert_eq!(payload["orphan_role_permissions_total"], 1);
     }
 
     #[test]

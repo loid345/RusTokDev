@@ -82,6 +82,9 @@ if [[ -n "$ROLLBACK_SOURCE" ]]; then
   ROLLBACK_FILE="$ROLLBACK_SOURCE"
 fi
 REPORT_FILE="$ARTIFACTS_DIR/rbac_relation_stage_report_${TS}.md"
+PRECHECK_JSON="$ARTIFACTS_DIR/rbac_report_pre_${TS}.json"
+POST_APPLY_JSON="$ARTIFACTS_DIR/rbac_report_post_apply_${TS}.json"
+POST_ROLLBACK_JSON="$ARTIFACTS_DIR/rbac_report_post_rollback_${TS}.json"
 
 build_args() {
   local target="$1"
@@ -122,7 +125,7 @@ run_step() {
 }
 
 # 1) Baseline
-run_step "01_pre_report" "target=rbac-report"
+run_step "01_pre_report" "target=rbac-report output=${PRECHECK_JSON}"
 
 # 2) Dry-run backfill
 run_step "02_backfill_dry_run" "$(build_args rbac-backfill) dry_run=true rollback_file=${GENERATED_ROLLBACK_FILE}"
@@ -130,7 +133,7 @@ run_step "02_backfill_dry_run" "$(build_args rbac-backfill) dry_run=true rollbac
 # 3) Apply backfill (optional)
 if [[ "$RUN_APPLY" == "true" ]]; then
   run_step "03_backfill_apply" "$(build_args rbac-backfill) rollback_file=${GENERATED_ROLLBACK_FILE}"
-  run_step "04_post_report" "target=rbac-report"
+  run_step "04_post_report" "target=rbac-report output=${POST_APPLY_JSON}"
 else
   echo "Skipping apply step (use --run-apply to enable)."
 fi
@@ -145,7 +148,7 @@ fi
 if [[ "$RUN_ROLLBACK_APPLY" == "true" ]]; then
   require_rollback_source "rollback apply"
   run_step "06_rollback_apply" "target=rbac-backfill-rollback source=${ROLLBACK_FILE} continue_on_error=${CONTINUE_ON_ERROR}"
-  run_step "07_post_rollback_report" "target=rbac-report"
+  run_step "07_post_rollback_report" "target=rbac-report output=${POST_ROLLBACK_JSON}"
 fi
 
 cat > "$REPORT_FILE" <<REPORT
@@ -155,6 +158,9 @@ cat > "$REPORT_FILE" <<REPORT
 - Environment: ${ENV_NAME}
 - Artifacts directory: ${ARTIFACTS_DIR}
 - Generated rollback snapshot path: ${GENERATED_ROLLBACK_FILE}
+- Pre-check JSON report: ${PRECHECK_JSON}
+- Post-apply JSON report: ${POST_APPLY_JSON}
+- Post-rollback JSON report: ${POST_ROLLBACK_JSON}
 - Effective rollback source: ${ROLLBACK_FILE}
 - Apply step enabled: ${RUN_APPLY}
 - Rollback dry-run enabled: ${RUN_ROLLBACK_DRY}

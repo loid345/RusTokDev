@@ -1,8 +1,9 @@
 use loco_rs::{app::AppContext, Error, Result};
 use rustok_core::UserRole;
 use sea_orm::{ConnectionTrait, DbBackend, Statement, TryGetable};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct RbacConsistencyStats {
     pub users_without_roles_total: i64,
     pub orphan_user_roles_total: i64,
