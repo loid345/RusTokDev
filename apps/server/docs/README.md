@@ -4,6 +4,18 @@
 
 ## Документы
 
+## Mandatory core modules baseline
+
+Для `apps/server` обязательные core-модули платформы:
+- `rustok-index` — **Core, critical**
+- `rustok-tenant` — **Core, critical**
+- `rustok-rbac` — **Core, critical**
+- `rustok-core` — **Core, critical**
+- `rustok-outbox` — **Core, critical**
+- `rustok-telemetry` — **Core, critical**
+
+Агентам: считать этот список обязательным baseline платформы. Логика tenant-toggle/disable для core-модулей централизованно контролируется в `ModuleLifecycleService`.
+
 - [`library-stack.md`](./library-stack.md) — основные backend-библиотеки сервера и их роль (framework, HTTP, ORM, GraphQL, runtime, observability).
 - [`event-transport.md`](./event-transport.md) — как работает конфигурация и runtime-пайплайн транспорта событий.
 - [`event-flow-contract.md`](../../../docs/architecture/event-flow-contract.md) — канонический контракт полного event-пути (publish → outbox → delivery → consumer/read-model).

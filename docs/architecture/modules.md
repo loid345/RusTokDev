@@ -5,9 +5,9 @@ RusToK реализован как **Modular Monolith**: все модули к�
 ## Ключевой принцип
 
 Не каждый критичный компонент платформы реализует `RusToKModule`.
-Есть три категории компонентов — подробно описаны ниже.
+Есть три категории компонентов — подробно описаны ниже. Core-модули трактуются как обязательный слой платформы.
 
-## Категория A — Compile-time Infrastructure (не `RusToKModule`)
+## Категория A — Mandatory Core Crates (не `RusToKModule`)
 
 Всегда линкуются в бинарник, не участвуют в lifecycle модулей:
 
@@ -24,13 +24,18 @@ RusToK реализован как **Modular Monolith**: все модули к�
 
 ## Категория B — Core Platform Modules (`ModuleKind::Core`)
 
-Реализуют `RusToKModule`, обязательны для работы платформы, нельзя отключить:
+Реализуют `RusToKModule`, обязательны для работы платформы, нельзя отключить.
+В документации и в server-контексте они считаются критичным core-модульным baseline:
 
 | Crate | Slug | Назначение |
 |-------|------|-----------|
-| `rustok-index` | `index` | CQRS read-model, индексатор для storefront |
-| `rustok-tenant` | `tenant` | Tenant metadata, lifecycle hooks |
-| `rustok-rbac` | `rbac` | RBAC helpers, lifecycle hooks |
+| `rustok-index` | `index` | **Core (critical)**: CQRS read-model, индексатор для storefront |
+| `rustok-tenant` | `tenant` | **Core (critical)**: Tenant metadata, lifecycle hooks |
+| `rustok-rbac` | `rbac` | **Core (critical)**: RBAC helpers, lifecycle hooks |
+
+Итоговые обязательные core-модули платформы (`ModuleKind::Core`): `rustok-index`, `rustok-tenant`, `rustok-rbac`.
+
+`rustok-core`, `rustok-outbox`, `rustok-telemetry` — обязательные **core (critical)** модули платформы (инициализируются напрямую в runtime).
 
 ## Категория C — Optional Domain Modules (`ModuleKind::Optional`)
 

@@ -32,6 +32,20 @@ pub enum ToggleModuleError {
 }
 
 impl ModuleLifecycleService {
+    /// Platform core modules are fixed on server side and cannot be disabled per tenant.
+    /// Keep this list aligned with runtime registration in `apps/server/src/modules/mod.rs`.
+    const CORE_MODULE_SLUGS: [&'static str; 3] = ["index", "tenant", "rbac"];
+
+    fn validate_core_toggle(module_slug: &str, enabled: bool) -> Result<(), ToggleModuleError> {
+        if !enabled && Self::CORE_MODULE_SLUGS.contains(&module_slug) {
+            return Err(ToggleModuleError::CoreModuleCannotBeDisabled(
+                module_slug.to_string(),
+            ));
+        }
+
+        Ok(())
+    }
+
     pub async fn toggle_module(
         db: &DatabaseConnection,
         registry: &ModuleRegistry,
@@ -43,11 +57,7 @@ impl ModuleLifecycleService {
             return Err(ToggleModuleError::UnknownModule);
         };
 
-        if registry.is_core(module_slug) {
-            return Err(ToggleModuleError::CoreModuleCannotBeDisabled(
-                module_slug.to_string(),
-            ));
-        }
+        Self::validate_core_toggle(module_slug, enabled)?;
 
         let enabled_modules = TenantModulesEntity::find_enabled(db, tenant_id).await?;
         let enabled_set: HashSet<String> = enabled_modules.into_iter().collect();
@@ -165,5 +175,34 @@ impl ModuleLifecycleService {
             sea_orm::TransactionError::Connection(db_err) => db_err,
             sea_orm::TransactionError::Transaction(db_err) => db_err,
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn disable_known_core_module_is_rejected() {
+        let result = ModuleLifecycleService::validate_core_toggle("tenant", false);
+
+        assert!(matches!(
+            result,
+            Err(ToggleModuleError::CoreModuleCannotBeDisabled(slug)) if slug == "tenant"
+        ));
+    }
+
+    #[test]
+    fn enable_known_core_module_is_allowed() {
+        let result = ModuleLifecycleService::validate_core_toggle("rbac", true);
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn disable_non_core_module_is_allowed() {
+        let result = ModuleLifecycleService::validate_core_toggle("content", false);
+
+        assert!(result.is_ok());
     }
 }
