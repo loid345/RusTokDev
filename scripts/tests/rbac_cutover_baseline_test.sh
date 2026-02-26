@@ -144,10 +144,68 @@ MOCK
   pass "min-decision-delta=0 allows idle windows"
 }
 
+test_baseline_fails_on_counter_reset() {
+  local tmp
+  tmp="$(mktemp -d)"
+
+  cat > "$tmp/mock-curl" <<'MOCK'
+#!/usr/bin/env bash
+set -euo pipefail
+
+state_file="${MOCK_CURL_STATE_FILE:?}"
+count=0
+if [[ -f "$state_file" ]]; then
+  count="$(cat "$state_file")"
+fi
+count=$((count + 1))
+printf '%s' "$count" > "$state_file"
+
+if [[ "$count" -eq 1 ]]; then
+  allowed=50
+else
+  allowed=10
+fi
+
+cat <<METRICS
+rustok_rbac_decision_mismatch_total 0
+rustok_rbac_shadow_compare_failures_total 0
+rustok_rbac_permission_checks_denied 0
+rustok_rbac_permission_checks_allowed ${allowed}
+METRICS
+MOCK
+  chmod +x "$tmp/mock-curl"
+
+  set +e
+  MOCK_CURL_STATE_FILE="$tmp/state" RUSTOK_CURL_BIN="$tmp/mock-curl" "$SCRIPT" \
+    --samples 2 --interval-sec 0 --artifacts-dir "$tmp/artifacts" >"$tmp/out.log" 2>&1
+  code=$?
+  set -e
+
+  [[ "$code" -eq 1 ]] || fail "expected non-zero exit when a counter reset is detected"
+  rg -q "Counter reset detected" "$tmp/out.log" || fail "expected counter reset gate message"
+  pass "baseline helper fails fast on counter reset"
+}
+
+test_json_report_includes_timestamps() {
+  local tmp
+  tmp="$(mktemp -d)"
+  make_mock_curl "$tmp"
+
+  MOCK_CURL_STATE_FILE="$tmp/state" MOCK_CURL_PROFILE=steady RUSTOK_CURL_BIN="$tmp/mock-curl" "$SCRIPT" \
+    --samples 2 --interval-sec 0 --artifacts-dir "$tmp/artifacts" >"$tmp/out.log" 2>&1
+
+  json_report="$(find "$tmp/artifacts" -maxdepth 1 -name 'rbac_cutover_baseline_*.json' | head -n 1)"
+  [[ -n "$json_report" ]] || fail "expected json report artifact"
+  rg -q '"timestamp"' "$json_report" || fail "expected per-sample timestamps in json report"
+  pass "json report includes per-sample timestamps"
+}
+
 test_baseline_passes_when_mismatch_is_stable
 test_baseline_fails_when_mismatch_changes
 test_allow_mismatch_disables_strict_gate
 test_baseline_fails_when_decision_volume_is_too_low
 test_min_decision_delta_zero_allows_idle_windows
+test_baseline_fails_on_counter_reset
+test_json_report_includes_timestamps
 
 echo "All rbac_cutover_baseline tests passed"
