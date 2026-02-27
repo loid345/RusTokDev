@@ -34,22 +34,56 @@ printf '%s' "$count" > "$state_file"
 
 profile="${MOCK_CURL_PROFILE:-steady}"
 case "$profile" in
+  shadow-fail)
+    mismatch="0"
+    shadow_fail="$count"
+    ;;
   mismatch)
     mismatch="$count"
+    shadow_fail="0"
     ;;
   steady|*)
     mismatch="0"
+    shadow_fail="0"
     ;;
 esac
 
 cat <<METRICS
 rustok_rbac_decision_mismatch_total ${mismatch}
-rustok_rbac_shadow_compare_failures_total 0
+rustok_rbac_shadow_compare_failures_total ${shadow_fail}
 rustok_rbac_permission_checks_denied $((2 * count))
 rustok_rbac_permission_checks_allowed $((10 * count))
 METRICS
 MOCK
   chmod +x "$dir/mock-curl"
+}
+
+test_baseline_fails_when_shadow_failures_change() {
+  local tmp
+  tmp="$(mktemp -d)"
+  make_mock_curl "$tmp"
+
+  set +e
+  MOCK_CURL_STATE_FILE="$tmp/state" MOCK_CURL_PROFILE=shadow-fail RUSTOK_CURL_BIN="$tmp/mock-curl" "$SCRIPT" \
+    --samples 3 --interval-sec 0 --artifacts-dir "$tmp/artifacts" >"$tmp/out.log" 2>&1
+  code=$?
+  set -e
+
+  [[ "$code" -eq 1 ]] || fail "expected non-zero exit when shadow failure delta is non-zero"
+  rg -q "Shadow compare failures delta is" "$tmp/out.log" || fail "expected shadow failures gate message"
+  pass "baseline helper enforces zero shadow failures gate"
+}
+
+test_allow_shadow_failures_disables_strict_gate() {
+  local tmp
+  tmp="$(mktemp -d)"
+  make_mock_curl "$tmp"
+
+  MOCK_CURL_STATE_FILE="$tmp/state" MOCK_CURL_PROFILE=shadow-fail RUSTOK_CURL_BIN="$tmp/mock-curl" "$SCRIPT" \
+    --samples 3 --interval-sec 0 --allow-shadow-failures --artifacts-dir "$tmp/artifacts" >"$tmp/out.log" 2>&1
+
+  rg -q "Done. Report:" "$tmp/out.log" || fail "expected successful output with --allow-shadow-failures"
+  pass "allow-shadow-failures flag bypasses strict shadow gate"
 }
 
 test_baseline_passes_when_mismatch_is_stable() {
@@ -232,7 +266,9 @@ test_no_save_samples_disables_raw_snapshot_artifacts() {
 
 test_baseline_passes_when_mismatch_is_stable
 test_baseline_fails_when_mismatch_changes
+test_baseline_fails_when_shadow_failures_change
 test_allow_mismatch_disables_strict_gate
+test_allow_shadow_failures_disables_strict_gate
 test_baseline_fails_when_decision_volume_is_too_low
 test_min_decision_delta_zero_allows_idle_windows
 test_baseline_fails_on_counter_reset
