@@ -14,12 +14,12 @@ pub struct ContentQuery;
 
 #[Object]
 impl ContentQuery {
-    async fn node(&self, ctx: &Context<'_>, _tenant_id: Uuid, id: Uuid) -> Result<Option<GqlNode>> {
+    async fn node(&self, ctx: &Context<'_>, tenant_id: Uuid, id: Uuid) -> Result<Option<GqlNode>> {
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
 
         let service = NodeService::new(db.clone(), event_bus.clone());
-        match service.get_node(id).await {
+        match service.get_node(tenant_id, id).await {
             Ok(node) => Ok(Some(node.into())), // GqlNode implements From<NodeResponse>
             Err(rustok_content::ContentError::NodeNotFound(_)) => Ok(None),
             Err(err) => Err(async_graphql::Error::new(err.to_string())),

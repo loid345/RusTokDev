@@ -88,7 +88,7 @@ impl BlockService {
 
         let mut blocks = Vec::with_capacity(items.len());
         for item in items {
-            let node = self.nodes.get_node(item.id).await?;
+            let node = self.nodes.get_node(tenant_id, item.id).await?;
             blocks.push(node_to_block(node));
         }
 
@@ -103,7 +103,7 @@ impl BlockService {
         block_id: Uuid,
         input: UpdateBlockInput,
     ) -> PagesResult<BlockResponse> {
-        let existing = self.nodes.get_node(block_id).await?;
+        let existing = self.nodes.get_node(tenant_id, block_id).await?;
         if existing.kind != BLOCK_KIND {
             return Err(PagesError::BlockNotFound(block_id));
         }
@@ -122,6 +122,7 @@ impl BlockService {
 
         self.nodes
             .update_node(
+                tenant_id,
                 block_id,
                 security.clone(),
                 UpdateNodeInput {
@@ -140,7 +141,7 @@ impl BlockService {
             )
             .await?;
 
-        let node = self.nodes.get_node(block_id).await?;
+        let node = self.nodes.get_node(tenant_id, block_id).await?;
         Ok(node_to_block(node))
     }
 
@@ -156,6 +157,7 @@ impl BlockService {
         for (position, block_id) in block_order.into_iter().enumerate() {
             self.nodes
                 .update_node(
+                    tenant_id,
                     block_id,
                     security.clone(),
                     UpdateNodeInput {
@@ -179,11 +181,11 @@ impl BlockService {
 
     pub async fn delete(
         &self,
-        _tenant_id: Uuid,
+        tenant_id: Uuid,
         security: SecurityContext,
         block_id: Uuid,
     ) -> PagesResult<()> {
-        self.nodes.delete_node(block_id, security).await?;
+        self.nodes.delete_node(tenant_id, block_id, security).await?;
         Ok(())
     }
 
@@ -197,7 +199,9 @@ impl BlockService {
             .list_for_page(tenant_id, security.clone(), page_id)
             .await?;
         for block in blocks {
-            self.nodes.delete_node(block.id, security.clone()).await?;
+            self.nodes
+                .delete_node(tenant_id, block.id, security.clone())
+                .await?;
         }
         Ok(())
     }

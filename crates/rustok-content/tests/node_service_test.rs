@@ -101,7 +101,7 @@ async fn test_get_node_success() {
         .await
         .unwrap();
 
-    let result = service.get_node(created.id).await;
+    let result = service.get_node(tenant_id, created.id).await;
 
     assert!(result.is_ok());
     let node = result.unwrap();
@@ -114,7 +114,7 @@ async fn test_get_nonexistent_node() {
     let (_db, service) = setup().await;
     let fake_id = Uuid::new_v4();
 
-    let result = service.get_node(fake_id).await;
+    let result = service.get_node(tenant_id, fake_id).await;
 
     assert!(result.is_err());
     match result.unwrap_err() {
@@ -146,7 +146,7 @@ async fn test_update_node_success() {
         ..UpdateNodeInput::default()
     };
 
-    let result = service.update_node(node.id, security, update_input).await;
+    let result = service.update_node(tenant_id, node.id, security, update_input).await;
 
     assert!(result.is_ok());
     let updated = result.unwrap();
@@ -166,10 +166,10 @@ async fn test_delete_node_success() {
         .await
         .unwrap();
 
-    let result = service.delete_node(node.id, security).await;
+    let result = service.delete_node(tenant_id, node.id, security).await;
     assert!(result.is_ok());
 
-    let get_result = service.get_node(node.id).await;
+    let get_result = service.get_node(tenant_id, node.id).await;
     assert!(get_result.is_err());
 }
 
@@ -275,7 +275,7 @@ async fn test_publish_node() {
     assert_eq!(node.status, ContentStatus::Draft);
     assert!(node.published_at.is_none());
 
-    let result = service.publish_node(node.id, security).await;
+    let result = service.publish_node(tenant_id, node.id, security).await;
 
     assert!(result.is_ok());
     let published = result.unwrap();
@@ -298,7 +298,7 @@ async fn test_unpublish_node() {
 
     assert_eq!(node.status, ContentStatus::Published);
 
-    let result = service.unpublish_node(node.id, security).await;
+    let result = service.unpublish_node(tenant_id, node.id, security).await;
 
     assert!(result.is_ok());
     let unpublished = result.unwrap();
@@ -514,7 +514,7 @@ async fn test_update_node_metadata() {
         ..UpdateNodeInput::default()
     };
 
-    let result = service.update_node(node.id, security, update_input).await;
+    let result = service.update_node(tenant_id, node.id, security, update_input).await;
 
     assert!(result.is_ok());
     let updated = result.unwrap();
@@ -560,7 +560,7 @@ async fn test_update_node_own_scope_prevents_author_change() {
         ..UpdateNodeInput::default()
     };
 
-    let result = service.update_node(node.id, manager, update_input).await;
+    let result = service.update_node(tenant_id, node.id, manager, update_input).await;
 
     assert!(result.is_err());
     match result.unwrap_err() {
@@ -591,7 +591,7 @@ async fn test_update_nonexistent_node() {
         ..UpdateNodeInput::default()
     };
 
-    let result = service.update_node(fake_id, security, update_input).await;
+    let result = service.update_node(tenant_id, fake_id, security, update_input).await;
 
     assert!(result.is_err());
     match result.unwrap_err() {
@@ -606,7 +606,7 @@ async fn test_delete_nonexistent_node() {
     let security = admin_context();
     let fake_id = Uuid::new_v4();
 
-    let result = service.delete_node(fake_id, security).await;
+    let result = service.delete_node(tenant_id, fake_id, security).await;
 
     assert!(result.is_err());
 }

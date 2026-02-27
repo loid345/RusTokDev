@@ -12,12 +12,12 @@ pub struct BlogQuery;
 
 #[Object]
 impl BlogQuery {
-    async fn post(&self, ctx: &Context<'_>, _tenant_id: Uuid, id: Uuid) -> Result<Option<GqlPost>> {
+    async fn post(&self, ctx: &Context<'_>, tenant_id: Uuid, id: Uuid) -> Result<Option<GqlPost>> {
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
 
         let service = NodeService::new(db.clone(), event_bus.clone());
-        let node = match service.get_node(id).await {
+        let node = match service.get_node(tenant_id, id).await {
             Ok(node) => node,
             Err(rustok_content::ContentError::NodeNotFound(_)) => return Ok(None),
             Err(err) => return Err(async_graphql::Error::new(err.to_string())),

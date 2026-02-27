@@ -57,7 +57,7 @@ pub async fn list_posts(
 )]
 pub async fn get_post(
     State(ctx): State<AppContext>,
-    _tenant: TenantContext,
+    tenant: TenantContext,
     _user: RequireBlogPostsRead,
     Path(id): Path<Uuid>,
     Query(params): Query<std::collections::HashMap<String, String>>,
@@ -65,7 +65,7 @@ pub async fn get_post(
     let locale = params.get("locale").map(String::as_str).unwrap_or("en");
     let service = PostService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let post = service
-        .get_post(id, locale)
+        .get_post(tenant.id, id, locale)
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(Json(post))
@@ -116,14 +116,14 @@ pub async fn create_post(
 )]
 pub async fn update_post(
     State(ctx): State<AppContext>,
-    _tenant: TenantContext,
+    tenant: TenantContext,
     RequireBlogPostsUpdate(user): RequireBlogPostsUpdate,
     Path(id): Path<Uuid>,
     Json(input): Json<UpdatePostInput>,
 ) -> Result<()> {
     let service = PostService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     service
-        .update_post(id, user.security_context(), input)
+        .update_post(tenant.id, id, user.security_context(), input)
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(())
@@ -146,13 +146,13 @@ pub async fn update_post(
 )]
 pub async fn delete_post(
     State(ctx): State<AppContext>,
-    _tenant: TenantContext,
+    tenant: TenantContext,
     RequireBlogPostsDelete(user): RequireBlogPostsDelete,
     Path(id): Path<Uuid>,
 ) -> Result<()> {
     let service = PostService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     service
-        .delete_post(id, user.security_context())
+        .delete_post(tenant.id, id, user.security_context())
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(())
@@ -175,13 +175,13 @@ pub async fn delete_post(
 )]
 pub async fn publish_post(
     State(ctx): State<AppContext>,
-    _tenant: TenantContext,
+    tenant: TenantContext,
     RequireBlogPostsPublish(user): RequireBlogPostsPublish,
     Path(id): Path<Uuid>,
 ) -> Result<()> {
     let service = PostService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     service
-        .publish_post(id, user.security_context())
+        .publish_post(tenant.id, id, user.security_context())
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(())
@@ -204,13 +204,13 @@ pub async fn publish_post(
 )]
 pub async fn unpublish_post(
     State(ctx): State<AppContext>,
-    _tenant: TenantContext,
+    tenant: TenantContext,
     RequireBlogPostsPublish(user): RequireBlogPostsPublish,
     Path(id): Path<Uuid>,
 ) -> Result<()> {
     let service = PostService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     service
-        .unpublish_post(id, user.security_context())
+        .unpublish_post(tenant.id, id, user.security_context())
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(())

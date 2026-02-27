@@ -148,7 +148,7 @@ impl ContentMutation {
         };
 
         let node: rustok_content::dto::NodeResponse =
-            service.update_node(id, security, domain_input).await?;
+            service.update_node(tenant_id, id, security, domain_input).await?;
 
         Ok(node.into())
     }
@@ -183,7 +183,7 @@ impl ContentMutation {
 
         let security = auth.security_context();
         let service = NodeService::new(db.clone(), event_bus.clone());
-        service.delete_node(id, security).await?;
+        service.delete_node(tenant_id, id, security).await?;
 
         Ok(true)
     }
