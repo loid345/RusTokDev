@@ -61,7 +61,7 @@ pub async fn list_replies(
 )]
 pub async fn get_reply(
     State(ctx): State<AppContext>,
-    _tenant: TenantContext,
+    tenant: TenantContext,
     _user: RequireForumRepliesRead,
     Path(id): Path<Uuid>,
     Query(filter): Query<ListRepliesFilter>,
@@ -69,7 +69,7 @@ pub async fn get_reply(
     let locale = filter.locale.unwrap_or_else(|| "en".to_string());
     let service = ReplyService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let reply = service
-        .get(id, &locale)
+        .get(tenant.id, id, &locale)
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(Json(reply))
@@ -122,14 +122,14 @@ pub async fn create_reply(
 )]
 pub async fn update_reply(
     State(ctx): State<AppContext>,
-    _tenant: TenantContext,
+    tenant: TenantContext,
     RequireForumTopicsModerate(user): RequireForumTopicsModerate,
     Path(id): Path<Uuid>,
     Json(input): Json<UpdateReplyInput>,
 ) -> Result<Json<ReplyResponse>> {
     let service = ReplyService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let reply = service
-        .update(id, user.security_context(), input)
+        .update(tenant.id, id, user.security_context(), input)
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(Json(reply))
@@ -151,13 +151,13 @@ pub async fn update_reply(
 )]
 pub async fn delete_reply(
     State(ctx): State<AppContext>,
-    _tenant: TenantContext,
+    tenant: TenantContext,
     RequireForumTopicsModerate(user): RequireForumTopicsModerate,
     Path(id): Path<Uuid>,
 ) -> Result<()> {
     let service = ReplyService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     service
-        .delete(id, user.security_context())
+        .delete(tenant.id, id, user.security_context())
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(())

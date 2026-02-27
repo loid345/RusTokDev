@@ -58,7 +58,7 @@ pub async fn list_topics(
 )]
 pub async fn get_topic(
     State(ctx): State<AppContext>,
-    _tenant: TenantContext,
+    tenant: TenantContext,
     _user: RequireForumTopicsRead,
     Path(id): Path<Uuid>,
     Query(filter): Query<ListTopicsFilter>,
@@ -66,7 +66,7 @@ pub async fn get_topic(
     let locale = filter.locale.unwrap_or_else(|| "en".to_string());
     let service = TopicService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let topic = service
-        .get(id, &locale)
+        .get(tenant.id, id, &locale)
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(Json(topic))
@@ -115,14 +115,14 @@ pub async fn create_topic(
 )]
 pub async fn update_topic(
     State(ctx): State<AppContext>,
-    _tenant: TenantContext,
+    tenant: TenantContext,
     RequireForumTopicsUpdate(user): RequireForumTopicsUpdate,
     Path(id): Path<Uuid>,
     Json(input): Json<UpdateTopicInput>,
 ) -> Result<Json<TopicResponse>> {
     let service = TopicService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let topic = service
-        .update(id, user.security_context(), input)
+        .update(tenant.id, id, user.security_context(), input)
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(Json(topic))
@@ -144,13 +144,13 @@ pub async fn update_topic(
 )]
 pub async fn delete_topic(
     State(ctx): State<AppContext>,
-    _tenant: TenantContext,
+    tenant: TenantContext,
     RequireForumTopicsDelete(user): RequireForumTopicsDelete,
     Path(id): Path<Uuid>,
 ) -> Result<()> {
     let service = TopicService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     service
-        .delete(id, user.security_context())
+        .delete(tenant.id, id, user.security_context())
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(())
