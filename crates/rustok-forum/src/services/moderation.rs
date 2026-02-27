@@ -105,14 +105,24 @@ impl ModerationService {
     }
 
     #[instrument(skip(self, security))]
-    pub async fn lock_topic(&self, topic_id: Uuid, security: SecurityContext) -> ForumResult<()> {
-        self.update_topic_bool_flag(topic_id, security, "is_locked", true)
+    pub async fn lock_topic(
+        &self,
+        tenant_id: Uuid,
+        topic_id: Uuid,
+        security: SecurityContext,
+    ) -> ForumResult<()> {
+        self.update_topic_bool_flag(tenant_id, topic_id, security, "is_locked", true)
             .await
     }
 
     #[instrument(skip(self, security))]
-    pub async fn unlock_topic(&self, topic_id: Uuid, security: SecurityContext) -> ForumResult<()> {
-        self.update_topic_bool_flag(topic_id, security, "is_locked", false)
+    pub async fn unlock_topic(
+        &self,
+        tenant_id: Uuid,
+        topic_id: Uuid,
+        security: SecurityContext,
+    ) -> ForumResult<()> {
+        self.update_topic_bool_flag(tenant_id, topic_id, security, "is_locked", false)
             .await
     }
 
@@ -140,7 +150,7 @@ impl ModerationService {
         topic_id: Uuid,
         security: SecurityContext,
     ) -> ForumResult<()> {
-        let node = self.nodes.get_node(topic_id).await?;
+        let node = self.nodes.get_node(tenant_id, topic_id).await?;
         if node.kind != KIND_TOPIC {
             return Err(ForumError::TopicNotFound(topic_id));
         }
@@ -171,7 +181,7 @@ impl ModerationService {
         security: SecurityContext,
         new_status: &str,
     ) -> ForumResult<()> {
-        let node = self.nodes.get_node(reply_id).await?;
+        let node = self.nodes.get_node(tenant_id, reply_id).await?;
         let mut metadata = node.metadata;
         metadata["reply_status"] = serde_json::json!(new_status);
 
@@ -180,6 +190,7 @@ impl ModerationService {
         self.nodes
             .update_node_in_tx(
                 &txn,
+                tenant_id,
                 reply_id,
                 security.clone(),
                 rustok_content::UpdateNodeInput {
@@ -215,7 +226,7 @@ impl ModerationService {
         security: SecurityContext,
         is_pinned: bool,
     ) -> ForumResult<()> {
-        let node = self.nodes.get_node(topic_id).await?;
+        let node = self.nodes.get_node(tenant_id, topic_id).await?;
         if node.kind != KIND_TOPIC {
             return Err(ForumError::TopicNotFound(topic_id));
         }
@@ -227,6 +238,7 @@ impl ModerationService {
         self.nodes
             .update_node_in_tx(
                 &txn,
+                tenant_id,
                 topic_id,
                 security.clone(),
                 rustok_content::UpdateNodeInput {
@@ -256,12 +268,13 @@ impl ModerationService {
 
     async fn update_topic_bool_flag(
         &self,
+        tenant_id: Uuid,
         topic_id: Uuid,
         security: SecurityContext,
         flag: &str,
         value: bool,
     ) -> ForumResult<()> {
-        let node = self.nodes.get_node(topic_id).await?;
+        let node = self.nodes.get_node(tenant_id, topic_id).await?;
         if node.kind != KIND_TOPIC {
             return Err(ForumError::TopicNotFound(topic_id));
         }
@@ -270,6 +283,7 @@ impl ModerationService {
 
         self.nodes
             .update_node(
+                tenant_id,
                 topic_id,
                 security,
                 rustok_content::UpdateNodeInput {
@@ -289,7 +303,7 @@ impl ModerationService {
         old_status: &str,
         new_status: &str,
     ) -> ForumResult<()> {
-        let node = self.nodes.get_node(topic_id).await?;
+        let node = self.nodes.get_node(tenant_id, topic_id).await?;
         if node.kind != KIND_TOPIC {
             return Err(ForumError::TopicNotFound(topic_id));
         }
@@ -301,6 +315,7 @@ impl ModerationService {
         self.nodes
             .update_node_in_tx(
                 &txn,
+                tenant_id,
                 topic_id,
                 security.clone(),
                 rustok_content::UpdateNodeInput {

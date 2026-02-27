@@ -42,7 +42,7 @@ impl ReplyService {
             ));
         }
 
-        let topic_node = self.nodes.get_node(topic_id).await?;
+        let topic_node = self.nodes.get_node(tenant_id, topic_id).await?;
         if topic_node.kind != KIND_TOPIC {
             return Err(ForumError::TopicNotFound(topic_id));
         }
@@ -111,13 +111,18 @@ impl ReplyService {
 
         txn.commit().await?;
 
-        let node = self.nodes.get_node(reply_id).await?;
+        let node = self.nodes.get_node(tenant_id, reply_id).await?;
         Ok(Self::node_to_reply(node, topic_id, &locale))
     }
 
     #[instrument(skip(self))]
-    pub async fn get(&self, reply_id: Uuid, locale: &str) -> ForumResult<ReplyResponse> {
-        let node = self.nodes.get_node(reply_id).await?;
+    pub async fn get(
+        &self,
+        tenant_id: Uuid,
+        reply_id: Uuid,
+        locale: &str,
+    ) -> ForumResult<ReplyResponse> {
+        let node = self.nodes.get_node(tenant_id, reply_id).await?;
 
         if node.kind != KIND_REPLY {
             return Err(ForumError::ReplyNotFound(reply_id));
@@ -130,11 +135,12 @@ impl ReplyService {
     #[instrument(skip(self, security, input))]
     pub async fn update(
         &self,
+        tenant_id: Uuid,
         reply_id: Uuid,
         security: SecurityContext,
         input: UpdateReplyInput,
     ) -> ForumResult<ReplyResponse> {
-        let existing = self.get(reply_id, &input.locale).await?;
+        let existing = self.get(tenant_id, reply_id, &input.locale).await?;
         let bodies = input.content.map(|content| {
             vec![BodyInput {
                 locale: input.locale.clone(),
@@ -146,6 +152,7 @@ impl ReplyService {
         let node = self
             .nodes
             .update_node(
+                tenant_id,
                 reply_id,
                 security,
                 UpdateNodeInput {
@@ -159,8 +166,13 @@ impl ReplyService {
     }
 
     #[instrument(skip(self, security))]
-    pub async fn delete(&self, reply_id: Uuid, security: SecurityContext) -> ForumResult<()> {
-        self.nodes.delete_node(reply_id, security).await?;
+    pub async fn delete(
+        &self,
+        tenant_id: Uuid,
+        reply_id: Uuid,
+        security: SecurityContext,
+    ) -> ForumResult<()> {
+        self.nodes.delete_node(tenant_id, reply_id, security).await?;
         Ok(())
     }
 
@@ -196,7 +208,7 @@ impl ReplyService {
 
         let mut full_nodes = Vec::with_capacity(node_ids.len());
         for id in node_ids {
-            match self.nodes.get_node(id).await {
+            match self.nodes.get_node(tenant_id, id).await {
                 Ok(node) => full_nodes.push(node),
                 Err(_) => continue,
             }

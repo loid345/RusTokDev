@@ -98,7 +98,7 @@ impl BlogMutation {
             version: None,
         };
 
-        service.update_post(id, security, domain_input).await?;
+        service.update_post(tenant_id, id, security, domain_input).await?;
 
         Ok(true)
     }
@@ -127,7 +127,7 @@ impl BlogMutation {
 
         let security = auth.security_context();
         let service = PostService::new(db.clone(), event_bus.clone());
-        service.delete_post(id, security).await?;
+        service.delete_post(tenant_id, id, security).await?;
 
         Ok(true)
     }
@@ -156,7 +156,7 @@ impl BlogMutation {
 
         let security = auth.security_context();
         let service = PostService::new(db.clone(), event_bus.clone());
-        service.publish_post(id, security).await?;
+        service.publish_post(tenant_id, id, security).await?;
 
         Ok(true)
     }
@@ -185,7 +185,7 @@ impl BlogMutation {
 
         let security = auth.security_context();
         let service = PostService::new(db.clone(), event_bus.clone());
-        service.unpublish_post(id, security).await?;
+        service.unpublish_post(tenant_id, id, security).await?;
 
         Ok(true)
     }
@@ -220,7 +220,7 @@ impl BlogMutation {
 
         let security = auth.security_context();
         let service = PostService::new(db.clone(), event_bus.clone());
-        service.archive_post(id, security, reason).await?;
+        service.archive_post(tenant_id, id, security, reason).await?;
 
         Ok(true)
     }

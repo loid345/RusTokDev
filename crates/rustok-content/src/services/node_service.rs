@@ -123,7 +123,7 @@ impl NodeService {
             .await?;
         txn.commit().await?;
         info!(node_id = %node_id, "Node created successfully");
-        let response = self.get_node(node_id).await?;
+        let response = self.get_node(tenant_id, node_id).await?;
         Ok(response)
     }
 
@@ -247,16 +247,17 @@ impl NodeService {
         Ok(node_id)
     }
 
-    #[instrument(skip(self, security, update), fields(node_id = %node_id, user_id = ?security.user_id))]
+    #[instrument(skip(self, security, update), fields(tenant_id = %tenant_id, node_id = %node_id, user_id = ?security.user_id))]
     pub async fn update_node(
         &self,
+        tenant_id: Uuid,
         node_id: Uuid,
         security: SecurityContext,
         update: UpdateNodeInput,
     ) -> ContentResult<NodeResponse> {
         info!("Updating node");
         let txn = self.db.begin().await?;
-        let updated = self.update_node_in_tx(&txn, node_id, security, update).await?;
+        let updated = self.update_node_in_tx(&txn, tenant_id, node_id, security, update).await?;
         txn.commit().await?;
         let translations = node_translation::Entity::find()
             .filter(node_translation::Column::NodeId.eq(node_id))
@@ -274,11 +275,12 @@ impl NodeService {
     pub async fn update_node_in_tx(
         &self,
         txn: &DatabaseTransaction,
+        tenant_id: Uuid,
         node_id: Uuid,
         security: SecurityContext,
         update: UpdateNodeInput,
     ) -> ContentResult<node::Model> {
-        let node_model = self.find_node(node_id).await?;
+        let node_model = self.find_node(tenant_id, node_id).await?;
 
         if node_model.deleted_at.is_some() {
             return Err(ContentError::Validation(
@@ -419,6 +421,7 @@ impl NodeService {
     /// Common method for status transitions (publish/unpublish/archive)
     async fn transition_status(
         &self,
+        tenant_id: Uuid,
         node_id: Uuid,
         security: SecurityContext,
         new_status: node::ContentStatus,
@@ -426,7 +429,7 @@ impl NodeService {
     ) -> ContentResult<NodeResponse> {
         let txn = self.db.begin().await?;
         let updated = self
-            .transition_status_in_tx(&txn, node_id, security, new_status, events)
+            .transition_status_in_tx(&txn, tenant_id, node_id, security, new_status, events)
             .await?;
         txn.commit().await?;
 
@@ -446,12 +449,13 @@ impl NodeService {
     pub async fn transition_status_in_tx(
         &self,
         txn: &DatabaseTransaction,
+        tenant_id: Uuid,
         node_id: Uuid,
         security: SecurityContext,
         new_status: node::ContentStatus,
         events: Vec<DomainEvent>,
     ) -> ContentResult<node::Model> {
-        let node_model = self.find_node(node_id).await?;
+        let node_model = self.find_node(tenant_id, node_id).await?;
 
         if node_model.deleted_at.is_some() {
             return Err(ContentError::Validation(
@@ -490,17 +494,19 @@ impl NodeService {
         Ok(updated)
     }
 
-    #[instrument(skip(self, security), fields(node_id = %node_id, user_id = ?security.user_id))]
+    #[instrument(skip(self, security), fields(tenant_id = %tenant_id, node_id = %node_id, user_id = ?security.user_id))]
     pub async fn publish_node(
         &self,
+        tenant_id: Uuid,
         node_id: Uuid,
         security: SecurityContext,
     ) -> ContentResult<NodeResponse> {
         info!("Publishing node");
-        let node_model = self.find_node(node_id).await?;
+        let node_model = self.find_node(tenant_id, node_id).await?;
         let kind = node_model.kind.clone();
 
         self.transition_status(
+            tenant_id,
             node_id,
             security,
             node::ContentStatus::Published,
@@ -515,17 +521,19 @@ impl NodeService {
         .await
     }
 
-    #[instrument(skip(self, security), fields(node_id = %node_id, user_id = ?security.user_id))]
+    #[instrument(skip(self, security), fields(tenant_id = %tenant_id, node_id = %node_id, user_id = ?security.user_id))]
     pub async fn unpublish_node(
         &self,
+        tenant_id: Uuid,
         node_id: Uuid,
         security: SecurityContext,
     ) -> ContentResult<NodeResponse> {
         info!("Unpublishing node");
-        let node_model = self.find_node(node_id).await?;
+        let node_model = self.find_node(tenant_id, node_id).await?;
         let kind = node_model.kind.clone();
 
         self.transition_status(
+            tenant_id,
             node_id,
             security,
             node::ContentStatus::Draft,
@@ -540,17 +548,19 @@ impl NodeService {
         .await
     }
 
-    #[instrument(skip(self, security), fields(node_id = %node_id, user_id = ?security.user_id))]
+    #[instrument(skip(self, security), fields(tenant_id = %tenant_id, node_id = %node_id, user_id = ?security.user_id))]
     pub async fn archive_node(
         &self,
+        tenant_id: Uuid,
         node_id: Uuid,
         security: SecurityContext,
     ) -> ContentResult<NodeResponse> {
         info!("Archiving node");
-        let node_model = self.find_node(node_id).await?;
+        let node_model = self.find_node(tenant_id, node_id).await?;
         let kind = node_model.kind.clone();
 
         self.transition_status(
+            tenant_id,
             node_id,
             security,
             node::ContentStatus::Archived,
@@ -563,12 +573,14 @@ impl NodeService {
     pub async fn publish_node_in_tx(
         &self,
         txn: &DatabaseTransaction,
+        tenant_id: Uuid,
         node_id: Uuid,
         security: SecurityContext,
     ) -> ContentResult<node::Model> {
-        let kind = self.find_node(node_id).await?.kind;
+        let kind = self.find_node(tenant_id, node_id).await?.kind;
         self.transition_status_in_tx(
             txn,
+            tenant_id,
             node_id,
             security,
             node::ContentStatus::Published,
@@ -587,12 +599,14 @@ impl NodeService {
     pub async fn unpublish_node_in_tx(
         &self,
         txn: &DatabaseTransaction,
+        tenant_id: Uuid,
         node_id: Uuid,
         security: SecurityContext,
     ) -> ContentResult<node::Model> {
-        let kind = self.find_node(node_id).await?.kind;
+        let kind = self.find_node(tenant_id, node_id).await?.kind;
         self.transition_status_in_tx(
             txn,
+            tenant_id,
             node_id,
             security,
             node::ContentStatus::Draft,
@@ -611,12 +625,14 @@ impl NodeService {
     pub async fn archive_node_in_tx(
         &self,
         txn: &DatabaseTransaction,
+        tenant_id: Uuid,
         node_id: Uuid,
         security: SecurityContext,
     ) -> ContentResult<node::Model> {
-        let kind = self.find_node(node_id).await?.kind;
+        let kind = self.find_node(tenant_id, node_id).await?.kind;
         self.transition_status_in_tx(
             txn,
+            tenant_id,
             node_id,
             security,
             node::ContentStatus::Archived,
@@ -626,11 +642,16 @@ impl NodeService {
     }
 
     /// Soft delete a node (can be restored)
-    #[instrument(skip(self, security), fields(node_id = %node_id, user_id = ?security.user_id))]
-    pub async fn delete_node(&self, node_id: Uuid, security: SecurityContext) -> ContentResult<()> {
+    #[instrument(skip(self, security), fields(tenant_id = %tenant_id, node_id = %node_id, user_id = ?security.user_id))]
+    pub async fn delete_node(
+        &self,
+        tenant_id: Uuid,
+        node_id: Uuid,
+        security: SecurityContext,
+    ) -> ContentResult<()> {
         info!("Soft-deleting node");
         let txn = self.db.begin().await?;
-        self.delete_node_in_tx(&txn, node_id, security).await?;
+        self.delete_node_in_tx(&txn, tenant_id, node_id, security).await?;
         txn.commit().await?;
         info!(node_id = %node_id, "Node soft-deleted successfully");
         Ok(())
@@ -640,10 +661,11 @@ impl NodeService {
     pub async fn delete_node_in_tx(
         &self,
         txn: &DatabaseTransaction,
+        tenant_id: Uuid,
         node_id: Uuid,
         security: SecurityContext,
     ) -> ContentResult<()> {
-        let node_model = self.find_node(node_id).await?;
+        let node_model = self.find_node(tenant_id, node_id).await?;
 
         let resource = Self::kind_to_resource(&node_model.kind);
         let scope = security.get_scope(resource, Action::Delete);
@@ -672,14 +694,15 @@ impl NodeService {
     }
 
     /// Restore a soft-deleted node
-    #[instrument(skip(self, security), fields(node_id = %node_id, user_id = ?security.user_id))]
+    #[instrument(skip(self, security), fields(tenant_id = %tenant_id, node_id = %node_id, user_id = ?security.user_id))]
     pub async fn restore_node(
         &self,
+        tenant_id: Uuid,
         node_id: Uuid,
         security: SecurityContext,
     ) -> ContentResult<NodeResponse> {
         info!("Restoring node");
-        let node_model = self.find_node_with_deleted(node_id).await?;
+        let node_model = self.find_node_with_deleted(tenant_id, node_id).await?;
 
         if node_model.deleted_at.is_none() {
             return Err(ContentError::Validation("Node is not deleted".to_string()));
@@ -727,14 +750,15 @@ impl NodeService {
     }
 
     /// Hard delete - permanently removes node (admin only)
-    #[instrument(skip(self, security), fields(node_id = %node_id, user_id = ?security.user_id))]
+    #[instrument(skip(self, security), fields(tenant_id = %tenant_id, node_id = %node_id, user_id = ?security.user_id))]
     pub async fn hard_delete_node(
         &self,
+        tenant_id: Uuid,
         node_id: Uuid,
         security: SecurityContext,
     ) -> ContentResult<()> {
         info!("Hard-deleting node");
-        let node_model = self.find_node_with_deleted(node_id).await?;
+        let node_model = self.find_node_with_deleted(tenant_id, node_id).await?;
 
         // Only admins can hard delete
         let resource = Self::kind_to_resource(&node_model.kind);
@@ -764,25 +788,31 @@ impl NodeService {
         Ok(())
     }
 
-    pub async fn find_node(&self, node_id: Uuid) -> ContentResult<node::Model> {
+    pub async fn find_node(&self, tenant_id: Uuid, node_id: Uuid) -> ContentResult<node::Model> {
         node::Entity::find_by_id(node_id)
+            .filter(node::Column::TenantId.eq(tenant_id))
             .filter(node::Column::DeletedAt.is_null())
             .one(&self.db)
             .await?
             .ok_or(ContentError::NodeNotFound(node_id))
     }
 
-    async fn find_node_with_deleted(&self, node_id: Uuid) -> ContentResult<node::Model> {
+    async fn find_node_with_deleted(
+        &self,
+        tenant_id: Uuid,
+        node_id: Uuid,
+    ) -> ContentResult<node::Model> {
         node::Entity::find_by_id(node_id)
+            .filter(node::Column::TenantId.eq(tenant_id))
             .one(&self.db)
             .await?
             .ok_or(ContentError::NodeNotFound(node_id))
     }
 
-    #[instrument(skip(self), fields(node_id = %node_id))]
-    pub async fn get_node(&self, node_id: Uuid) -> ContentResult<NodeResponse> {
+    #[instrument(skip(self), fields(tenant_id = %tenant_id, node_id = %node_id))]
+    pub async fn get_node(&self, tenant_id: Uuid, node_id: Uuid) -> ContentResult<NodeResponse> {
         debug!("Fetching node");
-        let node_model = self.find_node(node_id).await?;
+        let node_model = self.find_node(tenant_id, node_id).await?;
         let translations = node_translation::Entity::find()
             .filter(node_translation::Column::NodeId.eq(node_id))
             .all(&self.db)
@@ -813,7 +843,7 @@ impl NodeService {
             .await?;
 
         match result {
-            Some(node_model) => Ok(Some(self.get_node(node_model.id).await?)),
+            Some(node_model) => Ok(Some(self.get_node(tenant_id, node_model.id).await?)),
             None => Ok(None),
         }
     }

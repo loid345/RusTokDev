@@ -139,7 +139,7 @@ impl MenuService {
         security: SecurityContext,
         menu_id: Uuid,
     ) -> PagesResult<MenuResponse> {
-        let menu = self.nodes.get_node(menu_id).await?;
+        let menu = self.nodes.get_node(tenant_id, menu_id).await?;
         if menu.kind != MENU_KIND {
             return Err(PagesError::MenuNotFound(menu_id));
         }
@@ -194,7 +194,7 @@ impl MenuService {
 
             let mut responses = Vec::with_capacity(items.len());
             for item in items {
-                let node = self.nodes.get_node(item.id).await?;
+                let node = self.nodes.get_node(tenant_id, item.id).await?;
                 let title = node.translations.first().and_then(|t| t.title.clone());
 
                 let url = node

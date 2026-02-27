@@ -118,7 +118,7 @@ impl ForumMutation {
             tags: input.tags,
         };
 
-        let topic = service.update(id, security, domain_input).await?;
+        let topic = service.update(tenant_id, id, security, domain_input).await?;
 
         Ok(GqlForumTopic {
             id: topic.id,
@@ -171,7 +171,7 @@ impl ForumMutation {
 
         let security = auth.security_context();
         let service = TopicService::new(db.clone(), event_bus.clone());
-        service.delete(id, security).await?;
+        service.delete(tenant_id, id, security).await?;
 
         Ok(true)
     }

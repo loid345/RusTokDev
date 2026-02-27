@@ -58,13 +58,13 @@ pub async fn list_nodes(
 )]
 pub async fn get_node(
     State(ctx): State<AppContext>,
-    _tenant: TenantContext,
+    tenant: TenantContext,
     _user: RequireNodesRead,
     Path(id): Path<Uuid>,
 ) -> Result<Json<NodeResponse>> {
     let service = NodeService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let node = service
-        .get_node(id)
+        .get_node(tenant.id, id)
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(Json(node))
@@ -115,14 +115,14 @@ pub async fn create_node(
 )]
 pub async fn update_node(
     State(ctx): State<AppContext>,
-    _tenant: TenantContext,
+    tenant: TenantContext,
     RequireNodesUpdate(user): RequireNodesUpdate,
     Path(id): Path<Uuid>,
     Json(input): Json<UpdateNodeInput>,
 ) -> Result<Json<NodeResponse>> {
     let service = NodeService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let node = service
-        .update_node(id, user.security_context(), input)
+        .update_node(tenant.id, id, user.security_context(), input)
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(Json(node))
@@ -145,13 +145,13 @@ pub async fn update_node(
 )]
 pub async fn delete_node(
     State(ctx): State<AppContext>,
-    _tenant: TenantContext,
+    tenant: TenantContext,
     RequireNodesDelete(user): RequireNodesDelete,
     Path(id): Path<Uuid>,
 ) -> Result<()> {
     let service = NodeService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     service
-        .delete_node(id, user.security_context())
+        .delete_node(tenant.id, id, user.security_context())
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(())

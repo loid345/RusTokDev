@@ -151,13 +151,13 @@ pub async fn update_category(
 )]
 pub async fn delete_category(
     State(ctx): State<AppContext>,
-    _tenant: TenantContext,
+    tenant: TenantContext,
     RequireForumCategoriesDelete(user): RequireForumCategoriesDelete,
     Path(id): Path<Uuid>,
 ) -> Result<()> {
     let service = CategoryService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     service
-        .delete(id, user.security_context())
+        .delete(tenant.id, id, user.security_context())
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(())
