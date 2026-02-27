@@ -112,6 +112,7 @@ async fn test_get_node_success() {
 #[tokio::test]
 async fn test_get_nonexistent_node() {
     let (_db, service) = setup().await;
+    let tenant_id = Uuid::new_v4();
     let fake_id = Uuid::new_v4();
 
     let result = service.get_node(tenant_id, fake_id).await;
@@ -578,6 +579,7 @@ async fn test_update_node_own_scope_prevents_author_change() {
 #[tokio::test]
 async fn test_update_nonexistent_node() {
     let (_db, service) = setup().await;
+    let tenant_id = Uuid::new_v4();
     let security = admin_context();
     let fake_id = Uuid::new_v4();
 
@@ -603,6 +605,7 @@ async fn test_update_nonexistent_node() {
 #[tokio::test]
 async fn test_delete_nonexistent_node() {
     let (_db, service) = setup().await;
+    let tenant_id = Uuid::new_v4();
     let security = admin_context();
     let fake_id = Uuid::new_v4();
 
