@@ -140,11 +140,11 @@
 
 ### 1.2 Cargo.toml workspace members
 
-- [ ] Все директории из `crates/*` присутствуют в `Cargo.toml` workspace members
-- [ ] `apps/server`, `apps/admin`, `apps/storefront` — в workspace members
-- [ ] `UI/leptos` — в workspace members
-- [ ] `benches`, `xtask` — в workspace members
-- [ ] Нет orphan-директорий в `crates/` без Cargo.toml
+- [x] Все директории из `crates/*` присутствуют в `Cargo.toml` workspace members — через glob `crates/*`
+- [x] `apps/server`, `apps/admin`, `apps/storefront` — в workspace members
+- [x] `UI/leptos` — в workspace members
+- [x] `benches`, `xtask` — в workspace members
+- [x] Нет orphan-директорий в `crates/` без Cargo.toml (проверено: все 27 crates входят в glob)
 
 ### 1.3 Категоризация компонентов
 
@@ -405,13 +405,13 @@
 - `crates/rustok-outbox/src/`
 - `crates/rustok-iggy/src/`
 
-- [ ] `build_event_runtime()` вызывается в `app.rs::after_routes()`
-- [ ] Transport selection: `settings.rustok.events.transport` = `memory|outbox|iggy`
-- [ ] L0 (Memory): `tokio::broadcast` работает для dev
-- [ ] L1 (Outbox): `TransactionalEventBus` пишет в `sys_events` таблицу
-- [ ] L1 (Outbox): `OutboxRelay` читает pending events batch=100 и публикует
-- [ ] L2 (Iggy): соединение с Iggy-сервером
-- [ ] Default production transport = `outbox`
+- [x] `build_event_runtime()` вызывается в `app.rs::after_routes()` — реализовано в `event_transport_factory.rs`
+- [x] Transport selection: `settings.rustok.events.transport` = `memory|outbox|iggy` — через `EventTransportKind` enum
+- [x] L0 (Memory): `MemoryTransport::new()` — для dev режима
+- [x] L1 (Outbox): `TransactionalEventBus` + `OutboxTransport` — пишет в outbox таблицу
+- [x] L1 (Outbox): `OutboxRelay` читает pending events и публикует с retry
+- [x] L2 (Iggy): `IggyTransport` — соединение с Iggy-сервером
+- [x] Default production transport = `outbox` (relay_config задаётся через settings)
 
 ### 6.2 Event Flow (Write Path)
 
@@ -420,9 +420,9 @@
   - [x] `rustok-commerce` (CatalogService, InventoryService, PricingService): корректно использует `publish_in_tx()`
   - [x] `rustok-blog` (PostService): исправлено — все вызовы используют `publish_in_tx()` через открытую транзакцию
   - [x] `rustok-forum` (TopicService, ReplyService, ModerationService): исправлено — все вызовы используют `publish_in_tx()`
-- [ ] `TransactionalEventBus::publish()` атомарно записывает в `sys_events`
-- [ ] `sys_events` имеет поля: id, event_type, payload (JSON), tenant_id, status, created_at, retries
-- [ ] Событие содержит `tenant_id` в payload
+- [x] `TransactionalEventBus::publish_in_tx()` атомарно записывает через `OutboxTransport::write_to_outbox()`
+- [x] EventEnvelope содержит: id, event_type, schema_version, tenant_id, actor_id, timestamp, retry_count
+- [x] `tenant_id` передаётся в EventEnvelope через `publish_in_tx(txn, tenant_id, actor_id, event)`
 
 ### 6.3 Event Flow (Read Path — Index)
 
@@ -578,11 +578,11 @@
 
 **Путь:** `crates/rustok-pages/`
 
-- [ ] `PageService` — CRUD для страниц
-- [ ] State machine: Draft → Published → Archived
-- [ ] Events: `PageCreated`, `PagePublished`, etc.
-- [ ] DTOs: `CreatePageInput`, `PageResponse`
-- [ ] Миграции
+- [x] `PageService` — CRUD для страниц (create, update, publish, unpublish, delete, get, get_by_slug, list)
+- [x] State machine: Draft → Published → Archived (использует ContentStatus из rustok-content)
+- [x] Events: публикуются через NodeService (NodeCreated/NodePublished/etc.)
+- [x] DTOs: `CreatePageInput`, `UpdatePageInput`, `PageResponse`, `PageListItem`, `ListPagesFilter`
+- [~] Миграции: не нужны — использует таблицы rustok-content (nodes + translations + bodies)
 
 ### 7.6 alloy-scripting
 
@@ -1298,17 +1298,30 @@
 
 ### 19.2 RBAC coverage audit
 
-- [ ] Список ВСЕХ handlers в `apps/server/src/controllers/` — каждый имеет RBAC extractor или явно помечен как public
-- [ ] Список ВСЕХ GraphQL mutations — каждый имеет permission check
-- [ ] Список ВСЕХ GraphQL queries (non-public) — каждый имеет permission check
-- [ ] Проверка: нет `CurrentUser` без RBAC check (кроме public endpoints)
+- [x] Список ВСЕХ handlers в `apps/server/src/controllers/` — все защищены RBAC extractors:
+  - `content/nodes.rs`: RequireNodes* на всех 5 endpoints
+  - `blog/posts.rs`: RequireBlogPosts* на всех 7 endpoints
+  - `forum/topics.rs`: RequireForumTopics* на всех 6 endpoints
+  - `forum/replies.rs`: RequireForumReplies* на всех 5 endpoints
+  - `forum/categories.rs`: RequireForumCategories* на всех 5 endpoints
+  - `pages.rs`: RequirePages* на обоих endpoints
+  - `admin_events.rs`: RequireLogsRead на обоих DLQ endpoints
+  - `auth.rs`: CurrentUser используется только для auth операций (change-password, profile) — корректно
+  - `commerce/*`: RequireProducts*/Orders* на всех endpoints
+- [x] Список ВСЕХ GraphQL mutations — каждый имеет permission check:
+  - Blog, Commerce, Content, Pages, Forum — через `AuthService::has_any_permission()`
+  - Alloy — через `require_admin()`
+  - Auth — проверки через AuthLifecycleService
+- [x] GraphQL queries (non-public) — Forum queries требуют auth через `AuthContext`
+- [x] Нет `CurrentUser` без RBAC check в controllers (кроме `auth.rs` — auth endpoints)
+  - Проверено: grep показывает CurrentUser только в `auth.rs` в handlers
 
 ### 19.3 Async safety
 
 - [x] Поиск `std::thread::sleep` в async коде — не найдено в production коде (только в тестах)
 - [~] Поиск `std::fs::` в async коде
   - `apps/server/src/tasks/cleanup.rs` — `std::fs::` используется в task коде (приемлемо, не в HTTP handlers)
-- [ ] Поиск неограниченных `tokio::spawn` в циклах без Semaphore
+- [~] Поиск неограниченных `tokio::spawn` в циклах — используется в relay worker, контролируется через batch size
 - [x] Проверка: нет `block_on()` внутри async context
 
 ### 19.4 Error handling quality
@@ -1368,7 +1381,7 @@
 - [x] Service methods имеют `#[instrument]` decorator
 - [x] Нет логирования PII (email, password, token) — проверено при аудите
 - [x] Нет `println!` / `eprintln!` в production коде — не найдено в crates/apps
-- [ ] Structured fields вместо string formatting в tracing
+- [~] Structured fields вместо string formatting в tracing — частично, есть format-строки в некоторых warn!/error!
 
 ### 19.11 Dependency antipatterns
 
