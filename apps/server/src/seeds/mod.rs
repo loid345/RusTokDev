@@ -13,6 +13,54 @@ use crate::services::auth::AuthService;
 
 const DEFAULT_DEV_SEED_PASSWORD: &str = "dev-password-123";
 
+fn superadmin_email() -> Option<String> {
+    for key in ["SUPERADMIN_EMAIL", "SEED_ADMIN_EMAIL"] {
+        if let Ok(v) = std::env::var(key) {
+            let v = v.trim().to_string();
+            if !v.is_empty() {
+                return Some(v);
+            }
+        }
+    }
+    None
+}
+
+fn superadmin_password() -> String {
+    for key in ["SUPERADMIN_PASSWORD", "SEED_ADMIN_PASSWORD", "RUSTOK_DEV_SEED_PASSWORD"] {
+        if let Ok(v) = std::env::var(key) {
+            let v = v.trim().to_string();
+            if !v.is_empty() {
+                return v;
+            }
+        }
+    }
+    DEFAULT_DEV_SEED_PASSWORD.to_string()
+}
+
+fn superadmin_tenant_slug() -> String {
+    for key in ["SUPERADMIN_TENANT_SLUG", "SEED_TENANT_SLUG"] {
+        if let Ok(v) = std::env::var(key) {
+            let v = v.trim().to_string();
+            if !v.is_empty() {
+                return v;
+            }
+        }
+    }
+    "demo".to_string()
+}
+
+fn superadmin_tenant_name() -> String {
+    for key in ["SUPERADMIN_TENANT_NAME", "SEED_TENANT_NAME"] {
+        if let Ok(v) = std::env::var(key) {
+            let v = v.trim().to_string();
+            if !v.is_empty() {
+                return v;
+            }
+        }
+    }
+    "Demo Workspace".to_string()
+}
+
 /// Seed the database with initial data
 pub async fn seed(ctx: &AppContext, path: &Path) -> Result<()> {
     let seed_name = path
@@ -40,16 +88,26 @@ pub async fn seed(ctx: &AppContext, path: &Path) -> Result<()> {
 async fn seed_development(ctx: &AppContext) -> Result<()> {
     tracing::info!("Seeding development data...");
 
-    let demo_tenant =
-        tenants::Entity::find_or_create(&ctx.db, "Demo Tenant", "demo", Some("demo.localhost"))
-            .await?;
+    let tenant_slug = superadmin_tenant_slug();
+    let tenant_name = superadmin_tenant_name();
+
+    let demo_tenant = tenants::Entity::find_or_create(
+        &ctx.db,
+        &tenant_name,
+        &tenant_slug,
+        Some("demo.localhost"),
+    )
+    .await?;
+
+    let admin_email = superadmin_email()
+        .unwrap_or_else(|| "admin@demo.local".to_string());
 
     seed_user(
         ctx,
         demo_tenant.id,
-        "admin@demo.local",
-        "Demo Admin",
-        rustok_core::UserRole::Admin,
+        &admin_email,
+        "Super Admin",
+        rustok_core::UserRole::SuperAdmin,
     )
     .await?;
 
@@ -85,11 +143,7 @@ async fn seed_user(
         return Ok(());
     }
 
-    let seed_password = std::env::var("RUSTOK_DEV_SEED_PASSWORD")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .unwrap_or_else(|| DEFAULT_DEV_SEED_PASSWORD.to_string());
-
+    let seed_password = superadmin_password();
     let password_hash = hash_password(&seed_password)?;
     let mut user = users::ActiveModel::new(tenant_id, email, &password_hash);
     user.name = Set(Some(name.to_string()));
@@ -110,11 +164,24 @@ async fn seed_test(_ctx: &AppContext) -> Result<()> {
     Ok(())
 }
 
-/// Minimal seed data (just essentials)
-async fn seed_minimal(_ctx: &AppContext) -> Result<()> {
+/// Minimal seed data — creates only the default superadmin from env vars
+async fn seed_minimal(ctx: &AppContext) -> Result<()> {
     tracing::info!("Seeding minimal data...");
 
-    // Only essential data
+    let Some(email) = superadmin_email() else {
+        tracing::warn!("SUPERADMIN_EMAIL not set — minimal seed skipped");
+        return Ok(());
+    };
+
+    let tenant_slug = superadmin_tenant_slug();
+    let tenant_name = superadmin_tenant_name();
+
+    let tenant =
+        tenants::Entity::find_or_create(&ctx.db, &tenant_name, &tenant_slug, None).await?;
+
+    seed_user(ctx, tenant.id, &email, "Super Admin", rustok_core::UserRole::SuperAdmin).await?;
+
+    tracing::info!(tenant_id = %tenant.id, "Minimal seed complete");
 
     Ok(())
 }
