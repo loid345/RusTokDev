@@ -738,3 +738,100 @@ async fn test_list_nodes_includes_metadata_and_category_id() {
     assert_eq!(items[0].category_id, Some(category_id));
     assert_eq!(items[0].metadata["is_featured"], true);
 }
+
+// =============================================================================
+// Tenant Isolation Tests
+// =============================================================================
+
+#[tokio::test]
+async fn test_cross_tenant_get_node_is_blocked() {
+    let (_db, service) = setup().await;
+    let tenant_a = Uuid::new_v4();
+    let tenant_b = Uuid::new_v4();
+    let security = admin_context();
+
+    let node = service
+        .create_node(tenant_a, security.clone(), create_test_input())
+        .await
+        .unwrap();
+
+    let result = service.get_node(tenant_b, node.id).await;
+    assert!(
+        result.is_err(),
+        "tenant_b must not access tenant_a node"
+    );
+}
+
+#[tokio::test]
+async fn test_cross_tenant_update_node_is_blocked() {
+    let (_db, service) = setup().await;
+    let tenant_a = Uuid::new_v4();
+    let tenant_b = Uuid::new_v4();
+    let security = admin_context();
+
+    let node = service
+        .create_node(tenant_a, security.clone(), create_test_input())
+        .await
+        .unwrap();
+
+    let update = UpdateNodeInput {
+        kind: Some("article".to_string()),
+        ..Default::default()
+    };
+    let result = service
+        .update_node(tenant_b, node.id, security, update)
+        .await;
+    assert!(
+        result.is_err(),
+        "tenant_b must not update tenant_a node"
+    );
+}
+
+#[tokio::test]
+async fn test_cross_tenant_delete_node_is_blocked() {
+    let (_db, service) = setup().await;
+    let tenant_a = Uuid::new_v4();
+    let tenant_b = Uuid::new_v4();
+    let security = admin_context();
+
+    let node = service
+        .create_node(tenant_a, security.clone(), create_test_input())
+        .await
+        .unwrap();
+
+    let result = service.delete_node(tenant_b, node.id, security).await;
+    assert!(
+        result.is_err(),
+        "tenant_b must not delete tenant_a node"
+    );
+
+    let still_exists = service.get_node(tenant_a, node.id).await;
+    assert!(still_exists.is_ok(), "node must still exist for tenant_a");
+}
+
+#[tokio::test]
+async fn test_list_nodes_does_not_leak_across_tenants() {
+    let (_db, service) = setup().await;
+    let tenant_a = Uuid::new_v4();
+    let tenant_b = Uuid::new_v4();
+    let security = admin_context();
+
+    service
+        .create_node(tenant_a, security.clone(), create_test_input())
+        .await
+        .unwrap();
+
+    let filter = ListNodesFilter {
+        page: 1,
+        per_page: 10,
+        ..Default::default()
+    };
+    let (items, _) = service
+        .list_nodes(tenant_b, security, filter)
+        .await
+        .unwrap();
+    assert!(
+        items.is_empty(),
+        "tenant_b must see zero nodes, not tenant_a's"
+    );
+}
