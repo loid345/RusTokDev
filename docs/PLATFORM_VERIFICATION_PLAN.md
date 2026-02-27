@@ -175,8 +175,8 @@
 #### Trait'ы и контракты
 - [x] `RusToKModule` trait определён в `module.rs` с методами: `slug()`, `kind()`, `health()`, `dependencies()`, `migrations()`
 - [x] `ModuleKind` enum имеет варианты `Core` и `Optional`
-- [ ] `EventBus` trait определён
-- [ ] `DomainEvent` enum содержит все нужные варианты для всех доменных модулей
+- [x] `EventBus` struct определён в `events/bus.rs` (broadcast-channel based, со статистикой и backpressure)
+- [x] `DomainEvent` enum содержит 51 вариант, покрывающий все домены (Node*, Product*, Variant*, Inventory*, Order*, BlogPost*, ForumTopic*, ForumReply*, Tenant*, User*, Media*, Tag*, Category*, Index*, Build*)
 
 #### Permissions
 - [x] `Permission` struct определён в `permissions.rs`
@@ -198,14 +198,14 @@
 - [x] `PermissionScope` enum: `All`, `Own`, `None`
 
 #### Cache
-- [ ] `CacheBackend` trait определён
-- [ ] `InMemoryCacheBackend` поддерживает per-entry TTL через moka
-- [ ] `RedisCacheBackend` работает с CircuitBreaker
-- [ ] Fallback: Redis → InMemory
+- [x] `CacheBackend` trait определён в `context.rs` (re-export через `lib.rs`)
+- [x] `InMemoryCacheBackend` поддерживает per-entry TTL через moka (в `cache.rs`)
+- [x] `RedisCacheBackend` работает с CircuitBreaker (в `cache.rs`)
+- [~] Fallback: Redis → InMemory — CircuitBreaker есть в `RedisCacheBackend`, но автоматический fallback не проверен
 
 #### Error handling
-- [ ] `PlatformError` / типизированные ошибки определены в `error/`
-- [ ] Ошибки конвертируются в HTTP-коды корректно
+- [x] `Error` enum определён в `error/mod.rs` с вариантами: InvalidIdFormat, Database, Serialization, Auth, NotFound, Forbidden, Cache, Scripting, Validation, External
+- [x] Ошибки конвертируются корректно через `ErrorResponse` в `error/response.rs`
 
 ### 2.2 rustok-outbox
 
@@ -215,16 +215,16 @@
 - [x] Атомарная запись событий в рамках DB-транзакции
 - [x] `OutboxRelay` в `relay.rs` — корректный batch processing (batch=100)
 - [x] Retry policy: max retries, exponential backoff
-- [ ] Transport trait: `EventTransport` в `transport.rs`
-- [ ] Миграция для таблицы `sys_events` в `migration.rs`
+- [x] Transport trait: `EventTransport` определён в `crates/rustok-core/src/events/transport.rs`
+- [x] Миграция для таблицы `sys_events` существует в `crates/rustok-outbox/src/migration.rs` и добавлена в `apps/server/migration/src/lib.rs` как `m20260211_000002_create_sys_events`
 
 ### 2.3 rustok-events
 
 **Путь:** `crates/rustok-events/src/`
 
-- [ ] Re-export `DomainEvent` из `rustok-core`
-- [ ] Re-export `EventEnvelope` из `rustok-core`
-- [ ] Нет дублирования определений — только re-exports
+- [x] Re-export `DomainEvent` из `rustok-core` (в `crates/rustok-events/src/lib.rs`)
+- [x] Re-export `EventEnvelope` из `rustok-core`
+- [x] Нет дублирования определений — только re-exports
 
 ### 2.4 rustok-telemetry
 
@@ -249,32 +249,32 @@
 - `apps/server/src/extractors/auth.rs` — CurrentUser extractor
 
 #### Auth lifecycle (REST ↔ GraphQL паритет)
-- [ ] `register` — доступен через REST (`POST /api/auth/register`) и GraphQL (`mutation register`)
-- [ ] `login/sign_in` — доступен через REST и GraphQL
-- [ ] `refresh` — доступен через REST и GraphQL
-- [ ] `change_password` — доступен через REST и GraphQL
-- [ ] `reset_password` — доступен через REST и GraphQL (если реализован)
-- [ ] Оба transport-слоя используют единый `AuthLifecycleService` (не дублируют логику)
+- [x] `register` — доступен через REST (`POST /api/auth/register`) и GraphQL (`mutation register`)
+- [x] `login/sign_in` — доступен через REST и GraphQL
+- [x] `refresh` — доступен через REST и GraphQL
+- [x] `change_password` — доступен через REST и GraphQL
+- [x] `reset_password` — доступен через REST и GraphQL (реализован через `/api/auth/reset/request` + `/api/auth/reset/confirm`)
+- [x] Оба transport-слоя используют единый `AuthLifecycleService` через `AuthLifecycleService::login/register/refresh`
 
 #### JWT
-- [ ] JWT generation корректен (expiry, claims)
-- [ ] JWT validation работает (middleware / extractor)
-- [ ] Refresh token flow реализован
-- [ ] Token invalidation при смене пароля
+- [x] JWT generation корректен: `Claims` содержит `sub`, `tenant_id`, `role`, `exp`, `session_id`
+- [x] JWT validation работает через `CurrentUser` extractor в `apps/server/src/extractors/auth.rs`
+- [x] Refresh token flow реализован через `Sessions` table + `claims.session_id`
+- [x] Token invalidation при смене пароля — через `Sessions::revoke()` в `AuthLifecycleService`
 
 #### Password hashing
-- [ ] Используется Argon2 (crate `argon2`)
-- [ ] Параметры хэширования безопасны (cost factor)
-- [ ] Salt генерируется рандомно
+- [x] Используется Argon2 (crate `argon2`) — в `crates/rustok-core/src/auth/password.rs`
+- [x] Параметры хэширования: `Argon2::default()` — безопасные defaults
+- [x] Salt генерируется рандомно через `SaltString::generate(&mut OsRng)`
 
 ### 3.2 CurrentUser Extractor
 
 **Файл:** `apps/server/src/extractors/auth.rs`
 
-- [ ] Извлекает JWT из `Authorization: Bearer <token>` header
-- [ ] Декодирует claims и создаёт `CurrentUser`
-- [ ] Возвращает 401 при отсутствии/невалидности токена
-- [ ] `CurrentUser` содержит: id, email, role, tenant_id
+- [x] Извлекает JWT из `Authorization: Bearer <token>` header через `TypedHeader<Authorization<Bearer>>`
+- [x] Декодирует claims и создаёт `CurrentUser` (проверяет `claims.tenant_id == tenant_id` из `TenantContext`)
+- [x] Возвращает 401 при отсутствии/невалидности токена
+- [x] `CurrentUser` содержит: `user` (users::Model с id, email), `session_id`, `permissions: Vec<Permission>`
 
 ---
 
@@ -357,9 +357,9 @@
 - `apps/server/src/middleware/tenant.rs`
 - `crates/rustok-tenant/src/`
 
-- [ ] Middleware `TenantContext` извлекает tenant из: UUID header, slug header, hostname
-- [ ] При отсутствии tenant → 400/404 (не 500)
-- [ ] `TenantContext` доступен как Axum extractor в handlers
+- [x] Middleware извлекает tenant из: `X-Tenant-Slug` header, `X-Tenant-ID` header, hostname/domain
+- [x] При отсутствии tenant → 400/404 (через `TenantError.status_code()`)
+- [x] `TenantContext` реализует `FromRequestParts` в `apps/server/src/context/tenant.rs`
 
 ### 5.2 Tenant Cache
 
@@ -590,7 +590,7 @@
 
 **Путь:** `crates/alloy-scripting/`
 
-- [ ] `AlloyModule` зарегистрирован как `ModuleKind::Optional` (в `apps/server/src/modules/alloy.rs`)
+- [x] `AlloyModule` зарегистрирован как `ModuleKind::Optional` (в `apps/server/src/modules/alloy.rs`)
 - [ ] Rhai scripting engine инициализируется
 - [ ] `scripts` таблица — CRUD для скриптов
 - [ ] RBAC permissions: `Scripts` resource (create/read/update/delete/list/manage)
@@ -601,7 +601,7 @@
 
 **Путь:** `crates/rustok-index/`
 
-- [ ] `IndexModule` зарегистрирован как `ModuleKind::Core`
+- [x] `IndexModule` зарегистрирован как `ModuleKind::Core` (в `crates/rustok-index/src/lib.rs`)
 - [ ] Content indexer: слушает content events → пишет в `index_content`
 - [ ] Product indexer: слушает commerce events → пишет в `index_products`
 - [ ] Denormalized models для fast reads
@@ -613,7 +613,7 @@
 
 **Путь:** `crates/rustok-rbac/`
 
-- [ ] `RbacModule` зарегистрирован как `ModuleKind::Core`
+- [x] `RbacModule` зарегистрирован как `ModuleKind::Core` (в `crates/rustok-rbac/src/lib.rs`)
 - [ ] Entities, DTOs, Services
 - [ ] Health check работает
 - [ ] Миграции
@@ -622,7 +622,7 @@
 
 **Путь:** `crates/rustok-tenant/`
 
-- [ ] `TenantModule` зарегистрирован как `ModuleKind::Core`
+- [x] `TenantModule` зарегистрирован как `ModuleKind::Core` (в `crates/rustok-tenant/src/lib.rs`)
 - [ ] Entities: `tenants`, `tenant_modules`
 - [ ] Services: CRUD для tenants, module toggle
 - [ ] Health check работает
@@ -639,52 +639,52 @@
 - `apps/server/src/graphql/queries.rs`
 - `apps/server/src/graphql/mutations.rs`
 
-- [ ] Schema собирается через `MergedObject`
-- [ ] `RootQuery` содержит: `ContentQuery`, `CommerceQuery`, `BlogQuery`, `ForumQuery`, `AlloyQuery`, `PagesQuery` (если есть)
-- [ ] `RootMutation` содержит: `ContentMutation`, `CommerceMutation`, `BlogMutation`, `ForumMutation`, `AlloyMutation`, `PagesMutation` (если есть)
-- [ ] Schema endpoint: `POST /api/graphql`
-- [ ] GraphQL Playground / IDE доступен (если включён)
+- [x] Schema собирается через `MergedObject` в `apps/server/src/graphql/schema.rs`
+- [x] Merged Query: `RootQuery`, `AuthQuery`, `CommerceQuery`, `ContentQuery`, `BlogQuery`, `ForumQuery`, `AlloyQuery`, `PagesQuery`
+- [x] Merged Mutation: `RootMutation`, `AuthMutation`, `CommerceMutation`, `ContentMutation`, `BlogMutation`, `ForumMutation`, `AlloyMutation`, `PagesMutation`
+- [x] Schema endpoint: `POST /api/graphql` (через Loco routing)
+- [~] GraphQL Playground — определяется конфигурацией async-graphql
 
 ### 8.2 Content GraphQL
 
 **Файлы:** `apps/server/src/graphql/content/`
 
-- [ ] Query: `node(id)`, `nodes(filter, pagination)`
-- [ ] Mutation: `createNode`, `updateNode`, `deleteNode`, `publishNode`
-- [ ] Auth/RBAC проверяются
-- [ ] Tenant isolation соблюдается
+- [x] Query: `node(id)`, `nodes(filter)` — реализованы в `graphql/content/query.rs`
+- [x] Mutation: `createNode`, `updateNode`, `deleteNode`, `publishNode` — реализованы с RBAC
+- [x] Auth/RBAC проверяются через `AuthService::has_any_permission()`
+- [x] Tenant isolation соблюдается (tenant_id передаётся в сервисы)
 
 ### 8.3 Commerce GraphQL
 
 **Файлы:** `apps/server/src/graphql/commerce/`
 
-- [ ] Query: `product(id)`, `products(filter)`, `order(id)`, `orders(filter)`
-- [ ] Mutation: `createProduct`, `updateProduct`, `deleteProduct`, `createOrder`
-- [ ] Variants: `addVariant`, `updateVariant`
-- [ ] Inventory: `updateStock`
-- [ ] Prices: `updatePrice`
+- [x] Query: `product(id)`, `products(filter)` — реализованы
+- [~] `order(id)`, `orders(filter)` — OrderService не реализован
+- [x] Mutation: `createProduct`, `updateProduct`, `deleteProduct` — с RBAC
+- [~] `createOrder` — не реализован (OrderService отсутствует)
+- [~] Variants, Inventory, Prices mutations — управляются через REST, не GraphQL (только products в GraphQL)
 
 ### 8.4 Blog GraphQL
 
 **Файлы:** `apps/server/src/graphql/blog/`
 
-- [ ] Query: `post(id)`, `posts(filter)`
-- [ ] Mutation: `createPost`, `updatePost`, `deletePost`, `publishPost`
+- [x] Query: `post(id)`, `posts(filter)` — реализованы в `graphql/blog/query.rs`
+- [x] Mutation: `createPost`, `updatePost`, `deletePost`, `publishPost` — с полным RBAC
 
 ### 8.5 Forum GraphQL
 
 **Файлы:** `apps/server/src/graphql/forum/`
 
-- [ ] Query: `topic(id)`, `topics(filter)`, `replies(topicId)`
-- [ ] Mutation: `createTopic`, `createReply`, `updateTopic`
-- [ ] Categories: query/mutation
+- [x] Query: `forum_topics(filter)`, `forum_replies(topicId)`, `forum_categories()` — реализованы
+- [x] Mutation: `createTopic`, `createReply`, `updateTopic`, `deleteTopic`, `createCategory`, `deleteCategory` — с RBAC
+- [x] Categories: query + mutation реализованы с полным RBAC
 
 ### 8.6 Alloy GraphQL
 
 **Файлы:** `apps/server/src/graphql/alloy/`
 
-- [ ] Query: `script(id)`, `scripts(filter)`
-- [ ] Mutation: `createScript`, `updateScript`, `executeScript`, `deleteScript`
+- [~] Query: `script(id)`, `scripts(filter)` — зависит от состояния `alloy-scripting` crate
+- [~] Mutation: `createScript`, `updateScript`, `executeScript`, `deleteScript` — требует audit `graphql/alloy/`
 
 ### 8.7 Pages GraphQL
 
@@ -706,11 +706,11 @@
 
 **Файлы:** `apps/server/src/graphql/auth/`
 
-- [ ] `register` mutation
-- [ ] `login` / `signIn` mutation
-- [ ] `refreshToken` mutation
-- [ ] `changePassword` mutation
-- [ ] `me` query (current user info)
+- [x] `register` mutation — реализована в `graphql/auth/mutation.rs`
+- [x] `login` / `signIn` mutation — реализована
+- [x] `refreshToken` mutation — реализована
+- [x] `changePassword` mutation — реализована
+- [x] `me` query — реализована в `graphql/auth/query.rs`
 
 ### 8.10 Observability GraphQL
 
@@ -727,20 +727,20 @@
 
 **Файл:** `apps/server/src/controllers/auth.rs`
 
-- [ ] `POST /api/auth/register` — регистрация
-- [ ] `POST /api/auth/login` — вход
-- [ ] `POST /api/auth/refresh` — обновление токена
-- [ ] `POST /api/auth/change-password` — смена пароля
-- [ ] `POST /api/auth/reset-password` — сброс пароля (если есть)
+- [x] `POST /api/auth/register` — регистрация
+- [x] `POST /api/auth/login` — вход
+- [x] `POST /api/auth/refresh` — обновление токена
+- [x] `POST /api/auth/change-password` — смена пароля
+- [x] `POST /api/auth/reset/request` + `POST /api/auth/reset/confirm` — сброс пароля
 
 ### 9.2 Health REST
 
 **Файл:** `apps/server/src/controllers/health.rs`
 
-- [ ] `GET /api/health` — общий health check
-- [ ] Включает статус модулей из `ModuleRegistry::health_all()`
-- [ ] Включает статус DB-соединения
-- [ ] Возвращает 200 OK / 503 Service Unavailable
+- [x] `GET /health`, `GET /health/live`, `GET /health/ready` — реализованы в `controllers/health.rs`
+- [x] Включает статус модулей из `ModuleRegistry`
+- [x] Включает статус DB-соединения (через `ready` endpoint)
+- [x] Возвращает корректные статусы через health checks
 
 ### 9.3 Commerce REST
 
