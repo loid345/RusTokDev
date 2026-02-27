@@ -252,6 +252,8 @@ fi
   echo "- samples: ${SAMPLES}"
   echo "- interval_sec: ${INTERVAL_SEC}"
   echo "- min_decision_delta: ${MIN_DECISION_DELTA}"
+  echo "- require_zero_mismatch: ${REQUIRE_ZERO_MISMATCH}"
+  echo "- require_zero_shadow_failures: ${REQUIRE_ZERO_SHADOW_FAILURES}"
   echo "- save_samples: ${SAVE_SAMPLES}"
   echo "- mismatch_total: ${first_mismatch} -> ${last_mismatch} (delta ${mismatch_delta})"
   echo "- shadow_compare_failures_total: ${first_shadow_fail} -> ${last_shadow_fail} (delta ${shadow_fail_delta})"
