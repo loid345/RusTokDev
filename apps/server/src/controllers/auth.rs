@@ -16,18 +16,15 @@ use utoipa::ToSchema;
 
 use crate::auth::{
     decode_email_verification_token, decode_invite_token, encode_email_verification_token,
-    encode_password_reset_token, hash_password, hash_refresh_token, AuthConfig,
+    encode_password_reset_token, hash_refresh_token, AuthConfig,
 };
 use crate::common::settings::RustokSettings;
 use crate::extractors::{auth::CurrentUser, tenant::CurrentTenant};
 use crate::models::{
     sessions,
-    users::{self, ActiveModel as UserActiveModel, Entity as Users},
+    users::{self, Entity as Users},
 };
-use crate::services::{
-    auth::AuthService,
-    auth_lifecycle::{AuthLifecycleError, AuthLifecycleService},
-};
+use crate::services::auth_lifecycle::{AuthLifecycleError, AuthLifecycleService};
 
 const DEFAULT_RESET_TOKEN_TTL_SECS: u64 = 15 * 60;
 const DEFAULT_VERIFY_TOKEN_TTL_SECS: u64 = 24 * 60 * 60;
@@ -316,22 +313,22 @@ async fn accept_invite(
     let email = claims.sub.clone();
     let role = claims.role.clone();
 
-    if Users::find_by_email(&ctx.db, tenant.id, &email)
-        .await?
-        .is_some()
-    {
-        return Err(Error::BadRequest(
-            "A user with this email already exists".into(),
-        ));
-    }
-
-    let password_hash = hash_password(&params.password)?;
-    let mut user = UserActiveModel::new(tenant.id, &email, &password_hash);
-    user.role = Set(role.clone());
-    user.name = Set(params.name);
-    let user = user.insert(&ctx.db).await?;
-
-    AuthService::assign_role_permissions(&ctx.db, &user.id, &tenant.id, role.clone()).await?;
+    AuthLifecycleService::create_user(
+        &ctx,
+        tenant.id,
+        &email,
+        &params.password,
+        params.name,
+        role.clone(),
+        Some(rustok_core::UserStatus::Active),
+    )
+    .await
+    .map_err(|e: AuthLifecycleError| match e {
+        AuthLifecycleError::EmailAlreadyExists => {
+            Error::BadRequest("A user with this email already exists".into())
+        }
+        other => Error::from(other),
+    })?;
 
     format::json(InviteAcceptResponse {
         status: "ok",

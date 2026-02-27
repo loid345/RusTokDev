@@ -141,7 +141,20 @@ impl AuthLifecycleService {
             user.status = Set(status);
         }
 
-        let user = user.insert(&tx).await.map_err(AuthLifecycleError::from)?;
+        let user = match user.insert(&tx).await {
+            Ok(user) => user,
+            Err(err) => {
+                if users::Entity::find_by_email(db, tenant_id, email)
+                    .await
+                    .map_err(AuthLifecycleError::from)?
+                    .is_some()
+                {
+                    return Err(AuthLifecycleError::EmailAlreadyExists);
+                }
+
+                return Err(AuthLifecycleError::from(err.into()));
+            }
+        };
 
         AuthService::replace_user_role(&tx, &user.id, &tenant_id, role)
             .await
