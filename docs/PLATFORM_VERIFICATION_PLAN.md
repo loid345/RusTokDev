@@ -1288,10 +1288,10 @@
 - [ ] Проверка: каждый DomainEvent в crates содержит `tenant_id` field
 
 #### Hardcoded secrets
-- [ ] Поиск hardcoded passwords/secrets/keys в Rust коде
-  - `grep -rn "password\|secret\|api_key" --include="*.rs" | grep -v test | grep -v "// " | grep "="`
+- [x] Поиск hardcoded passwords/secrets/keys в Rust коде — нарушений нет
+  - `grep -rn "password\|secret\|api_key" --include="*.rs"` — результатов нет в production коде
 - [ ] Поиск в .ts/.tsx файлах
-- [ ] Проверка: `.env` файлы отсутствуют в git (только `.env.dev.example`)
+- [x] Проверка: `.env` файлы отсутствуют в git (только `.env.dev.example`)
 
 #### Panics в production
 - [x] Поиск `unwrap()` в production коде — все найденные случаи:
@@ -1301,7 +1301,9 @@
   - `async_utils::retry` — `last_error.unwrap()` внутри итерации (инвариант: последняя ошибка всегда Some)
 - [ ] Поиск `expect()` в production коде (проверить каждый: оправдан или нет)
   - `grep -rn "\.expect(" crates/rustok-*/src/ apps/server/src/ --include="*.rs" | grep -v test`
-- [ ] Поиск `panic!` в production коде
+- [x] Поиск `panic!` в production коде — нарушений нет
+  - `rustok-test-utils/src/helpers.rs` — только в test helper функциях (assert helpers)
+  - `apps/server/src/services/auth_lifecycle.rs` — только внутри `#[test]` функций
 
 ### 19.2 RBAC coverage audit
 
