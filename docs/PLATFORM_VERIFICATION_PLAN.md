@@ -1271,10 +1271,10 @@
 Поиск запрещённых паттернов в production коде. Каждый найденный экземпляр — обязательное исправление.
 
 #### Tenant Isolation violations
-- [ ] Поиск `find().all(&db)` без `.filter(...tenant_id...)` в domain crates
-  - `grep -rn "\.all(&" crates/rustok-content/src/ crates/rustok-commerce/src/ crates/rustok-blog/src/ crates/rustok-forum/src/ crates/rustok-pages/src/`
-- [ ] Поиск `find_by_id` без tenant_id проверки
-- [ ] Поиск DELETE без tenant_id filter
+- [x] Поиск `find().all(&db)` без `.filter(...tenant_id...)` в domain crates — нарушений нет
+  - Дочерние записи (translations, variants, prices) фильтруются по node_id/product_id, родитель загружается с tenant_id
+- [x] Поиск `find_by_id` без tenant_id проверки — проверено: все find_by_id добавляют `.filter(TenantId.eq(tenant_id))`
+- [x] Поиск DELETE без tenant_id filter — все удаления через модели, загруженные с tenant filter
 - [ ] Проверка: каждая domain-таблица имеет `tenant_id` column в миграции
 - [ ] Проверка: каждый SeaORM entity имеет `tenant_id` поле
 
@@ -1290,8 +1290,11 @@
 - [ ] Проверка: `.env` файлы отсутствуют в git (только `.env.dev.example`)
 
 #### Panics в production
-- [ ] Поиск `unwrap()` в production коде (исключая tests)
-  - `grep -rn "\.unwrap()" crates/rustok-*/src/ apps/server/src/ --include="*.rs" | grep -v "#\[cfg(test)\]" | grep -v "mod tests"`
+- [x] Поиск `unwrap()` в production коде — все найденные случаи:
+  - `Regex::new(r"...").unwrap()` — безопасно, константные regex паттерны (LazyLock)
+  - `serde_json::to_value(Vec<String>).unwrap()` — заменено на `.expect("Vec<String> is always valid JSON")`
+  - `state_machine.rs` — внутри `#[cfg(test)]` блоков
+  - `async_utils::retry` — `last_error.unwrap()` внутри итерации (инвариант: последняя ошибка всегда Some)
 - [ ] Поиск `expect()` в production коде (проверить каждый: оправдан или нет)
   - `grep -rn "\.expect(" crates/rustok-*/src/ apps/server/src/ --include="*.rs" | grep -v test`
 - [ ] Поиск `panic!` в production коде
@@ -1408,10 +1411,10 @@
 
 - [ ] Каждый endpoint имеет `#[utoipa::path(...)]` annotation для OpenAPI
   - Искать: handlers без `#[utoipa::path]` в `apps/server/src/controllers/`
-- [ ] HTTP status codes корректны:
-  - 201 Created для POST (не 200)
-  - 204 No Content для DELETE (не 200)
-  - 404 Not Found для отсутствующих ресурсов (не 500)
+- [x] HTTP status codes корректны:
+  - 201 Created для POST — исправлено во всех controllers (blog, content, forum, commerce, pages)
+  - 204 No Content для DELETE — исправлено во всех controllers
+  - 404 Not Found для отсутствующих ресурсов — через `Error::NotFound`
   - 422 Unprocessable Entity для validation errors (не 400)
 - [ ] Нет бизнес-логики в controllers — только вызов domain services
 - [ ] `loco_rs::Result` для error handling (не custom error types)
