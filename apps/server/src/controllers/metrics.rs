@@ -13,6 +13,7 @@ use std::time::Instant;
 
 use crate::middleware::tenant::tenant_cache_stats;
 use crate::services::auth::AuthService;
+use crate::services::auth_lifecycle::AuthLifecycleService;
 use crate::services::rbac_consistency::{load_rbac_consistency_stats, RbacConsistencyStats};
 use tracing::warn;
 
@@ -27,6 +28,7 @@ pub async fn metrics(State(ctx): State<AppContext>) -> Result<Response> {
             payload.push('\n');
             payload.push_str(&render_tenant_cache_metrics(&ctx).await);
             payload.push_str(&render_outbox_metrics(&ctx).await);
+            payload.push_str(&render_auth_lifecycle_metrics());
             payload.push_str(&render_rbac_metrics(&ctx).await);
 
             Ok((
@@ -123,6 +125,20 @@ async fn render_rbac_metrics(ctx: &AppContext) -> String {
     )
 }
 
+fn render_auth_lifecycle_metrics() -> String {
+    let stats = AuthLifecycleService::metrics_snapshot();
+    format!(
+        "auth_password_reset_sessions_revoked_total {password_reset_sessions_revoked_total}\n\
+auth_change_password_sessions_revoked_total {change_password_sessions_revoked_total}\n\
+auth_flow_inconsistency_total {flow_inconsistency_total}\n\
+auth_login_inactive_user_attempt_total {login_inactive_user_attempt_total}\n",
+        password_reset_sessions_revoked_total = stats.password_reset_sessions_revoked_total,
+        change_password_sessions_revoked_total = stats.change_password_sessions_revoked_total,
+        flow_inconsistency_total = stats.flow_inconsistency_total,
+        login_inactive_user_attempt_total = stats.login_inactive_user_attempt_total,
+    )
+}
+
 fn format_rbac_metrics(
     stats: crate::services::auth::RbacResolverMetricsSnapshot,
     users_without_roles_total: i64,
@@ -182,8 +198,9 @@ rustok_rbac_consistency_query_latency_samples {consistency_query_latency_samples
 
 #[cfg(test)]
 mod tests {
-    use super::format_rbac_metrics;
+    use super::{format_rbac_metrics, render_auth_lifecycle_metrics};
     use crate::services::auth::AuthService;
+    use crate::services::auth_lifecycle::AuthLifecycleService;
 
     #[test]
     fn rbac_metrics_include_claim_role_mismatch_counter() {
@@ -240,5 +257,17 @@ mod tests {
         assert!(payload.contains("rustok_rbac_users_without_roles_total 7"));
         assert!(payload.contains("rustok_rbac_orphan_user_roles_total 3"));
         assert!(payload.contains("rustok_rbac_orphan_role_permissions_total 1"));
+    }
+
+    #[test]
+    fn auth_lifecycle_metrics_include_required_counters() {
+        AuthLifecycleService::record_flow_inconsistency();
+
+        let payload = render_auth_lifecycle_metrics();
+
+        assert!(payload.contains("auth_password_reset_sessions_revoked_total"));
+        assert!(payload.contains("auth_change_password_sessions_revoked_total"));
+        assert!(payload.contains("auth_flow_inconsistency_total"));
+        assert!(payload.contains("auth_login_inactive_user_attempt_total"));
     }
 }

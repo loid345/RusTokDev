@@ -191,6 +191,8 @@ REST/GraphQL должны вызывать этот сервис, оставая
 - `auth_flow_inconsistency_total` (временная диагностическая метрика в период миграции)
 - `auth_login_inactive_user_attempt_total`
 
+- Примечание: `auth_password_reset_sessions_revoked_total` и `auth_change_password_sessions_revoked_total` считаются по количеству фактически отозванных сессий (`rows_affected`), а не по числу вызовов API.
+
 Оповещения:
 
 - рост ошибок reset/confirm выше baseline;
@@ -231,6 +233,9 @@ Gate перед выкладкой:
 
 - Кодовые и документационные задачи Phases A-C завершены (см. раздел 5).
 - Rollout controls и rollback-инструкция добавлены в `apps/server/docs/README.md`.
+- Метрики rollout-периода из раздела 7 (`auth_password_reset_sessions_revoked_total`, `auth_change_password_sessions_revoked_total`, `auth_flow_inconsistency_total`, `auth_login_inactive_user_attempt_total`) публикуются через `/metrics`.
+- Unit coverage для инварианта из раздела 6 (повторный reset на уже отозванных сессиях) расширено: повторный вызов не добавляет новых revoked session.
+- Добавлены unit-checks для transport error contracts `UserInactive` и `InvalidResetToken` (единый mapping в unauthorized), чтобы удерживать parity REST/GraphQL по негативным auth-сценариям.
 - Phase D остаётся открытой до фиксации результатов integration/staging/security проверок.
 
 Stop-the-line условия:

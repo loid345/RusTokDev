@@ -10,6 +10,7 @@ use crate::auth::{
     hash_refresh_token, verify_password, AuthConfig,
 };
 use crate::models::{sessions, users};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use super::auth::AuthService;
 
@@ -62,7 +63,44 @@ impl From<AuthLifecycleError> for Error {
 
 pub struct AuthLifecycleService;
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AuthLifecycleMetricsSnapshot {
+    pub password_reset_sessions_revoked_total: u64,
+    pub change_password_sessions_revoked_total: u64,
+    pub flow_inconsistency_total: u64,
+    pub login_inactive_user_attempt_total: u64,
+}
+
+static AUTH_PASSWORD_RESET_SESSIONS_REVOKED_TOTAL: AtomicU64 = AtomicU64::new(0);
+static AUTH_CHANGE_PASSWORD_SESSIONS_REVOKED_TOTAL: AtomicU64 = AtomicU64::new(0);
+static AUTH_FLOW_INCONSISTENCY_TOTAL: AtomicU64 = AtomicU64::new(0);
+static AUTH_LOGIN_INACTIVE_USER_ATTEMPT_TOTAL: AtomicU64 = AtomicU64::new(0);
+
 impl AuthLifecycleService {
+    pub fn metrics_snapshot() -> AuthLifecycleMetricsSnapshot {
+        AuthLifecycleMetricsSnapshot {
+            password_reset_sessions_revoked_total: AUTH_PASSWORD_RESET_SESSIONS_REVOKED_TOTAL
+                .load(Ordering::Relaxed),
+            change_password_sessions_revoked_total: AUTH_CHANGE_PASSWORD_SESSIONS_REVOKED_TOTAL
+                .load(Ordering::Relaxed),
+            flow_inconsistency_total: AUTH_FLOW_INCONSISTENCY_TOTAL.load(Ordering::Relaxed),
+            login_inactive_user_attempt_total: AUTH_LOGIN_INACTIVE_USER_ATTEMPT_TOTAL
+                .load(Ordering::Relaxed),
+        }
+    }
+
+    pub fn record_flow_inconsistency() {
+        AUTH_FLOW_INCONSISTENCY_TOTAL.fetch_add(1, Ordering::Relaxed);
+    }
+
+    #[cfg(test)]
+    fn reset_metrics_for_tests() {
+        AUTH_PASSWORD_RESET_SESSIONS_REVOKED_TOTAL.store(0, Ordering::Relaxed);
+        AUTH_CHANGE_PASSWORD_SESSIONS_REVOKED_TOTAL.store(0, Ordering::Relaxed);
+        AUTH_FLOW_INCONSISTENCY_TOTAL.store(0, Ordering::Relaxed);
+        AUTH_LOGIN_INACTIVE_USER_ATTEMPT_TOTAL.store(0, Ordering::Relaxed);
+    }
+
     pub async fn register(
         ctx: &AppContext,
         tenant_id: uuid::Uuid,
@@ -119,6 +157,7 @@ impl AuthLifecycleService {
         }
 
         if !user.is_active() {
+            AUTH_LOGIN_INACTIVE_USER_ATTEMPT_TOTAL.fetch_add(1, Ordering::Relaxed);
             return Err(AuthLifecycleError::UserInactive);
         }
 
@@ -246,7 +285,9 @@ impl AuthLifecycleService {
             .await
             .map_err(AuthLifecycleError::from)?;
 
-        Self::revoke_user_sessions(ctx, tenant_id, user_id, Some(current_session_id)).await?;
+        let revoked_sessions =
+            Self::revoke_user_sessions(ctx, tenant_id, user_id, Some(current_session_id)).await?;
+        AUTH_CHANGE_PASSWORD_SESSIONS_REVOKED_TOTAL.fetch_add(revoked_sessions, Ordering::Relaxed);
 
         Ok(())
     }
@@ -267,7 +308,9 @@ impl AuthLifecycleService {
             .await
             .map_err(AuthLifecycleError::from)?;
 
-        Self::revoke_user_sessions_db(db, tenant_id, user_id, except_session_id).await?;
+        let revoked_sessions =
+            Self::revoke_user_sessions_db(db, tenant_id, user_id, except_session_id).await?;
+        AUTH_PASSWORD_RESET_SESSIONS_REVOKED_TOTAL.fetch_add(revoked_sessions, Ordering::Relaxed);
 
         Ok(())
     }
@@ -308,7 +351,7 @@ impl AuthLifecycleService {
         tenant_id: uuid::Uuid,
         user_id: uuid::Uuid,
         except_session_id: Option<uuid::Uuid>,
-    ) -> std::result::Result<(), AuthLifecycleError> {
+    ) -> std::result::Result<u64, AuthLifecycleError> {
         Self::revoke_user_sessions_db(&ctx.db, tenant_id, user_id, except_session_id).await
     }
 
@@ -317,7 +360,7 @@ impl AuthLifecycleService {
         tenant_id: uuid::Uuid,
         user_id: uuid::Uuid,
         except_session_id: Option<uuid::Uuid>,
-    ) -> std::result::Result<(), AuthLifecycleError> {
+    ) -> std::result::Result<u64, AuthLifecycleError> {
         let mut query = sessions::Entity::update_many()
             .col_expr(sessions::Column::RevokedAt, Expr::value(Utc::now()))
             .filter(sessions::Column::TenantId.eq(tenant_id))
@@ -328,19 +371,75 @@ impl AuthLifecycleService {
             query = query.filter(sessions::Column::Id.ne(session_id));
         }
 
-        query.exec(db).await.map_err(AuthLifecycleError::from)?;
-        Ok(())
+        let result = query.exec(db).await.map_err(AuthLifecycleError::from)?;
+        Ok(result.rows_affected)
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{AuthLifecycleError, AuthLifecycleService, Error};
+    use super::{
+        AuthLifecycleError, AuthLifecycleMetricsSnapshot, AuthLifecycleService, Error,
+        AUTH_CHANGE_PASSWORD_SESSIONS_REVOKED_TOTAL, AUTH_FLOW_INCONSISTENCY_TOTAL,
+        AUTH_LOGIN_INACTIVE_USER_ATTEMPT_TOTAL, AUTH_PASSWORD_RESET_SESSIONS_REVOKED_TOTAL,
+    };
     use crate::models::{sessions, tenants, users};
     use chrono::{Duration, Utc};
     use migration::Migrator;
     use rustok_test_utils::db::setup_test_db_with_migrations;
     use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter};
+    use std::sync::atomic::Ordering;
+
+    #[test]
+    fn metrics_snapshot_reads_current_auth_lifecycle_counters() {
+        AuthLifecycleService::reset_metrics_for_tests();
+        let before = AuthLifecycleService::metrics_snapshot();
+
+        AUTH_PASSWORD_RESET_SESSIONS_REVOKED_TOTAL.fetch_add(2, Ordering::Relaxed);
+        AUTH_CHANGE_PASSWORD_SESSIONS_REVOKED_TOTAL.fetch_add(3, Ordering::Relaxed);
+        AUTH_FLOW_INCONSISTENCY_TOTAL.fetch_add(1, Ordering::Relaxed);
+        AUTH_LOGIN_INACTIVE_USER_ATTEMPT_TOTAL.fetch_add(4, Ordering::Relaxed);
+
+        let after = AuthLifecycleService::metrics_snapshot();
+        assert_eq!(
+            after.password_reset_sessions_revoked_total,
+            before.password_reset_sessions_revoked_total + 2
+        );
+        assert_eq!(
+            after.change_password_sessions_revoked_total,
+            before.change_password_sessions_revoked_total + 3
+        );
+        assert_eq!(
+            after.flow_inconsistency_total,
+            before.flow_inconsistency_total + 1
+        );
+        assert_eq!(
+            after.login_inactive_user_attempt_total,
+            before.login_inactive_user_attempt_total + 4
+        );
+    }
+
+    #[test]
+    fn flow_inconsistency_counter_can_be_incremented() {
+        AuthLifecycleService::reset_metrics_for_tests();
+        let before = AuthLifecycleService::metrics_snapshot();
+        AuthLifecycleService::record_flow_inconsistency();
+        let after = AuthLifecycleService::metrics_snapshot();
+        assert_eq!(
+            after.flow_inconsistency_total,
+            before.flow_inconsistency_total + 1
+        );
+    }
+
+    #[test]
+    fn auth_lifecycle_metrics_snapshot_default_is_zeroed() {
+        AuthLifecycleService::reset_metrics_for_tests();
+        let snapshot = AuthLifecycleMetricsSnapshot::default();
+        assert_eq!(snapshot.password_reset_sessions_revoked_total, 0);
+        assert_eq!(snapshot.change_password_sessions_revoked_total, 0);
+        assert_eq!(snapshot.flow_inconsistency_total, 0);
+        assert_eq!(snapshot.login_inactive_user_attempt_total, 0);
+    }
 
     #[test]
     fn maps_email_exists_to_bad_request() {
@@ -361,6 +460,24 @@ mod tests {
     }
 
     #[test]
+    fn maps_user_inactive_to_unauthorized() {
+        let err: Error = AuthLifecycleError::UserInactive.into();
+        match err {
+            Error::Unauthorized(msg) => assert_eq!(msg, "User is inactive"),
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn maps_invalid_reset_token_to_unauthorized() {
+        let err: Error = AuthLifecycleError::InvalidResetToken.into();
+        match err {
+            Error::Unauthorized(msg) => assert_eq!(msg, "Invalid reset token"),
+            other => panic!("unexpected error variant: {other:?}"),
+        }
+    }
+
+    #[test]
     fn keeps_internal_error_as_is() {
         let err: Error = AuthLifecycleError::Internal(Error::Unauthorized("inner".into())).into();
         match err {
@@ -371,6 +488,7 @@ mod tests {
 
     #[tokio::test]
     async fn reset_password_revoke_sessions_marks_all_sessions_revoked() {
+        AuthLifecycleService::reset_metrics_for_tests();
         let db = setup_test_db_with_migrations::<Migrator>().await;
         let tenant = tenants::ActiveModel::new("Test tenant", "test-tenant")
             .insert(&db)
@@ -406,6 +524,8 @@ mod tests {
         .await
         .expect("failed to create session 2");
 
+        let metrics_before = AuthLifecycleService::metrics_snapshot();
+
         AuthLifecycleService::reset_password_and_revoke_sessions(
             &db,
             tenant.id,
@@ -425,10 +545,17 @@ mod tests {
             .expect("failed to query active sessions");
 
         assert!(active_sessions.is_empty());
+
+        let metrics_after = AuthLifecycleService::metrics_snapshot();
+        assert_eq!(
+            metrics_after.password_reset_sessions_revoked_total,
+            metrics_before.password_reset_sessions_revoked_total + 2
+        );
     }
 
     #[tokio::test]
     async fn reset_password_revoke_sessions_can_keep_current_session() {
+        AuthLifecycleService::reset_metrics_for_tests();
         let db = setup_test_db_with_migrations::<Migrator>().await;
         let tenant = tenants::ActiveModel::new("Test tenant", "test-tenant-2")
             .insert(&db)
@@ -464,6 +591,8 @@ mod tests {
         .await
         .expect("failed to create secondary session");
 
+        let metrics_before = AuthLifecycleService::metrics_snapshot();
+
         AuthLifecycleService::reset_password_and_revoke_sessions(
             &db,
             tenant.id,
@@ -490,5 +619,80 @@ mod tests {
             .expect("failed to query revoked sessions");
 
         assert_eq!(revoked_count, 1);
+
+        let metrics_after = AuthLifecycleService::metrics_snapshot();
+        assert_eq!(
+            metrics_after.password_reset_sessions_revoked_total,
+            metrics_before.password_reset_sessions_revoked_total + 1
+        );
+    }
+
+    #[tokio::test]
+    async fn reset_password_revoke_sessions_repeat_call_on_already_revoked_sessions_is_idempotent()
+    {
+        AuthLifecycleService::reset_metrics_for_tests();
+        let db = setup_test_db_with_migrations::<Migrator>().await;
+        let tenant = tenants::ActiveModel::new("Test tenant", "test-tenant-3")
+            .insert(&db)
+            .await
+            .expect("failed to create tenant");
+
+        let user = users::ActiveModel::new(tenant.id, "user3@example.com", "old-hash")
+            .insert(&db)
+            .await
+            .expect("failed to create user");
+
+        let now = Utc::now();
+        sessions::ActiveModel::new(
+            tenant.id,
+            user.id,
+            "token-a".to_string(),
+            now + Duration::hours(1),
+            None,
+            None,
+        )
+        .insert(&db)
+        .await
+        .expect("failed to create session a");
+        sessions::ActiveModel::new(
+            tenant.id,
+            user.id,
+            "token-b".to_string(),
+            now + Duration::hours(2),
+            None,
+            None,
+        )
+        .insert(&db)
+        .await
+        .expect("failed to create session b");
+
+        let metrics_before = AuthLifecycleService::metrics_snapshot();
+
+        AuthLifecycleService::reset_password_and_revoke_sessions(
+            &db,
+            tenant.id,
+            user.clone(),
+            "new-password",
+            None,
+        )
+        .await
+        .expect("first password reset should succeed");
+
+        AuthLifecycleService::reset_password_and_revoke_sessions(
+            &db,
+            tenant.id,
+            user,
+            "new-password-2",
+            None,
+        )
+        .await
+        .expect("second password reset should succeed");
+
+        let metrics_after = AuthLifecycleService::metrics_snapshot();
+        assert_eq!(
+            metrics_after.password_reset_sessions_revoked_total,
+            metrics_before.password_reset_sessions_revoked_total + 2,
+            "second call should revoke zero additional sessions"
+        );
     }
 }
