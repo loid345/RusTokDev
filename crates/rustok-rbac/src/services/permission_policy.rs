@@ -1,3 +1,4 @@
+use crate::services::permission_normalization::normalize_permissions;
 use rustok_core::{Action, Permission};
 use std::fmt::Write;
 
@@ -45,11 +46,13 @@ pub fn missing_permissions(
     user_permissions: &[Permission],
     required_permissions: &[Permission],
 ) -> Vec<Permission> {
-    required_permissions
-        .iter()
-        .copied()
-        .filter(|permission| !has_effective_permission_in_set(user_permissions, permission))
-        .collect()
+    normalize_permissions(
+        required_permissions
+            .iter()
+            .copied()
+            .filter(|permission| !has_effective_permission_in_set(user_permissions, permission))
+            .collect(),
+    )
 }
 
 pub fn check_permission(
@@ -87,7 +90,7 @@ pub fn check_any_permission(
     let missing_permissions = if allowed {
         Vec::new()
     } else {
-        required_permissions.to_vec()
+        normalize_permissions(required_permissions.to_vec())
     };
 
     PermissionCheckOutcome {
@@ -172,6 +175,24 @@ mod tests {
 
         assert!(!outcome.allowed);
         assert_eq!(outcome.missing_permissions, vec![Permission::USERS_UPDATE]);
+    }
+
+    #[test]
+    fn check_any_permission_returns_normalized_missing_permissions() {
+        let outcome = check_any_permission(
+            &[],
+            &[
+                Permission::USERS_UPDATE,
+                Permission::USERS_READ,
+                Permission::USERS_UPDATE,
+            ],
+        );
+
+        assert!(!outcome.allowed);
+        assert_eq!(
+            outcome.missing_permissions,
+            vec![Permission::USERS_READ, Permission::USERS_UPDATE]
+        );
     }
 
     #[test]

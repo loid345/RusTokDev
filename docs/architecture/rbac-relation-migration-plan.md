@@ -36,6 +36,7 @@
   - `seed_user` (dev/test seed bootstrap) теперь также вызывает `assign_role_permissions` после создания пользователя.
   - parity reset-password/session invalidation ведётся отдельным remediation-потоком и ADR (см. cross-link ниже).
 - [x] **Фаза 2 — Единый Permission Resolver (завершено):**
+  - В `rustok-rbac` стандартизирован модульный cross-module integration event contract для role-assignment изменений: добавлены `RbacRoleAssignmentEvent`, `RbacIntegrationEventKind` и стабильные event-type ключи `rbac.*` для единообразной публикации/подписки между модулями.
   - В `AuthService` добавлены tenant-aware методы `get_user_permissions / has_permission / has_any_permission / has_all_permissions`.
   - В `rustok-rbac` добавлен `permission_evaluator` (единый API итоговой policy-оценки allow/deny + missing permissions + denied reason), а `AuthService` теперь использует его как модульный policy-source вместо локальной сборки outcome.
   - В `rustok-rbac` добавлен контракт `PermissionResolver` + `PermissionResolution`; на промежуточном шаге использовался тонкий `ServerPermissionResolver` adapter в `apps/server` (инкрементальный strangler-этап).

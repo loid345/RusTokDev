@@ -29,8 +29,8 @@ compatibility with platform-level contracts.
 - [x] Freeze initial public RBAC runtime API: exported `permission_policy`/`permission_evaluator` + trait contract `PermissionResolver`/`PermissionResolution` with default use-case methods (`has_*`) for adapter-driven integrations.
 - [x] Introduce shared permission-policy helpers (`permission_policy`) and start consuming them from `apps/server` extractors/service wiring to reduce server-owned policy logic.
 - [x] Introduce shared permission evaluation API (`permission_evaluator`) and move allow/deny + missing-permissions outcome assembly from `apps/server::AuthService` into `rustok-rbac`.
-- [ ] Align error/validation conventions with platform guidance.
-- [ ] Expand automated tests around core invariants and boundary behavior (including stable normalized permission payload from both relation and cache paths).
+- [x] Align error/validation conventions with platform guidance (added typed `RbacError` validation path for authz-mode parsing via `RbacAuthzMode::try_parse` while preserving backward-compatible fallback in `parse`).
+- [x] Expand automated tests around core invariants and boundary behavior (including stable normalized permission payload from both relation and cache paths, empty-requirements decision contract, and resolver error propagation in `permission_authorizer`).
 
 ### Phase 2 — Domain expansion (planned)
 
@@ -38,12 +38,12 @@ compatibility with platform-level contracts.
 - [x] Move authz rollout mode contract (`RbacAuthzMode` for `relation_only`/`dual_read`) into `rustok-rbac` to reduce server-owned RBAC control-plane logic and keep compatibility with legacy rollout flag `RUSTOK_RBAC_RELATION_DUAL_READ_ENABLED` (aliases: `RBAC_RELATION_DUAL_READ_ENABLED`, `rbac_relation_dual_read_enabled`) during cutover.
 - [x] Move dual-read legacy-vs-relation comparison logic (`shadow_decision`) into `rustok-rbac` so `apps/server` keeps only transport/observability concerns for shadow-check execution.
 - [x] Add module-level dual-read orchestrator (`shadow_dual_read::evaluate_dual_read`) so `apps/server` does not keep local branching for `skip/compare` dual-read outcomes.
-- [ ] Standardize cross-module integration points and events.
-- [ ] Document ownership and release gates for new capabilities.
+- [x] Standardize cross-module integration points and events (published canonical RBAC role-assignment integration event contract: `RbacRoleAssignmentEvent` + `RbacIntegrationEventKind` + stable `rbac.*` event-type constants).
+- [x] Document ownership and release gates for new capabilities (added module owner, review boundaries, and release-gate checklist to `crates/rustok-rbac/docs/README.md`).
 
 ### Phase 3 — Productionization (planned)
 
-- [ ] Finalize rollout and migration strategy for incremental adoption.
+- [x] Finalize rollout and migration strategy for incremental adoption (documented module-level incremental rollout sequence and compatibility behavior in `crates/rustok-rbac/docs/README.md`).
 - [ ] Complete security/tenancy/rbac checks relevant to the module.
 - [ ] Validate observability, runbooks, and operational readiness.
 

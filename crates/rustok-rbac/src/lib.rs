@@ -1,8 +1,15 @@
 pub mod dto;
 pub mod entities;
 pub mod error;
+pub mod integration;
 pub mod services;
 
+pub use error::RbacError;
+pub use integration::{
+    RbacIntegrationEventKind, RbacRoleAssignmentEvent, RBAC_EVENT_ROLE_PERMISSIONS_ASSIGNED,
+    RBAC_EVENT_TENANT_ROLE_ASSIGNMENTS_REMOVED, RBAC_EVENT_USER_ROLE_ASSIGNMENT_REMOVED,
+    RBAC_EVENT_USER_ROLE_REPLACED,
+};
 pub use services::authz_mode::RbacAuthzMode;
 pub use services::permission_authorizer::{
     authorize_all_permissions, authorize_any_permission, authorize_permission,
