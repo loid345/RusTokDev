@@ -86,13 +86,12 @@ impl CategoryService {
         category_id: Uuid,
         locale: &str,
     ) -> ForumResult<CategoryResponse> {
-        let node = self.nodes.get_node(category_id).await?;
+        let node = self.nodes.get_node(tenant_id, category_id).await?;
 
         if node.kind != KIND_CATEGORY {
             return Err(ForumError::CategoryNotFound(category_id));
         }
 
-        let _ = tenant_id;
         Ok(Self::node_to_category(node, locale))
     }
 
@@ -128,6 +127,7 @@ impl CategoryService {
         let node = self
             .nodes
             .update_node(
+                tenant_id,
                 category_id,
                 security,
                 UpdateNodeInput {
@@ -144,8 +144,13 @@ impl CategoryService {
     }
 
     #[instrument(skip(self, security))]
-    pub async fn delete(&self, category_id: Uuid, security: SecurityContext) -> ForumResult<()> {
-        self.nodes.delete_node(category_id, security).await?;
+    pub async fn delete(
+        &self,
+        tenant_id: Uuid,
+        category_id: Uuid,
+        security: SecurityContext,
+    ) -> ForumResult<()> {
+        self.nodes.delete_node(tenant_id, category_id, security).await?;
         Ok(())
     }
 

@@ -109,13 +109,18 @@ impl TopicService {
 
         txn.commit().await?;
 
-        let node = self.nodes.get_node(topic_id).await?;
+        let node = self.nodes.get_node(tenant_id, topic_id).await?;
         Ok(Self::node_to_topic(node, &locale))
     }
 
     #[instrument(skip(self))]
-    pub async fn get(&self, topic_id: Uuid, locale: &str) -> ForumResult<TopicResponse> {
-        let node = self.nodes.get_node(topic_id).await?;
+    pub async fn get(
+        &self,
+        tenant_id: Uuid,
+        topic_id: Uuid,
+        locale: &str,
+    ) -> ForumResult<TopicResponse> {
+        let node = self.nodes.get_node(tenant_id, topic_id).await?;
 
         if node.kind != KIND_TOPIC {
             return Err(ForumError::TopicNotFound(topic_id));
@@ -127,11 +132,12 @@ impl TopicService {
     #[instrument(skip(self, security, input))]
     pub async fn update(
         &self,
+        tenant_id: Uuid,
         topic_id: Uuid,
         security: SecurityContext,
         input: UpdateTopicInput,
     ) -> ForumResult<TopicResponse> {
-        let existing = self.get(topic_id, &input.locale).await?;
+        let existing = self.get(tenant_id, topic_id, &input.locale).await?;
         let metadata = serde_json::json!({
             "tags": input.tags.unwrap_or(existing.tags.clone()),
             "is_pinned": existing.is_pinned,
@@ -162,6 +168,7 @@ impl TopicService {
         let node = self
             .nodes
             .update_node(
+                tenant_id,
                 topic_id,
                 security,
                 UpdateNodeInput {
@@ -178,8 +185,13 @@ impl TopicService {
     }
 
     #[instrument(skip(self, security))]
-    pub async fn delete(&self, topic_id: Uuid, security: SecurityContext) -> ForumResult<()> {
-        self.nodes.delete_node(topic_id, security).await?;
+    pub async fn delete(
+        &self,
+        tenant_id: Uuid,
+        topic_id: Uuid,
+        security: SecurityContext,
+    ) -> ForumResult<()> {
+        self.nodes.delete_node(tenant_id, topic_id, security).await?;
         Ok(())
     }
 

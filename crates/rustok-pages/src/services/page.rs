@@ -104,7 +104,7 @@ impl PageService {
         security: SecurityContext,
         page_id: Uuid,
     ) -> PagesResult<PageResponse> {
-        let node = self.nodes.get_node(page_id).await?;
+        let node = self.nodes.get_node(tenant_id, page_id).await?;
         if node.kind != PAGE_KIND {
             return Err(PagesError::PageNotFound(page_id));
         }
@@ -171,7 +171,7 @@ impl PageService {
 
         let mut pages = Vec::with_capacity(nodes.len());
         for node in nodes {
-            let full_node = self.nodes.get_node(node.id).await?;
+            let full_node = self.nodes.get_node(tenant_id, node.id).await?;
             let template = full_node
                 .metadata
                 .get("template")
@@ -200,7 +200,7 @@ impl PageService {
         page_id: Uuid,
         input: UpdatePageInput,
     ) -> PagesResult<PageResponse> {
-        let existing = self.nodes.get_node(page_id).await?;
+        let existing = self.nodes.get_node(tenant_id, page_id).await?;
         if existing.kind != PAGE_KIND {
             return Err(PagesError::PageNotFound(page_id));
         }
@@ -230,6 +230,7 @@ impl PageService {
 
         self.nodes
             .update_node(
+                tenant_id,
                 page_id,
                 security.clone(),
                 UpdateNodeInput {
@@ -268,7 +269,9 @@ impl PageService {
         security: SecurityContext,
         page_id: Uuid,
     ) -> PagesResult<PageResponse> {
-        self.nodes.publish_node(page_id, security.clone()).await?;
+        self.nodes
+            .publish_node(tenant_id, page_id, security.clone())
+            .await?;
         self.get(tenant_id, security, page_id).await
     }
 
@@ -279,7 +282,9 @@ impl PageService {
         security: SecurityContext,
         page_id: Uuid,
     ) -> PagesResult<PageResponse> {
-        self.nodes.unpublish_node(page_id, security.clone()).await?;
+        self.nodes
+            .unpublish_node(tenant_id, page_id, security.clone())
+            .await?;
         self.get(tenant_id, security, page_id).await
     }
 
@@ -292,7 +297,7 @@ impl PageService {
         self.blocks
             .delete_all_for_page(tenant_id, security.clone(), page_id)
             .await?;
-        self.nodes.delete_node(page_id, security).await?;
+        self.nodes.delete_node(tenant_id, page_id, security).await?;
         Ok(())
     }
 }

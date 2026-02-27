@@ -146,6 +146,7 @@ impl PostService {
     #[instrument(skip(self, security, input))]
     pub async fn update_post(
         &self,
+        tenant_id: Uuid,
         post_id: Uuid,
         security: SecurityContext,
         input: UpdatePostInput,
@@ -202,17 +203,10 @@ impl PostService {
             update.expected_version = Some(version);
         }
 
-        let node = self
-            .nodes
-            .get_node(post_id)
-            .await
-            .map_err(BlogError::from)?;
-        let tenant_id = node.tenant_id;
-
         let txn = self.db.begin().await.map_err(BlogError::from)?;
 
         self.nodes
-            .update_node_in_tx(&txn, post_id, security.clone(), update)
+            .update_node_in_tx(&txn, tenant_id, post_id, security.clone(), update)
             .await
             .map_err(BlogError::from)?;
 
@@ -232,19 +226,23 @@ impl PostService {
     }
 
     #[instrument(skip(self, security))]
-    pub async fn publish_post(&self, post_id: Uuid, security: SecurityContext) -> BlogResult<()> {
+    pub async fn publish_post(
+        &self,
+        tenant_id: Uuid,
+        post_id: Uuid,
+        security: SecurityContext,
+    ) -> BlogResult<()> {
         let node = self
             .nodes
-            .get_node(post_id)
+            .get_node(tenant_id, post_id)
             .await
             .map_err(BlogError::from)?;
         let author_id = node.author_id;
-        let tenant_id = node.tenant_id;
 
         let txn = self.db.begin().await.map_err(BlogError::from)?;
 
         self.nodes
-            .publish_node_in_tx(&txn, post_id, security.clone())
+            .publish_node_in_tx(&txn, tenant_id, post_id, security.clone())
             .await
             .map_err(BlogError::from)?;
 
@@ -264,18 +262,16 @@ impl PostService {
     }
 
     #[instrument(skip(self, security))]
-    pub async fn unpublish_post(&self, post_id: Uuid, security: SecurityContext) -> BlogResult<()> {
-        let node = self
-            .nodes
-            .get_node(post_id)
-            .await
-            .map_err(BlogError::from)?;
-        let tenant_id = node.tenant_id;
-
+    pub async fn unpublish_post(
+        &self,
+        tenant_id: Uuid,
+        post_id: Uuid,
+        security: SecurityContext,
+    ) -> BlogResult<()> {
         let txn = self.db.begin().await.map_err(BlogError::from)?;
 
         self.nodes
-            .unpublish_node_in_tx(&txn, post_id, security.clone())
+            .unpublish_node_in_tx(&txn, tenant_id, post_id, security.clone())
             .await
             .map_err(BlogError::from)?;
 
@@ -297,21 +293,15 @@ impl PostService {
     #[instrument(skip(self, security))]
     pub async fn archive_post(
         &self,
+        tenant_id: Uuid,
         post_id: Uuid,
         security: SecurityContext,
         reason: Option<String>,
     ) -> BlogResult<()> {
-        let node = self
-            .nodes
-            .get_node(post_id)
-            .await
-            .map_err(BlogError::from)?;
-        let tenant_id = node.tenant_id;
-
         let txn = self.db.begin().await.map_err(BlogError::from)?;
 
         self.nodes
-            .archive_node_in_tx(&txn, post_id, security.clone())
+            .archive_node_in_tx(&txn, tenant_id, post_id, security.clone())
             .await
             .map_err(BlogError::from)?;
 
@@ -334,10 +324,15 @@ impl PostService {
     }
 
     #[instrument(skip(self, security))]
-    pub async fn delete_post(&self, post_id: Uuid, security: SecurityContext) -> BlogResult<()> {
+    pub async fn delete_post(
+        &self,
+        tenant_id: Uuid,
+        post_id: Uuid,
+        security: SecurityContext,
+    ) -> BlogResult<()> {
         let node = self
             .nodes
-            .get_node(post_id)
+            .get_node(tenant_id, post_id)
             .await
             .map_err(BlogError::from)?;
         let status = map_content_status(node.status.clone());
@@ -345,12 +340,10 @@ impl PostService {
             return Err(BlogError::CannotDeletePublished);
         }
 
-        let tenant_id = node.tenant_id;
-
         let txn = self.db.begin().await.map_err(BlogError::from)?;
 
         self.nodes
-            .delete_node_in_tx(&txn, post_id, security.clone())
+            .delete_node_in_tx(&txn, tenant_id, post_id, security.clone())
             .await
             .map_err(BlogError::from)?;
 
@@ -370,10 +363,15 @@ impl PostService {
     }
 
     #[instrument(skip(self))]
-    pub async fn get_post(&self, post_id: Uuid, locale: &str) -> BlogResult<PostResponse> {
+    pub async fn get_post(
+        &self,
+        tenant_id: Uuid,
+        post_id: Uuid,
+        locale: &str,
+    ) -> BlogResult<PostResponse> {
         let node = self
             .nodes
-            .get_node(post_id)
+            .get_node(tenant_id, post_id)
             .await
             .map_err(BlogError::from)?;
 
