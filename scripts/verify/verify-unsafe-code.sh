@@ -160,6 +160,30 @@ else
     grep -rn 'unreachable!(' "${EXISTING[@]}" --include="*.rs" 2>/dev/null | filter_tests | head -10
 fi
 
+# ─── 10. static / lazy_static! / once_cell::Lazy (should use AppContext) ───
+header "10. Поиск global state: static / lazy_static / once_cell::Lazy"
+
+static_state=$(grep -rn 'static\s\+mut\|lazy_static!\|once_cell::sync::Lazy\|static\s\+ref' "${EXISTING[@]}" --include="*.rs" 2>/dev/null | filter_tests | grep -v "const\|type\|str\|// " || true)
+if [[ -n "$static_state" ]]; then
+    count=$(echo "$static_state" | wc -l)
+    warn "$count global state declaration(s) — should use AppContext.shared_store:"
+    echo "$static_state" | head -10
+else
+    pass "No global mutable state (lazy_static/once_cell)"
+fi
+
+# ─── 11. Unsafe fallback defaults for secrets ───
+header "11. Unsafe fallback defaults for secrets"
+
+unsafe_fallback=$(grep -rn 'unwrap_or\|unwrap_or_else\|unwrap_or_default' "${EXISTING[@]}" --include="*.rs" 2>/dev/null | grep -iE 'secret\|password\|jwt\|token\|key\|api_key' | filter_tests || true)
+if [[ -n "$unsafe_fallback" ]]; then
+    count=$(echo "$unsafe_fallback" | wc -l)
+    fail "$count unsafe fallback(s) for secrets (should fail loudly, not use defaults):"
+    echo "$unsafe_fallback" | head -10
+else
+    pass "No unsafe fallback defaults for secrets"
+fi
+
 # ─── Summary ───
 echo ""
 echo -e "${BOLD}━━━ Unsafe Code Summary ━━━${NC}"

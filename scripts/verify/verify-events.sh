@@ -177,6 +177,54 @@ else
     warn "No idempotency markers found in event handlers"
 fi
 
+# ─── 8. Transport config: not "memory" in production ───
+header "8. Transport config: not 'memory' in production"
+
+memory_transport=$(grep -rn '"memory"\|transport.*memory\|InMemory' "apps/server/src" "$CORE_CRATE" "$EVENTS_CRATE" --include="*.rs" 2>/dev/null | grep -v "test\|// \|///\|#\[cfg(test" || true)
+config_memory=$(grep -rn 'memory' config/*.yaml config/*.toml .env.dev.example 2>/dev/null | grep -i "transport" || true)
+if [[ -n "$memory_transport" || -n "$config_memory" ]]; then
+    warn "In-memory transport detected (only for tests, not production):"
+    [[ -n "$memory_transport" ]] && echo "$memory_transport" | head -5
+    [[ -n "$config_memory" ]] && echo "$config_memory" | head -5
+else
+    pass "No in-memory transport in production code/config"
+fi
+
+# ─── 9. Event structs have Serialize/Deserialize ───
+header "9. Event structs: #[derive(Serialize, Deserialize)]"
+
+event_struct_files=$(grep -rl 'struct.*Event\b' "$CORE_CRATE" "$EVENTS_CRATE" --include="*.rs" 2>/dev/null | grep -v "test\|Handler\|Bus" || true)
+if [[ -n "$event_struct_files" ]]; then
+    for file in $event_struct_files; do
+        structs=$(grep -n 'struct.*Event\b' "$file" 2>/dev/null | grep -v "Handler\|Bus\|Publisher\|Subscriber\|Config" || true)
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            lineno=$(echo "$line" | cut -d: -f1)
+            name=$(echo "$line" | grep -oP 'struct\s+\K\w+' || echo "unknown")
+            # Check for derive above
+            start=$((lineno > 5 ? lineno - 5 : 1))
+            above=$(sed -n "${start},${lineno}p" "$file" 2>/dev/null || true)
+            if echo "$above" | grep -q "Serialize.*Deserialize\|Deserialize.*Serialize"; then
+                pass "$name — has Serialize + Deserialize"
+            else
+                warn "$name ($file:$lineno) — missing Serialize/Deserialize derive"
+            fi
+        done <<< "$structs"
+    done
+else
+    warn "No event struct files found"
+fi
+
+# ─── 10. Outbox relay worker registered ───
+header "10. Outbox relay worker registration"
+
+worker_refs=$(grep -rn 'outbox\|relay\|OutboxRelay\|outbox_worker' "apps/server/src" --include="*.rs" 2>/dev/null | grep -iE "worker\|spawn\|connect_workers\|register" || true)
+if [[ -n "$worker_refs" ]]; then
+    pass "Outbox relay worker registration found"
+else
+    warn "No outbox relay worker registration found"
+fi
+
 # ─── Summary ───
 echo ""
 echo -e "${BOLD}━━━ Events System Summary ━━━${NC}"

@@ -156,6 +156,30 @@ for edir in "${ENTITY_DIRS[@]}"; do
     fi
 done
 
+# ─── 6. Raw SQL string concatenation (SQL injection risk) ───
+header "6. Raw SQL string concatenation (SQL injection risk)"
+
+sql_concat=$(grep -rn 'format!.*SELECT\|format!.*INSERT\|format!.*UPDATE\|format!.*DELETE\|format!.*WHERE' "${EXISTING_CRATES[@]}" "apps/server/src" --include="*.rs" 2>/dev/null | grep -v "test\|// \|///\|migration" || true)
+if [[ -n "$sql_concat" ]]; then
+    count=$(echo "$sql_concat" | wc -l)
+    fail "$count raw SQL concatenation(s) found (use parameterized queries):"
+    echo "$sql_concat" | head -10
+else
+    pass "No raw SQL string concatenation"
+fi
+
+# ─── 7. Hard DELETE without soft-delete pattern ───
+header "7. Hard DELETE without soft-delete/archive"
+
+hard_delete=$(grep -rn '\.delete(\|delete_by_id\|delete_many\|DELETE FROM' "${EXISTING_CRATES[@]}" --include="*.rs" 2>/dev/null | grep -v "test\|// \|migration\|soft_delete\|archive\|status" || true)
+if [[ -n "$hard_delete" ]]; then
+    count=$(echo "$hard_delete" | wc -l)
+    warn "$count hard DELETE operation(s) — consider soft-delete (status = Archived):"
+    echo "$hard_delete" | head -10
+else
+    pass "No hard DELETE operations (or using soft-delete)"
+fi
+
 # ─── Summary ───
 echo ""
 echo -e "${BOLD}━━━ Tenant Isolation Summary ━━━${NC}"

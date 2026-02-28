@@ -25,11 +25,13 @@ usage() {
     echo ""
     echo "Scripts (run individually):"
     echo "  tenant-isolation   Check tenant_id in queries, entities, migrations"
-    echo "  unsafe-code        Check unwrap, panic, blocking ops, println"
+    echo "  unsafe-code        Check unwrap, panic, blocking ops, println, global state"
     echo "  rbac-coverage      Check RBAC extractors on handlers/resolvers"
     echo "  api-quality        Check GraphQL/REST quality, N+1, OpenAPI, parity"
-    echo "  events             Check event publishing, DLQ, outbox"
-    echo "  code-quality       Check PII, secrets, metrics, dependencies"
+    echo "  events             Check event publishing, DLQ, outbox, transport, serde"
+    echo "  code-quality       Check PII, secrets, metrics, dependencies, observability"
+    echo "  security           Check argon2, headers, CORS, SSRF, JWT, rate limiting"
+    echo "  architecture       Check module registry, Loco hooks, MCP, DI, telemetry"
     echo ""
     echo "Without arguments, runs all scripts."
 }
@@ -49,6 +51,8 @@ SCRIPTS=(
     "verify-api-quality.sh:API Quality (REST + GraphQL)"
     "verify-events.sh:Event System"
     "verify-code-quality.sh:Code Quality"
+    "verify-security.sh:Security"
+    "verify-architecture.sh:Architecture"
 )
 
 # Filter to selected script if specified

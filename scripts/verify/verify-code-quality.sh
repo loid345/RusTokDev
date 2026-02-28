@@ -104,14 +104,14 @@ fi
 # CODE METRICS
 # ═══════════════════════════════════════════
 
-# ─── 4. Модули > 1000 строк ───
-header "4. Файлы > 1000 строк"
+# ─── 4. Модули > 500 строк ───
+header "4. Файлы > 500 строк"
 
 large_files=""
 for dir in "${EXISTING[@]}"; do
     while IFS= read -r file; do
         lines=$(wc -l < "$file" 2>/dev/null || echo "0")
-        if [[ $lines -gt 1000 ]]; then
+        if [[ $lines -gt 500 ]]; then
             large_files+="  $file: $lines lines"$'\n'
         fi
     done < <(find "$dir" -name "*.rs" -type f 2>/dev/null)
@@ -119,10 +119,10 @@ done
 
 if [[ -n "$large_files" ]]; then
     count=$(echo "$large_files" | grep -c . || echo "0")
-    warn "$count file(s) exceed 1000 lines (consider splitting):"
-    echo "$large_files" | head -10
+    warn "$count file(s) exceed 500 lines (consider splitting):"
+    echo "$large_files" | sort -t: -k2 -rn | head -15
 else
-    pass "All files under 1000 lines"
+    pass "All files under 500 lines"
 fi
 
 # ─── 5. Функции > 60 строк ───
@@ -267,6 +267,106 @@ if [[ -n "$string_status" ]]; then
 else
     pass "No string-based status checks (using enums)"
 fi
+
+# ═══════════════════════════════════════════
+# OBSERVABILITY
+# ═══════════════════════════════════════════
+
+# ─── 12. #[instrument] на service methods ───
+header "12. Observability: #[instrument] on service methods"
+
+SERVICE_DIRS=()
+for crate in "${PROD_RS_PATHS[@]}"; do
+    svc_dir="$crate/services"
+    [[ -d "$svc_dir" ]] && SERVICE_DIRS+=("$svc_dir")
+    # Also check for service.rs files
+    svc_file="$crate/service.rs"
+    [[ -f "$svc_file" ]] && SERVICE_DIRS+=("$svc_file")
+done
+
+if [[ ${#SERVICE_DIRS[@]} -gt 0 ]]; then
+    total_svc_fns=0
+    instrumented_fns=0
+    for svc in "${SERVICE_DIRS[@]}"; do
+        while IFS= read -r file; do
+            fns=$(grep -cn 'pub async fn\|pub fn' "$file" 2>/dev/null || echo "0")
+            instrs=$(grep -cn '#\[instrument' "$file" 2>/dev/null || echo "0")
+            total_svc_fns=$((total_svc_fns + fns))
+            instrumented_fns=$((instrumented_fns + instrs))
+        done < <(find "$svc" -name "*.rs" -type f 2>/dev/null)
+    done
+
+    if [[ $total_svc_fns -gt 0 ]]; then
+        pct=$((instrumented_fns * 100 / total_svc_fns))
+        if [[ $pct -ge 80 ]]; then
+            pass "#[instrument] coverage: $instrumented_fns/$total_svc_fns service functions ($pct%)"
+        elif [[ $pct -ge 50 ]]; then
+            warn "#[instrument] coverage: $instrumented_fns/$total_svc_fns service functions ($pct%) — aim for 80%+"
+        else
+            warn "#[instrument] coverage: $instrumented_fns/$total_svc_fns service functions ($pct%) — LOW"
+        fi
+    fi
+fi
+
+# ─── 13. Structured logging (not string interpolation) ───
+header "13. Observability: structured logging"
+
+string_format_logs=$(grep -rn 'tracing::\|info!\|debug!\|warn!\|error!' "${EXISTING[@]}" --include="*.rs" 2>/dev/null | grep -E 'format!\|&format' | grep -v "test\|// " || true)
+if [[ -n "$string_format_logs" ]]; then
+    count=$(echo "$string_format_logs" | wc -l)
+    warn "$count log call(s) using format! (use structured fields instead):"
+    echo "$string_format_logs" | head -10
+else
+    pass "No format! in tracing calls (using structured fields)"
+fi
+
+# ═══════════════════════════════════════════
+# TYPE SAFETY
+# ═══════════════════════════════════════════
+
+# ─── 14. Newtype IDs ───
+header "14. Type safety: Newtype IDs (not bare Uuid)"
+
+bare_uuid_params=$(grep -rn 'Path<Uuid>\|Query.*Uuid>\|Json.*uuid::Uuid' "apps/server/src/controllers" --include="*.rs" 2>/dev/null | grep -v "test\|// " || true)
+if [[ -n "$bare_uuid_params" ]]; then
+    count=$(echo "$bare_uuid_params" | wc -l)
+    warn "$count bare Uuid parameter(s) in controllers (should use TenantId, UserId, etc.):"
+    echo "$bare_uuid_params" | head -10
+else
+    pass "No bare Uuid in controller parameters"
+fi
+
+# ─── 15. Function arity (> 5 args) ───
+header "15. Code metrics: functions with > 5 arguments"
+
+# Find function signatures with many commas (heuristic for argument count)
+high_arity=""
+for dir in "${EXISTING[@]}"; do
+    while IFS= read -r file; do
+        # Find fn lines, count commas in signature
+        grep -n 'pub\s\+\(async\s\+\)\?fn ' "$file" 2>/dev/null | while IFS= read -r line; do
+            lineno=$(echo "$line" | cut -d: -f1)
+            fn_name=$(echo "$line" | grep -oP 'fn\s+\K\w+' || echo "unknown")
+            # Get full signature (may span lines)
+            sig=$(sed -n "${lineno},$((lineno + 5))p" "$file" 2>/dev/null | tr '\n' ' ' | sed 's/\s\+/ /g' || true)
+            # Count commas between ( and )
+            params=$(echo "$sig" | grep -oP '\(.*?\)' | head -1 || true)
+            comma_count=$(echo "$params" | tr -cd ',' | wc -c)
+            if [[ $comma_count -gt 5 ]]; then
+                echo "  $file:$lineno $fn_name — $((comma_count + 1)) params"
+            fi
+        done
+    done < <(find "$dir" -name "*.rs" -type f 2>/dev/null)
+done > /tmp/rustok_high_arity.txt 2>/dev/null
+
+if [[ -s /tmp/rustok_high_arity.txt ]]; then
+    count=$(wc -l < /tmp/rustok_high_arity.txt)
+    warn "$count function(s) with > 5 arguments (consider using param struct):"
+    cat /tmp/rustok_high_arity.txt | head -10
+else
+    pass "No functions with > 5 arguments"
+fi
+rm -f /tmp/rustok_high_arity.txt
 
 # ─── Summary ───
 echo ""
