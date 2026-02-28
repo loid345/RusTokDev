@@ -6,7 +6,7 @@
 //! # Architecture
 //!
 //! This crate implements `EventTransport` trait and handles:
-//! - Event serialization (JSON/Bincode)
+//! - Event serialization (JSON/Postcard)
 //! - Topology management (streams, topics)
 //! - Consumer group coordination
 //! - Dead letter queue handling
@@ -17,7 +17,7 @@
 //! # Features
 //!
 //! - **EventTransport implementation**: Seamless integration with RusToK event system
-//! - **Multiple serialization formats**: JSON (default) and Bincode
+//! - **Multiple serialization formats**: JSON (default) and Postcard
 //! - **Automatic topology management**: Streams and topics created automatically
 //! - **Tenant-based partitioning**: Events from the same tenant maintain order
 //! - **Consumer groups, DLQ, replay**: Higher-level streaming primitives
@@ -77,6 +77,6 @@ pub use dlq::{DlqEntry, DlqManager};
 pub use health::{health_check, HealthCheckResult, HealthStatus};
 pub use partitioning::{calculate_partition, partition_key};
 pub use replay::{ActiveReplay, ReplayConfig, ReplayManager, ReplayStatus};
-pub use serialization::{BincodeSerializer, EventSerializer, JsonSerializer};
+pub use serialization::{PostcardSerializer, EventSerializer, JsonSerializer};
 pub use topology::TopologyManager;
 pub use transport::IggyTransport;

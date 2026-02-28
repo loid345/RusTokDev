@@ -15,7 +15,7 @@ while preserving compatibility with platform-level contracts.
 │                    rustok-iggy                      │
 │  Responsibilities:                                  │
 │  - EventTransport implementation                    │
-│  - Event serialization (JSON/Bincode)              │
+│  - Event serialization (JSON/Postcard)              │
 │  - Topology management, consumer groups            │
 │  - DLQ, replay, health checks                      │
 └──────────────────────┬──────────────────────────────┘
@@ -32,7 +32,7 @@ while preserving compatibility with platform-level contracts.
 
 - `rustok-iggy` implements `EventTransport` trait from `rustok-core`
 - Delegates to `rustok-iggy-connector` for Embedded/Remote mode abstraction
-- Supports both JSON and Bincode serialization formats
+- Supports both JSON and Postcard serialization formats
 - Provides topology management, consumer groups, DLQ, and replay capabilities
 - Observability via tracing and health checks
 
@@ -47,7 +47,7 @@ while preserving compatibility with platform-level contracts.
 
 ### Phase 1 — Core Implementation ✅ DONE
 
-- [x] Fix BincodeSerializer (was returning errors)
+- [x] Fix PostcardSerializer (was returning errors)
 - [x] TopologyManager with actual state management
 - [x] ConsumerGroupManager with group tracking
 - [x] DlqManager with entry structure
@@ -80,7 +80,7 @@ while preserving compatibility with platform-level contracts.
 |-----------|--------|-------|
 | `config.rs` | ✅ Complete | Full configuration with serialization |
 | `transport.rs` | ✅ Complete | EventTransport implementation |
-| `serialization.rs` | ✅ Complete | JSON + Bincode with tests |
+| `serialization.rs` | ✅ Complete | JSON + Postcard with tests |
 | `topology.rs` | ✅ Complete | State management with tests |
 | `consumer.rs` | ✅ Complete | Group management with tests |
 | `producer.rs` | ✅ Complete | Request building with tests |

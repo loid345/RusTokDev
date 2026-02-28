@@ -25,7 +25,7 @@ Documentation for the `crates/rustok-iggy` module.
 | `ConsumerGroupManager` | Consumer group coordination |
 | `DlqManager` | Dead letter queue handling |
 | `ReplayManager` | Event replay orchestration |
-| `EventSerializer` | JSON/Bincode serialization |
+| `EventSerializer` | JSON/Postcard serialization |
 
 ## Quick Reference
 
