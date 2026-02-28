@@ -32,7 +32,7 @@ use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
 #[cfg(feature = "iggy")]
-use iggy::prelude::{IggyClient, IggyError};
+use iggy::prelude::{Client, IggyClient, IggyError};
 
 /// Connection mode for Iggy connector
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -346,6 +346,7 @@ impl RemoteConnector {
     }
 
     #[cfg(not(feature = "iggy"))]
+    #[allow(dead_code)]
     async fn create_and_connect(_config: &RemoteConnectorConfig) -> Result<(), ConnectorError> {
         tracing::warn!("Iggy SDK not enabled, using mock client");
         Ok(())
@@ -393,7 +394,7 @@ impl IggyConnector for RemoteConnector {
 
         #[cfg(feature = "iggy")]
         {
-            use iggy::prelude::{Message, Partitioning};
+            use iggy::prelude::{IggyMessage, Partitioning};
 
             let client_guard = self.client.read().await;
             let client: &IggyClient = client_guard.as_ref().ok_or(ConnectorError::NotConnected)?;
@@ -409,7 +410,7 @@ impl IggyConnector for RemoteConnector {
                 .await
                 .map_err(|e: IggyError| ConnectorError::Publish(e.to_string()))?;
 
-            let message = Message::from_bytes(request.payload.clone().into())
+            let message = IggyMessage::from_bytes(request.payload.clone().into())
                 .map_err(|e: IggyError| ConnectorError::Publish(e.to_string()))?;
 
             producer
@@ -483,6 +484,7 @@ impl IggyConnector for RemoteConnector {
 
 /// Remote message subscriber implementation
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct RemoteMessageSubscriber {
     stream: String,
     topic: String,
@@ -651,6 +653,7 @@ impl IggyConnector for EmbeddedConnector {
 
 /// Embedded message subscriber implementation
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct EmbeddedMessageSubscriber {
     stream: String,
     topic: String,
