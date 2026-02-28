@@ -6,7 +6,7 @@ use rmcp::{
     model::{CallToolRequestParams, CallToolResult, Implementation, ListToolsResult, ServerInfo},
     service::{RequestContext, RoleServer},
     transport::stdio,
-    ServerHandler,
+    ServerHandler, ServiceExt,
 };
 use rustok_core::registry::ModuleRegistry;
 
@@ -615,7 +615,7 @@ impl<R: ScriptRegistry + Send + Sync + 'static> ServerHandler for RusToKMcpServe
         }
 
         if let Some(enabled) = &self.enabled_tools {
-            tools.retain(|tool| enabled.contains(&tool.name) || tool.name == TOOL_MCP_HEALTH);
+            tools.retain(|tool| enabled.contains(tool.name.as_ref()) || tool.name == TOOL_MCP_HEALTH);
         }
 
         Ok(ListToolsResult {
@@ -653,7 +653,11 @@ pub async fn serve_stdio(config: McpServerConfig) -> Result<()> {
         None => RusToKMcpServer::new(config.registry),
     };
 
-    stdio::serve(server)
+    server
+        .serve(stdio())
+        .await
+        .map_err(|e| anyhow::anyhow!("MCP server error: {}", e))?
+        .waiting()
         .await
         .map_err(|e| anyhow::anyhow!("MCP server error: {}", e))
 }
