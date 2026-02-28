@@ -41,14 +41,14 @@ impl std::fmt::Display for IggyMode {
 pub enum SerializationFormat {
     #[default]
     Json,
-    Bincode,
+    Postcard,
 }
 
 impl std::fmt::Display for SerializationFormat {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             SerializationFormat::Json => write!(f, "json"),
-            SerializationFormat::Bincode => write!(f, "bincode"),
+            SerializationFormat::Postcard => write!(f, "postcard"),
         }
     }
 }
@@ -187,7 +187,7 @@ mod tests {
     #[test]
     fn serialization_format_display() {
         assert_eq!(SerializationFormat::Json.to_string(), "json");
-        assert_eq!(SerializationFormat::Bincode.to_string(), "bincode");
+        assert_eq!(SerializationFormat::Postcard.to_string(), "postcard");
     }
 
     #[test]
@@ -249,7 +249,7 @@ mod tests {
     fn config_serialization_roundtrip() {
         let config = IggyConfig {
             mode: IggyMode::Remote,
-            serialization: SerializationFormat::Bincode,
+            serialization: SerializationFormat::Postcard,
             topology: TopologyConfig {
                 stream_name: "custom-stream".to_string(),
                 domain_partitions: 16,
@@ -262,7 +262,7 @@ mod tests {
         let parsed: IggyConfig = serde_json::from_str(&json).unwrap();
 
         assert_eq!(parsed.mode, IggyMode::Remote);
-        assert_eq!(parsed.serialization, SerializationFormat::Bincode);
+        assert_eq!(parsed.serialization, SerializationFormat::Postcard);
         assert_eq!(parsed.topology.stream_name, "custom-stream");
         assert_eq!(parsed.topology.domain_partitions, 16);
     }

@@ -40,10 +40,10 @@ async fn test_iggy_transport_remote_mode() -> TestResult<()> {
 
 #[tokio::test]
 #[ignore = "Integration test requires running iggy backend"]
-async fn test_iggy_transport_bincode() -> TestResult<()> {
+async fn test_iggy_transport_postcard() -> TestResult<()> {
     let config = IggyConfig {
         mode: IggyMode::Embedded,
-        serialization: SerializationFormat::Bincode,
+        serialization: SerializationFormat::Postcard,
         ..IggyConfig::default()
     };
 
@@ -63,7 +63,7 @@ mod config_tests {
     fn config_serialization_roundtrip() {
         let original = IggyConfig {
             mode: IggyMode::Remote,
-            serialization: SerializationFormat::Bincode,
+            serialization: SerializationFormat::Postcard,
             embedded: EmbeddedConfig {
                 data_dir: "/custom/data".to_string(),
                 use_binary_fallback: false,
@@ -94,7 +94,7 @@ mod config_tests {
         let parsed: IggyConfig = serde_json::from_str(&json).unwrap();
 
         assert_eq!(parsed.mode, IggyMode::Remote);
-        assert_eq!(parsed.serialization, SerializationFormat::Bincode);
+        assert_eq!(parsed.serialization, SerializationFormat::Postcard);
         assert_eq!(parsed.topology.stream_name, "production");
         assert_eq!(parsed.topology.domain_partitions, 32);
         assert_eq!(parsed.remote.addresses.len(), 2);
@@ -142,7 +142,7 @@ topology:
 mod serialization_tests {
     use rustok_core::events::{DomainEvent, EventEnvelope};
     use rustok_iggy::config::SerializationFormat;
-    use rustok_iggy::serialization::{BincodeSerializer, EventSerializer, JsonSerializer};
+    use rustok_iggy::serialization::{PostcardSerializer, EventSerializer, JsonSerializer};
     use uuid::Uuid;
 
     fn create_test_envelope() -> EventEnvelope {
@@ -164,9 +164,9 @@ mod serialization_tests {
     }
 
     #[test]
-    fn bincode_serializer_format() {
-        let serializer = BincodeSerializer;
-        assert_eq!(serializer.format(), SerializationFormat::Bincode);
+    fn postcard_serializer_format() {
+        let serializer = PostcardSerializer;
+        assert_eq!(serializer.format(), SerializationFormat::Postcard);
     }
 
     #[test]
@@ -182,8 +182,8 @@ mod serialization_tests {
     }
 
     #[test]
-    fn bincode_serialization_works() {
-        let serializer = BincodeSerializer;
+    fn postcard_serialization_works() {
+        let serializer = PostcardSerializer;
         let envelope = create_test_envelope();
 
         let result = serializer.serialize(&envelope);

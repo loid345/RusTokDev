@@ -15,7 +15,7 @@ Event streaming transport for the RusToK platform using [Iggy](https://iggy.rs).
 - **EventTransport Implementation**: Seamless integration with RusToK event system
 - **Automatic Topology**: Streams and topics are created automatically
 - **Tenant Partitioning**: Events are partitioned by tenant ID for ordering guarantees
-- **Multiple Serialization Formats**: JSON (default) and Bincode for high-throughput scenarios
+- **Multiple Serialization Formats**: JSON (default) and Postcard for high-throughput scenarios
 - **Consumer Groups**: Support for distributed consumers via consumer groups
 - **Dead Letter Queue**: DLQ support for failed message handling
 - **Event Replay**: Replay events for recovery or reprocessing
@@ -73,7 +73,7 @@ events:
   transport: iggy
   iggy:
     mode: embedded  # or "remote" — handled by rustok-iggy-connector
-    serialization: json  # or "bincode"
+    serialization: json  # or "postcard"
     topology:
       stream_name: rustok
       domain_partitions: 8
@@ -120,7 +120,7 @@ let config = IggyConfig {
 | `ConsumerGroupManager` | Consumer group coordination |
 | `DlqManager` | Dead letter queue handling |
 | `ReplayManager` | Event replay orchestration |
-| `EventSerializer` | JSON/Bincode serialization |
+| `EventSerializer` | JSON/Postcard serialization |
 
 ## Serialization
 
@@ -135,13 +135,13 @@ let config = IggyConfig {
 };
 ```
 
-### Bincode
+### Postcard
 
 High-throughput binary format:
 
 ```rust
 let config = IggyConfig {
-    serialization: SerializationFormat::Bincode,
+    serialization: SerializationFormat::Postcard,
     ..Default::default()
 };
 ```

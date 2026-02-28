@@ -6,7 +6,7 @@ use tracing::{error, info};
 use crate::config::{IggyConfig, IggyMode};
 use crate::consumer::ConsumerGroupManager;
 use crate::producer;
-use crate::serialization::{BincodeSerializer, EventSerializer, JsonSerializer};
+use crate::serialization::{PostcardSerializer, EventSerializer, JsonSerializer};
 use crate::topology::TopologyManager;
 use rustok_core::events::{EventEnvelope, EventTransport, ReliabilityLevel};
 use rustok_core::Result;
@@ -44,7 +44,7 @@ impl IggyTransport {
 
         let serializer: Arc<dyn EventSerializer> = match config.serialization {
             crate::config::SerializationFormat::Json => Arc::new(JsonSerializer),
-            crate::config::SerializationFormat::Bincode => Arc::new(BincodeSerializer),
+            crate::config::SerializationFormat::Postcard => Arc::new(PostcardSerializer),
         };
 
         info!(

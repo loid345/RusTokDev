@@ -22,15 +22,15 @@ impl EventSerializer for JsonSerializer {
 }
 
 #[derive(Debug, Default)]
-pub struct BincodeSerializer;
+pub struct PostcardSerializer;
 
-impl EventSerializer for BincodeSerializer {
+impl EventSerializer for PostcardSerializer {
     fn format(&self) -> SerializationFormat {
-        SerializationFormat::Bincode
+        SerializationFormat::Postcard
     }
 
     fn serialize(&self, envelope: &EventEnvelope) -> Result<Vec<u8>> {
-        bincode::serde::encode_to_vec(envelope, bincode::config::standard())
+        postcard::to_stdvec(envelope)
             .map_err(|err| rustok_core::Error::External(err.to_string()))
     }
 }
@@ -60,9 +60,9 @@ mod tests {
     }
 
     #[test]
-    fn bincode_serializer_format() {
-        let serializer = BincodeSerializer;
-        assert_eq!(serializer.format(), SerializationFormat::Bincode);
+    fn postcard_serializer_format() {
+        let serializer = PostcardSerializer;
+        assert_eq!(serializer.format(), SerializationFormat::Postcard);
     }
 
     #[test]
@@ -81,8 +81,8 @@ mod tests {
     }
 
     #[test]
-    fn bincode_serialize_event() {
-        let serializer = BincodeSerializer;
+    fn postcard_serialize_event() {
+        let serializer = PostcardSerializer;
         let envelope = create_test_envelope();
 
         let result = serializer.serialize(&envelope);
