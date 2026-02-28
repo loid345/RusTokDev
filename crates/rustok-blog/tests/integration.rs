@@ -4,10 +4,10 @@
 //! to prevent running in CI without proper test infrastructure.
 
 use rustok_blog::dto::{CreatePostInput, PostListQuery};
-use rustok_blog::state_machine::{BlogPost, BlogPostStatus, CommentStatus};
-use rustok_blog::{BlogError, BlogModule};
+use rustok_blog::state_machine::{BlogPost, BlogPostStatus, CommentStatus, ToBlogPostStatus};
+use rustok_blog::BlogError;
 use rustok_core::events::EventEnvelope;
-use rustok_core::{DomainEvent, MigrationSource, RusToKModule, SecurityContext};
+use rustok_core::DomainEvent;
 use tokio::sync::broadcast;
 use uuid::Uuid;
 
