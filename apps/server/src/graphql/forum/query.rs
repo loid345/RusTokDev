@@ -177,7 +177,9 @@ impl ForumQuery {
             per_page: per_page.unwrap_or(20),
         };
 
-        let (replies, _total) = service.list_for_topic(tenant_id, security, topic_id, filter).await?;
+        let (replies, _total) = service
+            .list_for_topic(tenant_id, security, topic_id, filter)
+            .await?;
 
         Ok(replies
             .into_iter()

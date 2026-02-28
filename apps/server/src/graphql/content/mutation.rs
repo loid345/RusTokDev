@@ -147,8 +147,9 @@ impl ContentMutation {
             expected_version: None,
         };
 
-        let node: rustok_content::dto::NodeResponse =
-            service.update_node(tenant_id, id, security, domain_input).await?;
+        let node: rustok_content::dto::NodeResponse = service
+            .update_node(tenant_id, id, security, domain_input)
+            .await?;
 
         Ok(node.into())
     }

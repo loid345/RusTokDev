@@ -26,7 +26,11 @@ fn superadmin_email() -> Option<String> {
 }
 
 fn superadmin_password() -> String {
-    for key in ["SUPERADMIN_PASSWORD", "SEED_ADMIN_PASSWORD", "RUSTOK_DEV_SEED_PASSWORD"] {
+    for key in [
+        "SUPERADMIN_PASSWORD",
+        "SEED_ADMIN_PASSWORD",
+        "RUSTOK_DEV_SEED_PASSWORD",
+    ] {
         if let Ok(v) = std::env::var(key) {
             let v = v.trim().to_string();
             if !v.is_empty() {
@@ -99,8 +103,7 @@ async fn seed_development(ctx: &AppContext) -> Result<()> {
     )
     .await?;
 
-    let admin_email = superadmin_email()
-        .unwrap_or_else(|| "admin@demo.local".to_string());
+    let admin_email = superadmin_email().unwrap_or_else(|| "admin@demo.local".to_string());
 
     seed_user(
         ctx,
@@ -176,10 +179,16 @@ async fn seed_minimal(ctx: &AppContext) -> Result<()> {
     let tenant_slug = superadmin_tenant_slug();
     let tenant_name = superadmin_tenant_name();
 
-    let tenant =
-        tenants::Entity::find_or_create(&ctx.db, &tenant_name, &tenant_slug, None).await?;
+    let tenant = tenants::Entity::find_or_create(&ctx.db, &tenant_name, &tenant_slug, None).await?;
 
-    seed_user(ctx, tenant.id, &email, "Super Admin", rustok_core::UserRole::SuperAdmin).await?;
+    seed_user(
+        ctx,
+        tenant.id,
+        &email,
+        "Super Admin",
+        rustok_core::UserRole::SuperAdmin,
+    )
+    .await?;
 
     tracing::info!(tenant_id = %tenant.id, "Minimal seed complete");
 

@@ -141,7 +141,9 @@ async fn test_node_update_triggers_event() {
         published_at: None,
     };
 
-    let result = service.update_node(tenant_id, node.id, security, update_input).await;
+    let result = service
+        .update_node(tenant_id, node.id, security, update_input)
+        .await;
     assert!(result.is_ok());
 
     // Verify that a NodeUpdated event was published

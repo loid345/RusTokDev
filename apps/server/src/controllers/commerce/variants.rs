@@ -188,7 +188,10 @@ pub(super) async fn create_variant(
         .await
         .map_err(|err| Error::BadRequest(err.to_string()))?;
 
-    Ok((StatusCode::CREATED, Json(build_variant_response(variant, created_prices))))
+    Ok((
+        StatusCode::CREATED,
+        Json(build_variant_response(variant, created_prices)),
+    ))
 }
 
 /// Get variant details
@@ -419,13 +422,7 @@ pub(super) async fn update_prices(
         .await
         .map_err(|err| Error::BadRequest(err.to_string()))?;
 
-    show_variant(
-        State(ctx),
-        tenant,
-        RequireProductsRead(user),
-        Path(id),
-    )
-    .await
+    show_variant(State(ctx), tenant, RequireProductsRead(user), Path(id)).await
 }
 
 fn build_variant_response(

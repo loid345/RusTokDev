@@ -35,10 +35,7 @@ impl CommerceMutation {
             db,
             &tenant_id,
             &auth.user_id,
-            &[
-                Permission::PRODUCTS_CREATE,
-                Permission::PRODUCTS_MANAGE,
-            ],
+            &[Permission::PRODUCTS_CREATE, Permission::PRODUCTS_MANAGE],
         )
         .await
         .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
@@ -76,10 +73,7 @@ impl CommerceMutation {
             db,
             &tenant_id,
             &auth.user_id,
-            &[
-                Permission::PRODUCTS_UPDATE,
-                Permission::PRODUCTS_MANAGE,
-            ],
+            &[Permission::PRODUCTS_UPDATE, Permission::PRODUCTS_MANAGE],
         )
         .await
         .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
@@ -137,10 +131,7 @@ impl CommerceMutation {
             db,
             &tenant_id,
             &auth.user_id,
-            &[
-                Permission::PRODUCTS_UPDATE,
-                Permission::PRODUCTS_MANAGE,
-            ],
+            &[Permission::PRODUCTS_UPDATE, Permission::PRODUCTS_MANAGE],
         )
         .await
         .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
@@ -174,10 +165,7 @@ impl CommerceMutation {
             db,
             &tenant_id,
             &auth.user_id,
-            &[
-                Permission::PRODUCTS_DELETE,
-                Permission::PRODUCTS_MANAGE,
-            ],
+            &[Permission::PRODUCTS_DELETE, Permission::PRODUCTS_MANAGE],
         )
         .await
         .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;

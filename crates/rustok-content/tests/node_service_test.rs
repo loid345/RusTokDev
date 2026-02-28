@@ -147,7 +147,9 @@ async fn test_update_node_success() {
         ..UpdateNodeInput::default()
     };
 
-    let result = service.update_node(tenant_id, node.id, security, update_input).await;
+    let result = service
+        .update_node(tenant_id, node.id, security, update_input)
+        .await;
 
     assert!(result.is_ok());
     let updated = result.unwrap();
@@ -515,7 +517,9 @@ async fn test_update_node_metadata() {
         ..UpdateNodeInput::default()
     };
 
-    let result = service.update_node(tenant_id, node.id, security, update_input).await;
+    let result = service
+        .update_node(tenant_id, node.id, security, update_input)
+        .await;
 
     assert!(result.is_ok());
     let updated = result.unwrap();
@@ -561,7 +565,9 @@ async fn test_update_node_own_scope_prevents_author_change() {
         ..UpdateNodeInput::default()
     };
 
-    let result = service.update_node(tenant_id, node.id, manager, update_input).await;
+    let result = service
+        .update_node(tenant_id, node.id, manager, update_input)
+        .await;
 
     assert!(result.is_err());
     match result.unwrap_err() {
@@ -593,7 +599,9 @@ async fn test_update_nonexistent_node() {
         ..UpdateNodeInput::default()
     };
 
-    let result = service.update_node(tenant_id, fake_id, security, update_input).await;
+    let result = service
+        .update_node(tenant_id, fake_id, security, update_input)
+        .await;
 
     assert!(result.is_err());
     match result.unwrap_err() {
@@ -756,10 +764,7 @@ async fn test_cross_tenant_get_node_is_blocked() {
         .unwrap();
 
     let result = service.get_node(tenant_b, node.id).await;
-    assert!(
-        result.is_err(),
-        "tenant_b must not access tenant_a node"
-    );
+    assert!(result.is_err(), "tenant_b must not access tenant_a node");
 }
 
 #[tokio::test]
@@ -781,10 +786,7 @@ async fn test_cross_tenant_update_node_is_blocked() {
     let result = service
         .update_node(tenant_b, node.id, security, update)
         .await;
-    assert!(
-        result.is_err(),
-        "tenant_b must not update tenant_a node"
-    );
+    assert!(result.is_err(), "tenant_b must not update tenant_a node");
 }
 
 #[tokio::test]
@@ -800,10 +802,7 @@ async fn test_cross_tenant_delete_node_is_blocked() {
         .unwrap();
 
     let result = service.delete_node(tenant_b, node.id, security).await;
-    assert!(
-        result.is_err(),
-        "tenant_b must not delete tenant_a node"
-    );
+    assert!(result.is_err(), "tenant_b must not delete tenant_a node");
 
     let still_exists = service.get_node(tenant_a, node.id).await;
     assert!(still_exists.is_ok(), "node must still exist for tenant_a");

@@ -172,7 +172,9 @@ impl ReplyService {
         reply_id: Uuid,
         security: SecurityContext,
     ) -> ForumResult<()> {
-        self.nodes.delete_node(tenant_id, reply_id, security).await?;
+        self.nodes
+            .delete_node(tenant_id, reply_id, security)
+            .await?;
         Ok(())
     }
 

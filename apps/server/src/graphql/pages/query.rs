@@ -15,12 +15,7 @@ pub struct PagesQuery;
 
 #[Object]
 impl PagesQuery {
-    async fn page(
-        &self,
-        ctx: &Context<'_>,
-        tenant_id: Uuid,
-        id: Uuid,
-    ) -> Result<Option<GqlPage>> {
+    async fn page(&self, ctx: &Context<'_>, tenant_id: Uuid, id: Uuid) -> Result<Option<GqlPage>> {
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let security = auth_context_to_security(ctx);

@@ -53,9 +53,7 @@ impl Initializer for SuperAdminInitializer {
         };
 
         let Some(password) = env_first("SUPERADMIN_PASSWORD", "SEED_ADMIN_PASSWORD") else {
-            tracing::warn!(
-                "SUPERADMIN_EMAIL is set but SUPERADMIN_PASSWORD is missing — skipping"
-            );
+            tracing::warn!("SUPERADMIN_EMAIL is set but SUPERADMIN_PASSWORD is missing — skipping");
             return Ok(());
         };
 

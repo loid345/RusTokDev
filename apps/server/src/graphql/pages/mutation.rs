@@ -143,12 +143,7 @@ impl PagesMutation {
         Ok(page.into())
     }
 
-    async fn publish_page(
-        &self,
-        ctx: &Context<'_>,
-        tenant_id: Uuid,
-        id: Uuid,
-    ) -> Result<GqlPage> {
+    async fn publish_page(&self, ctx: &Context<'_>, tenant_id: Uuid, id: Uuid) -> Result<GqlPage> {
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = ctx
@@ -217,12 +212,7 @@ impl PagesMutation {
         Ok(page.into())
     }
 
-    async fn delete_page(
-        &self,
-        ctx: &Context<'_>,
-        tenant_id: Uuid,
-        id: Uuid,
-    ) -> Result<bool> {
+    async fn delete_page(&self, ctx: &Context<'_>, tenant_id: Uuid, id: Uuid) -> Result<bool> {
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = ctx

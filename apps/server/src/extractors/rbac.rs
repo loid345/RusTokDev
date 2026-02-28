@@ -227,17 +227,20 @@ define_permission_extractor!(
     rustok_core::Permission::INVENTORY_LIST
 );
 
-define_permission_extractor!(RequireScriptsCreate, rustok_core::Permission::SCRIPTS_CREATE);
+define_permission_extractor!(
+    RequireScriptsCreate,
+    rustok_core::Permission::SCRIPTS_CREATE
+);
 define_permission_extractor!(RequireScriptsRead, rustok_core::Permission::SCRIPTS_READ);
 define_permission_extractor!(RequireScriptsList, rustok_core::Permission::SCRIPTS_LIST);
-define_permission_extractor!(RequireScriptsManage, rustok_core::Permission::SCRIPTS_MANAGE);
+define_permission_extractor!(
+    RequireScriptsManage,
+    rustok_core::Permission::SCRIPTS_MANAGE
+);
 
 define_permission_extractor!(
     RequireLogsRead,
-    rustok_core::Permission::new(
-        rustok_core::Resource::Logs,
-        rustok_core::Action::Read
-    )
+    rustok_core::Permission::new(rustok_core::Resource::Logs, rustok_core::Action::Read)
 );
 
 /// Helper to check permission inline without extractor

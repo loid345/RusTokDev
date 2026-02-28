@@ -113,8 +113,8 @@ impl Hooks for App {
         });
 
         let auth_limiter_for_middleware = auth_limiter.clone();
-        let auth_rate_limit_middleware =
-            axum_middleware::from_fn(move |request: axum::extract::Request, next: axum_middleware::Next| {
+        let auth_rate_limit_middleware = axum_middleware::from_fn(
+            move |request: axum::extract::Request, next: axum_middleware::Next| {
                 let limiter = auth_limiter_for_middleware.clone();
                 async move {
                     use axum::body::Body;
@@ -135,28 +135,38 @@ impl Hooks for App {
                         Ok(info) => {
                             let mut response = next.run(request).await;
                             let resp_headers = response.headers_mut();
-                            if let Ok(v) = axum::http::HeaderValue::from_str(&info.limit.to_string()) {
+                            if let Ok(v) =
+                                axum::http::HeaderValue::from_str(&info.limit.to_string())
+                            {
                                 resp_headers.insert("x-ratelimit-limit", v);
                             }
-                            if let Ok(v) = axum::http::HeaderValue::from_str(&info.remaining.to_string()) {
+                            if let Ok(v) =
+                                axum::http::HeaderValue::from_str(&info.remaining.to_string())
+                            {
                                 resp_headers.insert("x-ratelimit-remaining", v);
                             }
-                            if let Ok(v) = axum::http::HeaderValue::from_str(&info.reset.to_string()) {
+                            if let Ok(v) =
+                                axum::http::HeaderValue::from_str(&info.reset.to_string())
+                            {
                                 resp_headers.insert("x-ratelimit-reset", v);
                             }
                             response
                         }
                         Err(status) => {
-                            let mut response = axum::response::Response::new(Body::from("Rate limit exceeded"));
+                            let mut response =
+                                axum::response::Response::new(Body::from("Rate limit exceeded"));
                             *response.status_mut() = status;
-                            if let Ok(v) = axum::http::HeaderValue::from_str(&limiter.window_secs().to_string()) {
+                            if let Ok(v) = axum::http::HeaderValue::from_str(
+                                &limiter.window_secs().to_string(),
+                            ) {
                                 response.headers_mut().insert("retry-after", v);
                             }
                             response
                         }
                     }
                 }
-            });
+            },
+        );
 
         Ok(router
             .nest("/api/alloy", alloy_rest_router)

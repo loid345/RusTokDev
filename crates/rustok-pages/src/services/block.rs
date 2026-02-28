@@ -185,7 +185,9 @@ impl BlockService {
         security: SecurityContext,
         block_id: Uuid,
     ) -> PagesResult<()> {
-        self.nodes.delete_node(tenant_id, block_id, security).await?;
+        self.nodes
+            .delete_node(tenant_id, block_id, security)
+            .await?;
         Ok(())
     }
 

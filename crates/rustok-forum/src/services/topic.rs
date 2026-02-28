@@ -191,7 +191,9 @@ impl TopicService {
         topic_id: Uuid,
         security: SecurityContext,
     ) -> ForumResult<()> {
-        self.nodes.delete_node(tenant_id, topic_id, security).await?;
+        self.nodes
+            .delete_node(tenant_id, topic_id, security)
+            .await?;
         Ok(())
     }
 

@@ -150,7 +150,9 @@ impl CategoryService {
         category_id: Uuid,
         security: SecurityContext,
     ) -> ForumResult<()> {
-        self.nodes.delete_node(tenant_id, category_id, security).await?;
+        self.nodes
+            .delete_node(tenant_id, category_id, security)
+            .await?;
         Ok(())
     }
 

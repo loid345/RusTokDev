@@ -118,7 +118,9 @@ impl ForumMutation {
             tags: input.tags,
         };
 
-        let topic = service.update(tenant_id, id, security, domain_input).await?;
+        let topic = service
+            .update(tenant_id, id, security, domain_input)
+            .await?;
 
         Ok(GqlForumTopic {
             id: topic.id,

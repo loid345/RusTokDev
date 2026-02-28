@@ -257,7 +257,9 @@ impl NodeService {
     ) -> ContentResult<NodeResponse> {
         info!("Updating node");
         let txn = self.db.begin().await?;
-        let updated = self.update_node_in_tx(&txn, tenant_id, node_id, security, update).await?;
+        let updated = self
+            .update_node_in_tx(&txn, tenant_id, node_id, security, update)
+            .await?;
         txn.commit().await?;
         let translations = node_translation::Entity::find()
             .filter(node_translation::Column::NodeId.eq(node_id))
@@ -651,7 +653,8 @@ impl NodeService {
     ) -> ContentResult<()> {
         info!("Soft-deleting node");
         let txn = self.db.begin().await?;
-        self.delete_node_in_tx(&txn, tenant_id, node_id, security).await?;
+        self.delete_node_in_tx(&txn, tenant_id, node_id, security)
+            .await?;
         txn.commit().await?;
         info!(node_id = %node_id, "Node soft-deleted successfully");
         Ok(())

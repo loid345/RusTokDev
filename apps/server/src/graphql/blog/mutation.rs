@@ -98,7 +98,9 @@ impl BlogMutation {
             version: None,
         };
 
-        service.update_post(tenant_id, id, security, domain_input).await?;
+        service
+            .update_post(tenant_id, id, security, domain_input)
+            .await?;
 
         Ok(true)
     }
@@ -143,7 +145,10 @@ impl BlogMutation {
             db,
             &tenant_id,
             &auth.user_id,
-            &[Permission::BLOG_POSTS_PUBLISH, Permission::BLOG_POSTS_MANAGE],
+            &[
+                Permission::BLOG_POSTS_PUBLISH,
+                Permission::BLOG_POSTS_MANAGE,
+            ],
         )
         .await
         .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
@@ -172,7 +177,10 @@ impl BlogMutation {
             db,
             &tenant_id,
             &auth.user_id,
-            &[Permission::BLOG_POSTS_PUBLISH, Permission::BLOG_POSTS_MANAGE],
+            &[
+                Permission::BLOG_POSTS_PUBLISH,
+                Permission::BLOG_POSTS_MANAGE,
+            ],
         )
         .await
         .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
@@ -220,7 +228,9 @@ impl BlogMutation {
 
         let security = auth.security_context();
         let service = PostService::new(db.clone(), event_bus.clone());
-        service.archive_post(tenant_id, id, security, reason).await?;
+        service
+            .archive_post(tenant_id, id, security, reason)
+            .await?;
 
         Ok(true)
     }
