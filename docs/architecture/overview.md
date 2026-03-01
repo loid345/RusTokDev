@@ -2,6 +2,8 @@
 
 RusTok is a high-performance, event-driven modular monolith designed for enterprise content and commerce. It balances the developer productivity of frameworks like Rails (via Loco.rs) with the uncompromising performance and safety of Rust.
 
+> **Foundational vision:** RusToK follows the [Matryoshka Principle](matryoshka.md) — a 7-layer nested architecture from core platform to inter-network federation. This document covers the technical implementation of Layers 1-3.
+
 ---
 
 ## 🛰️ High-Level Architecture
