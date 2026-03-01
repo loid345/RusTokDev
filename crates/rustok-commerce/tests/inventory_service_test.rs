@@ -7,11 +7,11 @@ use rustok_commerce::dto::{
     AdjustInventoryInput, CreateProductInput, CreateVariantInput, PriceInput,
     ProductTranslationInput,
 };
-use std::str::FromStr;
 use rustok_commerce::services::{CatalogService, InventoryService};
 use rustok_commerce::CommerceError;
 use rustok_test_utils::{db::setup_test_db, helpers::unique_slug, mock_transactional_event_bus};
 use sea_orm::DatabaseConnection;
+use std::str::FromStr;
 use uuid::Uuid;
 
 async fn setup() -> (DatabaseConnection, InventoryService, CatalogService) {

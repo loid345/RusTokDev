@@ -2,10 +2,9 @@
 // These tests verify price management, currency support,
 // discounts, and price validation logic.
 
-use rust_decimal::Decimal;
 use rust_decimal_macros::dec;
 use rustok_commerce::dto::{
-    CreateProductInput, PriceInput, ProductTranslationInput, ProductVariantInput,
+    CreateProductInput, CreateVariantInput, PriceInput, ProductTranslationInput,
 };
 use rustok_commerce::services::{CatalogService, PricingService};
 use rustok_commerce::CommerceError;
@@ -28,20 +27,27 @@ async fn create_test_product(catalog: &CatalogService, tenant_id: Uuid) -> (Uuid
             title: "Test Product".to_string(),
             description: Some("A test product".to_string()),
             handle: Some(unique_slug("test-product")),
+            meta_title: None,
+            meta_description: None,
         }],
-        variants: vec![ProductVariantInput {
-            sku: format!(
+        options: vec![],
+        variants: vec![CreateVariantInput {
+            sku: Some(format!(
                 "SKU-{}",
                 Uuid::new_v4().to_string().split('-').next().unwrap()
-            ),
-            title: Some("Default".to_string()),
-            price: 99.99,
-            compare_at_price: None,
-            cost: Some(50.00),
+            )),
             barcode: None,
-            requires_shipping: true,
-            taxable: true,
-            weight: Some(1.5),
+            option1: Some("Default".to_string()),
+            option2: None,
+            option3: None,
+            prices: vec![PriceInput {
+                currency_code: "USD".to_string(),
+                amount: dec!(99.99),
+                compare_at_amount: None,
+            }],
+            inventory_quantity: 0,
+            inventory_policy: "deny".to_string(),
+            weight: Some(dec!(1.5)),
             weight_unit: Some("kg".to_string()),
         }],
         vendor: Some("Test Vendor".to_string()),

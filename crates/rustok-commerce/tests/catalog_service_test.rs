@@ -203,7 +203,9 @@ async fn test_delete_product_success() {
         .await
         .unwrap();
 
-    let result = service.delete_product(tenant_id, actor_id, product.id).await;
+    let result = service
+        .delete_product(tenant_id, actor_id, product.id)
+        .await;
     assert!(result.is_ok());
 
     let get_result = service.get_product(tenant_id, product.id).await;
@@ -312,14 +314,8 @@ async fn test_create_product_with_multiple_variants() {
     let product = result.unwrap();
     assert_eq!(product.variants.len(), 3);
 
-    let small = product
-        .variants
-        .iter()
-        .find(|v| v.title == "Small");
-    let large = product
-        .variants
-        .iter()
-        .find(|v| v.title == "Large");
+    let small = product.variants.iter().find(|v| v.title == "Small");
+    let large = product.variants.iter().find(|v| v.title == "Large");
 
     assert!(small.is_some());
     assert!(large.is_some());
@@ -437,7 +433,9 @@ async fn test_publish_product() {
     assert_eq!(product.status, ProductStatus::Draft);
     assert!(product.published_at.is_none());
 
-    let result = service.publish_product(tenant_id, actor_id, product.id).await;
+    let result = service
+        .publish_product(tenant_id, actor_id, product.id)
+        .await;
 
     assert!(result.is_ok());
     let published = result.unwrap();
@@ -754,7 +752,10 @@ async fn test_variant_price_in_prices_vec() {
     let variant = &product.variants[0];
 
     assert!(!variant.prices.is_empty());
-    assert_eq!(variant.prices[0].amount, Decimal::from_str("100.00").unwrap());
+    assert_eq!(
+        variant.prices[0].amount,
+        Decimal::from_str("100.00").unwrap()
+    );
 }
 
 #[tokio::test]

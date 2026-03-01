@@ -23,7 +23,7 @@ mod tests {
 
     /// Generate random UUIDs
     fn uuid_strategy() -> impl Strategy<Value = Uuid> {
-        prop::array::uniform16(0u8..=255).prop_map(|bytes| Uuid::from_bytes(bytes))
+        prop::array::uniform16(0u8..=255).prop_map(Uuid::from_bytes)
     }
 
     /// Generate valid currency codes
@@ -425,7 +425,7 @@ mod tests {
                 currency_strategy()
             )
         ) {
-            let large_amount = Decimal::new(999_999_999_99i64, 2); // $999,999,999.99
+            let large_amount = Decimal::new(99_999_999_999_i64, 2); // $999,999,999.99
             let order = Order::new_pending(id, tenant_id, customer_id, large_amount, currency.clone());
             prop_assert_eq!(order.total_amount, large_amount);
             prop_assert_eq!(order.currency, currency);
