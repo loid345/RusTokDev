@@ -9,15 +9,15 @@ use rustok_content::entities::node::ContentStatus;
 use rustok_content::services::NodeService;
 use rustok_content::ContentError;
 use rustok_test_utils::{
-    db::setup_test_db, events::mock_event_bus, helpers::admin_context, helpers::manager_context,
-    helpers::unique_slug,
+    db::setup_test_db, helpers::admin_context, helpers::manager_context, helpers::unique_slug,
+    mock_transactional_event_bus,
 };
 use sea_orm::DatabaseConnection;
 use uuid::Uuid;
 
 async fn setup() -> (DatabaseConnection, NodeService) {
     let db = setup_test_db().await;
-    let (event_bus, _rx) = mock_event_bus();
+    let event_bus = mock_transactional_event_bus();
     let service = NodeService::new(db.clone(), event_bus);
     (db, service)
 }
@@ -64,9 +64,9 @@ async fn test_create_node_success() {
     let node = result.unwrap();
     assert_eq!(node.kind, "post");
     assert_eq!(node.translations.len(), 1);
-    assert_eq!(node.translations[0].title, "Test Post");
+    assert_eq!(node.translations[0].title, Some("Test Post".to_string()));
     assert_eq!(node.bodies.len(), 1);
-    assert!(node.bodies[0].body.contains("Test Content"));
+    assert!(node.bodies[0].body.as_deref().unwrap_or("").contains("Test Content"));
 }
 
 #[tokio::test]
@@ -153,7 +153,7 @@ async fn test_update_node_success() {
 
     assert!(result.is_ok());
     let updated = result.unwrap();
-    assert_eq!(updated.translations[0].title, "Updated Title");
+    assert_eq!(updated.translations[0].title, Some("Updated Title".to_string()));
     assert_eq!(updated.status, ContentStatus::Published);
 }
 
@@ -213,9 +213,9 @@ async fn test_create_node_with_multiple_translations() {
     assert!(en_translation.is_some());
     assert!(ru_translation.is_some());
     assert!(de_translation.is_some());
-    assert_eq!(en_translation.unwrap().title, "Test Post");
-    assert_eq!(ru_translation.unwrap().title, "Тестовый пост");
-    assert_eq!(de_translation.unwrap().title, "Testbeitrag");
+    assert_eq!(en_translation.unwrap().title, Some("Test Post".to_string()));
+    assert_eq!(ru_translation.unwrap().title, Some("Тестовый пост".to_string()));
+    assert_eq!(de_translation.unwrap().title, Some("Testbeitrag".to_string()));
 }
 
 #[tokio::test]
@@ -238,7 +238,7 @@ async fn test_get_by_slug_success() {
     assert!(result.is_ok());
     let node = result.unwrap().expect("node should exist for slug");
     assert_eq!(node.id, created.id);
-    assert_eq!(node.translations[0].slug, slug);
+    assert_eq!(node.translations[0].slug, Some(slug));
 }
 
 // =============================================================================
@@ -656,8 +656,8 @@ async fn test_node_with_multiple_body_locales() {
 
     assert!(en_body.is_some());
     assert!(ru_body.is_some());
-    assert!(en_body.unwrap().body.contains("Test Content"));
-    assert!(ru_body.unwrap().body.contains("Русский контент"));
+    assert!(en_body.unwrap().body.as_deref().unwrap_or("").contains("Test Content"));
+    assert!(ru_body.unwrap().body.as_deref().unwrap_or("").contains("Русский контент"));
 }
 
 // =============================================================================
@@ -780,7 +780,7 @@ async fn test_cross_tenant_update_node_is_blocked() {
         .unwrap();
 
     let update = UpdateNodeInput {
-        kind: Some("article".to_string()),
+        status: Some(ContentStatus::Published),
         ..Default::default()
     };
     let result = service
