@@ -25,6 +25,7 @@
 |----------|-------------|
 | [docs/index.md](docs/index.md) | Главная карта всей документации — начинайте отсюда |
 | [docs/architecture/overview.md](docs/architecture/overview.md) | Технический обзор архитектуры |
+| [docs/architecture/matryoshka.md](docs/architecture/matryoshka.md) | Matryoshka Architecture — 7-слойная модель платформы |
 | [docs/architecture/database.md](docs/architecture/database.md) | Схема БД с таблицами и связями |
 | [docs/architecture/i18n.md](docs/architecture/i18n.md) | i18n/multi-language архитектура |
 | [docs/modules/registry.md](docs/modules/registry.md) | Реестр всех модулей и приложений |
@@ -100,6 +101,24 @@ RusToK — это headless-платформа на Rust для e-commerce и к�
 ---
 
 ## 2. CORE PHILOSOPHY
+
+### 2.0 The Matryoshka Principle (7-Layer Architecture)
+
+RusToK is built on a unique **Matryoshka Principle** — a 7-layer nested architecture model, conceived by Human & Claude AI:
+
+| Layer | Name | Scope | Project |
+|-------|------|-------|---------|
+| 1 | **Core Platform** | Rust SaaS Starter (auth, tenants, RBAC, events, CQRS) | RusToK |
+| 2 | **Modules** | Independent business verticals (commerce, content, blog, forum) | RusToK |
+| 3 | **Sub-Modules** | Extensions within modules (payment gateways, SEO tools) | RusToK |
+| 4 | **Shared Capabilities** | Cross-module services (emoji, tags, comments, media) | Alloy |
+| 5 | **Unified UI** | Technology-agnostic design system | Alloy |
+| 6 | **Interaction Layer** | Internal communication bus, fast composite index | Alloy |
+| 7 | **Inter-Network** | Federation, mesh, cross-instance communication | Graal |
+
+Each layer encapsulates those below it. This model has no direct analogue in the industry.
+
+**Full specification:** [docs/architecture/matryoshka.md](docs/architecture/matryoshka.md)
 
 ### 2.1 The Tank Strategy
 

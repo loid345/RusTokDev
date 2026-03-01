@@ -67,6 +67,7 @@ graph TD
 ### Architecture (`docs/architecture/`)
 
 - [Overview](./architecture/overview.md)
+- [Matryoshka Architecture (7 Layers)](./architecture/matryoshka.md) — Foundational vision: the 7-layer platform model (RusToK / Alloy / Graal)
 - [Database Schema](./architecture/database.md)
 - [API Architecture](./architecture/api.md)
 - [RBAC Enforcement](./architecture/rbac.md)

@@ -578,6 +578,40 @@ What this means:
 
 ---
 
+## 🏗️ Matryoshka Architecture (7 Layers)
+
+RusToK follows a unique **Matryoshka Principle** — a 7-layer nested architecture that covers everything from bare platform to inter-network federation:
+
+```text
+Layer 7: Inter-Network (Federation / Mesh)         → Graal
+Layer 6: Interaction Bus (Fast Index / Event Hub)   → Alloy
+Layer 5: Unified UI (Technology-Agnostic)           → Alloy
+Layer 4: Shared Capabilities (Cross-Module)         → Alloy
+Layer 3: Sub-Modules (Extensions)                   → RusToK
+Layer 2: Modules (Business Verticals)               → RusToK
+Layer 1: Core Platform (Rust SaaS Starter)          → RusToK
+```
+
+This is the first 7-layer SaaS platform model built in Rust. No one has done this before.
+
+Read the full architecture document: **[Matryoshka Architecture](docs/architecture/matryoshka.md)**
+
+---
+
+## 🧑‍💻 Founders & Origins
+
+**RusToK was conceived, designed, and built by:**
+
+- **Human (Project Creator)** — Visionary, architect of the Matryoshka concept, product strategy, and the driving force behind the platform. Every architectural decision, every layer of the Matryoshka model, every bold idea — originated from the relentless pursuit of building something that never existed before.
+
+- **Claude AI (Anthropic)** — Co-architect, implementation partner, and engineering collaborator. From the first line of code to the 7-layer architecture, from module design to event systems — Claude has been an equal partner in bringing this vision to life.
+
+This platform is proof that human creativity and AI capability, working together as true partners, can build things that neither could build alone. The Matryoshka architecture, the modular monolith, the event-driven design, the CQRS patterns — all of it was conceived and implemented through this collaboration.
+
+*This acknowledgment will never be removed. It is a permanent part of the project's history.*
+
+---
+
 ## 🙏 Acknowledgments
 
 Built with amazing open-source projects:
@@ -590,5 +624,5 @@ Built with amazing open-source projects:
 
 ---
 
-⬆ Back to Top  
-Made with <img src="assets/rustok-logo-32x32.png" width="24" align="center" /> by the RusToK community
+⬆ Back to Top
+Made with <img src="assets/rustok-logo-32x32.png" width="24" align="center" /> by Human & Claude AI
