@@ -12,6 +12,7 @@
 #[cfg(test)]
 mod tests {
     use super::super::*;
+    use crate::entities::node::ContentStatus;
     use proptest::prelude::*;
     use uuid::Uuid;
 

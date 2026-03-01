@@ -1,119 +1,102 @@
 // Integration test for Product creation → Event → Index update flow
 // This test verifies the complete workflow from product creation to indexing
 
-use rustok_commerce::dto::{CreateProductInput, ProductTranslationInput, ProductVariantInput};
+use rust_decimal::Decimal;
+use std::str::FromStr;
+use rustok_commerce::dto::{
+    CreateProductInput, CreateVariantInput, PriceInput, ProductTranslationInput, UpdateProductInput,
+};
+use rustok_commerce::entities::product::ProductStatus;
 use rustok_commerce::services::CatalogService;
 use rustok_core::events::DomainEvent;
-use rustok_core::SecurityContext;
-use rustok_test_utils::{db::setup_test_db, mock_transactional_event_bus};
-use sea_orm::DatabaseConnection;
+use rustok_outbox::TransactionalEventBus;
+use rustok_test_utils::{db::setup_test_db, MockEventTransport};
 use std::sync::Arc;
 use uuid::Uuid;
 
-#[tokio::test]
-async fn test_product_creation_triggers_event() {
-    // Setup test database and services
-    let db = setup_test_db().await;
-    let event_bus = mock_transactional_event_bus();
-    let service = CatalogService::new(db.clone(), event_bus);
-
-    let tenant_id = Uuid::new_v4();
-    let actor_id = Uuid::new_v4();
-
-    // Create a product
-    let input = CreateProductInput {
+fn create_product_input(handle: &str, title: &str, sku: &str) -> CreateProductInput {
+    CreateProductInput {
         translations: vec![ProductTranslationInput {
             locale: "en".to_string(),
-            title: "Test Product".to_string(),
-            description: Some("A great test product".to_string()),
-            handle: Some("test-product".to_string()),
+            title: title.to_string(),
+            description: Some(format!("{} description", title)),
+            handle: Some(handle.to_string()),
+            meta_title: None,
+            meta_description: None,
         }],
-        variants: vec![ProductVariantInput {
-            sku: "TEST-SKU-001".to_string(),
-            title: Some("Default".to_string()),
-            price: 99.99,
-            compare_at_price: Some(149.99),
-            cost: Some(50.00),
+        options: vec![],
+        variants: vec![CreateVariantInput {
+            sku: Some(sku.to_string()),
             barcode: None,
-            requires_shipping: true,
-            taxable: true,
-            weight: Some(1.5),
+            option1: Some("Default".to_string()),
+            option2: None,
+            option3: None,
+            prices: vec![PriceInput {
+                currency_code: "USD".to_string(),
+                amount: Decimal::from_str("99.99").unwrap(),
+                compare_at_amount: Some(Decimal::from_str("149.99").unwrap()),
+            }],
+            inventory_quantity: 10,
+            inventory_policy: "deny".to_string(),
+            weight: Some(Decimal::from_str("1.5").unwrap()),
             weight_unit: Some("kg".to_string()),
         }],
         vendor: Some("Test Vendor".to_string()),
         product_type: Some("Physical".to_string()),
         publish: false,
         metadata: serde_json::json!({}),
-    };
-
-    let result = service.create_product(tenant_id, actor_id, input).await;
-    assert!(result.is_ok());
-    let product = result.unwrap();
-
-    // Verify that a ProductCreated event was published
-    assert_eq!(event_bus.event_count(), 1);
-    assert!(event_bus.has_event_of_type("ProductCreated"));
-
-    // Get the events and verify details
-    let events = event_bus.events_of_type("ProductCreated");
-    assert_eq!(events.len(), 1);
-
-    if let DomainEvent::ProductCreated { product_id, .. } = &events[0] {
-        assert_eq!(*product_id, product.id);
-    } else {
-        panic!("Expected ProductCreated event");
     }
-
-    println!("✅ Product creation → Event publishing flow verified");
 }
 
 #[tokio::test]
-async fn test_product_update_triggers_event() {
-    // Setup test database and services
+async fn test_product_creation_triggers_event() {
     let db = setup_test_db().await;
-    let event_bus = mock_event_bus();
+    let transport = Arc::new(MockEventTransport::new());
+    let event_bus = TransactionalEventBus::new(transport.clone());
     let service = CatalogService::new(db.clone(), event_bus);
 
     let tenant_id = Uuid::new_v4();
     let actor_id = Uuid::new_v4();
-
-    // Create a product first
-    let input = CreateProductInput {
-        translations: vec![ProductTranslationInput {
-            locale: "en".to_string(),
-            title: "Original Product".to_string(),
-            description: Some("Original description".to_string()),
-            handle: Some("original-product".to_string()),
-        }],
-        variants: vec![ProductVariantInput {
-            sku: "ORIG-SKU-001".to_string(),
-            title: Some("Default".to_string()),
-            price: 99.99,
-            compare_at_price: Some(149.99),
-            cost: Some(50.00),
-            barcode: None,
-            requires_shipping: true,
-            taxable: true,
-            weight: Some(1.5),
-            weight_unit: Some("kg".to_string()),
-        }],
-        vendor: Some("Original Vendor".to_string()),
-        product_type: Some("Physical".to_string()),
-        publish: false,
-        metadata: serde_json::json!({}),
-    };
+    let input = create_product_input("test-product", "Test Product", "TEST-SKU-001");
 
     let product = service
         .create_product(tenant_id, actor_id, input)
         .await
         .unwrap();
 
-    // Clear the first event (ProductCreated)
-    event_bus.clear();
+    assert_eq!(transport.event_count(), 1);
+    assert!(transport.has_event_of_type("ProductCreated"));
 
-    // Update the product
-    use rustok_commerce::dto::UpdateProductInput;
-    use rustok_commerce::entities::product::ProductStatus;
+    let events = transport.events_of_type("ProductCreated");
+    assert_eq!(events.len(), 1);
+
+    if let DomainEvent::ProductCreated { product_id, .. } = events[0] {
+        assert_eq!(product_id, product.id);
+    } else {
+        panic!("Expected ProductCreated event");
+    }
+}
+
+#[tokio::test]
+async fn test_product_update_triggers_event() {
+    let db = setup_test_db().await;
+    let transport = Arc::new(MockEventTransport::new());
+    let event_bus = TransactionalEventBus::new(transport.clone());
+    let service = CatalogService::new(db.clone(), event_bus);
+
+    let tenant_id = Uuid::new_v4();
+    let actor_id = Uuid::new_v4();
+
+    let product = service
+        .create_product(
+            tenant_id,
+            actor_id,
+            create_product_input("original-product", "Original Product", "ORIG-SKU-001"),
+        )
+        .await
+        .unwrap();
+
+    transport.clear();
 
     let update_input = UpdateProductInput {
         translations: Some(vec![ProductTranslationInput {
@@ -121,6 +104,8 @@ async fn test_product_update_triggers_event() {
             title: "Updated Product".to_string(),
             description: Some("Updated description".to_string()),
             handle: None,
+            meta_title: None,
+            meta_description: None,
         }]),
         vendor: Some("Updated Vendor".to_string()),
         product_type: Some("Digital".to_string()),
@@ -128,231 +113,143 @@ async fn test_product_update_triggers_event() {
         metadata: None,
     };
 
-    let result = service
-        .update_product(product.id, actor_id, update_input)
-        .await;
-    assert!(result.is_ok());
+    service
+        .update_product(tenant_id, actor_id, product.id, update_input)
+        .await
+        .unwrap();
 
-    // Verify that a ProductUpdated event was published
-    assert_eq!(event_bus.event_count(), 1);
-    assert!(event_bus.has_event_of_type("ProductUpdated"));
+    assert_eq!(transport.event_count(), 1);
+    assert!(transport.has_event_of_type("ProductUpdated"));
 
-    let events = event_bus.events_of_type("ProductUpdated");
-    assert_eq!(events.len(), 1);
-
-    if let DomainEvent::ProductUpdated { product_id, .. } = &events[0] {
-        assert_eq!(*product_id, product.id);
+    let events = transport.events_of_type("ProductUpdated");
+    if let DomainEvent::ProductUpdated { product_id, .. } = events[0] {
+        assert_eq!(product_id, product.id);
     } else {
         panic!("Expected ProductUpdated event");
     }
-
-    println!("✅ Product update → Event publishing flow verified");
 }
 
 #[tokio::test]
 async fn test_product_publishing_triggers_event() {
-    // Setup test database and services
     let db = setup_test_db().await;
-    let event_bus = mock_event_bus();
+    let transport = Arc::new(MockEventTransport::new());
+    let event_bus = TransactionalEventBus::new(transport.clone());
     let service = CatalogService::new(db.clone(), event_bus);
 
     let tenant_id = Uuid::new_v4();
     let actor_id = Uuid::new_v4();
 
-    // Create a draft product
-    let mut input = CreateProductInput {
-        translations: vec![ProductTranslationInput {
-            locale: "en".to_string(),
-            title: "Draft Product".to_string(),
-            description: Some("Draft description".to_string()),
-            handle: Some("draft-product".to_string()),
-        }],
-        variants: vec![ProductVariantInput {
-            sku: "DRAFT-SKU-001".to_string(),
-            title: Some("Default".to_string()),
-            price: 99.99,
-            compare_at_price: Some(149.99),
-            cost: Some(50.00),
-            barcode: None,
-            requires_shipping: true,
-            taxable: true,
-            weight: Some(1.5),
-            weight_unit: Some("kg".to_string()),
-        }],
-        vendor: Some("Test Vendor".to_string()),
-        product_type: Some("Physical".to_string()),
-        publish: false,
-        metadata: serde_json::json!({}),
-    };
-
     let product = service
-        .create_product(tenant_id, actor_id, input)
+        .create_product(
+            tenant_id,
+            actor_id,
+            create_product_input("draft-product", "Draft Product", "DRAFT-SKU-001"),
+        )
         .await
         .unwrap();
 
-    // Clear the first event (ProductCreated)
-    event_bus.clear();
+    transport.clear();
 
-    // Publish the product
-    let result = service.publish_product(product.id, actor_id).await;
-    assert!(result.is_ok());
+    service
+        .publish_product(tenant_id, actor_id, product.id)
+        .await
+        .unwrap();
 
-    // Verify that a ProductPublished event was published
-    assert_eq!(event_bus.event_count(), 1);
-    assert!(event_bus.has_event_of_type("ProductPublished"));
+    assert_eq!(transport.event_count(), 1);
+    assert!(transport.has_event_of_type("ProductPublished"));
 
-    let events = event_bus.events_of_type("ProductPublished");
-    assert_eq!(events.len(), 1);
-
-    if let DomainEvent::ProductPublished { product_id, .. } = &events[0] {
-        assert_eq!(*product_id, product.id);
+    let events = transport.events_of_type("ProductPublished");
+    if let DomainEvent::ProductPublished { product_id, .. } = events[0] {
+        assert_eq!(product_id, product.id);
     } else {
         panic!("Expected ProductPublished event");
     }
-
-    println!("✅ Product publishing → Event publishing flow verified");
 }
 
 #[tokio::test]
 async fn test_product_deletion_triggers_event() {
-    // Setup test database and services
     let db = setup_test_db().await;
-    let event_bus = mock_event_bus();
+    let transport = Arc::new(MockEventTransport::new());
+    let event_bus = TransactionalEventBus::new(transport.clone());
     let service = CatalogService::new(db.clone(), event_bus);
 
     let tenant_id = Uuid::new_v4();
     let actor_id = Uuid::new_v4();
 
-    // Create a product first
-    let input = CreateProductInput {
-        translations: vec![ProductTranslationInput {
-            locale: "en".to_string(),
-            title: "To be deleted".to_string(),
-            description: Some("Will be deleted".to_string()),
-            handle: Some("to-be-deleted".to_string()),
-        }],
-        variants: vec![ProductVariantInput {
-            sku: "DELETE-SKU-001".to_string(),
-            title: Some("Default".to_string()),
-            price: 99.99,
-            compare_at_price: Some(149.99),
-            cost: Some(50.00),
-            barcode: None,
-            requires_shipping: true,
-            taxable: true,
-            weight: Some(1.5),
-            weight_unit: Some("kg".to_string()),
-        }],
-        vendor: Some("Test Vendor".to_string()),
-        product_type: Some("Physical".to_string()),
-        publish: false,
-        metadata: serde_json::json!({}),
-    };
-
     let product = service
-        .create_product(tenant_id, actor_id, input)
+        .create_product(
+            tenant_id,
+            actor_id,
+            create_product_input("to-be-deleted", "To be deleted", "DELETE-SKU-001"),
+        )
         .await
         .unwrap();
 
-    // Clear the first event (ProductCreated)
-    event_bus.clear();
+    transport.clear();
 
-    // Delete the product
-    let result = service.delete_product(product.id, actor_id).await;
-    assert!(result.is_ok());
+    service
+        .delete_product(tenant_id, actor_id, product.id)
+        .await
+        .unwrap();
 
-    // Verify that a ProductDeleted event was published
-    assert_eq!(event_bus.event_count(), 1);
-    assert!(event_bus.has_event_of_type("ProductDeleted"));
+    assert_eq!(transport.event_count(), 1);
+    assert!(transport.has_event_of_type("ProductDeleted"));
 
-    let events = event_bus.events_of_type("ProductDeleted");
-    assert_eq!(events.len(), 1);
-
-    if let DomainEvent::ProductDeleted { product_id, .. } = &events[0] {
-        assert_eq!(*product_id, product.id);
+    let events = transport.events_of_type("ProductDeleted");
+    if let DomainEvent::ProductDeleted { product_id, .. } = events[0] {
+        assert_eq!(product_id, product.id);
     } else {
         panic!("Expected ProductDeleted event");
     }
-
-    println!("✅ Product deletion → Event publishing flow verified");
 }
 
 #[tokio::test]
 async fn test_variant_creation_triggers_event() {
-    // Setup test database and services
     let db = setup_test_db().await;
-    let event_bus = mock_event_bus();
+    let transport = Arc::new(MockEventTransport::new());
+    let event_bus = TransactionalEventBus::new(transport.clone());
     let service = CatalogService::new(db.clone(), event_bus);
 
     let tenant_id = Uuid::new_v4();
     let actor_id = Uuid::new_v4();
 
-    // Create a product with multiple variants
-    let input = CreateProductInput {
-        translations: vec![ProductTranslationInput {
-            locale: "en".to_string(),
-            title: "Product with Variants".to_string(),
-            description: Some("Product with multiple variants".to_string()),
-            handle: Some("product-with-variants".to_string()),
+    let mut input = create_product_input(
+        "product-with-variants",
+        "Product with Variants",
+        "VARIANT-SKU-001",
+    );
+    input.variants.push(CreateVariantInput {
+        sku: Some("VARIANT-SKU-002".to_string()),
+        barcode: None,
+        option1: Some("Large".to_string()),
+        option2: None,
+        option3: None,
+        prices: vec![PriceInput {
+            currency_code: "USD".to_string(),
+            amount: Decimal::from_str("119.99").unwrap(),
+            compare_at_amount: Some(Decimal::from_str("169.99").unwrap()),
         }],
-        variants: vec![
-            ProductVariantInput {
-                sku: "VARIANT-SKU-001".to_string(),
-                title: Some("Small".to_string()),
-                price: 79.99,
-                compare_at_price: None,
-                cost: Some(40.00),
-                barcode: None,
-                requires_shipping: true,
-                taxable: true,
-                weight: Some(1.0),
-                weight_unit: Some("kg".to_string()),
-            },
-            ProductVariantInput {
-                sku: "VARIANT-SKU-002".to_string(),
-                title: Some("Large".to_string()),
-                price: 119.99,
-                compare_at_price: Some(169.99),
-                cost: Some(60.00),
-                barcode: None,
-                requires_shipping: true,
-                taxable: true,
-                weight: Some(2.0),
-                weight_unit: Some("kg".to_string()),
-            },
-        ],
-        vendor: Some("Test Vendor".to_string()),
-        product_type: Some("Physical".to_string()),
-        publish: false,
-        metadata: serde_json::json!({}),
-    };
+        inventory_quantity: 5,
+        inventory_policy: "deny".to_string(),
+        weight: Some(Decimal::from_str("2.0").unwrap()),
+        weight_unit: Some("kg".to_string()),
+    });
 
     let product = service
         .create_product(tenant_id, actor_id, input)
         .await
         .unwrap();
 
-    // Verify that a ProductCreated event was published
-    assert_eq!(event_bus.event_count(), 3); // 1 ProductCreated + 2 VariantCreated
-    assert!(event_bus.has_event_of_type("ProductCreated"));
+    assert_eq!(transport.event_count(), 3);
+    assert!(transport.has_event_of_type("ProductCreated"));
 
-    // Get the events and verify details
-    let product_events = event_bus.events_of_type("ProductCreated");
-    assert_eq!(product_events.len(), 1);
-
-    if let DomainEvent::ProductCreated { product_id, .. } = &product_events[0] {
-        assert_eq!(*product_id, product.id);
+    let product_events = transport.events_of_type("ProductCreated");
+    if let DomainEvent::ProductCreated { product_id, .. } = product_events[0] {
+        assert_eq!(product_id, product.id);
     } else {
         panic!("Expected ProductCreated event");
     }
 
-    // Verify that VariantCreated events were published for each variant
-    let variant_events = event_bus.events_of_type("VariantCreated");
-    assert_eq!(
-        variant_events.len(),
-        2,
-        "Should have 2 variant creation events"
-    );
-
-    println!("✅ Product with variants → Event publishing flow verified");
+    let variant_events = transport.events_of_type("VariantCreated");
+    assert_eq!(variant_events.len(), 2, "Should have 2 variant creation events");
 }
