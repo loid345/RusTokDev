@@ -66,7 +66,11 @@ async fn test_create_node_success() {
     assert_eq!(node.translations.len(), 1);
     assert_eq!(node.translations[0].title, Some("Test Post".to_string()));
     assert_eq!(node.bodies.len(), 1);
-    assert!(node.bodies[0].body.as_deref().unwrap_or("").contains("Test Content"));
+    assert!(node.bodies[0]
+        .body
+        .as_deref()
+        .unwrap_or("")
+        .contains("Test Content"));
 }
 
 #[tokio::test]
@@ -153,7 +157,10 @@ async fn test_update_node_success() {
 
     assert!(result.is_ok());
     let updated = result.unwrap();
-    assert_eq!(updated.translations[0].title, Some("Updated Title".to_string()));
+    assert_eq!(
+        updated.translations[0].title,
+        Some("Updated Title".to_string())
+    );
     assert_eq!(updated.status, ContentStatus::Published);
 }
 
@@ -214,8 +221,14 @@ async fn test_create_node_with_multiple_translations() {
     assert!(ru_translation.is_some());
     assert!(de_translation.is_some());
     assert_eq!(en_translation.unwrap().title, Some("Test Post".to_string()));
-    assert_eq!(ru_translation.unwrap().title, Some("Тестовый пост".to_string()));
-    assert_eq!(de_translation.unwrap().title, Some("Testbeitrag".to_string()));
+    assert_eq!(
+        ru_translation.unwrap().title,
+        Some("Тестовый пост".to_string())
+    );
+    assert_eq!(
+        de_translation.unwrap().title,
+        Some("Testbeitrag".to_string())
+    );
 }
 
 #[tokio::test]
@@ -656,8 +669,18 @@ async fn test_node_with_multiple_body_locales() {
 
     assert!(en_body.is_some());
     assert!(ru_body.is_some());
-    assert!(en_body.unwrap().body.as_deref().unwrap_or("").contains("Test Content"));
-    assert!(ru_body.unwrap().body.as_deref().unwrap_or("").contains("Русский контент"));
+    assert!(en_body
+        .unwrap()
+        .body
+        .as_deref()
+        .unwrap_or("")
+        .contains("Test Content"));
+    assert!(ru_body
+        .unwrap()
+        .body
+        .as_deref()
+        .unwrap_or("")
+        .contains("Русский контент"));
 }
 
 // =============================================================================
