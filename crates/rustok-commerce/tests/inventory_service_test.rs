@@ -353,7 +353,7 @@ async fn test_check_availability_sufficient_stock() {
 
     assert!(result.is_ok());
     let available = result.unwrap();
-    assert_eq!(available, true);
+    assert!(available);
 }
 
 #[tokio::test]
@@ -372,7 +372,7 @@ async fn test_check_availability_insufficient_stock() {
 
     assert!(result.is_ok());
     let available = result.unwrap();
-    assert_eq!(available, false);
+    assert!(!available);
 }
 
 #[tokio::test]
@@ -391,7 +391,7 @@ async fn test_check_availability_exact_stock() {
 
     assert!(result.is_ok());
     let available = result.unwrap();
-    assert_eq!(available, true);
+    assert!(available);
 }
 
 #[tokio::test]
@@ -410,7 +410,7 @@ async fn test_check_availability_zero_stock() {
 
     assert!(result.is_ok());
     let available = result.unwrap();
-    assert_eq!(available, false);
+    assert!(!available);
 }
 
 #[tokio::test]
