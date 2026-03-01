@@ -2,7 +2,6 @@
 // This test verifies the complete workflow from product creation to indexing
 
 use rust_decimal::Decimal;
-use std::str::FromStr;
 use rustok_commerce::dto::{
     CreateProductInput, CreateVariantInput, PriceInput, ProductTranslationInput, UpdateProductInput,
 };
@@ -11,6 +10,7 @@ use rustok_commerce::services::CatalogService;
 use rustok_core::events::DomainEvent;
 use rustok_outbox::TransactionalEventBus;
 use rustok_test_utils::{db::setup_test_db, MockEventTransport};
+use std::str::FromStr;
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -251,5 +251,9 @@ async fn test_variant_creation_triggers_event() {
     }
 
     let variant_events = transport.events_of_type("VariantCreated");
-    assert_eq!(variant_events.len(), 2, "Should have 2 variant creation events");
+    assert_eq!(
+        variant_events.len(),
+        2,
+        "Should have 2 variant creation events"
+    );
 }

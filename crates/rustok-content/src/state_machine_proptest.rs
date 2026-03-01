@@ -22,7 +22,7 @@ mod tests {
 
     /// Generate random UUIDs
     fn uuid_strategy() -> impl Strategy<Value = Uuid> {
-        prop::array::uniform16(0u8..=255).prop_map(|bytes| Uuid::from_bytes(bytes))
+        prop::array::uniform16(0u8..=255).prop_map(Uuid::from_bytes)
     }
 
     /// Generate valid content kinds

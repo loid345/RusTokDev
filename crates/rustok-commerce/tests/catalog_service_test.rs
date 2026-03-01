@@ -2,14 +2,16 @@
 // These tests verify product CRUD, variants, translations,
 // pricing, and publishing workflows.
 
+use rust_decimal::Decimal;
 use rustok_commerce::dto::{
-    CreateProductInput, ProductTranslationInput, ProductVariantInput, UpdateProductInput,
+    CreateProductInput, CreateVariantInput, PriceInput, ProductTranslationInput, UpdateProductInput,
 };
 use rustok_commerce::entities::product::ProductStatus;
 use rustok_commerce::services::CatalogService;
 use rustok_commerce::CommerceError;
 use rustok_test_utils::{db::setup_test_db, helpers::unique_slug, mock_transactional_event_bus};
 use sea_orm::DatabaseConnection;
+use std::str::FromStr;
 use uuid::Uuid;
 
 async fn setup() -> (DatabaseConnection, CatalogService) {
@@ -26,20 +28,27 @@ fn create_test_product_input() -> CreateProductInput {
             title: "Test Product".to_string(),
             description: Some("A great test product".to_string()),
             handle: Some(unique_slug("test-product")),
+            meta_title: None,
+            meta_description: None,
         }],
-        variants: vec![ProductVariantInput {
-            sku: format!(
+        options: vec![],
+        variants: vec![CreateVariantInput {
+            sku: Some(format!(
                 "SKU-{}",
                 Uuid::new_v4().to_string().split('-').next().unwrap()
-            ),
-            title: Some("Default".to_string()),
-            price: 99.99,
-            compare_at_price: Some(149.99),
-            cost: Some(50.00),
+            )),
             barcode: None,
-            requires_shipping: true,
-            taxable: true,
-            weight: Some(1.5),
+            option1: Some("Default".to_string()),
+            option2: None,
+            option3: None,
+            prices: vec![PriceInput {
+                currency_code: "USD".to_string(),
+                amount: Decimal::from_str("99.99").unwrap(),
+                compare_at_amount: Some(Decimal::from_str("149.99").unwrap()),
+            }],
+            inventory_quantity: 0,
+            inventory_policy: "deny".to_string(),
+            weight: Some(Decimal::from_str("1.5").unwrap()),
             weight_unit: Some("kg".to_string()),
         }],
         vendor: Some("Test Vendor".to_string()),
@@ -120,7 +129,7 @@ async fn test_get_product_success() {
         .await
         .unwrap();
 
-    let result = service.get_product(created.id).await;
+    let result = service.get_product(tenant_id, created.id).await;
 
     assert!(result.is_ok());
     let product = result.unwrap();
@@ -131,14 +140,15 @@ async fn test_get_product_success() {
 #[tokio::test]
 async fn test_get_nonexistent_product() {
     let (_db, service) = setup().await;
+    let tenant_id = Uuid::new_v4();
     let fake_id = Uuid::new_v4();
 
-    let result = service.get_product(fake_id).await;
+    let result = service.get_product(tenant_id, fake_id).await;
 
     assert!(result.is_err());
     match result.unwrap_err() {
-        CommerceError::NotFound(_) => {}
-        _ => panic!("Expected NotFound error"),
+        CommerceError::ProductNotFound(_) => {}
+        _ => panic!("Expected ProductNotFound error"),
     }
 }
 
@@ -160,6 +170,8 @@ async fn test_update_product_success() {
             title: "Updated Product".to_string(),
             description: Some("Updated description".to_string()),
             handle: None,
+            meta_title: None,
+            meta_description: None,
         }]),
         vendor: Some("Updated Vendor".to_string()),
         product_type: Some("Digital".to_string()),
@@ -168,7 +180,7 @@ async fn test_update_product_success() {
     };
 
     let result = service
-        .update_product(product.id, actor_id, update_input)
+        .update_product(tenant_id, actor_id, product.id, update_input)
         .await;
 
     assert!(result.is_ok());
@@ -191,10 +203,10 @@ async fn test_delete_product_success() {
         .await
         .unwrap();
 
-    let result = service.delete_product(product.id, actor_id).await;
+    let result = service.delete_product(tenant_id, actor_id, product.id).await;
     assert!(result.is_ok());
 
-    let get_result = service.get_product(product.id).await;
+    let get_result = service.get_product(tenant_id, product.id).await;
     assert!(get_result.is_err());
 }
 
@@ -214,12 +226,16 @@ async fn test_create_product_with_multiple_translations() {
         title: "Тестовый продукт".to_string(),
         description: Some("Отличный тестовый продукт".to_string()),
         handle: Some(unique_slug("test-product-ru")),
+        meta_title: None,
+        meta_description: None,
     });
     input.translations.push(ProductTranslationInput {
         locale: "de".to_string(),
         title: "Testprodukt".to_string(),
         description: Some("Ein großartiges Testprodukt".to_string()),
         handle: Some(unique_slug("test-product-de")),
+        meta_title: None,
+        meta_description: None,
     });
 
     let result = service.create_product(tenant_id, actor_id, input).await;
@@ -251,34 +267,42 @@ async fn test_create_product_with_multiple_variants() {
     let actor_id = Uuid::new_v4();
 
     let mut input = create_test_product_input();
-    input.variants.push(ProductVariantInput {
-        sku: format!(
+    input.variants.push(CreateVariantInput {
+        sku: Some(format!(
             "SKU-{}",
             Uuid::new_v4().to_string().split('-').next().unwrap()
-        ),
-        title: Some("Small".to_string()),
-        price: 79.99,
-        compare_at_price: None,
-        cost: Some(40.00),
+        )),
         barcode: None,
-        requires_shipping: true,
-        taxable: true,
-        weight: Some(1.0),
+        option1: Some("Small".to_string()),
+        option2: None,
+        option3: None,
+        prices: vec![PriceInput {
+            currency_code: "USD".to_string(),
+            amount: Decimal::from_str("79.99").unwrap(),
+            compare_at_amount: None,
+        }],
+        inventory_quantity: 0,
+        inventory_policy: "deny".to_string(),
+        weight: Some(Decimal::from_str("1.0").unwrap()),
         weight_unit: Some("kg".to_string()),
     });
-    input.variants.push(ProductVariantInput {
-        sku: format!(
+    input.variants.push(CreateVariantInput {
+        sku: Some(format!(
             "SKU-{}",
             Uuid::new_v4().to_string().split('-').next().unwrap()
-        ),
-        title: Some("Large".to_string()),
-        price: 119.99,
-        compare_at_price: Some(169.99),
-        cost: Some(60.00),
+        )),
         barcode: None,
-        requires_shipping: true,
-        taxable: true,
-        weight: Some(2.0),
+        option1: Some("Large".to_string()),
+        option2: None,
+        option3: None,
+        prices: vec![PriceInput {
+            currency_code: "USD".to_string(),
+            amount: Decimal::from_str("119.99").unwrap(),
+            compare_at_amount: Some(Decimal::from_str("169.99").unwrap()),
+        }],
+        inventory_quantity: 0,
+        inventory_policy: "deny".to_string(),
+        weight: Some(Decimal::from_str("2.0").unwrap()),
         weight_unit: Some("kg".to_string()),
     });
 
@@ -291,16 +315,22 @@ async fn test_create_product_with_multiple_variants() {
     let small = product
         .variants
         .iter()
-        .find(|v| v.title.as_deref() == Some("Small"));
+        .find(|v| v.title == "Small");
     let large = product
         .variants
         .iter()
-        .find(|v| v.title.as_deref() == Some("Large"));
+        .find(|v| v.title == "Large");
 
     assert!(small.is_some());
     assert!(large.is_some());
-    assert_eq!(small.unwrap().price, 79.99);
-    assert_eq!(large.unwrap().price, 119.99);
+    assert_eq!(
+        small.unwrap().prices[0].amount,
+        Decimal::from_str("79.99").unwrap()
+    );
+    assert_eq!(
+        large.unwrap().prices[0].amount,
+        Decimal::from_str("119.99").unwrap()
+    );
 }
 
 #[tokio::test]
@@ -309,10 +339,7 @@ async fn test_variant_pricing() {
     let tenant_id = Uuid::new_v4();
     let actor_id = Uuid::new_v4();
 
-    let mut input = create_test_product_input();
-    input.variants[0].price = 99.99;
-    input.variants[0].compare_at_price = Some(149.99);
-    input.variants[0].cost = Some(50.00);
+    let input = create_test_product_input();
 
     let result = service.create_product(tenant_id, actor_id, input).await;
 
@@ -320,13 +347,19 @@ async fn test_variant_pricing() {
     let product = result.unwrap();
     let variant = &product.variants[0];
 
-    assert_eq!(variant.price, 99.99);
-    assert_eq!(variant.compare_at_price, Some(149.99));
-    assert_eq!(variant.cost, Some(50.00));
+    assert!(!variant.prices.is_empty());
+    let price = &variant.prices[0];
+    assert_eq!(price.amount, Decimal::from_str("99.99").unwrap());
+    assert_eq!(
+        price.compare_at_amount,
+        Some(Decimal::from_str("149.99").unwrap())
+    );
 
-    let discount = 149.99 - 99.99;
-    let discount_percent = (discount / 149.99) * 100.0;
-    assert!((discount_percent - 33.34).abs() < 0.1);
+    let discount = price.compare_at_amount.unwrap() - price.amount;
+    let discount_percent =
+        (discount / price.compare_at_amount.unwrap()) * Decimal::from_str("100.0").unwrap();
+    let diff = (discount_percent - Decimal::from_str("33.34").unwrap()).abs();
+    assert!(diff < Decimal::from_str("0.1").unwrap());
 }
 
 #[tokio::test]
@@ -336,10 +369,8 @@ async fn test_variant_shipping_properties() {
     let actor_id = Uuid::new_v4();
 
     let mut input = create_test_product_input();
-    input.variants[0].requires_shipping = true;
-    input.variants[0].weight = Some(2.5);
+    input.variants[0].weight = Some(Decimal::from_str("2.5").unwrap());
     input.variants[0].weight_unit = Some("kg".to_string());
-    input.variants[0].taxable = true;
 
     let result = service.create_product(tenant_id, actor_id, input).await;
 
@@ -347,10 +378,8 @@ async fn test_variant_shipping_properties() {
     let product = result.unwrap();
     let variant = &product.variants[0];
 
-    assert_eq!(variant.requires_shipping, true);
-    assert_eq!(variant.weight, Some(2.5));
+    assert_eq!(variant.weight, Some(Decimal::from_str("2.5").unwrap()));
     assert_eq!(variant.weight_unit, Some("kg".to_string()));
-    assert_eq!(variant.taxable, true);
 }
 
 #[tokio::test]
@@ -408,7 +437,7 @@ async fn test_publish_product() {
     assert_eq!(product.status, ProductStatus::Draft);
     assert!(product.published_at.is_none());
 
-    let result = service.publish_product(product.id, actor_id).await;
+    let result = service.publish_product(tenant_id, actor_id, product.id).await;
 
     assert!(result.is_ok());
     let published = result.unwrap();
@@ -431,7 +460,9 @@ async fn test_unpublish_product() {
 
     assert_eq!(product.status, ProductStatus::Active);
 
-    let result = service.unpublish_product(product.id, actor_id).await;
+    let result = service
+        .unpublish_product(tenant_id, actor_id, product.id)
+        .await;
 
     assert!(result.is_ok());
     let unpublished = result.unwrap();
@@ -491,7 +522,7 @@ async fn test_update_product_metadata() {
     };
 
     let result = service
-        .update_product(product.id, actor_id, update_input)
+        .update_product(tenant_id, actor_id, product.id, update_input)
         .await;
 
     assert!(result.is_ok());
@@ -544,7 +575,7 @@ async fn test_update_vendor() {
     };
 
     let result = service
-        .update_product(product.id, actor_id, update_input)
+        .update_product(tenant_id, actor_id, product.id, update_input)
         .await;
 
     assert!(result.is_ok());
@@ -559,6 +590,7 @@ async fn test_update_vendor() {
 #[tokio::test]
 async fn test_update_nonexistent_product() {
     let (_db, service) = setup().await;
+    let tenant_id = Uuid::new_v4();
     let actor_id = Uuid::new_v4();
     let fake_id = Uuid::new_v4();
 
@@ -568,6 +600,8 @@ async fn test_update_nonexistent_product() {
             title: "Updated".to_string(),
             description: None,
             handle: None,
+            meta_title: None,
+            meta_description: None,
         }]),
         vendor: None,
         product_type: None,
@@ -576,23 +610,24 @@ async fn test_update_nonexistent_product() {
     };
 
     let result = service
-        .update_product(fake_id, actor_id, update_input)
+        .update_product(tenant_id, actor_id, fake_id, update_input)
         .await;
 
     assert!(result.is_err());
     match result.unwrap_err() {
-        CommerceError::NotFound(_) => {}
-        _ => panic!("Expected NotFound error"),
+        CommerceError::ProductNotFound(_) => {}
+        _ => panic!("Expected ProductNotFound error"),
     }
 }
 
 #[tokio::test]
 async fn test_delete_nonexistent_product() {
     let (_db, service) = setup().await;
+    let tenant_id = Uuid::new_v4();
     let actor_id = Uuid::new_v4();
     let fake_id = Uuid::new_v4();
 
-    let result = service.delete_product(fake_id, actor_id).await;
+    let result = service.delete_product(tenant_id, actor_id, fake_id).await;
 
     assert!(result.is_err());
 }
@@ -600,10 +635,11 @@ async fn test_delete_nonexistent_product() {
 #[tokio::test]
 async fn test_publish_nonexistent_product() {
     let (_db, service) = setup().await;
+    let tenant_id = Uuid::new_v4();
     let actor_id = Uuid::new_v4();
     let fake_id = Uuid::new_v4();
 
-    let result = service.publish_product(fake_id, actor_id).await;
+    let result = service.publish_product(tenant_id, actor_id, fake_id).await;
 
     assert!(result.is_err());
 }
@@ -624,7 +660,7 @@ async fn test_unique_skus_per_product() {
         .await
         .unwrap();
 
-    let skus: Vec<String> = product.variants.iter().map(|v| v.sku.clone()).collect();
+    let skus: Vec<Option<String>> = product.variants.iter().map(|v| v.sku.clone()).collect();
     let unique_skus: std::collections::HashSet<_> = skus.iter().collect();
 
     assert_eq!(skus.len(), unique_skus.len(), "All SKUs should be unique");
@@ -658,7 +694,6 @@ async fn test_variant_digital_product() {
 
     let mut input = create_test_product_input();
     input.product_type = Some("Digital".to_string());
-    input.variants[0].requires_shipping = false;
     input.variants[0].weight = None;
     input.variants[0].weight_unit = None;
 
@@ -667,7 +702,6 @@ async fn test_variant_digital_product() {
     assert!(result.is_ok());
     let product = result.unwrap();
     assert_eq!(product.product_type, Some("Digital".to_string()));
-    assert_eq!(product.variants[0].requires_shipping, false);
     assert_eq!(product.variants[0].weight, None);
 }
 
@@ -692,7 +726,7 @@ async fn test_create_archived_product() {
     };
 
     let result = service
-        .update_product(product.id, actor_id, update_input)
+        .update_product(tenant_id, actor_id, product.id, update_input)
         .await;
 
     assert!(result.is_ok());
@@ -701,14 +735,17 @@ async fn test_create_archived_product() {
 }
 
 #[tokio::test]
-async fn test_variant_profit_margin() {
+async fn test_variant_price_in_prices_vec() {
     let (_db, service) = setup().await;
     let tenant_id = Uuid::new_v4();
     let actor_id = Uuid::new_v4();
 
     let mut input = create_test_product_input();
-    input.variants[0].price = 100.00;
-    input.variants[0].cost = Some(40.00);
+    input.variants[0].prices = vec![PriceInput {
+        currency_code: "USD".to_string(),
+        amount: Decimal::from_str("100.00").unwrap(),
+        compare_at_amount: None,
+    }];
 
     let result = service.create_product(tenant_id, actor_id, input).await;
 
@@ -716,11 +753,8 @@ async fn test_variant_profit_margin() {
     let product = result.unwrap();
     let variant = &product.variants[0];
 
-    let profit = variant.price - variant.cost.unwrap();
-    let margin = (profit / variant.price) * 100.0;
-
-    assert_eq!(profit, 60.00);
-    assert_eq!(margin, 60.0);
+    assert!(!variant.prices.is_empty());
+    assert_eq!(variant.prices[0].amount, Decimal::from_str("100.00").unwrap());
 }
 
 #[tokio::test]
@@ -730,20 +764,28 @@ async fn test_multiple_variants_different_prices() {
     let actor_id = Uuid::new_v4();
 
     let mut input = create_test_product_input();
-    input.variants[0].price = 50.00;
-    input.variants.push(ProductVariantInput {
-        sku: format!(
+    input.variants[0].prices = vec![PriceInput {
+        currency_code: "USD".to_string(),
+        amount: Decimal::from_str("50.00").unwrap(),
+        compare_at_amount: None,
+    }];
+    input.variants.push(CreateVariantInput {
+        sku: Some(format!(
             "SKU-{}",
             Uuid::new_v4().to_string().split('-').next().unwrap()
-        ),
-        title: Some("Premium".to_string()),
-        price: 150.00,
-        compare_at_price: None,
-        cost: Some(80.00),
+        )),
         barcode: None,
-        requires_shipping: true,
-        taxable: true,
-        weight: Some(2.0),
+        option1: Some("Premium".to_string()),
+        option2: None,
+        option3: None,
+        prices: vec![PriceInput {
+            currency_code: "USD".to_string(),
+            amount: Decimal::from_str("150.00").unwrap(),
+            compare_at_amount: None,
+        }],
+        inventory_quantity: 0,
+        inventory_policy: "deny".to_string(),
+        weight: Some(Decimal::from_str("2.0").unwrap()),
         weight_unit: Some("kg".to_string()),
     });
 
@@ -753,7 +795,16 @@ async fn test_multiple_variants_different_prices() {
     let product = result.unwrap();
     assert_eq!(product.variants.len(), 2);
 
-    let prices: Vec<f64> = product.variants.iter().map(|v| v.price).collect();
-    assert_eq!(prices[0], 50.00);
-    assert_eq!(prices[1], 150.00);
+    // Find variants by their option1 value (used as title)
+    let cheap = product
+        .variants
+        .iter()
+        .find(|v| v.prices[0].amount == Decimal::from_str("50.00").unwrap());
+    let premium = product
+        .variants
+        .iter()
+        .find(|v| v.prices[0].amount == Decimal::from_str("150.00").unwrap());
+
+    assert!(cheap.is_some());
+    assert!(premium.is_some());
 }

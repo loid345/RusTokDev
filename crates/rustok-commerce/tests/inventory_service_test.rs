@@ -2,9 +2,12 @@
 // These tests verify inventory management, stock tracking,
 // low stock alerts, and availability checks.
 
+use rust_decimal::Decimal;
 use rustok_commerce::dto::{
-    AdjustInventoryInput, CreateProductInput, ProductTranslationInput, ProductVariantInput,
+    AdjustInventoryInput, CreateProductInput, CreateVariantInput, PriceInput,
+    ProductTranslationInput,
 };
+use std::str::FromStr;
 use rustok_commerce::services::{CatalogService, InventoryService};
 use rustok_commerce::CommerceError;
 use rustok_test_utils::{db::setup_test_db, helpers::unique_slug, mock_transactional_event_bus};
@@ -26,20 +29,27 @@ async fn create_test_product(catalog: &CatalogService, tenant_id: Uuid) -> (Uuid
             title: "Test Product".to_string(),
             description: Some("A test product".to_string()),
             handle: Some(unique_slug("test-product")),
+            meta_title: None,
+            meta_description: None,
         }],
-        variants: vec![ProductVariantInput {
-            sku: format!(
+        options: vec![],
+        variants: vec![CreateVariantInput {
+            sku: Some(format!(
                 "SKU-{}",
                 Uuid::new_v4().to_string().split('-').next().unwrap()
-            ),
-            title: Some("Default".to_string()),
-            price: 99.99,
-            compare_at_price: None,
-            cost: Some(50.00),
+            )),
             barcode: None,
-            requires_shipping: true,
-            taxable: true,
-            weight: Some(1.5),
+            option1: Some("Default".to_string()),
+            option2: None,
+            option3: None,
+            prices: vec![PriceInput {
+                currency_code: "USD".to_string(),
+                amount: Decimal::from_str("99.99").unwrap(),
+                compare_at_amount: None,
+            }],
+            inventory_quantity: 0,
+            inventory_policy: "deny".to_string(),
+            weight: Some(Decimal::from_str("1.5").unwrap()),
             weight_unit: Some("kg".to_string()),
         }],
         vendor: Some("Test Vendor".to_string()),
@@ -299,7 +309,7 @@ async fn test_custom_threshold() {
     let actor_id = Uuid::new_v4();
     let (_product_id, variant_id) = create_test_product(&catalog, tenant_id).await;
 
-    let (event_bus, _rx) = mock_event_bus();
+    let event_bus = mock_transactional_event_bus();
     let service_with_custom_threshold =
         InventoryService::new(db.clone(), event_bus).with_threshold(10);
 
