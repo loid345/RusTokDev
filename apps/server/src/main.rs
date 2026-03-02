@@ -5,8 +5,14 @@ use rustok_telemetry::{LogFormat, TelemetryConfig};
 
 #[tokio::main]
 async fn main() -> eyre::Result<()> {
-    let _telemetry = rustok_telemetry::init(telemetry_config())?;
-    Ok(cli::main::<App, Migrator>().await?)
+    let telemetry_cfg = telemetry_config();
+    let has_otel = telemetry_cfg.otel.is_some();
+    let _telemetry = rustok_telemetry::init(telemetry_cfg)?;
+    let result = cli::main::<App, Migrator>().await;
+    if has_otel {
+        rustok_telemetry::otel::shutdown().await;
+    }
+    Ok(result?)
 }
 
 fn telemetry_config() -> TelemetryConfig {

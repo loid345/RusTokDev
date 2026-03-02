@@ -6,6 +6,7 @@ use sea_orm::{
 use std::collections::{HashMap, HashSet};
 use tracing::{debug, info, instrument, warn};
 use uuid::Uuid;
+use validator::Validate;
 
 use rustok_core::{generate_id, DomainEvent};
 use rustok_outbox::TransactionalEventBus;
@@ -38,6 +39,10 @@ impl CatalogService {
             publish = input.publish,
             "Creating product"
         );
+
+        input
+            .validate()
+            .map_err(|e| CommerceError::Validation(e.to_string()))?;
 
         if input.translations.is_empty() {
             warn!("Product creation rejected: no translations");
@@ -374,6 +379,10 @@ impl CatalogService {
         input: UpdateProductInput,
     ) -> CommerceResult<ProductResponse> {
         debug!(product_id = %product_id, "Updating product");
+
+        input
+            .validate()
+            .map_err(|e| CommerceError::Validation(e.to_string()))?;
 
         let txn = self.db.begin().await?;
 

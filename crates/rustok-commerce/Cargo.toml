@@ -20,6 +20,7 @@ tracing.workspace = true
 unicode-normalization.workspace = true
 utoipa = { workspace = true, features = ["uuid", "chrono", "decimal"] }
 uuid.workspace = true
+validator.workspace = true
 
 [dev-dependencies]
 tokio.workspace = true

@@ -5,6 +5,7 @@ use sea_orm::{
 };
 use tracing::{debug, error, info, instrument, warn};
 use uuid::Uuid;
+use validator::Validate;
 
 use rustok_core::{Action, DomainEvent, PermissionScope, Resource, SecurityContext};
 use rustok_outbox::TransactionalEventBus;
@@ -136,6 +137,10 @@ impl NodeService {
         security: SecurityContext,
         mut input: CreateNodeInput,
     ) -> ContentResult<Uuid> {
+        input
+            .validate()
+            .map_err(|e| ContentError::Validation(e.to_string()))?;
+
         let resource = Self::kind_to_resource(&input.kind);
         let scope = security.get_scope(resource, Action::Create);
 
@@ -282,6 +287,10 @@ impl NodeService {
         security: SecurityContext,
         update: UpdateNodeInput,
     ) -> ContentResult<node::Model> {
+        update
+            .validate()
+            .map_err(|e| ContentError::Validation(e.to_string()))?;
+
         let node_model = self.find_node(tenant_id, node_id).await?;
 
         if node_model.deleted_at.is_some() {

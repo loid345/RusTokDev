@@ -1,1 +1,2 @@
-// SeaORM entities for tenant module (to be generated).
+pub mod tenant;
+pub mod tenant_module;

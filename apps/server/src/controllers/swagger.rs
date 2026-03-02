@@ -1,3 +1,9 @@
+use axum::{
+    http::{header::CONTENT_TYPE, StatusCode},
+    response::{IntoResponse, Response},
+    routing::get,
+};
+use loco_rs::{controller::Routes, prelude::*};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -191,6 +197,54 @@ use utoipa::OpenApi;
     )
 )]
 pub struct ApiDoc;
+
+/// GET /api/openapi.json — OpenAPI specification in JSON format
+#[utoipa::path(
+    get,
+    path = "/api/openapi.json",
+    tag = "observability",
+    responses(
+        (status = 200, description = "OpenAPI specification in JSON format", content_type = "application/json"),
+    )
+)]
+pub async fn openapi_json() -> Result<Response> {
+    let spec = ApiDoc::openapi()
+        .to_json()
+        .map_err(|e| loco_rs::Error::Message(format!("Failed to serialize OpenAPI spec: {e}")))?;
+    Ok((
+        StatusCode::OK,
+        [(CONTENT_TYPE, "application/json; charset=utf-8")],
+        spec,
+    )
+        .into_response())
+}
+
+/// GET /api/openapi.yaml — OpenAPI specification in YAML format
+#[utoipa::path(
+    get,
+    path = "/api/openapi.yaml",
+    tag = "observability",
+    responses(
+        (status = 200, description = "OpenAPI specification in YAML format", content_type = "text/yaml"),
+    )
+)]
+pub async fn openapi_yaml() -> Result<Response> {
+    let spec = ApiDoc::openapi().to_yaml().map_err(|e| {
+        loco_rs::Error::Message(format!("Failed to serialize OpenAPI spec to YAML: {e}"))
+    })?;
+    Ok((
+        StatusCode::OK,
+        [(CONTENT_TYPE, "text/yaml; charset=utf-8")],
+        spec,
+    )
+        .into_response())
+}
+
+pub fn routes() -> Routes {
+    Routes::new()
+        .add("/api/openapi.json", get(openapi_json))
+        .add("/api/openapi.yaml", get(openapi_yaml))
+}
 
 pub struct SecurityAddon;
 

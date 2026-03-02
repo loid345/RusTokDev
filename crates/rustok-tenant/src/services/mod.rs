@@ -1,1 +1,3 @@
-// Service layer for tenant operations.
+pub mod tenant_service;
+
+pub use tenant_service::TenantService;

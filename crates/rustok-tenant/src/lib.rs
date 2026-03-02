@@ -3,6 +3,12 @@ pub mod entities;
 pub mod error;
 pub mod services;
 
+pub use dto::{
+    CreateTenantInput, TenantModuleResponse, TenantResponse, ToggleModuleInput, UpdateTenantInput,
+};
+pub use error::TenantError;
+pub use services::TenantService;
+
 use async_trait::async_trait;
 use rustok_core::module::{HealthStatus, MigrationSource, ModuleKind, RusToKModule};
 use sea_orm_migration::MigrationTrait;
