@@ -12,15 +12,30 @@ pub async fn ensure_commerce_schema(db: &DatabaseConnection) {
     let builder = db.get_database_backend();
     let schema = Schema::new(builder);
 
-    create_entity_table(db, &builder, schema.create_table_from_entity(product::Entity)).await;
+    create_entity_table(
+        db,
+        &builder,
+        schema.create_table_from_entity(product::Entity),
+    )
+    .await;
     create_entity_table(
         db,
         &builder,
         schema.create_table_from_entity(product_translation::Entity),
     )
     .await;
-    create_entity_table(db, &builder, schema.create_table_from_entity(product_option::Entity)).await;
-    create_entity_table(db, &builder, schema.create_table_from_entity(product_variant::Entity)).await;
+    create_entity_table(
+        db,
+        &builder,
+        schema.create_table_from_entity(product_option::Entity),
+    )
+    .await;
+    create_entity_table(
+        db,
+        &builder,
+        schema.create_table_from_entity(product_variant::Entity),
+    )
+    .await;
     create_entity_table(
         db,
         &builder,
@@ -28,7 +43,12 @@ pub async fn ensure_commerce_schema(db: &DatabaseConnection) {
     )
     .await;
     create_entity_table(db, &builder, schema.create_table_from_entity(price::Entity)).await;
-    create_entity_table(db, &builder, schema.create_table_from_entity(product_image::Entity)).await;
+    create_entity_table(
+        db,
+        &builder,
+        schema.create_table_from_entity(product_image::Entity),
+    )
+    .await;
 }
 
 async fn create_entity_table(
