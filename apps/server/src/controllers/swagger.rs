@@ -68,6 +68,16 @@ use utoipa::OpenApi;
         crate::controllers::commerce::inventory::adjust_inventory,
         crate::controllers::commerce::inventory::set_inventory,
         crate::controllers::commerce::inventory::check_availability,
+        // Health
+        crate::controllers::health::health,
+        crate::controllers::health::live,
+        crate::controllers::health::ready,
+        crate::controllers::health::modules,
+        // Metrics
+        crate::controllers::metrics::metrics,
+        // Admin Events
+        crate::controllers::admin_events::list_dlq,
+        crate::controllers::admin_events::replay_dlq_event,
     ),
     components(
         schemas(
@@ -155,6 +165,16 @@ use utoipa::OpenApi;
             crate::controllers::commerce::inventory::CheckAvailabilityInput,
             crate::controllers::commerce::inventory::CheckItem,
             crate::controllers::commerce::inventory::AvailabilityResult,
+
+            // Health
+            crate::controllers::health::HealthResponse,
+            crate::controllers::health::ModuleHealth,
+            crate::controllers::health::ModulesHealthResponse,
+
+            // Admin Events
+            crate::controllers::admin_events::DlqEventItem,
+            crate::controllers::admin_events::DlqListResponse,
+            crate::controllers::admin_events::DlqReplayResponse,
         )
     ),
     modifiers(&SecurityAddon),
@@ -164,7 +184,10 @@ use utoipa::OpenApi;
         (name = "blog", description = "Blog endpoints"),
         (name = "forum", description = "Forum endpoints"),
         (name = "pages", description = "Pages endpoints"),
-        (name = "commerce", description = "Ecommerce endpoints")
+        (name = "commerce", description = "Ecommerce endpoints"),
+        (name = "health", description = "Health check endpoints"),
+        (name = "observability", description = "Observability and metrics endpoints"),
+        (name = "admin", description = "Admin operations")
     )
 )]
 pub struct ApiDoc;

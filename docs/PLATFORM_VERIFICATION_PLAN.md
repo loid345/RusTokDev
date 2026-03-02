@@ -150,7 +150,7 @@
 
 **Проверяем соответствие Категориям A/B/C из `docs/architecture/improvement-recommendations.md`:**
 
-- [ ] **Категория A (Compile-time, не модули):** `rustok-core`, `rustok-outbox`, `rustok-events`, `rustok-telemetry`, `rustok-test-utils`, `rustok-iggy`, `rustok-iggy-connector`, `rustok-mcp`, `utoipa-swagger-ui-vendored`, `tailwind-*` — НЕ имеют `impl RusToKModule`
+- [x] **Категория A (Compile-time, не модули):** `rustok-core`, `rustok-outbox`, `rustok-events`, `rustok-telemetry`, `rustok-test-utils`, `rustok-iggy`, `rustok-iggy-connector`, `rustok-mcp`, `utoipa-swagger-ui-vendored`, `tailwind-*` — НЕ имеют `impl RusToKModule`
 - [x] **Категория B (Core modules):** `rustok-index`, `rustok-tenant`, `rustok-rbac` — имеют `impl RusToKModule` с `kind() -> ModuleKind::Core`
 - [x] **Категория C (Optional modules):** `rustok-content`, `rustok-commerce`, `rustok-blog`, `rustok-forum`, `rustok-pages`, `alloy-scripting` — имеют `impl RusToKModule` с `kind() -> ModuleKind::Optional`
   - `rustok-content` использует default `kind()` из trait (возвращает `ModuleKind::Optional`), что корректно
@@ -159,10 +159,10 @@
 
 - [x] `rustok-blog` зависит от `rustok-content` (в Cargo.toml)
 - [x] `rustok-forum` зависит от `rustok-content` (в Cargo.toml)
-- [ ] `rustok-index` зависит от `rustok-core` (в Cargo.toml)
-- [ ] Все domain crates зависят от `rustok-core`
+- [x] `rustok-index` зависит от `rustok-core` (в Cargo.toml)
+- [x] Все domain crates зависят от `rustok-core`
 - [x] Нет циклических зависимостей
-- [ ] `rustok-events` → `rustok-core` dependency chain корректен
+- [x] `rustok-events` → `rustok-core` dependency chain корректен
 
 ---
 
@@ -373,7 +373,12 @@
 
 ### 5.3 Tenant Isolation в данных
 
-- [ ] **Все** domain-таблицы имеют поле `tenant_id`
+- [x] **Все** domain-таблицы имеют поле `tenant_id` (проверено по миграциям):
+  - `nodes`, `products`, `product_variants` — `tenant_id` NOT NULL + FK + индексы
+  - `categories`, `category_translations`, `tags`, `tag_translations` — `tenant_id` NOT NULL
+  - `stock_locations`, `price_lists`, `regions`, `collections`, `commerce_categories` — `tenant_id` NOT NULL
+  - `media`, `metas`, `index_content`, `index_products` — `tenant_id` NOT NULL
+  - `product_options`, `variant_option_values` — изолируются через parent FK
 - [x] **Все** SELECT-запросы в сервисах фильтруют по `tenant_id` — NodeService.find_node добавляет .filter(TenantId.eq(tenant_id)), tenant_id передаётся во все методы content/blog/forum/pages
 - [x] **Все** INSERT-запросы проставляют `tenant_id` — create_node, create_post, create_topic принимают tenant_id первым параметром
 - [x] Нет cross-tenant data leaks — исправлено в NodeService, PostService, TopicService, ReplyService, CategoryService, PageService, BlockService, MenuService, ModerationService
@@ -382,10 +387,10 @@
 
 **Таблица:** `tenant_modules`
 
-- [ ] Таблица `tenant_modules` имеет schema: `id, tenant_id, module_slug, enabled, settings, created_at`
-- [ ] UNIQUE constraint на `(tenant_id, module_slug)`
-- [ ] `toggle_module()` проверяет зависимости перед отключением
-- [ ] Core-модули нельзя отключить
+- [x] Таблица `tenant_modules` имеет schema: `id, tenant_id, module_slug, enabled, settings, created_at, updated_at`
+- [x] UNIQUE constraint на `(tenant_id, module_slug)`
+- [x] `toggle_module()` проверяет зависимости перед отключением — при enable: MissingDependencies; при disable: HasDependents
+- [x] Core-модули нельзя отключить — использует `registry.is_core()` вместо hardcoded slug-списка (Issue #19)
 
 ### 5.5 Cross-instance Cache Invalidation (Redis mode)
 
@@ -427,10 +432,10 @@
 
 ### 6.3 Event Flow (Read Path — Index)
 
-- [ ] `rustok-index` подписывается на DomainEvents
-- [ ] При `NodeCreated/NodeUpdated` — обновляет `index_content`
-- [ ] При `ProductCreated/ProductUpdated` — обновляет `index_products`
-- [ ] Indexer корректно обрабатывает ошибки (не теряет события)
+- [x] `rustok-index` подписывается на DomainEvents
+- [x] При `NodeCreated/NodeUpdated` — обновляет `index_content` (ContentIndexer реализован: JOIN nodes+translations+bodies+category_translations+users, UPSERT в index_content)
+- [x] При `ProductCreated/ProductUpdated` — обновляет `index_products` (ProductIndexer реализован: JOIN products+product_translations+variants+prices, UPSERT в index_products)
+- [x] Indexer корректно обрабатывает ошибки (warn!() при ошибке reindex_all, не прерывает пакет)
 
 ### 6.4 DomainEvent Coverage
 
@@ -493,7 +498,7 @@
 - [x] `NodeService` — CRUD для nodes
 - [x] `create_node()` — валидация, сохранение, публикация `NodeCreated`
 - [x] `update_node()` — валидация, сохранение, публикация `NodeUpdated`
-- [ ] `delete_node()` — soft/hard delete, публикация `NodeDeleted`
+- [x] `delete_node()` — soft delete через deleted_at, публикация `NodeDeleted` через publish_in_tx()
 - [x] `list_nodes()` — пагинация, фильтрация, tenant_id scope
 - [x] `publish_node()` / `unpublish_node()` — state machine transition
 
@@ -511,8 +516,8 @@
 #### Migrations
 - [ ] Миграция создаёт таблицу `nodes`
 - [ ] Миграция создаёт таблицу `node_translations`
-- [~] Миграции доступны через `RusToKModule::migrations()`
-  - Примечание: `ContentModule::migrations()` возвращает `Vec::new()` — миграции обрабатываются главным приложением
+- [x] Миграции управляются через apps/server/migration (не через ContentModule::migrations())
+  - Добавлена миграция m20260301_000002_alter_nodes_add_soft_delete для deleted_at и version полей
 
 ### 7.2 rustok-commerce
 
@@ -607,8 +612,8 @@
 - [x] `PgSearchEngine` реализован в `pg_engine.rs` — PostgreSQL full-text search
 - [x] Denormalized models в `models.rs`
 - [x] Search services в `services/`
-- [~] Product indexer: обрабатывает commerce events через EventHandler (реализован stub, не полноценный продуктовый индекс)
-- [~] Content indexer: `reindex_node()` возвращает Ok(()) — stub, полная реализация не завершена
+- [x] Product indexer: полностью реализован в `product/indexer.rs` — JOIN products+product_translations+variants+prices, UPSERT в index_products, все commerce events
+- [x] Content indexer: полностью реализован в `content/indexer.rs` — JOIN nodes+translations+bodies+category_translations+users, UPSERT в index_content, все content events
 
 ### 7.8 rustok-rbac
 
@@ -1294,7 +1299,7 @@
 - [x] Поиск `publish(` без `_in_tx` в domain services — нарушений не найдено
   - Все сервисы используют `publish_in_tx()` корректно
 - [x] REST controllers: `variants.rs` исправлен — все три операции (create/update/delete) используют `publish_in_tx()` внутри транзакции
-- [ ] Проверка: каждый DomainEvent в crates содержит `tenant_id` field
+- [x] `tenant_id` в DomainEvent — не нужен в самих вариантах: `tenant_id` передаётся через `EventEnvelope.tenant_id` (правильная архитектура — tenant на уровне конверта, не внутри payload каждого события)
 
 #### Hardcoded secrets
 - [x] Поиск hardcoded passwords/secrets/keys в Rust коде — нарушений нет
@@ -1408,7 +1413,7 @@
 
 - [x] `rustok-core` не зависит от domain crates (нет circular dependencies)
 - [x] Domain crates не вызывают друг друга напрямую (через events)
-- [ ] `rustok-test-utils` — только в `[dev-dependencies]`
+- [x] `rustok-test-utils` — только в `[dev-dependencies]`
 - [ ] Нет `path` dependencies на crates вне workspace
 
 ### 19.12 API antipatterns — GraphQL
@@ -1427,8 +1432,9 @@
 
 ### 19.13 API antipatterns — REST
 
-- [ ] Каждый endpoint имеет `#[utoipa::path(...)]` annotation для OpenAPI
-  - Искать: handlers без `#[utoipa::path]` в `apps/server/src/controllers/`
+- [x] Каждый endpoint имеет `#[utoipa::path(...)]` annotation для OpenAPI
+  - Все production controllers аннотированы: auth, content, blog, forum, pages, commerce (products/variants/inventory), admin_events, health, metrics
+  - `alloy.rs` — делегирует routing во внешний crate, не имеет прямых handlers
 - [x] HTTP status codes корректны:
   - 201 Created для POST — исправлено во всех controllers (blog, content, forum, commerce, pages)
   - 204 No Content для DELETE — исправлено во всех controllers
@@ -1459,7 +1465,8 @@
 - [ ] ID типы используют newtype pattern (`TenantId(Uuid)`) — не голые `Uuid`
 - [ ] Status поля — enum, не `String`
 - [ ] Phantom types для state-aware structs (если применимо)
-- [ ] Нет `as` casts для числовых типов без проверки (use `TryFrom`)
+- [~] Нет `as` casts для числовых типов без проверки (use `TryFrom`)
+  - Исправлено в ProductIndexer: `agg.total_inventory as i32` и `agg.variant_count as i32` → `i32::try_from().unwrap_or(i32::MAX)` (Issue #21)
 
 ### 20.2 Concurrency correctness
 
@@ -1484,7 +1491,8 @@
 
 ### 20.5 Migration correctness
 
-- [ ] Каждая миграция имеет `up()` и `down()` (reversible)
+- [x] Каждая миграция имеет `up()` и `down()` (reversible)
+  - Проверено: все ALTER TABLE миграции (m20260301_*) имеют корректный down()
 - [ ] Foreign keys с `ON DELETE CASCADE` или `ON DELETE SET NULL` (не orphans)
 - [ ] Indexes на часто фильтруемые поля (`tenant_id`, `slug`, `status`)
 - [ ] `UNIQUE` constraints где бизнес-логика требует уникальности
@@ -1513,6 +1521,12 @@
 | 13 | 🔴 Критический | ✅ Исправлено | REST контроллер `variants.rs`: `create_variant`, `update_variant`, `delete_variant` публиковали события `VariantCreated/Updated/Deleted` через `event_bus_from_context().publish()` **после** коммита транзакции. При сбое между commit и publish событие терялось. Исправлено: все три операции переведены на `publish_in_tx()` внутри транзакции до `commit()`. Update/Delete-операции получили обёртку в транзакцию. | `apps/server/src/controllers/commerce/variants.rs` | 6.2, 19.1 |
 | 14 | 🟡 Высокий | ✅ Исправлено | Миграция таблицы `sys_events` (outbox pattern) не была зарегистрирована в главном сервере. Создан файл `m20260211_000002_create_sys_events.rs` и добавлен в `apps/server/migration/src/lib.rs`. | `apps/server/migration/src/` | 2.2 |
 | 15 | 🟡 Высокий | ✅ Исправлено | Rate limiting middleware существовал в `middleware/rate_limit.rs` но **не был подключён** к роутеру. Все auth endpoints были уязвимы к брутфорс-атакам. Исправлено: добавлен `axum_middleware::from_fn` с per-IP sliding window limiter (20 req/60 сек) для `/api/auth/login`, `/api/auth/register`, `/api/auth/reset/*` в `app.rs::after_routes()`. | `apps/server/src/app.rs`, `apps/server/src/middleware/rate_limit.rs` | 9.10, 18.1 |
+| 16 | 🟡 Высокий | ✅ Исправлено | Entity `product_variant` имел поля `tenant_id, inventory_policy, inventory_management, inventory_quantity, weight_unit, option1/2/3, position`, которых не было в миграции `m20250130_000014_create_commerce_variants`. Добавлена миграция `m20260301_000001_alter_product_variants_add_fields`. | `apps/server/migration/src/m20260301_000001_alter_product_variants_add_fields.rs` | 7.2, 20.5 |
+| 17 | 🟡 Высокий | ✅ Исправлено | Entity `node` имел поля `deleted_at` и `version`, которых не было в миграции `m20250130_000005_create_nodes`. Добавлена миграция `m20260301_000002_alter_nodes_add_soft_delete`. | `apps/server/migration/src/m20260301_000002_alter_nodes_add_soft_delete.rs` | 7.1, 20.5 |
+| 18 | 🟡 Высокий | ✅ Исправлено | `ContentIndexer::build_index_content()` и `ProductIndexer::index_one()` были stub-реализациями (return Ok(None/0)). Реализованы с реальными JOIN-запросами к БД и UPSERT в index_content/index_products. | `crates/rustok-index/src/content/indexer.rs`, `crates/rustok-index/src/product/indexer.rs` | 6.3, 7.7 |
+| 19 | 🟢 Низкий | ✅ Исправлено | `ModuleLifecycleService` использовал hardcoded `CORE_MODULE_SLUGS` массив вместо `registry.is_core()`. При добавлении нового Core-модуля нужно было обновлять два места. Исправлено: `validate_core_toggle()` удалён, проверка инлайнена через `registry.is_core()`. Тесты обновлены. | `apps/server/src/services/module_lifecycle.rs` | 5.4 |
+| 20 | 🟡 Высокий | ✅ Исправлено | `ProductIndexer::reindex_all()` содержал SQL-запрос `WHERE tenant_id = $1 AND deleted_at IS NULL` — но таблица `products` не имеет поля `deleted_at` (продукты удаляются через hard delete). Убрана несуществующая колонка из WHERE. | `crates/rustok-index/src/product/indexer.rs` | 7.7, 20.5 |
+| 21 | 🟢 Низкий | ✅ Исправлено | `ProductIndexer::build_index_product()` использовал небезопасный `as i32` cast для `agg.total_inventory` и `agg.variant_count` (тип `i64`). Исправлено: используется `i32::try_from().unwrap_or(i32::MAX)`. | `crates/rustok-index/src/product/indexer.rs` | 20.1 |
 
 ### 21.1 Детали: Проблема #2 — Небезопасная публикация событий в blog/forum
 

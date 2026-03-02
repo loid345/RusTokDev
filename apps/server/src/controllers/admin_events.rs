@@ -9,6 +9,7 @@ use sea_orm::{
     ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set,
 };
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::extractors::rbac::RequireLogsRead;
@@ -22,7 +23,7 @@ pub struct DlqQuery {
     pub limit: u64,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct DlqEventItem {
     pub id: Uuid,
     pub event_type: String,
@@ -32,18 +33,34 @@ pub struct DlqEventItem {
     pub created_at: DateTime<Utc>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct DlqListResponse {
     pub total: usize,
     pub items: Vec<DlqEventItem>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToSchema)]
 pub struct DlqReplayResponse {
     pub id: Uuid,
     pub status: &'static str,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/admin/events/dlq",
+    params(
+        ("tenant_id" = Option<Uuid>, Query, description = "Filter by tenant UUID"),
+        ("event_type" = Option<String>, Query, description = "Filter by event type"),
+        ("limit" = Option<u64>, Query, description = "Maximum number of results (1-200)"),
+    ),
+    responses(
+        (status = 200, description = "DLQ event list", body = DlqListResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "admin"
+)]
 pub async fn list_dlq(
     State(ctx): State<AppContext>,
     _user: RequireLogsRead,
@@ -101,6 +118,22 @@ pub async fn list_dlq(
     }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/admin/events/dlq/{id}/replay",
+    params(
+        ("id" = Uuid, Path, description = "DLQ event UUID to replay"),
+    ),
+    responses(
+        (status = 200, description = "Event requeued for processing", body = DlqReplayResponse),
+        (status = 400, description = "Event is not in failed status"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
+        (status = 404, description = "Event not found"),
+    ),
+    security(("bearer_auth" = [])),
+    tag = "admin"
+)]
 pub async fn replay_dlq_event(
     State(ctx): State<AppContext>,
     _user: RequireLogsRead,

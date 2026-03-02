@@ -24,6 +24,7 @@ use crate::seeds;
 use crate::services::event_transport_factory::{
     build_event_runtime, spawn_outbox_relay_worker, EventRuntime,
 };
+use crate::services::index_dispatcher::spawn_index_dispatcher;
 use crate::tasks;
 use loco_rs::prelude::Queue;
 use migration::Migrator;
@@ -72,6 +73,7 @@ impl Hooks for App {
     async fn after_routes(router: AxumRouter, ctx: &AppContext) -> Result<AxumRouter> {
         let event_runtime = build_event_runtime(ctx).await?;
         ctx.shared_store.insert(event_runtime.transport.clone());
+        spawn_index_dispatcher(ctx);
         ctx.shared_store.insert(Arc::new(event_runtime));
         let registry = modules::build_registry();
         modules::validate_registry_vs_manifest(&registry)?;

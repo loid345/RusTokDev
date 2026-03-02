@@ -1,11 +1,41 @@
 use async_trait::async_trait;
+use chrono::Utc;
 use rustok_core::events::{DomainEvent, EventEnvelope, EventHandler, HandlerResult};
-use sea_orm::DatabaseConnection;
-use tracing::{debug, info, instrument};
+use sea_orm::{DatabaseBackend, DatabaseConnection, FromQueryResult, Statement};
+use serde_json::Value as JsonValue;
+use tracing::{debug, info, instrument, warn};
 use uuid::Uuid;
 
+use crate::content::model::IndexContentModel;
 use crate::error::IndexResult;
 use crate::traits::{Indexer, IndexerContext, LocaleIndexer};
+
+/// Raw DB row for building index_content
+#[derive(Debug, FromQueryResult)]
+struct NodeRow {
+    id: Uuid,
+    tenant_id: Uuid,
+    parent_id: Option<Uuid>,
+    author_id: Option<Uuid>,
+    kind: String,
+    category_id: Option<Uuid>,
+    status: String,
+    position: i32,
+    depth: i32,
+    reply_count: i32,
+    published_at: Option<chrono::DateTime<chrono::FixedOffset>>,
+    created_at: chrono::DateTime<chrono::FixedOffset>,
+    updated_at: chrono::DateTime<chrono::FixedOffset>,
+    locale: Option<String>,
+    title: Option<String>,
+    slug: Option<String>,
+    excerpt: Option<String>,
+    body: Option<String>,
+    body_format: Option<String>,
+    category_name: Option<String>,
+    category_slug: Option<String>,
+    author_name: Option<String>,
+}
 
 /// Content indexer - listens to events and updates index_content table
 pub struct ContentIndexer {
@@ -17,6 +47,10 @@ impl ContentIndexer {
         Self { db }
     }
 
+    fn backend(&self) -> DatabaseBackend {
+        self.db.get_database_backend()
+    }
+
     /// Build denormalized content from normalized tables
     #[instrument(skip(self, ctx))]
     async fn build_index_content(
@@ -24,15 +58,298 @@ impl ContentIndexer {
         ctx: &IndexerContext,
         node_id: Uuid,
         locale: &str,
-    ) -> IndexResult<Option<super::model::IndexContentModel>> {
-        let _ = ctx;
-        debug!(node_id = %node_id, locale = locale, "Building index content");
-        Ok(None)
+    ) -> IndexResult<Option<IndexContentModel>> {
+        let stmt = Statement::from_sql_and_values(
+            self.backend(),
+            r#"
+            SELECT
+                n.id,
+                n.tenant_id,
+                n.parent_id,
+                n.author_id,
+                n.kind,
+                n.category_id,
+                n.status::text AS status,
+                n.position,
+                n.depth,
+                n.reply_count,
+                n.published_at,
+                n.created_at,
+                n.updated_at,
+                nt.locale,
+                nt.title,
+                nt.slug,
+                nt.excerpt,
+                b.body,
+                b.format AS body_format,
+                ct.name AS category_name,
+                ct.slug AS category_slug,
+                u.name AS author_name
+            FROM nodes n
+            LEFT JOIN node_translations nt
+                ON nt.node_id = n.id AND nt.locale = $3
+            LEFT JOIN bodies b
+                ON b.node_id = n.id AND b.locale = $3
+            LEFT JOIN category_translations ct
+                ON ct.category_id = n.category_id AND ct.locale = $3
+            LEFT JOIN users u
+                ON u.id = n.author_id
+            WHERE n.id = $1
+              AND n.tenant_id = $2
+              AND n.deleted_at IS NULL
+            "#,
+            vec![node_id.into(), ctx.tenant_id.into(), locale.into()],
+        );
+
+        let row = NodeRow::find_by_statement(stmt)
+            .one(&self.db)
+            .await
+            .map_err(crate::error::IndexError::from)?;
+
+        let row = match row {
+            Some(r) => r,
+            None => {
+                debug!(node_id = %node_id, locale = locale, "Node not found in DB, skipping index");
+                return Ok(None);
+            }
+        };
+
+        let tags: Vec<crate::content::model::IndexTag> =
+            self.load_node_tags(node_id).await.unwrap_or_default();
+
+        let model = IndexContentModel {
+            id: Uuid::new_v4(),
+            tenant_id: row.tenant_id,
+            node_id: row.id,
+            locale: row.locale.unwrap_or_else(|| locale.to_string()),
+            kind: row.kind,
+            status: row.status,
+            title: row.title,
+            slug: row.slug,
+            excerpt: row.excerpt,
+            body: row.body,
+            body_format: row.body_format,
+            author_id: row.author_id,
+            author_name: row.author_name,
+            author_avatar: None,
+            category_id: row.category_id,
+            category_name: row.category_name,
+            category_slug: row.category_slug,
+            tags,
+            meta_title: None,
+            meta_description: None,
+            og_image: None,
+            featured_image_url: None,
+            featured_image_alt: None,
+            parent_id: row.parent_id,
+            depth: row.depth,
+            position: row.position,
+            reply_count: row.reply_count,
+            view_count: 0,
+            published_at: row.published_at.map(|dt| dt.with_timezone(&Utc)),
+            created_at: row.created_at.with_timezone(&Utc),
+            updated_at: row.updated_at.with_timezone(&Utc),
+        };
+
+        Ok(Some(model))
+    }
+
+    async fn load_node_tags(
+        &self,
+        node_id: Uuid,
+    ) -> IndexResult<Vec<crate::content::model::IndexTag>> {
+        #[derive(FromQueryResult)]
+        struct TagRow {
+            id: Uuid,
+            name: String,
+            slug: String,
+        }
+
+        let stmt = Statement::from_sql_and_values(
+            self.backend(),
+            r#"
+            SELECT t.id, t.name, t.slug
+            FROM tags t
+            JOIN taggables tg ON tg.tag_id = t.id
+            WHERE tg.taggable_id = $1 AND tg.taggable_type = 'node'
+            "#,
+            vec![node_id.into()],
+        );
+
+        let rows = TagRow::find_by_statement(stmt)
+            .all(&self.db)
+            .await
+            .unwrap_or_default();
+
+        Ok(rows
+            .into_iter()
+            .map(|r| crate::content::model::IndexTag {
+                id: r.id,
+                name: r.name,
+                slug: r.slug,
+            })
+            .collect())
+    }
+
+    /// Upsert the index_content row
+    #[instrument(skip(self, model))]
+    async fn upsert_index_content(&self, model: &IndexContentModel) -> IndexResult<()> {
+        let tags_json = serde_json::to_value(&model.tags)
+            .unwrap_or(JsonValue::Array(vec![]));
+
+        let stmt = Statement::from_sql_and_values(
+            self.backend(),
+            r#"
+            INSERT INTO index_content (
+                id, tenant_id, node_id, locale, kind, status,
+                title, slug, excerpt, body, body_format,
+                author_id, author_name, author_avatar,
+                category_id, category_name, category_slug,
+                tags,
+                meta_title, meta_description, og_image,
+                featured_image_url, featured_image_alt,
+                parent_id, depth, position,
+                reply_count, view_count,
+                published_at, created_at, updated_at, indexed_at
+            ) VALUES (
+                $1, $2, $3, $4, $5, $6,
+                $7, $8, $9, $10, $11,
+                $12, $13, $14,
+                $15, $16, $17,
+                $18,
+                $19, $20, $21,
+                $22, $23,
+                $24, $25, $26,
+                $27, $28,
+                $29, $30, $31, NOW()
+            )
+            ON CONFLICT (node_id, locale) DO UPDATE SET
+                kind = EXCLUDED.kind,
+                status = EXCLUDED.status,
+                title = EXCLUDED.title,
+                slug = EXCLUDED.slug,
+                excerpt = EXCLUDED.excerpt,
+                body = EXCLUDED.body,
+                body_format = EXCLUDED.body_format,
+                author_id = EXCLUDED.author_id,
+                author_name = EXCLUDED.author_name,
+                author_avatar = EXCLUDED.author_avatar,
+                category_id = EXCLUDED.category_id,
+                category_name = EXCLUDED.category_name,
+                category_slug = EXCLUDED.category_slug,
+                tags = EXCLUDED.tags,
+                meta_title = EXCLUDED.meta_title,
+                meta_description = EXCLUDED.meta_description,
+                og_image = EXCLUDED.og_image,
+                featured_image_url = EXCLUDED.featured_image_url,
+                featured_image_alt = EXCLUDED.featured_image_alt,
+                parent_id = EXCLUDED.parent_id,
+                depth = EXCLUDED.depth,
+                position = EXCLUDED.position,
+                reply_count = EXCLUDED.reply_count,
+                view_count = EXCLUDED.view_count,
+                published_at = EXCLUDED.published_at,
+                updated_at = EXCLUDED.updated_at,
+                indexed_at = NOW()
+            "#,
+            vec![
+                model.id.into(),
+                model.tenant_id.into(),
+                model.node_id.into(),
+                model.locale.clone().into(),
+                model.kind.clone().into(),
+                model.status.clone().into(),
+                model.title.clone().into(),
+                model.slug.clone().into(),
+                model.excerpt.clone().into(),
+                model.body.clone().into(),
+                model.body_format.clone().into(),
+                model.author_id.into(),
+                model.author_name.clone().into(),
+                model.author_avatar.clone().into(),
+                model.category_id.into(),
+                model.category_name.clone().into(),
+                model.category_slug.clone().into(),
+                tags_json.into(),
+                model.meta_title.clone().into(),
+                model.meta_description.clone().into(),
+                model.og_image.clone().into(),
+                model.featured_image_url.clone().into(),
+                model.featured_image_alt.clone().into(),
+                model.parent_id.into(),
+                model.depth.into(),
+                model.position.into(),
+                model.reply_count.into(),
+                model.view_count.into(),
+                model.published_at.into(),
+                model.created_at.into(),
+                model.updated_at.into(),
+            ],
+        );
+
+        self.db
+            .execute(stmt)
+            .await
+            .map(|_| ())
+            .map_err(crate::error::IndexError::from)
+    }
+
+    /// Remove all locales for a node from index_content
+    #[instrument(skip(self))]
+    async fn delete_node_from_index(&self, node_id: Uuid) -> IndexResult<()> {
+        let stmt = Statement::from_sql_and_values(
+            self.backend(),
+            "DELETE FROM index_content WHERE node_id = $1",
+            vec![node_id.into()],
+        );
+        self.db
+            .execute(stmt)
+            .await
+            .map(|_| ())
+            .map_err(crate::error::IndexError::from)
+    }
+
+    /// Remove a specific locale for a node from index_content
+    #[instrument(skip(self))]
+    async fn delete_node_locale_from_index(
+        &self,
+        node_id: Uuid,
+        locale: &str,
+    ) -> IndexResult<()> {
+        let stmt = Statement::from_sql_and_values(
+            self.backend(),
+            "DELETE FROM index_content WHERE node_id = $1 AND locale = $2",
+            vec![node_id.into(), locale.into()],
+        );
+        self.db
+            .execute(stmt)
+            .await
+            .map(|_| ())
+            .map_err(crate::error::IndexError::from)
     }
 
     async fn get_tenant_locales(&self, ctx: &IndexerContext) -> IndexResult<Vec<String>> {
-        let _ = ctx;
-        Ok(vec!["en".to_string()])
+        #[derive(FromQueryResult)]
+        struct LocaleRow {
+            locale: String,
+        }
+
+        let stmt = Statement::from_sql_and_values(
+            self.backend(),
+            "SELECT locale FROM tenant_locales WHERE tenant_id = $1",
+            vec![ctx.tenant_id.into()],
+        );
+
+        let rows = LocaleRow::find_by_statement(stmt)
+            .all(&self.db)
+            .await
+            .unwrap_or_default();
+
+        if rows.is_empty() {
+            Ok(vec!["en".to_string()])
+        } else {
+            Ok(rows.into_iter().map(|r| r.locale).collect())
+        }
     }
 }
 
@@ -57,13 +374,37 @@ impl Indexer for ContentIndexer {
     async fn remove_one(&self, ctx: &IndexerContext, entity_id: Uuid) -> IndexResult<()> {
         let _ = ctx;
         debug!(node_id = %entity_id, "Removing from content index");
-        Ok(())
+        self.delete_node_from_index(entity_id).await
     }
 
     #[instrument(skip(self, ctx))]
     async fn reindex_all(&self, ctx: &IndexerContext) -> IndexResult<u64> {
         info!(tenant_id = %ctx.tenant_id, "Reindexing all content");
-        Ok(0)
+
+        #[derive(FromQueryResult)]
+        struct IdRow {
+            id: Uuid,
+        }
+
+        let stmt = Statement::from_sql_and_values(
+            self.backend(),
+            "SELECT id FROM nodes WHERE tenant_id = $1 AND deleted_at IS NULL",
+            vec![ctx.tenant_id.into()],
+        );
+
+        let rows = IdRow::find_by_statement(stmt)
+            .all(&self.db)
+            .await
+            .unwrap_or_default();
+
+        let count = rows.len() as u64;
+        for row in rows {
+            if let Err(err) = self.index_one(ctx, row.id).await {
+                warn!(node_id = %row.id, error = %err, "Failed to reindex node");
+            }
+        }
+
+        Ok(count)
     }
 }
 
@@ -79,11 +420,13 @@ impl LocaleIndexer for ContentIndexer {
         let content = self.build_index_content(ctx, entity_id, locale).await?;
 
         match content {
-            Some(_model) => {
+            Some(model) => {
+                self.upsert_index_content(&model).await?;
                 debug!(node_id = %entity_id, locale = locale, "Indexed content");
             }
             None => {
-                self.remove_locale(ctx, entity_id, locale).await?;
+                self.delete_node_locale_from_index(entity_id, locale)
+                    .await?;
             }
         }
 
@@ -97,7 +440,7 @@ impl LocaleIndexer for ContentIndexer {
         locale: &str,
     ) -> IndexResult<()> {
         debug!(node_id = %entity_id, locale = locale, "Removed locale from content index");
-        Ok(())
+        self.delete_node_locale_from_index(entity_id, locale).await
     }
 }
 
@@ -160,7 +503,43 @@ impl EventHandler for ContentIndexer {
                 }
             }
 
+            DomainEvent::CategoryUpdated { category_id, .. } => {
+                self.reindex_category_nodes(&ctx, *category_id).await?;
+            }
+
             _ => {}
+        }
+
+        Ok(())
+    }
+}
+
+impl ContentIndexer {
+    async fn reindex_category_nodes(
+        &self,
+        ctx: &IndexerContext,
+        category_id: Uuid,
+    ) -> IndexResult<()> {
+        #[derive(FromQueryResult)]
+        struct IdRow {
+            id: Uuid,
+        }
+
+        let stmt = Statement::from_sql_and_values(
+            self.backend(),
+            "SELECT id FROM nodes WHERE tenant_id = $1 AND category_id = $2 AND deleted_at IS NULL",
+            vec![ctx.tenant_id.into(), category_id.into()],
+        );
+
+        let rows = IdRow::find_by_statement(stmt)
+            .all(&self.db)
+            .await
+            .unwrap_or_default();
+
+        for row in rows {
+            if let Err(err) = self.index_one(ctx, row.id).await {
+                warn!(node_id = %row.id, error = %err, "Failed to reindex node after category update");
+            }
         }
 
         Ok(())
