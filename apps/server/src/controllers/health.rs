@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::net::TcpStream;
 use tokio::sync::Mutex;
+use utoipa::ToSchema;
 
 use crate::common::settings::RustokSettings;
 use crate::middleware::tenant::tenant_cache_stats;
@@ -38,11 +39,11 @@ enum DependencyCriticality {
     NonCritical,
 }
 
-#[derive(Debug, Clone, Serialize)]
-struct HealthResponse {
-    status: &'static str,
-    app: &'static str,
-    version: &'static str,
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct HealthResponse {
+    pub status: &'static str,
+    pub app: &'static str,
+    pub version: &'static str,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -63,17 +64,17 @@ struct ReadinessResponse {
     degraded_reasons: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize)]
-struct ModuleHealth {
-    slug: String,
-    name: String,
-    status: String,
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ModuleHealth {
+    pub slug: String,
+    pub name: String,
+    pub status: String,
 }
 
-#[derive(Debug, Clone, Serialize)]
-struct ModulesHealthResponse {
-    status: &'static str,
-    modules: Vec<ModuleHealth>,
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct ModulesHealthResponse {
+    pub status: &'static str,
+    pub modules: Vec<ModuleHealth>,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -83,6 +84,14 @@ struct CircuitState {
 }
 
 /// GET /health - Basic health check
+#[utoipa::path(
+    get,
+    path = "/health",
+    tag = "health",
+    responses(
+        (status = 200, description = "Service is healthy", body = HealthResponse)
+    )
+)]
 pub async fn health() -> Result<Response> {
     format::json(HealthResponse {
         status: "ok",
@@ -93,12 +102,28 @@ pub async fn health() -> Result<Response> {
 
 /// GET /health/live - K8s liveness probe
 /// Always returns 200 if the process is running
+#[utoipa::path(
+    get,
+    path = "/health/live",
+    tag = "health",
+    responses(
+        (status = 200, description = "Process is alive")
+    )
+)]
 pub async fn live() -> Result<Response> {
     format::json(serde_json::json!({ "status": "ok" }))
 }
 
 /// GET /health/ready - K8s readiness probe
 /// Checks critical and non-critical infrastructure dependencies and module health.
+#[utoipa::path(
+    get,
+    path = "/health/ready",
+    tag = "health",
+    responses(
+        (status = 200, description = "Readiness status with detailed dependency checks")
+    )
+)]
 pub async fn ready(
     State(ctx): State<AppContext>,
     Extension(registry): Extension<ModuleRegistry>,
@@ -173,6 +198,14 @@ pub async fn ready(
 
 /// GET /health/modules - Module health aggregation
 /// Reports health status of all registered modules
+#[utoipa::path(
+    get,
+    path = "/health/modules",
+    tag = "health",
+    responses(
+        (status = 200, description = "Module health statuses", body = ModulesHealthResponse)
+    )
+)]
 pub async fn modules(Extension(registry): Extension<ModuleRegistry>) -> Result<Response> {
     let mut modules_health = Vec::new();
     let mut overall_healthy = true;

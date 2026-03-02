@@ -1,0 +1,91 @@
+use sea_orm_migration::prelude::*;
+
+#[derive(DeriveMigrationName)]
+pub struct Migration;
+
+#[async_trait::async_trait]
+impl MigrationTrait for Migration {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .alter_table(
+                Table::alter()
+                    .table(ProductVariants::Table)
+                    .add_column_if_not_exists(ColumnDef::new(ProductVariants::TenantId).uuid())
+                    .add_column_if_not_exists(
+                        ColumnDef::new(ProductVariants::InventoryPolicy)
+                            .string_len(32)
+                            .not_null()
+                            .default("deny"),
+                    )
+                    .add_column_if_not_exists(
+                        ColumnDef::new(ProductVariants::InventoryManagement)
+                            .string_len(32)
+                            .not_null()
+                            .default("rustok"),
+                    )
+                    .add_column_if_not_exists(
+                        ColumnDef::new(ProductVariants::InventoryQuantity)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .add_column_if_not_exists(ColumnDef::new(ProductVariants::WeightUnit).string_len(16))
+                    .add_column_if_not_exists(ColumnDef::new(ProductVariants::Option1).string_len(255))
+                    .add_column_if_not_exists(ColumnDef::new(ProductVariants::Option2).string_len(255))
+                    .add_column_if_not_exists(ColumnDef::new(ProductVariants::Option3).string_len(255))
+                    .add_column_if_not_exists(
+                        ColumnDef::new(ProductVariants::Position)
+                            .integer()
+                            .not_null()
+                            .default(0),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_variants_tenant_id")
+                    .table(ProductVariants::Table)
+                    .col(ProductVariants::TenantId)
+                    .to_owned(),
+            )
+            .await?;
+
+        Ok(())
+    }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .alter_table(
+                Table::alter()
+                    .table(ProductVariants::Table)
+                    .drop_column(ProductVariants::TenantId)
+                    .drop_column(ProductVariants::InventoryPolicy)
+                    .drop_column(ProductVariants::InventoryManagement)
+                    .drop_column(ProductVariants::InventoryQuantity)
+                    .drop_column(ProductVariants::WeightUnit)
+                    .drop_column(ProductVariants::Option1)
+                    .drop_column(ProductVariants::Option2)
+                    .drop_column(ProductVariants::Option3)
+                    .drop_column(ProductVariants::Position)
+                    .to_owned(),
+            )
+            .await
+    }
+}
+
+#[derive(Iden)]
+enum ProductVariants {
+    Table,
+    TenantId,
+    InventoryPolicy,
+    InventoryManagement,
+    InventoryQuantity,
+    WeightUnit,
+    Option1,
+    Option2,
+    Option3,
+    Position,
+}

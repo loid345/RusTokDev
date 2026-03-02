@@ -27,6 +27,8 @@ mod m20250201_000001_alter_status_to_enums;
 mod m20250212_000001_create_builds_and_releases;
 mod m20260211_000001_add_event_versioning;
 mod m20260211_000002_create_sys_events;
+mod m20260301_000001_alter_product_variants_add_fields;
+mod m20260301_000002_alter_nodes_add_soft_delete;
 
 pub struct Migrator;
 
@@ -59,6 +61,8 @@ impl MigratorTrait for Migrator {
             Box::new(m20260211_000001_add_event_versioning::Migration),
             Box::new(m20250212_000001_create_builds_and_releases::Migration),
             Box::new(m20260211_000002_create_sys_events::Migration),
+            Box::new(m20260301_000001_alter_product_variants_add_fields::Migration),
+            Box::new(m20260301_000002_alter_nodes_add_soft_delete::Migration),
         ]
     }
 }

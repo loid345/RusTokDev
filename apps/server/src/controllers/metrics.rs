@@ -21,6 +21,16 @@ static RBAC_CONSISTENCY_QUERY_FAILURES_TOTAL: AtomicU64 = AtomicU64::new(0);
 static RBAC_CONSISTENCY_QUERY_LATENCY_MS_TOTAL: AtomicU64 = AtomicU64::new(0);
 static RBAC_CONSISTENCY_QUERY_LATENCY_SAMPLES: AtomicU64 = AtomicU64::new(0);
 
+/// GET /metrics - Prometheus metrics endpoint
+#[utoipa::path(
+    get,
+    path = "/metrics",
+    tag = "observability",
+    responses(
+        (status = 200, description = "Prometheus metrics in text format", content_type = "text/plain"),
+        (status = 503, description = "Metrics collection disabled")
+    )
+)]
 pub async fn metrics(State(ctx): State<AppContext>) -> Result<Response> {
     match rustok_telemetry::metrics_handle() {
         Some(handle) => {
