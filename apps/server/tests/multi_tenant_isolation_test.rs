@@ -65,9 +65,11 @@ async fn list_nodes_is_scoped_by_tenant() {
         status: None,
         parent_id: None,
         author_id: None,
+        category_id: None,
         locale: Some("en".to_string()),
         page: 1,
         per_page: 10,
+        include_deleted: false,
     };
 
     let (tenant1_nodes, tenant1_total) = service
