@@ -149,8 +149,8 @@ impl ProductIndexer {
             compare_at_price_max: None,
             on_sale: false,
             in_stock: agg.in_stock,
-            total_inventory: agg.total_inventory as i32,
-            variant_count: agg.variant_count as i32,
+            total_inventory: i32::try_from(agg.total_inventory).unwrap_or(i32::MAX),
+            variant_count: i32::try_from(agg.variant_count).unwrap_or(i32::MAX),
             options: vec![],
             thumbnail_url: None,
             images: vec![],
@@ -371,7 +371,7 @@ impl Indexer for ProductIndexer {
 
         let stmt = Statement::from_sql_and_values(
             self.backend(),
-            "SELECT id FROM products WHERE tenant_id = $1 AND deleted_at IS NULL",
+            "SELECT id FROM products WHERE tenant_id = $1",
             vec![ctx.tenant_id.into()],
         );
 

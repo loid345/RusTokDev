@@ -1465,7 +1465,8 @@
 - [ ] ID типы используют newtype pattern (`TenantId(Uuid)`) — не голые `Uuid`
 - [ ] Status поля — enum, не `String`
 - [ ] Phantom types для state-aware structs (если применимо)
-- [ ] Нет `as` casts для числовых типов без проверки (use `TryFrom`)
+- [~] Нет `as` casts для числовых типов без проверки (use `TryFrom`)
+  - Исправлено в ProductIndexer: `agg.total_inventory as i32` и `agg.variant_count as i32` → `i32::try_from().unwrap_or(i32::MAX)` (Issue #21)
 
 ### 20.2 Concurrency correctness
 
@@ -1490,7 +1491,8 @@
 
 ### 20.5 Migration correctness
 
-- [ ] Каждая миграция имеет `up()` и `down()` (reversible)
+- [x] Каждая миграция имеет `up()` и `down()` (reversible)
+  - Проверено: все ALTER TABLE миграции (m20260301_*) имеют корректный down()
 - [ ] Foreign keys с `ON DELETE CASCADE` или `ON DELETE SET NULL` (не orphans)
 - [ ] Indexes на часто фильтруемые поля (`tenant_id`, `slug`, `status`)
 - [ ] `UNIQUE` constraints где бизнес-логика требует уникальности
@@ -1523,6 +1525,8 @@
 | 17 | 🟡 Высокий | ✅ Исправлено | Entity `node` имел поля `deleted_at` и `version`, которых не было в миграции `m20250130_000005_create_nodes`. Добавлена миграция `m20260301_000002_alter_nodes_add_soft_delete`. | `apps/server/migration/src/m20260301_000002_alter_nodes_add_soft_delete.rs` | 7.1, 20.5 |
 | 18 | 🟡 Высокий | ✅ Исправлено | `ContentIndexer::build_index_content()` и `ProductIndexer::index_one()` были stub-реализациями (return Ok(None/0)). Реализованы с реальными JOIN-запросами к БД и UPSERT в index_content/index_products. | `crates/rustok-index/src/content/indexer.rs`, `crates/rustok-index/src/product/indexer.rs` | 6.3, 7.7 |
 | 19 | 🟢 Низкий | ✅ Исправлено | `ModuleLifecycleService` использовал hardcoded `CORE_MODULE_SLUGS` массив вместо `registry.is_core()`. При добавлении нового Core-модуля нужно было обновлять два места. Исправлено: `validate_core_toggle()` удалён, проверка инлайнена через `registry.is_core()`. Тесты обновлены. | `apps/server/src/services/module_lifecycle.rs` | 5.4 |
+| 20 | 🟡 Высокий | ✅ Исправлено | `ProductIndexer::reindex_all()` содержал SQL-запрос `WHERE tenant_id = $1 AND deleted_at IS NULL` — но таблица `products` не имеет поля `deleted_at` (продукты удаляются через hard delete). Убрана несуществующая колонка из WHERE. | `crates/rustok-index/src/product/indexer.rs` | 7.7, 20.5 |
+| 21 | 🟢 Низкий | ✅ Исправлено | `ProductIndexer::build_index_product()` использовал небезопасный `as i32` cast для `agg.total_inventory` и `agg.variant_count` (тип `i64`). Исправлено: используется `i32::try_from().unwrap_or(i32::MAX)`. | `crates/rustok-index/src/product/indexer.rs` | 20.1 |
 
 ### 21.1 Детали: Проблема #2 — Небезопасная публикация событий в blog/forum
 
