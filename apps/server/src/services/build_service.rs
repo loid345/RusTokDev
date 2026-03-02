@@ -13,8 +13,8 @@ use async_trait::async_trait;
 use chrono::Utc;
 use rustok_core::{events::DomainEvent, EventBus};
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder, Set,
-    QuerySelect, TransactionTrait,
+    ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
+    QuerySelect, Set, TransactionTrait,
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
