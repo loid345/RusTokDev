@@ -16,6 +16,7 @@
     "plugins": [{ "name": "next" }],
     "baseUrl": ".",
     "paths": {
+      "react/jsx-runtime": ["./node_modules/@types/react/jsx-runtime.d.ts"],
       "@/components/*": ["src/components/*"],
       "@/shared/*": ["src/shared/*"],
       "@/modules": ["src/modules/index.ts"],
