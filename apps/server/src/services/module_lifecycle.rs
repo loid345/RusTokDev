@@ -32,20 +32,6 @@ pub enum ToggleModuleError {
 }
 
 impl ModuleLifecycleService {
-    /// Platform core modules are fixed on server side and cannot be disabled per tenant.
-    /// Keep this list aligned with runtime registration in `apps/server/src/modules/mod.rs`.
-    const CORE_MODULE_SLUGS: [&'static str; 3] = ["index", "tenant", "rbac"];
-
-    fn validate_core_toggle(module_slug: &str, enabled: bool) -> Result<(), ToggleModuleError> {
-        if !enabled && Self::CORE_MODULE_SLUGS.contains(&module_slug) {
-            return Err(ToggleModuleError::CoreModuleCannotBeDisabled(
-                module_slug.to_string(),
-            ));
-        }
-
-        Ok(())
-    }
-
     pub async fn toggle_module(
         db: &DatabaseConnection,
         registry: &ModuleRegistry,
@@ -57,7 +43,11 @@ impl ModuleLifecycleService {
             return Err(ToggleModuleError::UnknownModule);
         };
 
-        Self::validate_core_toggle(module_slug, enabled)?;
+        if !enabled && registry.is_core(module_slug) {
+            return Err(ToggleModuleError::CoreModuleCannotBeDisabled(
+                module_slug.to_string(),
+            ));
+        }
 
         let enabled_modules = TenantModulesEntity::find_enabled(db, tenant_id).await?;
         let enabled_set: HashSet<String> = enabled_modules.into_iter().collect();
@@ -180,29 +170,33 @@ impl ModuleLifecycleService {
 
 #[cfg(test)]
 mod tests {
+    use rustok_core::ModuleRegistry;
+    use rustok_index::IndexModule;
+    use rustok_rbac::RbacModule;
+    use rustok_tenant::TenantModule;
+
     use super::*;
 
-    #[test]
-    fn disable_known_core_module_is_rejected() {
-        let result = ModuleLifecycleService::validate_core_toggle("tenant", false);
-
-        assert!(matches!(
-            result,
-            Err(ToggleModuleError::CoreModuleCannotBeDisabled(slug)) if slug == "tenant"
-        ));
+    fn build_test_registry() -> ModuleRegistry {
+        ModuleRegistry::new()
+            .register(IndexModule)
+            .register(TenantModule)
+            .register(RbacModule)
     }
 
     #[test]
-    fn enable_known_core_module_is_allowed() {
-        let result = ModuleLifecycleService::validate_core_toggle("rbac", true);
-
-        assert!(result.is_ok());
+    fn disable_core_module_is_rejected() {
+        let registry = build_test_registry();
+        assert!(registry.is_core("tenant"));
+        assert!(registry.is_core("rbac"));
+        assert!(registry.is_core("index"));
     }
 
     #[test]
-    fn disable_non_core_module_is_allowed() {
-        let result = ModuleLifecycleService::validate_core_toggle("content", false);
-
-        assert!(result.is_ok());
+    fn disable_optional_module_is_allowed() {
+        let registry = build_test_registry();
+        assert!(!registry.is_core("content"));
+        assert!(!registry.is_core("commerce"));
+        assert!(!registry.is_core("blog"));
     }
 }

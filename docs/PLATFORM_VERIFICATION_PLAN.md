@@ -373,7 +373,12 @@
 
 ### 5.3 Tenant Isolation в данных
 
-- [ ] **Все** domain-таблицы имеют поле `tenant_id`
+- [x] **Все** domain-таблицы имеют поле `tenant_id` (проверено по миграциям):
+  - `nodes`, `products`, `product_variants` — `tenant_id` NOT NULL + FK + индексы
+  - `categories`, `category_translations`, `tags`, `tag_translations` — `tenant_id` NOT NULL
+  - `stock_locations`, `price_lists`, `regions`, `collections`, `commerce_categories` — `tenant_id` NOT NULL
+  - `media`, `metas`, `index_content`, `index_products` — `tenant_id` NOT NULL
+  - `product_options`, `variant_option_values` — изолируются через parent FK
 - [x] **Все** SELECT-запросы в сервисах фильтруют по `tenant_id` — NodeService.find_node добавляет .filter(TenantId.eq(tenant_id)), tenant_id передаётся во все методы content/blog/forum/pages
 - [x] **Все** INSERT-запросы проставляют `tenant_id` — create_node, create_post, create_topic принимают tenant_id первым параметром
 - [x] Нет cross-tenant data leaks — исправлено в NodeService, PostService, TopicService, ReplyService, CategoryService, PageService, BlockService, MenuService, ModerationService
@@ -384,8 +389,8 @@
 
 - [x] Таблица `tenant_modules` имеет schema: `id, tenant_id, module_slug, enabled, settings, created_at, updated_at`
 - [x] UNIQUE constraint на `(tenant_id, module_slug)`
-- [ ] `toggle_module()` проверяет зависимости перед отключением
-- [ ] Core-модули нельзя отключить
+- [x] `toggle_module()` проверяет зависимости перед отключением — при enable: MissingDependencies; при disable: HasDependents
+- [x] Core-модули нельзя отключить — использует `registry.is_core()` вместо hardcoded slug-списка (Issue #19)
 
 ### 5.5 Cross-instance Cache Invalidation (Redis mode)
 
@@ -1294,7 +1299,7 @@
 - [x] Поиск `publish(` без `_in_tx` в domain services — нарушений не найдено
   - Все сервисы используют `publish_in_tx()` корректно
 - [x] REST controllers: `variants.rs` исправлен — все три операции (create/update/delete) используют `publish_in_tx()` внутри транзакции
-- [ ] Проверка: каждый DomainEvent в crates содержит `tenant_id` field
+- [x] `tenant_id` в DomainEvent — не нужен в самих вариантах: `tenant_id` передаётся через `EventEnvelope.tenant_id` (правильная архитектура — tenant на уровне конверта, не внутри payload каждого события)
 
 #### Hardcoded secrets
 - [x] Поиск hardcoded passwords/secrets/keys в Rust коде — нарушений нет
@@ -1517,6 +1522,7 @@
 | 16 | 🟡 Высокий | ✅ Исправлено | Entity `product_variant` имел поля `tenant_id, inventory_policy, inventory_management, inventory_quantity, weight_unit, option1/2/3, position`, которых не было в миграции `m20250130_000014_create_commerce_variants`. Добавлена миграция `m20260301_000001_alter_product_variants_add_fields`. | `apps/server/migration/src/m20260301_000001_alter_product_variants_add_fields.rs` | 7.2, 20.5 |
 | 17 | 🟡 Высокий | ✅ Исправлено | Entity `node` имел поля `deleted_at` и `version`, которых не было в миграции `m20250130_000005_create_nodes`. Добавлена миграция `m20260301_000002_alter_nodes_add_soft_delete`. | `apps/server/migration/src/m20260301_000002_alter_nodes_add_soft_delete.rs` | 7.1, 20.5 |
 | 18 | 🟡 Высокий | ✅ Исправлено | `ContentIndexer::build_index_content()` и `ProductIndexer::index_one()` были stub-реализациями (return Ok(None/0)). Реализованы с реальными JOIN-запросами к БД и UPSERT в index_content/index_products. | `crates/rustok-index/src/content/indexer.rs`, `crates/rustok-index/src/product/indexer.rs` | 6.3, 7.7 |
+| 19 | 🟢 Низкий | ✅ Исправлено | `ModuleLifecycleService` использовал hardcoded `CORE_MODULE_SLUGS` массив вместо `registry.is_core()`. При добавлении нового Core-модуля нужно было обновлять два места. Исправлено: `validate_core_toggle()` удалён, проверка инлайнена через `registry.is_core()`. Тесты обновлены. | `apps/server/src/services/module_lifecycle.rs` | 5.4 |
 
 ### 21.1 Детали: Проблема #2 — Небезопасная публикация событий в blog/forum
 
