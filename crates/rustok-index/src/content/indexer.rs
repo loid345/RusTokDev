@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use chrono::Utc;
 use rustok_core::events::{DomainEvent, EventEnvelope, EventHandler, HandlerResult};
-use sea_orm::{DatabaseBackend, DatabaseConnection, FromQueryResult, Statement};
+use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, FromQueryResult, Statement};
 use serde_json::Value as JsonValue;
 use tracing::{debug, info, instrument, warn};
 use uuid::Uuid;
