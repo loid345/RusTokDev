@@ -3,26 +3,40 @@
 > Статус: RFC / Дорожная карта
 > Дата: 2026-03-03
 
-## Контекст
+## Философия
 
-RusTok использует **compile-time модульность**: все модули линкуются в бинарник
-при сборке через `ModuleRegistry`. Включение/отключение модуля из админки на
-уровне tenant — это **runtime-операция** (запись в `tenant_modules`), которая не
-требует пересборки. Установка/удаление модуля из состава платформы — это
-**build-time операция**, требующая пересборки бинарника.
+Для администратора управление модулями выглядит **одинаково** — как в WordPress:
+одна страница, кнопка "Включить/Отключить", кнопка "Установить/Удалить".
+Неважно, как собрана платформа (единый бинарник, разнесённые фронтенды, K8s).
 
-Нужно различать два уровня:
+Единственное видимое отличие от WordPress — **время на пересборку** при
+установке/удалении модуля (Rust компилирует AOT, PHP подгружает файлы JIT).
+Это компенсируется прогресс-баром и уведомлением по завершении.
 
-| Уровень | Действие | Требует пересборки |
-|---|---|---|
-| **Tenant-level** | Включить/отключить модуль для конкретного тенанта | Нет |
-| **Platform-level** | Установить/удалить модуль из состава платформы | Да |
+```
+┌─────────────────────────────────────────────────────┐
+│  WordPress      │  RusTok                           │
+├─────────────────┼───────────────────────────────────┤
+│  Включить       │  Toggle switch → мгновенно        │
+│  Отключить      │  Toggle switch → мгновенно        │
+│  Установить     │  Install → пересборка (минуты)    │
+│  Удалить        │  Uninstall → пересборка (минуты)  │
+│  Маркетплейс    │  Каталог → стандарт module.toml   │
+└─────────────────┴───────────────────────────────────┘
+```
+
+Два уровня операций — один UX:
+
+| Уровень | Действие | Время | UX |
+|---|---|---|---|
+| **Tenant-level** | Включить/отключить для тенанта | Мгновенно | Toggle switch |
+| **Platform-level** | Установить/удалить из платформы | 2-5 мин (сборка) | Кнопка + прогресс-бар |
 
 ---
 
-## Часть 1: Tenant-level toggle (текущая реализация)
+## Часть 1: Tenant-level toggle (реализовано)
 
-### Как это работает сейчас
+### Текущий flow
 
 1. Админ нажимает Switch в UI модулей (`/modules`).
 2. Leptos-клиент отправляет GraphQL мутацию `toggleModule(moduleSlug, enabled)`.
@@ -35,75 +49,86 @@ RusTok использует **compile-time модульность**: все мо
    - При ошибке хука — откат состояния.
 4. UI получает обновлённый статус и обновляет карточку модуля.
 
-### Влияние на UI (Leptos admin + storefront)
-
-- **Навигация**: сайдбар может фильтровать пункты меню на основе `enabledModules`
-  (GraphQL query). Если модуль отключён — его nav items скрыты.
-- **Слоты виджетов**: `components_for_slot()` может фильтровать по enabled
-  модулям (требует расширения реестра).
-- **Роутинг**: защита маршрутов — если модуль отключён, middleware/guard
-  перенаправляет на 404.
-
 ### Что нужно доработать (Tenant-level)
 
-1. **`enabledModules` контекст в Leptos admin/storefront**:
-   - Создать `EnabledModulesProvider` — загружает список при старте через
-     `enabledModules` query.
-   - Предоставляет `use_enabled_modules()` хук.
-   - Используется в sidebar для условного рендера nav items.
+1. **`EnabledModulesProvider` контекст в Leptos admin/storefront**:
+   - Загружает `enabledModules` query при старте.
+   - `use_enabled_modules()` хук для всех компонентов.
+   - Sidebar фильтрует nav items по enabled модулям.
 
-2. **Guard для маршрутов**:
-   - `<ModuleGuard slug="blog">` — компонент-обёртка, который проверяет
-     enabled статус и показывает контент или 404/placeholder.
+2. **`<ModuleGuard slug="blog">`** — компонент-обёртка для маршрутов:
+   - Проверяет enabled статус → показывает контент или 404/placeholder.
 
-3. **Фильтрация слотов по enabled модулям**:
-   - Расширить `AdminComponentRegistration` полем `module_slug: Option<&'static str>`.
-   - `components_for_slot()` фильтрует по `enabled_modules` из контекста.
+3. **Фильтрация слотов** — `components_for_slot()` фильтрует по `enabled_modules`.
 
 ---
 
 ## Часть 2: Platform-level install/uninstall (rebuild pipeline)
 
-### Архитектура
+### Архитектура — WordPress-подобный UX
+
+Для пользователя install/uninstall выглядит как одна кнопка:
 
 ```
-┌──────────┐     ┌──────────────┐     ┌───────────────┐     ┌──────────┐
-│  Admin   │────>│ Build Service│────>│ Artifact Store │────>│  Deploy  │
-│  UI      │     │ (CI/CD)      │     │ (Registry)     │     │ (K8s)    │
-└──────────┘     └──────────────┘     └───────────────┘     └──────────┘
-      │                 │                                          │
-      │  1. Обновить    │  2. cargo build                         │
-      │  modules.toml   │  3. docker build                        │
-      │                 │  4. push image                          │
-      └─────────────────┴──────────────────────────────────────────┘
-                        5. deploy & smoke check
+┌──────────────────────────────────────────────────────────────┐
+│  Admin UI                                                     │
+│                                                               │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │  Blog Module v1.2.0                     [Установить]    │ │
+│  │  Блоговый движок с категориями и тегами                 │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│                         ↓ клик                               │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │  Blog Module v1.2.0                                     │ │
+│  │  ████████████░░░░░░░░░░░░  45%  Компиляция...           │ │
+│  └─────────────────────────────────────────────────────────┘ │
+│                         ↓ готово                             │
+│  ┌─────────────────────────────────────────────────────────┐ │
+│  │  Blog Module v1.2.0            [●] Вкл    [Удалить]     │ │
+│  │  Блоговый движок с категориями и тегами                 │ │
+│  └─────────────────────────────────────────────────────────┘ │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-### Этапы реализации
+### Pipeline: что происходит за кулисами
 
-#### Этап 1: Build Service API (GraphQL)
+```
+Admin UI → GraphQL → Build Service → CI/CD → Artifact → Deploy
+   │                     │                       │          │
+   │ 1. installModule    │ 2. update             │          │
+   │    slug + version   │    modules.toml       │          │
+   │                     │ 3. cargo build         │          │
+   │ 4. subscription     │    --features=...     │          │
+   │    buildProgress    │ 5. docker build        │          │
+   │    ██████░░ 60%     │ 6. push image          │          │
+   │                     │                       │          │
+   │ 7. completed        │                       │ 8. deploy│
+   │    toast: "ready"   │                       │ rolling  │
+   └─────────────────────┴───────────────────────┴──────────┘
+```
 
-Все API — через GraphQL, без REST эндпоинтов.
+### GraphQL API (Build Service)
 
 ```graphql
 type BuildJob {
   id: ID!
   status: BuildStatus!
-  stage: String
-  progress: Int
+  stage: String            # "compiling", "testing", "packaging", "deploying"
+  progress: Int            # 0-100
   logsUrl: String
   startedAt: DateTime
   finishedAt: DateTime
   manifestHash: String!
-  modulesDelta: String!
+  modulesDelta: String!    # "+blog,-forum"
   requestedBy: String!
   reason: String!
 }
 
 enum BuildStatus {
   QUEUED
-  BUILDING
+  COMPILING
   TESTING
+  PACKAGING
   DEPLOYING
   COMPLETED
   FAILED
@@ -111,47 +136,48 @@ enum BuildStatus {
 }
 
 type Mutation {
-  # Инициировать сборку после изменения modules.toml
-  requestBuild(input: RequestBuildInput!): BuildJob!
+  # Установить модуль из маркетплейса → запускает сборку
+  installModule(slug: String!, version: String!): BuildJob!
 
-  # Деплой конкретной сборки
-  deployBuild(buildId: ID!, environment: String!): BuildJob!
+  # Удалить модуль → запускает сборку без него
+  uninstallModule(slug: String!): BuildJob!
+
+  # Обновить модуль до новой версии
+  upgradeModule(slug: String!, version: String!): BuildJob!
 
   # Откат к предыдущему релизу
-  rollbackBuild(buildId: ID!, targetRelease: String!): BuildJob!
+  rollbackBuild(buildId: ID!): BuildJob!
 }
 
 type Query {
-  # Статус сборки
-  buildJob(id: ID!): BuildJob
+  # Текущая сборка
+  activeBuild: BuildJob
 
   # История сборок
-  buildJobs(limit: Int, offset: Int): [BuildJob!]!
+  buildHistory(limit: Int, offset: Int): [BuildJob!]!
 
-  # Каталог доступных модулей (marketplace)
-  availableModules: [AvailableModule!]!
+  # Каталог доступных модулей (маркетплейс)
+  marketplace(search: String, category: String): [MarketplaceModule!]!
+
+  # Установленные модули платформы
+  installedModules: [InstalledModule!]!
 }
 
 type Subscription {
-  # Реальтайм обновления статуса сборки
+  # Реальтайм прогресс сборки
   buildProgress(buildId: ID!): BuildJob!
 }
 ```
 
-#### Этап 2: Manifest Manager
+### Manifest Manager
 
-Сервис для работы с `modules.toml`:
-
-1. **Чтение** текущего манифеста.
-2. **Добавление** модуля: парсинг → добавление записи → валидация → запись.
-3. **Удаление** модуля: проверка зависимостей → удаление → запись.
-4. **Diff**: сравнение двух манифестов для отображения в UI.
+Сервис для работы с `modules.toml` — единый source of truth для состава платформы:
 
 ```rust
 pub struct ManifestManager;
 
 impl ManifestManager {
-    /// Добавить модуль в манифест
+    /// Добавить модуль в манифест (из маркетплейса или локально)
     pub fn install_module(
         manifest: &mut Manifest,
         slug: &str,
@@ -164,70 +190,32 @@ impl ManifestManager {
         slug: &str,
     ) -> Result<ManifestDiff>;
 
+    /// Обновить версию модуля
+    pub fn upgrade_module(
+        manifest: &mut Manifest,
+        slug: &str,
+        new_version: &str,
+    ) -> Result<ManifestDiff>;
+
     /// Валидировать граф зависимостей
     pub fn validate(manifest: &Manifest) -> Result<()>;
 }
 ```
 
-#### Этап 3: Build Orchestrator
+### Build Orchestrator
 
-Оркестратор сборки (может быть отдельным микросервисом или интеграцией с CI):
+Варианты реализации (выбор зависит от deployment profile):
 
-1. **Queue**: принимает запрос на сборку, помещает в очередь.
-2. **Build**: клонирует repo, применяет манифест, запускает `cargo build`.
-3. **Test**: запускает smoke-тесты.
-4. **Package**: собирает Docker-образ.
-5. **Deploy**: обновляет deployment.
+| Deployment | Build strategy |
+|---|---|
+| **Self-hosted** | Build worker (tokio::process) на том же сервере |
+| **CI/CD** | GitHub Actions / GitLab CI через API |
+| **Kubernetes** | Build как K8s Job с kaniko |
+| **Cloud** | Managed build service (Cloud Build, CodeBuild) |
 
-Варианты реализации:
-- **GitHub Actions / GitLab CI**: запускать pipeline через API.
-- **Встроенный**: минимальный build worker на базе `tokio::process::Command`.
-- **Kubernetes Job**: запускать build как K8s Job.
+### Cargo Features — автоматическая оптимизация
 
-#### Этап 4: UI для install/uninstall в Leptos admin
-
-Новая страница/секция в `/modules`:
-
-1. **Каталог модулей** — список доступных для установки модулей (из registry/marketplace).
-2. **Установленные модули** — текущий состав из `modules.toml`.
-3. **Install/Uninstall** — кнопки с подтверждением.
-4. **Build Progress** — realtime отображение статуса сборки (GraphQL Subscription).
-5. **История сборок** — лог предыдущих install/uninstall операций.
-
----
-
-## Часть 3: Leptos Storefront — модульные слоты
-
-### Текущий механизм
-
-Storefront использует `StorefrontSlot` enum для регистрации компонентов:
-- `HomeAfterHero` — слот после hero-секции на главной.
-
-### Расширение
-
-1. **Больше слотов**: `ProductPageSidebar`, `CartSummary`, `Footer`, etc.
-2. **Условная регистрация**: модуль регистрирует компоненты только если enabled.
-3. **SSR-совместимость**: storefront рендерится на сервере (Axum), поэтому
-   enabled-check должен быть на серверной стороне.
-
-```rust
-pub fn register_components(enabled_modules: &HashSet<String>) {
-    if enabled_modules.contains("blog") {
-        register_component(StorefrontComponentRegistration {
-            id: "blog-latest-posts",
-            slot: StorefrontSlot::HomeAfterHero,
-            order: 20,
-            render: blog_latest_posts_widget,
-        });
-    }
-}
-```
-
----
-
-## Часть 4: Cargo Features (опциональная оптимизация)
-
-Для уменьшения размера бинарника можно использовать Cargo features:
+Build service автоматически мапит `modules.toml` в cargo features:
 
 ```toml
 # apps/server/Cargo.toml
@@ -240,42 +228,401 @@ mod-pages = ["dep:rustok-pages"]
 mod-forum = ["dep:rustok-forum", "mod-content"]
 ```
 
-Build service активирует features на основе `modules.toml`:
-
 ```bash
+# Build service генерирует на основе modules.toml:
 cargo build --release --no-default-features \
   --features "mod-content,mod-blog,mod-pages"
 ```
 
-Это позволяет:
-- Не включать код неиспользуемых модулей в бинарник.
-- Уменьшить время компиляции.
-- Уменьшить размер Docker-образа.
+---
+
+## Часть 3: Маркетплейс модулей (единый стандарт)
+
+### Стандарт модуля — `rustok-module.toml`
+
+Каждый модуль (внутренний или сторонний) описывается единым манифестом:
+
+```toml
+[module]
+slug = "blog"
+name = "Blog"
+version = "1.2.0"
+description = "Blogging engine with categories, tags, and SEO"
+authors = ["RusTok Team"]
+license = "MIT"
+repository = "https://github.com/rustok/rustok-blog"
+homepage = "https://rustok.dev/modules/blog"
+
+# Иконка и скриншоты для маркетплейса
+icon = "assets/icon.svg"
+screenshots = ["assets/screenshot-1.png", "assets/screenshot-2.png"]
+
+[module.categories]
+primary = "content"       # content, commerce, analytics, social, dev-tools, integrations
+tags = ["blog", "cms", "seo", "markdown"]
+
+[compatibility]
+rustok_min = "0.5.0"      # Минимальная версия платформы
+rustok_max = "1.x"        # Максимальная совместимая версия
+rust_edition = "2024"
+
+[dependencies]
+# Зависимости от других RusTok-модулей
+content = ">= 1.0.0"
+
+[crate]
+# Rust crate — source of truth для компиляции
+name = "rustok-blog"
+source = "registry"       # "registry" | "git" | "path"
+registry = "https://modules.rustok.dev/api/v1/crates"
+# Или для git:
+# source = "git"
+# git = "https://github.com/rustok/rustok-blog.git"
+# branch = "main"
+
+[provides]
+# Что модуль предоставляет платформе
+
+# Слоты в admin UI (FSD: features layer)
+admin_nav = [
+  { label_key = "blog.nav.posts", href = "/posts", icon = "pencil" },
+  { label_key = "blog.nav.categories", href = "/categories", icon = "folder" },
+]
+
+# Слоты в storefront
+storefront_slots = [
+  { id = "blog-latest-posts", slot = "HomeAfterHero", order = 20 },
+  { id = "blog-sidebar-widget", slot = "Sidebar", order = 10 },
+]
+
+# GraphQL расширения
+graphql_types = ["Post", "Category", "Tag"]
+graphql_queries = ["posts", "post", "categories"]
+graphql_mutations = ["createPost", "updatePost", "deletePost"]
+
+# Миграции БД
+migrations = true
+
+# Permissions для RBAC
+permissions = [
+  "blog:read",
+  "blog:write",
+  "blog:delete",
+  "blog:publish",
+]
+
+# Event listeners
+events = ["content.created", "content.updated"]
+
+[settings]
+# Настройки модуля (JSON schema для UI генерации)
+[settings.posts_per_page]
+type = "integer"
+default = 10
+min = 1
+max = 100
+label = "Posts per page"
+
+[settings.enable_comments]
+type = "boolean"
+default = true
+label = "Enable comments"
+
+[settings.default_status]
+type = "enum"
+values = ["draft", "published"]
+default = "draft"
+label = "Default post status"
+```
+
+### Реестр маркетплейса — GraphQL API
+
+```graphql
+type MarketplaceModule {
+  slug: String!
+  name: String!
+  version: String!
+  description: String!
+  longDescription: String
+  authors: [String!]!
+  license: String!
+  repository: String
+  homepage: String
+
+  # Визуальные элементы
+  iconUrl: String
+  screenshots: [String!]!
+
+  # Категоризация
+  category: String!
+  tags: [String!]!
+
+  # Совместимость
+  rustokMinVersion: String!
+  rustokMaxVersion: String
+
+  # Зависимости от других модулей
+  dependencies: [ModuleDependency!]!
+
+  # Статистика (будущее)
+  downloads: Int
+  rating: Float
+  reviewCount: Int
+
+  # Версии
+  versions: [ModuleVersion!]!
+  latestVersion: String!
+
+  # Статус на текущей платформе
+  installed: Boolean!
+  installedVersion: String
+  updateAvailable: Boolean!
+}
+
+type ModuleDependency {
+  slug: String!
+  versionConstraint: String!
+  satisfied: Boolean!        # Выполнена ли зависимость на текущей платформе
+}
+
+type ModuleVersion {
+  version: String!
+  releasedAt: DateTime!
+  changelog: String
+  compatible: Boolean!       # Совместима с текущей версией RusTok
+}
+
+type Query {
+  # Каталог маркетплейса с поиском и фильтрацией
+  marketplace(
+    search: String
+    category: String
+    tag: String
+    compatible: Boolean      # Только совместимые с текущей версией
+    limit: Int
+    offset: Int
+  ): MarketplaceConnection!
+
+  # Детали модуля
+  marketplaceModule(slug: String!): MarketplaceModule
+
+  # Категории маркетплейса
+  marketplaceCategories: [MarketplaceCategory!]!
+
+  # Проверить совместимость перед установкой
+  checkCompatibility(slug: String!, version: String!): CompatibilityReport!
+}
+
+type CompatibilityReport {
+  compatible: Boolean!
+  issues: [CompatibilityIssue!]!
+  missingDependencies: [ModuleDependency!]!
+  willAutoInstall: [String!]!    # Зависимости, которые установятся автоматически
+}
+```
+
+### Архитектура реестра
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  Marketplace Registry (modules.rustok.dev)                   │
+│                                                              │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
+│  │ Module Index  │  │ Crate Mirror │  │  Validation  │      │
+│  │ (metadata)    │  │ (artifacts)  │  │  Pipeline    │      │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
+│         │                  │                  │               │
+│         ▼                  ▼                  ▼               │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │                 GraphQL API                           │   │
+│  │  marketplace { ... }                                  │   │
+│  │  publishModule { ... }                                │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+         ▲                          ▲
+         │ query                    │ publish
+         │                          │
+┌────────┴────────┐        ┌───────┴────────┐
+│  Admin UI       │        │  Module Author │
+│  (Leptos/Next)  │        │  (CLI)         │
+└─────────────────┘        └────────────────┘
+```
+
+### Публикация модуля (для авторов)
+
+```bash
+# CLI для публикации модулей в маркетплейс
+rustok module init                  # Scaffold rustok-module.toml
+rustok module validate              # Проверить манифест и зависимости
+rustok module test                  # Запустить тесты совместимости
+rustok module publish               # Опубликовать в маркетплейс
+rustok module publish --dry-run     # Проверить без публикации
+```
+
+### Validation Pipeline
+
+При публикации модуля в маркетплейс, pipeline проверяет:
+
+1. **Manifest** — валидный `rustok-module.toml`.
+2. **Compilation** — модуль компилируется с минимальной и максимальной версией RusTok.
+3. **Tests** — тесты модуля проходят.
+4. **Security** — cargo-audit, no unsafe без обоснования.
+5. **API contract** — реализует `RusToKModule` trait корректно.
+6. **Migrations** — миграции идемпотентны.
+7. **Metadata** — icon, description, license заполнены.
+
+---
+
+## Часть 4: Leptos Storefront — модульные слоты
+
+### Текущий механизм
+
+Storefront использует `StorefrontSlot` enum для регистрации компонентов:
+- `HomeAfterHero` — слот после hero-секции на главной.
+
+### Расширение слотов
+
+```rust
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub enum StorefrontSlot {
+    // Layout
+    HeaderAfterNav,
+    FooterBefore,
+
+    // Home page
+    HomeAfterHero,
+    HomeBeforeFooter,
+
+    // Product page
+    ProductPageSidebar,
+    ProductPageAfterDescription,
+
+    // Cart
+    CartSummaryAfter,
+    CartSidebarWidget,
+
+    // Checkout
+    CheckoutPaymentMethods,
+    CheckoutAfterOrder,
+
+    // Blog
+    BlogSidebar,
+
+    // Global
+    GlobalNotificationBar,
+}
+```
+
+### Условная регистрация
+
+```rust
+pub fn register_components(enabled_modules: &HashSet<String>) {
+    if enabled_modules.contains("blog") {
+        register_component(StorefrontComponentRegistration {
+            id: "blog-latest-posts",
+            slot: StorefrontSlot::HomeAfterHero,
+            order: 20,
+            render: blog_latest_posts_widget,
+        });
+    }
+    if enabled_modules.contains("commerce") {
+        register_component(StorefrontComponentRegistration {
+            id: "featured-products",
+            slot: StorefrontSlot::HomeAfterHero,
+            order: 30,
+            render: featured_products_widget,
+        });
+    }
+}
+```
+
+---
+
+## Часть 5: Единый стандарт модуля — checklist для авторов
+
+### Структура модуля
+
+```
+rustok-blog/
+├── rustok-module.toml            # Единый манифест (обязательно)
+├── Cargo.toml                    # Rust crate
+├── src/
+│   ├── lib.rs                    # impl RusToKModule for BlogModule
+│   ├── entities/                 # SeaORM entities
+│   ├── migration/                # Миграции
+│   ├── graphql/                  # GraphQL types, queries, mutations
+│   └── events/                   # Event handlers
+├── admin/                        # FSD-компоненты для admin UI (опционально)
+│   ├── features/
+│   │   └── blog/
+│   │       ├── components/       # UI компоненты
+│   │       └── api.rs            # GraphQL запросы
+│   └── pages/                    # Страницы для admin routing
+├── storefront/                   # Компоненты для storefront (опционально)
+│   └── widgets/
+│       └── latest_posts.rs       # Виджет для слотов
+├── locales/                      # i18n
+│   ├── en.json
+│   └── ru.json
+├── assets/                       # Для маркетплейса
+│   ├── icon.svg
+│   └── screenshot-1.png
+└── tests/
+    └── integration.rs
+```
+
+### Контракт модуля — что обязательно
+
+| Требование | Описание |
+|---|---|
+| `RusToKModule` trait | slug, name, description, version, kind, dependencies |
+| `MigrationSource` trait | Список миграций для SeaORM |
+| `rustok-module.toml` | Манифест с метаданными для маркетплейса |
+| `on_enable` / `on_disable` | Lifecycle hooks (могут быть no-op) |
+| Permissions | Список permissions для RBAC |
+| i18n | Локализации как минимум en.json |
+
+### Что опционально
+
+| Компонент | Описание |
+|---|---|
+| Admin UI components | Leptos-компоненты для FSD layers |
+| Storefront widgets | Компоненты для slot-системы |
+| Event listeners | Обработчики доменных событий |
+| Settings schema | JSON Schema для настроек модуля |
+| GraphQL extensions | Дополнительные типы, запросы, мутации |
 
 ---
 
 ## Приоритеты реализации
 
-| Приоритет | Задача | Сложность |
-|---|---|---|
-| P0 | Tenant-level toggle (уже работает) | Готово |
-| P0 | Leptos admin: страница модулей с toggle | Готово |
-| P1 | `EnabledModulesProvider` + conditional nav | Средняя |
-| P1 | `ModuleGuard` для маршрутов | Низкая |
-| P2 | Manifest Manager | Средняя |
-| P2 | Build Service API (GraphQL) | Высокая |
-| P3 | Build Orchestrator (CI integration) | Высокая |
-| P3 | UI install/uninstall + build progress | Средняя |
-| P4 | Cargo features optimization | Низкая |
-| P4 | Module marketplace/catalog | Высокая |
+| Приоритет | Задача | Сложность | Статус |
+|---|---|---|---|
+| P0 | Tenant-level toggle (backend) | — | Готово |
+| P0 | Leptos admin: страница модулей с toggle | — | Готово |
+| P0 | Next.js admin: страница модулей с toggle | — | Готово |
+| P1 | `EnabledModulesProvider` + conditional nav | Средняя | — |
+| P1 | `ModuleGuard` для маршрутов | Низкая | — |
+| P1 | Фильтрация storefront слотов по enabled | Низкая | — |
+| P2 | `rustok-module.toml` стандарт + валидатор | Средняя | — |
+| P2 | Manifest Manager (CRUD для modules.toml) | Средняя | — |
+| P2 | Build Service API (GraphQL) | Высокая | — |
+| P3 | Build Orchestrator (CI/CD интеграция) | Высокая | — |
+| P3 | UI install/uninstall + build progress | Средняя | — |
+| P3 | Cargo features авто-генерация | Низкая | — |
+| P4 | Маркетплейс: реестр + GraphQL API | Высокая | — |
+| P4 | Маркетплейс: UI каталог в админке | Средняя | — |
+| P4 | CLI `rustok module publish` | Средняя | — |
+| P4 | Validation pipeline для публикации | Высокая | — |
 
 ---
 
 ## Безопасность
 
 - **Нет runtime-подгрузки нативного кода** — все модули компилируются в бинарник.
-- **RBAC**: `modules:manage` permission для toggle; `modules:install` для
-  platform-level операций.
-- **Audit log**: все операции с модулями логируются.
-- **Rollback**: каждый деплой имеет `release_id` для отката.
-- **Валидация зависимостей**: перед install/uninstall проверяется граф зависимостей.
+- **RBAC**: `modules:toggle` для tenant-level; `modules:install` для platform-level.
+- **Audit log**: все операции с модулями логируются с автором и причиной.
+- **Rollback**: каждый деплой имеет `release_id` для отката через `rollbackBuild`.
+- **Валидация зависимостей**: перед install/uninstall проверяется граф.
+- **Маркетплейс**: модули проходят validation pipeline перед публикацией.
+- **Sandbox**: сторонние модули не имеют доступа к fs/network напрямую — только через platform API.
