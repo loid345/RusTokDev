@@ -2,9 +2,10 @@
 //!
 //! Provides functions for setting up test databases with migrations.
 
-use sea_orm::{Database, DatabaseConnection, TransactionTrait};
+use sea_orm::{ConnectOptions, Database, DatabaseConnection, TransactionTrait};
 use std::sync::Arc;
 use tokio::sync::Mutex;
+use uuid::Uuid;
 
 static DB_LOCK: tokio::sync::OnceCell<Arc<Mutex<()>>> = tokio::sync::OnceCell::const_new();
 
@@ -34,7 +35,16 @@ pub async fn setup_test_db() -> DatabaseConnection {
         .await;
     let _guard = lock.lock().await;
 
-    let db = Database::connect("sqlite::memory:")
+    let db_url = format!(
+        "sqlite:file:rustok_test_{}?mode=memory&cache=shared",
+        Uuid::new_v4()
+    );
+    let mut opts = ConnectOptions::new(db_url);
+    opts.max_connections(5)
+        .min_connections(1)
+        .sqlx_logging(false);
+
+    let db = Database::connect(opts)
         .await
         .expect("Failed to connect to test database");
 
@@ -75,7 +85,16 @@ where
         .await;
     let _guard = lock.lock().await;
 
-    let db = Database::connect("sqlite::memory:")
+    let db_url = format!(
+        "sqlite:file:rustok_test_{}?mode=memory&cache=shared",
+        Uuid::new_v4()
+    );
+    let mut opts = ConnectOptions::new(db_url);
+    opts.max_connections(5)
+        .min_connections(1)
+        .sqlx_logging(false);
+
+    let db = Database::connect(opts)
         .await
         .expect("Failed to connect to test database");
 
