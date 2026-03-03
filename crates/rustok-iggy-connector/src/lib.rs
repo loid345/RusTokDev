@@ -797,7 +797,10 @@ mod tests {
         assert!(
             matches!(
                 result,
-                Err(_) | Ok(Ok(())) | Ok(Err(ConnectorError::Connection(_))) | Ok(Err(ConnectorError::Timeout(_)))
+                Err(_)
+                    | Ok(Ok(()))
+                    | Ok(Err(ConnectorError::Connection(_)))
+                    | Ok(Err(ConnectorError::Timeout(_)))
             ),
             "unexpected remote connect result: {:?}",
             result
