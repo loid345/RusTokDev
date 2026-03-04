@@ -18,7 +18,7 @@ use sea_orm::EntityTrait;
 use crate::controllers;
 use crate::initializers;
 use crate::middleware;
-use crate::middleware::rate_limit::{cleanup_task, RateLimitConfig, RateLimiter};
+use crate::middleware::rate_limit::{cleanup_task, rate_limit_for_paths, RateLimitConfig, RateLimiter};
 use crate::modules;
 use crate::seeds;
 use crate::services::event_transport_factory::{
@@ -109,6 +109,14 @@ impl Hooks for App {
         });
         let alloy_rest_router = controllers::alloy::router(alloy_app_state);
 
+        // Global API rate limiter: 300 req/min per IP for all /api/* endpoints
+        let api_limiter = Arc::new(RateLimiter::new(RateLimitConfig::new(300, 60)));
+        let api_limiter_for_cleanup = api_limiter.clone();
+        tokio::spawn(async move {
+            cleanup_task(api_limiter_for_cleanup).await;
+        });
+        let api_prefixes = Arc::new(vec!["/api/"]);
+
         let auth_limiter = Arc::new(RateLimiter::new(RateLimitConfig::new(20, 60)));
         let auth_limiter_for_cleanup = auth_limiter.clone();
         tokio::spawn(async move {
@@ -176,6 +184,10 @@ impl Hooks for App {
             .layer(Extension(registry))
             .layer(Extension(alloy_state))
             .layer(auth_rate_limit_middleware)
+            .layer(axum_middleware::from_fn_with_state(
+                (api_limiter, api_prefixes),
+                rate_limit_for_paths,
+            ))
             .layer(axum_middleware::from_fn_with_state(
                 ctx.clone(),
                 middleware::tenant::resolve,

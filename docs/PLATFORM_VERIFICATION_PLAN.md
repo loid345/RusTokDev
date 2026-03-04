@@ -821,7 +821,7 @@
 - [x] Корректные лимиты для auth endpoints (login/register/reset): 20 req/60 сек per IP для `/api/auth/login`, `/api/auth/register`, `/api/auth/reset/*`
   - Cleanup task запускается через `tokio::spawn` каждые 5 мин
   - Response headers: `x-ratelimit-limit`, `x-ratelimit-remaining`, `x-ratelimit-reset`; при 429 — `retry-after`
-- [ ] Корректные лимиты для API endpoints (глобальный rate limit не реализован — только auth endpoints)
+- [x] Корректные лимиты для API endpoints: глобальный rate limit 300 req/60 сек per IP для всех `/api/*` через `rate_limit_for_paths` middleware, подключён в `app.rs::after_routes()`
 
 ---
 
