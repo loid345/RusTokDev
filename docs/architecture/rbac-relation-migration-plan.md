@@ -962,3 +962,57 @@ RBAC-WEEKLY-STATUS:
 - section 16 (Casbin migration status).
 
 Это предотвращает рассинхрон между «оперативным» и «архитектурным» статусом.
+
+---
+
+## 22. Practical checklist для следующего PR-цикла (C0 → C2)
+
+Ниже фиксируется «исполняемый минимум» на продолжение работ, чтобы каждое изменение можно было проверить по артефактам, а не по формулировкам в описании PR.
+
+### 22.1 Обязательные задачи в порядке выполнения
+
+1. **C0 / ADR-ready:**
+   - ADR создан в `DECISIONS/` и содержит разделы: `Context`, `Decision`, `Rollback`, `SLO gates`, `Non-goals`.
+   - в разделе 11.1 этого плана добавлена ссылка на ADR и выставлен статус MVP-блокера 2.
+2. **C1 / Shadow wiring-ready:**
+   - shadow path подключён за feature-flag и не меняет active decision path.
+   - добавлены метрики `rbac_engine_decisions_total`, `rbac_engine_mismatch_total`, `rbac_engine_eval_duration_ms`.
+   - добавлен structured-log mismatch с обязательными полями: `tenant_id`, `user_id`, `resource`, `action`, `relation_decision`, `casbin_decision`.
+3. **C2 / Staging parity-ready:**
+   - прогнан staging baseline минимум в 24-часовом окне.
+   - собраны markdown+json отчёты и сохранены в `artifacts/rbac-cutover/<date>/`.
+   - принято go/no-go решение и отражено в section 16 (`RBAC-CASBIN-UPDATE`).
+
+### 22.2 Минимальный пакет файлов/артефактов на каждый PR
+
+Для PR-ов C0/C1/C2 обязательны ссылки на конкретные артефакты:
+
+- `artifacts/rbac-cutover/<date>/baseline.json`
+- `artifacts/rbac-cutover/<date>/baseline.md`
+- `artifacts/rbac-cutover/<date>/mismatch-sample.jsonl` (может быть пустым файлом при `mismatch=0`)
+- `artifacts/rbac-cutover/<date>/gate-decision.md`
+
+Если хотя бы одна ссылка отсутствует, PR не может считаться закрывающим этап.
+
+### 22.3 Технические критерии приёмки (default thresholds)
+
+До появления отдельного ADR с иными порогами используем значения по умолчанию:
+
+- `engine_mismatch_total == 0` в окне принятия решения,
+- `decision_volume_delta >= 0` относительно relation baseline,
+- `latency_p95_delta <= +10%`,
+- `latency_p99_delta <= +15%`,
+- `401/403_rate_delta <= +5%` без подтверждённого функционального изменения policy.
+
+Нарушение любого пункта автоматически переводит решение в **No-Go** до RCA и corrective action.
+
+### 22.4 Формат corrective action (обязателен для каждого No-Go)
+
+Для каждого `No-Go` фиксируется запись в `gate-decision.md`:
+
+1. `root_cause` (кратко, 1–3 пункта),
+2. `owner` (конкретная роль/команда),
+3. `target_date` (дата повторной проверки),
+4. `verification_step` (какой отчёт/метрика подтвердит исправление).
+
+Это требование закрывает «серую зону», когда решение No-Go есть, но плана выхода нет.
