@@ -54,7 +54,7 @@ fn build_post_input(title: &str, slug: &str) -> CreateNodeInput {
 async fn list_nodes_is_scoped_by_tenant() {
     let db = setup_test_db_with_migrations::<Migrator>().await;
     let event_bus = mock_transactional_event_bus();
-    let service = NodeService::new(db, event_bus);
+    let service = NodeService::new(db.clone(), event_bus);
 
     let tenant1_id = Uuid::new_v4();
     let tenant2_id = Uuid::new_v4();
@@ -114,7 +114,7 @@ async fn list_nodes_is_scoped_by_tenant() {
 async fn get_by_slug_is_scoped_by_tenant() {
     let db = setup_test_db_with_migrations::<Migrator>().await;
     let event_bus = mock_transactional_event_bus();
-    let service = NodeService::new(db, event_bus);
+    let service = NodeService::new(db.clone(), event_bus);
 
     let tenant1_id = Uuid::new_v4();
     let tenant2_id = Uuid::new_v4();
