@@ -973,4 +973,59 @@ mod tests {
             "second call should revoke zero additional sessions"
         );
     }
+
+
+    #[tokio::test]
+    async fn create_user_scopes_duplicate_email_check_per_tenant() {
+        let db = setup_test_db_with_migrations::<Migrator>().await;
+        let tenant_a = tenants::ActiveModel::new("Tenant A", "tenant-a-scope")
+            .insert(&db)
+            .await
+            .expect("failed to create tenant A");
+        let tenant_b = tenants::ActiveModel::new("Tenant B", "tenant-b-scope")
+            .insert(&db)
+            .await
+            .expect("failed to create tenant B");
+
+        AuthLifecycleService::create_user_db(
+            &db,
+            tenant_a.id,
+            "shared@example.com",
+            "Password123!",
+            Some("Tenant A User".to_string()),
+            rustok_core::UserRole::Customer,
+            None,
+        )
+        .await
+        .expect("create_user in tenant A should succeed");
+
+        AuthLifecycleService::create_user_db(
+            &db,
+            tenant_b.id,
+            "shared@example.com",
+            "Password123!",
+            Some("Tenant B User".to_string()),
+            rustok_core::UserRole::Manager,
+            None,
+        )
+        .await
+        .expect("same email in another tenant should be allowed");
+
+        let tenant_a_users = users::Entity::find()
+            .filter(users::Column::TenantId.eq(tenant_a.id))
+            .filter(users::Column::Email.eq("shared@example.com"))
+            .count(&db)
+            .await
+            .expect("failed to query users in tenant A");
+        assert_eq!(tenant_a_users, 1);
+
+        let tenant_b_users = users::Entity::find()
+            .filter(users::Column::TenantId.eq(tenant_b.id))
+            .filter(users::Column::Email.eq("shared@example.com"))
+            .count(&db)
+            .await
+            .expect("failed to query users in tenant B");
+        assert_eq!(tenant_b_users, 1);
+    }
+
 }
