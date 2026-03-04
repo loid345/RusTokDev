@@ -219,7 +219,7 @@ Gate перед выкладкой:
 
 | Гейт | Артефакт | Статус | Подтверждение | Ответственный | Дата |
 | --- | --- | --- | --- | --- | --- |
-| Integration | `cargo test -p rustok-server auth_lifecycle` + auth integration suite | In progress | Локально пройдено: `cargo test -p rustok-server auth_lifecycle` (2026-03-04); CI/staging report pending | Platform foundation | 2026-03-04 |
+| Integration | `cargo test -p rustok-server auth_lifecycle` + auth integration suite | In progress | Локально пройдено: `cargo test -p rustok-server auth_lifecycle` (2026-03-04); `cargo test -p rustok-server auth` (46/46), CI/staging report pending | Platform foundation | 2026-03-04 |
 | REST/GraphQL parity | staging report (`create_user`, `confirm_reset`/`reset_password`, `change_password`) | Pending | Ссылка на parity report | Platform foundation | YYYY-MM-DD |
 | Security review | checklist по reset/change-password + inactive-user bypass | Pending | Ссылка на checklist/sign-off | Platform foundation + security reviewer | YYYY-MM-DD |
 
@@ -229,12 +229,29 @@ Gate перед выкладкой:
 2. Для каждого gate зафиксировать owner и дату завершения проверки.
 3. Если хотя бы один gate не закрыт, релиз блокируется до устранения причины.
 
+Шаблон parity report (staging, заполнить перед закрытием gate):
+
+| Сценарий | REST (endpoint + итог) | GraphQL (mutation + итог) | Parity | Evidence |
+| --- | --- | --- | --- | --- |
+| `create_user` | `POST /api/auth/invite/accept` + итог | `create_user` + итог | Pending | Ссылка на лог/артефакт |
+| `confirm_reset` / `reset_password` | `POST /api/auth/reset/confirm` + итог | `reset_password` + итог | Pending | Ссылка на лог/артефакт |
+| `change_password` | `POST /api/auth/change-password` + итог | `change_password` + итог | Pending | Ссылка на лог/артефакт |
+
+Шаблон security checklist/sign-off (заполнить перед закрытием gate):
+
+- [ ] Reset password отзывает все активные сессии (`password reset => revoke all active sessions`).
+- [ ] Change password не оставляет bypass и соблюдает policy отзыва сессий.
+- [ ] Inactive user не может пройти login/sign_in/refresh.
+- [ ] Ошибки `InvalidResetToken`/`UserInactive` имеют стабильный transport-контракт.
+- [ ] Security reviewer sign-off: `<имя/роль>`, дата: `YYYY-MM-DD`, ссылка на evidence.
+
 Текущий прогресс по gate:
 
 - Кодовые и документационные задачи Phases A-C завершены (см. раздел 5).
 - Rollout controls и rollback-инструкция добавлены в `apps/server/docs/README.md`.
 - Метрики rollout-периода из раздела 7 (`auth_password_reset_sessions_revoked_total`, `auth_change_password_sessions_revoked_total`, `auth_flow_inconsistency_total`, `auth_login_inactive_user_attempt_total`) публикуются через `/metrics`.
-- Локальный integration прогон выполнен: `cargo test -p rustok-server auth_lifecycle` проходит (23/23), что подтверждает текущий минимум по unit/integration инвариантам в окружении разработки.
+- Локальный integration прогон выполнен: `cargo test -p rustok-server auth_lifecycle` проходит (26/26), что подтверждает текущий минимум по unit/integration инвариантам в окружении разработки.
+- Расширенный локальный auth-срез также пройден: `cargo test -p rustok-server auth` (46/46), включая transport mappings и service-level инварианты.
 - Unit coverage для инварианта из раздела 6 (повторный reset на уже отозванных сессиях) расширено: повторный вызов не добавляет новых revoked session.
 - Добавлен service-level тест на idempotency revoke-механизма: повторный `revoke_user_sessions` для того же `tenant+user` возвращает `0` новых revoke и не меняет уже отозванные сессии.
 - Добавлен service-level тест позитивного reset use-case: `reset_password_and_revoke_sessions` обновляет пароль, отзывает все активные сессии пользователя и увеличивает `auth_password_reset_sessions_revoked_total` на число реально отозванных сессий.
@@ -246,6 +263,7 @@ Gate перед выкладкой:
 - Добавлен service-level parity-тест users-permissions для одной роли (`Manager`) между двумя путями создания пользователя (через `AuthLifecycleService::create_user` и legacy insert + `AuthService::replace_user_role`): итоговый набор разрешений совпадает.
 - Добавлен service-level тест tenant/user scoping для revoke сессий: `revoke_user_sessions` отзывает только сессии целевого `tenant+user` и не затрагивает соседний tenant.
 - Добавлен service-level тест для ветки `except_session_id` в revoke-механизме: при `revoke_user_sessions` активной остаётся только явно исключённая текущая сессия пользователя.
+- Добавлены service-level тесты refresh-flow для негативных веток: unknown token отклоняется как `InvalidRefreshToken`, revoked/expired сессия — как `SessionExpired`, inactive user — как `UserInactive`.
 - Расширены transport-level проверки GraphQL mapping для негативных auth-кейсов: `UserInactive` и `InvalidResetToken` стабильно маппятся в согласованные сообщения ошибок.
 - `GraphQL create_user` переведён на общий `AuthLifecycleService::create_user` (единая транзакция создания пользователя + назначения RBAC-связей, без отдельной бизнес-ветки в transport-слое).
 - `REST invite/accept` переведён на общий `AuthLifecycleService::create_user`, чтобы убрать последний transport-level bypass для user-creation flow и удерживать единый контракт назначения RBAC-связей.
