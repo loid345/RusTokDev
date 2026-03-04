@@ -1,7 +1,7 @@
 # RBAC Enforcement in RusToK
 
 > Граница ответственности: этот документ описывает модель RBAC-enforcement и систему permissions.
-> Консистентность auth lifecycle (`register/login/refresh/reset/change-password`, parity между transport-слоями, policy инвалидирования сессий) ведётся отдельно в `docs/architecture/user-auth-consistency-remediation-plan.md` и ADR `DECISIONS/2026-02-26-auth-lifecycle-unification-session-invalidation.md`.
+> Консистентность auth lifecycle (`register/login/refresh/reset/change-password`, parity между transport-слоями, policy инвалидирования сессий) зафиксирована в `docs/architecture/api.md` (раздел «Auth lifecycle consistency и release-gate») и ADR `DECISIONS/2026-02-26-auth-lifecycle-unification-session-invalidation.md`.
 > Миграция relation-модели и cutover RBAC source-of-truth ведутся отдельно в `docs/architecture/rbac-relation-migration-plan.md`.
 
 This document describes the Role-Based Access Control (RBAC) enforcement system in RusToK.
