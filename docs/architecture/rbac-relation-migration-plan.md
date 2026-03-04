@@ -865,3 +865,100 @@
    - **Countermeasure:** ограничить matcher complexity в ADR, профилировать hot-path до production switch.
 4. **Risk:** тихие mismatch без операционного действия.
    - **Countermeasure:** mismatch-alert переводится в page-level инцидент в окне C3/C4.
+
+---
+
+## 19. Детализация ближайшего цикла (execution slice на 2 недели)
+
+Чтобы зафиксировать конкретный «следующий шаг», без расширения scope beyond MVP, вводим короткий execution slice.
+
+### 19.1 Цель цикла
+
+Закрыть подготовку к C1/C2 без переключения active engine:
+
+- завершить PR-1 (Casbin ADR + финальная модель),
+- поднять shadow wiring в `crates/rustok-rbac` (PR-2),
+- собрать staging parity baseline для go/no-go по C2 (PR-3 prep).
+
+### 19.2 Scope в цикле (что делаем)
+
+1. Оформляем и принимаем Casbin ADR с точным описанием:
+   - matcher semantics,
+   - rollout/rollback режимов,
+   - SLO-гейтов для switch decision.
+2. Подключаем `CasbinPermissionResolver` в shadow-mode:
+   - relation остаётся active decision path,
+   - mismatch и latency пишутся в метрики,
+   - fail-closed поведение не меняется.
+3. Готовим staging parity прогон:
+   - policy-fixtures для системных ролей,
+   - negative/tenant-isolation сценарии,
+   - экспорт отчётов в `artifacts/rbac-cutover/<date>/`.
+
+### 19.3 Scope вне цикла (что не делаем)
+
+- Не включаем `casbin_only` в production.
+- Не удаляем relation fallback.
+- Не расширяем матрицу прав beyond уже согласованных системных ролей.
+
+### 19.4 DoD цикла
+
+Цикл считается завершённым только если одновременно выполнено всё:
+
+1. Принят ADR Casbin-track и добавлена cross-ссылка в этот план.
+2. В staging есть mismatch/latency артефакты shadow-режима (минимум за 24ч окно).
+3. `engine_mismatch_total` документирован в отчёте (ожидаемо: `0`, либо явный список расхождений с RCA).
+4. Выпущено go/no-go решение по переходу к C3 (production dual-engine).
+
+---
+
+## 20. Матрица ответственности (RACI-lite для cutover)
+
+Чтобы исключить «ничейные» шаги, фиксируем минимальную роль-матрицу.
+
+| Поток работ | Responsible | Accountable | Consulted | Informed |
+|---|---|---|---|---|
+| Backfill / consistency checks (Фаза 4) | Platform backend engineer | Platform lead | DBA/on-call | QA, release manager |
+| Shadow wiring Casbin (C1) | RBAC module owner | Platform lead | Security reviewer | QA |
+| Staging parity report (C2) | QA + RBAC engineer | Release manager | On-call lead | Platform team |
+| Production go/no-go (C3/C4) | Release manager | Platform lead | On-call + QA + RBAC owner | All stakeholders |
+| Rollback execution (12.2 / 13.6) | On-call engineer | Incident commander | Platform lead | Release manager, QA |
+
+Правило эскалации: если `Responsible` не назначен по конкретному релизному окну, автоматический статус шага — **No-Go**.
+
+---
+
+## 21. Шаблон weekly status update (для section 11.1 + 16)
+
+Чтобы статусы в этом плане обновлялись единообразно, используем weekly-шаблон:
+
+```text
+RBAC-WEEKLY-STATUS:
+- period: <YYYY-MM-DD..YYYY-MM-DD>
+- phase: <4|5|6|C0|C1|C2|C3|C4|C5>
+- mvp_blockers: <#1=...; #2=...; #3=...>
+- engine_mode: <relation-active/casbin-shadow|casbin-active/relation-fallback>
+- data_health: <users_without_roles=...; orphan_user_roles=...; orphan_role_permissions=...>
+- decision_health: <mismatch=...; deny_rate=...; latency_p95=...; latency_p99=...>
+- gate_decision: <go|no-go|n-a>
+- links:
+  - artifacts: <path>
+  - report: <path>
+  - incident_or_rca: <path|n-a>
+```
+
+### 21.1 Минимальные требования к weekly-апдейту
+
+1. Числовые поля (`data_health`, `decision_health`) должны быть фактическими, не `TBD`.
+2. Любой `no-go` обязан иметь причину + corrective action owner.
+3. Любой `go` обязан ссылаться на артефакты из раздела 13.5.
+
+### 21.2 Правило консистентности документа
+
+После публикации weekly-апдейта обязательно синхронизировать:
+
+- section 0 (progress tracker),
+- section 11.1 (MVP execution board),
+- section 16 (Casbin migration status).
+
+Это предотвращает рассинхрон между «оперативным» и «архитектурным» статусом.
