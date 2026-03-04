@@ -10,7 +10,7 @@ pub use integration::{
     RBAC_EVENT_TENANT_ROLE_ASSIGNMENTS_REMOVED, RBAC_EVENT_USER_ROLE_ASSIGNMENT_REMOVED,
     RBAC_EVENT_USER_ROLE_REPLACED,
 };
-pub use services::authz_mode::RbacAuthzMode;
+pub use services::authz_mode::{AuthzEngine, RbacAuthzMode};
 pub use services::permission_authorizer::{
     authorize_all_permissions, authorize_any_permission, authorize_permission,
     AuthorizationDecision,
@@ -30,6 +30,7 @@ pub use services::relation_permission_resolver::{
     resolve_permissions_with_cache, PermissionCache, RelationPermissionStore,
 };
 pub use services::runtime_permission_resolver::{RoleAssignmentStore, RuntimePermissionResolver};
+pub use services::casbin_model::default_casbin_model;
 pub use services::shadow_decision::{
     compare_all_permissions, compare_any_permissions, compare_shadow_decision,
     compare_single_permission, ShadowCheck, ShadowDecision,

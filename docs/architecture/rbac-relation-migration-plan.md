@@ -670,6 +670,12 @@
 
 ## 15. Переход на Casbin (casbin-rs): когда начинать и что ещё доделать
 
+### 15.0 Текущий кодовый статус Casbin-track
+
+- [x] Подготовлен foundation для staged rollout в `crates/rustok-rbac`: режимы `casbin_shadow` / `casbin_only` и алиасы feature-flags (`RUSTOK_RBAC_CASBIN_SHADOW_ENABLED`, `RUSTOK_RBAC_CASBIN_ENFORCEMENT_ENABLED`) добавлены в `RbacAuthzMode`.
+- [x] Добавлен tenant-aware baseline `casbin_model.conf` и экспорт helper `default_casbin_model()` как стартовый артефакт этапа C0.
+- [ ] Shadow-resolver (`CasbinPermissionResolver`) и production parity-metrics (`rbac_engine_mismatch_total`) ещё не внедрены в runtime wiring (этап C1/C2).
+
 ### 15.1 Точка старта (когда начинаем переход)
 
 Переход на Casbin нужно запускать **после закрытия ядра Фазы 4** и до production relation-only cutover из Фазы 5.

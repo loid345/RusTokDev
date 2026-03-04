@@ -1,9 +1,17 @@
 use crate::error::RbacError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AuthzEngine {
+    Relation,
+    Casbin,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RbacAuthzMode {
     RelationOnly,
     DualRead,
+    CasbinShadow,
+    CasbinOnly,
 }
 
 const AUTHZ_MODE_ENV: &str = "RUSTOK_RBAC_AUTHZ_MODE";
@@ -12,12 +20,24 @@ const RELATION_DUAL_READ_FLAG_ALIASES: [&str; 3] = [
     "RBAC_RELATION_DUAL_READ_ENABLED",
     "rbac_relation_dual_read_enabled",
 ];
+const CASBIN_SHADOW_FLAG_ALIASES: [&str; 3] = [
+    "RUSTOK_RBAC_CASBIN_SHADOW_ENABLED",
+    "RBAC_CASBIN_SHADOW_ENABLED",
+    "rbac_casbin_shadow_enabled",
+];
+const CASBIN_ENFORCEMENT_FLAG_ALIASES: [&str; 3] = [
+    "RUSTOK_RBAC_CASBIN_ENFORCEMENT_ENABLED",
+    "RBAC_CASBIN_ENFORCEMENT_ENABLED",
+    "rbac_casbin_enforcement_enabled",
+];
 
 impl RbacAuthzMode {
     pub fn try_parse(value: &str) -> Result<Self, RbacError> {
         match value.trim().to_ascii_lowercase().as_str() {
             "dual_read" | "dual-read" | "dual" => Ok(Self::DualRead),
             "relation_only" | "relation-only" | "relation" => Ok(Self::RelationOnly),
+            "casbin_shadow" | "casbin-shadow" | "casbin_shadow_read" => Ok(Self::CasbinShadow),
+            "casbin_only" | "casbin-only" | "casbin" => Ok(Self::CasbinOnly),
             _ => Err(RbacError::InvalidAuthzMode {
                 value: value.to_string(),
             }),
@@ -33,6 +53,20 @@ impl RbacAuthzMode {
             return Self::parse(&raw_mode);
         }
 
+        if CASBIN_ENFORCEMENT_FLAG_ALIASES
+            .iter()
+            .any(|name| env_flag_enabled(name))
+        {
+            return Self::CasbinOnly;
+        }
+
+        if CASBIN_SHADOW_FLAG_ALIASES
+            .iter()
+            .any(|name| env_flag_enabled(name))
+        {
+            return Self::CasbinShadow;
+        }
+
         if RELATION_DUAL_READ_FLAG_ALIASES
             .iter()
             .any(|name| env_flag_enabled(name))
@@ -43,8 +77,31 @@ impl RbacAuthzMode {
         Self::RelationOnly
     }
 
+    pub fn active_engine(self) -> AuthzEngine {
+        match self {
+            Self::CasbinOnly => AuthzEngine::Casbin,
+            Self::RelationOnly | Self::DualRead | Self::CasbinShadow => AuthzEngine::Relation,
+        }
+    }
+
     pub fn is_dual_read(self) -> bool {
         self == Self::DualRead
+    }
+
+    pub fn is_casbin_shadow(self) -> bool {
+        self == Self::CasbinShadow
+    }
+
+    pub fn is_casbin_only(self) -> bool {
+        self == Self::CasbinOnly
+    }
+
+    pub fn should_run_legacy_role_shadow(self) -> bool {
+        self == Self::DualRead
+    }
+
+    pub fn should_run_casbin_shadow(self) -> bool {
+        self == Self::CasbinShadow
     }
 }
 
@@ -61,7 +118,10 @@ fn env_flag_enabled(name: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{RbacAuthzMode, AUTHZ_MODE_ENV, RELATION_DUAL_READ_FLAG_ALIASES};
+    use super::{
+        AuthzEngine, RbacAuthzMode, AUTHZ_MODE_ENV, CASBIN_ENFORCEMENT_FLAG_ALIASES,
+        CASBIN_SHADOW_FLAG_ALIASES, RELATION_DUAL_READ_FLAG_ALIASES,
+    };
     use crate::error::RbacError;
     use std::sync::{Mutex, OnceLock};
 
@@ -84,30 +144,18 @@ mod tests {
         }
 
         fn set(&self, value: &str) {
-            // SAFETY: tests serialize environment mutations via `EnvVarGuard` lock.
-            unsafe {
-                std::env::set_var(self.name, value);
-            }
+            unsafe { std::env::set_var(self.name, value) };
         }
 
         fn remove(&self) {
-            // SAFETY: tests serialize environment mutations via `EnvVarGuard` lock.
-            unsafe {
-                std::env::remove_var(self.name);
-            }
+            unsafe { std::env::remove_var(self.name) };
         }
 
         fn restore(&self) {
             if let Some(previous) = self.previous.as_ref() {
-                // SAFETY: tests serialize environment mutations via `EnvVarGuard` lock.
-                unsafe {
-                    std::env::set_var(self.name, previous);
-                }
+                unsafe { std::env::set_var(self.name, previous) };
             } else {
-                // SAFETY: tests serialize environment mutations via `EnvVarGuard` lock.
-                unsafe {
-                    std::env::remove_var(self.name);
-                }
+                unsafe { std::env::remove_var(self.name) };
             }
         }
     }
@@ -161,6 +209,15 @@ mod tests {
     }
 
     #[test]
+    fn parse_supports_casbin_modes() {
+        assert_eq!(
+            RbacAuthzMode::parse("casbin-shadow"),
+            RbacAuthzMode::CasbinShadow
+        );
+        assert_eq!(RbacAuthzMode::parse("casbin"), RbacAuthzMode::CasbinOnly);
+    }
+
+    #[test]
     fn from_env_supports_all_legacy_dual_read_flag_aliases() {
         let _lock = env_lock();
         let mode_env = EnvVarGuard::capture(AUTHZ_MODE_ENV);
@@ -174,15 +231,70 @@ mod tests {
     }
 
     #[test]
-    fn authz_mode_env_has_priority_over_legacy_flag_aliases() {
+    fn from_env_supports_casbin_shadow_aliases() {
+        let _lock = env_lock();
+        let mode_env = EnvVarGuard::capture(AUTHZ_MODE_ENV);
+        mode_env.remove();
+
+        for name in CASBIN_SHADOW_FLAG_ALIASES {
+            let alias = EnvVarGuard::capture(name);
+            alias.set("true");
+            assert_eq!(RbacAuthzMode::from_env(), RbacAuthzMode::CasbinShadow);
+        }
+    }
+
+    #[test]
+    fn from_env_supports_casbin_enforcement_aliases() {
+        let _lock = env_lock();
+        let mode_env = EnvVarGuard::capture(AUTHZ_MODE_ENV);
+        mode_env.remove();
+
+        for name in CASBIN_ENFORCEMENT_FLAG_ALIASES {
+            let alias = EnvVarGuard::capture(name);
+            alias.set("true");
+            assert_eq!(RbacAuthzMode::from_env(), RbacAuthzMode::CasbinOnly);
+        }
+    }
+
+    #[test]
+    fn authz_mode_env_has_priority_over_flag_aliases() {
         let _lock = env_lock();
         let mode_env = EnvVarGuard::capture(AUTHZ_MODE_ENV);
         mode_env.set("relation_only");
 
-        for name in RELATION_DUAL_READ_FLAG_ALIASES {
+        for name in CASBIN_ENFORCEMENT_FLAG_ALIASES {
             let alias = EnvVarGuard::capture(name);
             alias.set("true");
             assert_eq!(RbacAuthzMode::from_env(), RbacAuthzMode::RelationOnly);
         }
+    }
+
+    #[test]
+    fn casbin_enforcement_alias_has_priority_over_casbin_shadow_and_dual_read() {
+        let _lock = env_lock();
+        let mode_env = EnvVarGuard::capture(AUTHZ_MODE_ENV);
+        mode_env.remove();
+
+        let shadow_alias = EnvVarGuard::capture(CASBIN_SHADOW_FLAG_ALIASES[0]);
+        shadow_alias.set("true");
+        let dual_alias = EnvVarGuard::capture(RELATION_DUAL_READ_FLAG_ALIASES[0]);
+        dual_alias.set("true");
+        let enforce_alias = EnvVarGuard::capture(CASBIN_ENFORCEMENT_FLAG_ALIASES[0]);
+        enforce_alias.set("true");
+
+        assert_eq!(RbacAuthzMode::from_env(), RbacAuthzMode::CasbinOnly);
+    }
+
+    #[test]
+    fn exposes_active_engine_and_shadow_controls() {
+        assert_eq!(RbacAuthzMode::DualRead.active_engine(), AuthzEngine::Relation);
+        assert_eq!(
+            RbacAuthzMode::CasbinShadow.active_engine(),
+            AuthzEngine::Relation
+        );
+        assert_eq!(RbacAuthzMode::CasbinOnly.active_engine(), AuthzEngine::Casbin);
+        assert!(RbacAuthzMode::DualRead.should_run_legacy_role_shadow());
+        assert!(RbacAuthzMode::CasbinShadow.should_run_casbin_shadow());
+        assert!(!RbacAuthzMode::CasbinOnly.should_run_casbin_shadow());
     }
 }
