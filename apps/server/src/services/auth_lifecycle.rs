@@ -870,6 +870,81 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn revoke_user_sessions_is_strictly_scoped_by_tenant_and_user() {
+        let db = setup_test_db_with_migrations::<Migrator>().await;
+        let tenant_a = tenants::ActiveModel::new("Tenant A", "tenant-a-revoke")
+            .insert(&db)
+            .await
+            .expect("failed to create tenant A");
+        let tenant_b = tenants::ActiveModel::new("Tenant B", "tenant-b-revoke")
+            .insert(&db)
+            .await
+            .expect("failed to create tenant B");
+
+        let user_a = users::ActiveModel::new(tenant_a.id, "user-a@example.com", "hash-a")
+            .insert(&db)
+            .await
+            .expect("failed to create user A");
+        let user_b = users::ActiveModel::new(tenant_b.id, "user-b@example.com", "hash-b")
+            .insert(&db)
+            .await
+            .expect("failed to create user B");
+
+        let now = Utc::now();
+        sessions::ActiveModel::new(
+            tenant_a.id,
+            user_a.id,
+            "tenant-a-token".to_string(),
+            now + Duration::hours(1),
+            None,
+            None,
+        )
+        .insert(&db)
+        .await
+        .expect("failed to create tenant A session");
+        sessions::ActiveModel::new(
+            tenant_b.id,
+            user_b.id,
+            "tenant-b-token".to_string(),
+            now + Duration::hours(1),
+            None,
+            None,
+        )
+        .insert(&db)
+        .await
+        .expect("failed to create tenant B session");
+
+        let revoked_for_a = AuthLifecycleService::revoke_user_sessions_db(
+            &db,
+            tenant_a.id,
+            user_a.id,
+            None,
+        )
+        .await
+        .expect("revoke for tenant A should succeed");
+
+        assert_eq!(revoked_for_a, 1);
+
+        let tenant_a_active_sessions = sessions::Entity::find()
+            .filter(sessions::Column::TenantId.eq(tenant_a.id))
+            .filter(sessions::Column::UserId.eq(user_a.id))
+            .filter(sessions::Column::RevokedAt.is_null())
+            .count(&db)
+            .await
+            .expect("failed to query tenant A active sessions");
+        assert_eq!(tenant_a_active_sessions, 0);
+
+        let tenant_b_active_sessions = sessions::Entity::find()
+            .filter(sessions::Column::TenantId.eq(tenant_b.id))
+            .filter(sessions::Column::UserId.eq(user_b.id))
+            .filter(sessions::Column::RevokedAt.is_null())
+            .count(&db)
+            .await
+            .expect("failed to query tenant B active sessions");
+        assert_eq!(tenant_b_active_sessions, 1);
+    }
+
+    #[tokio::test]
     async fn reset_password_revoke_sessions_can_keep_current_session() {
         AuthLifecycleService::reset_metrics_for_tests();
         let db = setup_test_db_with_migrations::<Migrator>().await;
