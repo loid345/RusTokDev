@@ -754,6 +754,46 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn create_user_applies_default_active_status_and_respects_explicit_status() {
+        let db = setup_test_db_with_migrations::<Migrator>().await;
+        let tenant = tenants::ActiveModel::new("Status Tenant", "status-tenant")
+            .insert(&db)
+            .await
+            .expect("failed to create tenant");
+
+        let default_status_user = AuthLifecycleService::create_user_db(
+            &db,
+            tenant.id,
+            "default-status@example.com",
+            "Password123!",
+            Some("Default Status".to_string()),
+            rustok_core::UserRole::Customer,
+            None,
+        )
+        .await
+        .expect("create_user with default status should succeed");
+
+        assert_eq!(default_status_user.status, rustok_core::UserStatus::Active);
+
+        let explicit_inactive_user = AuthLifecycleService::create_user_db(
+            &db,
+            tenant.id,
+            "explicit-inactive@example.com",
+            "Password123!",
+            Some("Explicit Inactive".to_string()),
+            rustok_core::UserRole::Customer,
+            Some(rustok_core::UserStatus::Inactive),
+        )
+        .await
+        .expect("create_user with explicit inactive status should succeed");
+
+        assert_eq!(
+            explicit_inactive_user.status,
+            rustok_core::UserStatus::Inactive
+        );
+    }
+
+    #[tokio::test]
     async fn create_user_rejects_duplicate_email_with_stable_error_contract() {
         let db = setup_test_db_with_migrations::<Migrator>().await;
         let tenant = tenants::ActiveModel::new("Duplicate Email Tenant", "duplicate-email-tenant")
