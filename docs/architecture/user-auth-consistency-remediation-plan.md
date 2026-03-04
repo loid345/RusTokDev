@@ -250,6 +250,7 @@ Gate перед выкладкой:
 
 - Кодовые и документационные задачи Phases A-C завершены (см. раздел 5).
 - Rollout controls и rollback-инструкция добавлены в `apps/server/docs/README.md`.
+- Добавлен helper `scripts/auth_release_gate.sh` для формирования release-gate артефакта (integration + parity + security statuses) и фиксирования evidence-ссылок в отчёте.
 - Метрики rollout-периода из раздела 7 (`auth_password_reset_sessions_revoked_total`, `auth_change_password_sessions_revoked_total`, `auth_flow_inconsistency_total`, `auth_login_inactive_user_attempt_total`) публикуются через `/metrics`.
 - Расширенный локальный auth-срез также пройден: `cargo test -p rustok-server auth` (51/51), включая transport mappings и service-level инварианты.
 - Инвариант users-permissions из раздела 6 зафиксирован отдельным service-level тестом `user_permissions_are_consistent_for_same_role_across_creation_paths`.
@@ -274,7 +275,7 @@ Gate перед выкладкой:
 
 Открытый operational tail для продолжения реализации:
 
-1. Поднять/обновить auth integration suite до уровня release-gate evidence (не только выборка `auth_lifecycle`, но и полный прогон auth-сценариев из раздела 6).
+1. Использовать `scripts/auth_release_gate.sh` как стандартный pre-release шаг для сбора integration evidence (`auth_lifecycle` + `auth`) и фиксации статусов gate в едином отчёте.
 2. Зафиксировать staging parity report по REST/GraphQL для `create_user`, `confirm_reset`/`reset_password`, `change_password`.
 3. Закрыть security checklist/sign-off и проставить финальные статусы в таблице gate.
 

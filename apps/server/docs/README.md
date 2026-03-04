@@ -46,4 +46,5 @@
 - Auth/error contracts: `AuthLifecycleService` использует типизированные ошибки (`AuthLifecycleError`), а REST/GraphQL делают единообразный transport-specific mapping без дублирования строковых веток.
 
 - Auth rollout controls: канонические release gates, stop-the-line условия и rollback-процедура ведутся централизованно в `docs/architecture/user-auth-consistency-remediation-plan.md` (раздел 8), этот README хранит только краткий changelog.
+- Auth rollout controls: helper `scripts/auth_release_gate.sh` автоматизирует сбор локального integration evidence (`cargo test -p rustok-server auth_lifecycle` + `cargo test -p rustok-server auth`) и формирует markdown gate-report с полями для parity/security evidence.
 - RBAC/seed consistency: `seed_user` теперь вызывает `AuthService::assign_role_permissions` после создания пользователя, гарантируя наличие `user_roles` для всех seed-пользователей (dev bootstrap).
