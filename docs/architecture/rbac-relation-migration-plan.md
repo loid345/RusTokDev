@@ -665,3 +665,203 @@
 3. Уточнить долгосрочную судьбу `users.role` отдельным ADR (удаление vs derived-only).
 4. Консолидировать observability dashboard (RBAC migration + steady-state RBAC ops).
 5. Обновить onboarding docs для backend/on-call с финальной relation-only моделью.
+
+---
+
+## 15. Переход на Casbin (casbin-rs): когда начинать и что ещё доделать
+
+### 15.0 Текущий кодовый статус Casbin-track
+
+- [x] Подготовлен foundation для staged rollout в `crates/rustok-rbac`: режимы `casbin_shadow` / `casbin_only` и алиасы feature-flags (`RUSTOK_RBAC_CASBIN_SHADOW_ENABLED`, `RUSTOK_RBAC_CASBIN_ENFORCEMENT_ENABLED`) добавлены в `RbacAuthzMode`.
+- [x] Добавлен tenant-aware baseline `casbin_model.conf` и экспорт helper `default_casbin_model()` как стартовый артефакт этапа C0.
+- [ ] Shadow-resolver (`CasbinPermissionResolver`) и production parity-metrics (`rbac_engine_mismatch_total`) ещё не внедрены в runtime wiring (этап C1/C2).
+
+### 15.1 Точка старта (когда начинаем переход)
+
+Переход на Casbin нужно запускать **после закрытия ядра Фазы 4** и до production relation-only cutover из Фазы 5.
+
+Почему именно так:
+
+1. Casbin не исправляет «грязные» данные сам по себе — сначала нужны валидные `user_roles` / `role_permissions` и нулевые orphan-инварианты.
+2. Переключать одновременно и data-source, и policy-engine слишком рискованно; сначала фиксируем data health, затем меняем движок принятия решения.
+3. Dual-read окно Фазы 5 можно использовать как controlled rollout для сравнения `legacy relation resolver` vs `casbin enforcer`.
+
+**Решение по старту:**
+- Минимальный gate начала Casbin track: `users_without_roles_total == 0` на staging + подтверждённый rehearsal dry-run/apply/rollback.
+- Если этот gate не выполнен, Casbin-track откладывается, продолжается доработка Фазы 4.
+
+### 15.2 Что нужно доделать перед интеграцией Casbin (pre-Casbin backlog)
+
+1. Завершить staged rehearsal из раздела 13.1 с обязательными JSON-артефактами и stage-report.
+2. Зафиксировать canonical permission naming contract (`resource:action`, wildcard-правила, tenant scope) и исключить неоднозначные алиасы.
+3. Закрыть пробелы observability для текущего resolver:
+   - стабильные метрики deny-reason,
+   - latency p95/p99 по tenant,
+   - готовый baseline для сравнения с Casbin.
+4. Подготовить policy-fixture набор для регрессии:
+   - system roles,
+   - tenant-specific custom roles,
+   - deny-by-default сценарии,
+   - cross-tenant isolation кейсы.
+5. Подготовить ADR: «Casbin as policy engine, relation tables as policy data source» с rollback-гейтом и SLO-гейтами.
+
+### 15.3 Целевая модель Casbin в RusToK
+
+- `casbin-rs` используется как **policy evaluation engine**.
+- Таблицы `roles`, `permissions`, `user_roles`, `role_permissions` остаются источником данных (policy storage).
+- `users.role` не участвует в decision-path (только legacy/derived поле при необходимости).
+- Enforcement API в `crates/rustok-rbac` остаётся единым (`has_permission`, `has_any`, `has_all`), а Casbin скрыт за module boundary.
+
+### 15.4 Этапы перехода на Casbin (инкрементально)
+
+#### Этап C0 — Design + ADR (подготовка)
+
+- Описать casbin model (`r/p/g`, wildcard matcher, tenant domain matcher).
+- Выбрать adapter-стратегию:
+  - DB adapter (прямое чтение relation-таблиц), либо
+  - policy snapshot + reload.
+- Зафиксировать cache invalidation и policy reload SLA.
+
+**Выход:** утверждённый ADR + модель `model.conf` (или эквивалент в коде).
+
+#### Этап C1 — Shadow integration в `crates/rustok-rbac`
+
+- Добавить `CasbinPermissionResolver` как альтернативную реализацию текущего resolver-контракта.
+- Включить shadow-evaluation: runtime decision остаётся за текущим relation resolver, Casbin считает параллельно.
+- Добавить mismatch-метрики:
+  - `rbac_engine_mismatch_total{source="relation",target="casbin"}`
+  - `rbac_engine_eval_latency_ms{engine="casbin"}`.
+
+**Выход:** Casbin работает в shadow без влияния на production decisions.
+
+#### Этап C2 — Staging parity hardening
+
+- Прогнать full regression matrix (раздел 5 + policy-fixtures).
+- Добиться `engine_mismatch == 0` на staging окне наблюдения.
+- Зафиксировать производительность (p95/p99) не хуже согласованного порога.
+
+**Выход:** staging parity report + perf report.
+
+#### Этап C3 — Production dual-engine rollout
+
+- В production оставить relation engine как active, Casbin как shadow (feature flag).
+- Снять baseline 72h+ с decision volume gate.
+- Проанализировать все mismatch > 0, устранить причины, повторить окно.
+
+**Выход:** production parity baseline (go/no-go для переключения active engine).
+
+#### Этап C4 — Switch active engine на Casbin
+
+- Переключить active enforcement на Casbin под флагом `rbac_casbin_enforcement_enabled`.
+- Relation resolver оставить как fallback только на окно стабилизации.
+- Усилить on-call мониторинг 401/403/latency и deny-reason anomalies.
+
+**Выход:** Casbin — active policy engine, инцидентов выше SLO нет.
+
+#### Этап C5 — Cleanup legacy resolver path
+
+- Удалить fallback relation decision-path после окна стабилизации.
+- Удалить временные флаги shadow/dual-engine.
+- Обновить `docs/architecture/rbac.md`, runbook и onboarding под Casbin steady-state.
+
+**Выход:** один production engine (Casbin), документация синхронизирована.
+
+### 15.5 Рекомендуемая привязка Casbin-этапов к текущим фазам плана
+
+- Текущая Фаза 4 (data migration): закрыть полностью **до старта C0/C1**.
+- Текущая Фаза 5 (dual-read/cutover):
+  - первая часть = C3 (dual-engine parity),
+  - вторая часть = C4 (switch active engine).
+- Текущая Фаза 6 (cleanup): включает C5 + удаление оставшихся legacy-role и fallback веток.
+
+Итого: **практический старт Casbin — на стыке Фазы 4 → Фазы 5**, не раньше.
+
+### 15.6 Definition of Done для Casbin-перехода
+
+1. Все permission checks идут через `crates/rustok-rbac`, active engine = Casbin.
+2. `engine_mismatch_total` стабильно 0 в согласованном окне после switch.
+3. SLO 401/403/latency не ухудшены относительно relation-only baseline.
+4. Rollback-сценарий проверен rehearsal-ом и остаётся исполнимым до конца stabilization window.
+5. Документация и runbook описывают только актуальный Casbin-based enforcement flow.
+
+---
+
+## 16. Операционный шаблон статуса для Casbin migration
+
+Каждый merge в рамках этапов C0–C5 обновляет минимум:
+
+1. `phase`: текущий этап (`C0..C5`).
+2. `engine_mode`: `relation-active/casbin-shadow` или `casbin-active/relation-fallback`.
+3. `parity`: mismatch summary + ссылка на артефакт (`artifacts/rbac-cutover/*`).
+4. `gate_decision`: `go/no-go/n-a` и краткая причина.
+
+Рекомендуемый формат записи в PR:
+
+`RBAC-CASBIN-UPDATE: phase=<C0..C5>; engine_mode=<...>; parity=<artifact>; gate=<go|no-go|n-a>`
+
+---
+
+## 17. Продолжение реализации: ближайшие deliverables (next PR queue)
+
+Чтобы «продолжить реализацию» без расползания scope, фиксируем очередь следующих PR с чётким DoD.
+
+### 17.1 PR-1 (C0): Casbin ADR + модель
+
+**Что делаем:**
+- оформить ADR для Casbin-track (engine role, adapter choice, rollback, SLO-gates),
+- зафиксировать `model.conf` (или кодовый эквивалент) для tenant-aware matcher,
+- добавить ссылку на ADR в раздел 11.1 (MVP execution board) и в раздел 15.2.
+
+**DoD PR-1:**
+- ADR принят,
+- matcher покрывает wildcard + tenant domain,
+- rollback-путь явно описан и совместим с текущим runbook.
+
+### 17.2 PR-2 (C1): Shadow wiring в `crates/rustok-rbac`
+
+**Что делаем:**
+- подключить Casbin-resolver за feature flag без изменения active decision path,
+- добавить structured-логи mismatch (с tenant/user/resource/action),
+- добавить метрики из раздела 15.4 (C1).
+
+**DoD PR-2:**
+- active engine в production остаётся relation,
+- shadow path не ломает fail-closed semantics,
+- метрики/логи доступны на dashboard и в алертах.
+
+### 17.3 PR-3 (C2): Staging parity report
+
+**Что делаем:**
+- прогоняем regression matrix + policy-fixtures,
+- собираем parity/perf отчёты в `artifacts/rbac-cutover/<date>/...`,
+- фиксируем go/no-go запись по этапу C2.
+
+**DoD PR-3:**
+- `engine_mismatch == 0` в окне наблюдения staging,
+- p95/p99 укладываются в согласованный порог,
+- отчёт приложен и ссылается на конкретные артефакты.
+
+### 17.4 PR-4 (C3/C4): Production dual-engine -> switch
+
+**Что делаем:**
+- открываем production dual-engine окно (Casbin shadow),
+- при соблюдении gate переводим Casbin в active mode,
+- relation оставляем только как rollback fallback на stabilization window.
+
+**DoD PR-4:**
+- формально закрыты gate из разделов 12.1 и 15.6,
+- on-call подтверждает отсутствие SLO-регрессии,
+- запись `RBAC-CASBIN-UPDATE` заполнена полностью.
+
+---
+
+## 18. Casbin-специфичные риски и контрмеры
+
+1. **Risk:** разнобой semantics между SQL relation-check и Casbin matcher.
+   - **Countermeasure:** единый contract-test suite на одинаковых fixtures для обоих engines.
+2. **Risk:** устаревание policy snapshot при burst-изменениях ролей.
+   - **Countermeasure:** event-driven invalidation + верхняя граница TTL + forced reload endpoint для on-call.
+3. **Risk:** непредсказуемый рост latency при сложных matcher-правилах.
+   - **Countermeasure:** ограничить matcher complexity в ADR, профилировать hot-path до production switch.
+4. **Risk:** тихие mismatch без операционного действия.
+   - **Countermeasure:** mismatch-alert переводится в page-level инцидент в окне C3/C4.
