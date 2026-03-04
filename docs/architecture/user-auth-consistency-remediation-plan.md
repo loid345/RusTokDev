@@ -1,7 +1,7 @@
 # План устранения косяков в user/auth логике (без миграции RBAC)
 
 - Дата: 2026-02-26 (актуализировано: 2026-03-04)
-- Статус: In progress (Phase D: локальный integration gate пройден, staging parity + security sign-off остаются открытыми)
+- Статус: In progress (Phase D: локальный integration gate + auth regression suite пройдены; staging parity + security sign-off остаются открытыми)
 - Область: `apps/server` (REST + GraphQL auth), `apps/server/docs`, `docs/architecture/*`
 - Граница плана: этот документ **не дублирует RBAC migration** и не заменяет `rbac-relation-migration-plan.md`. Здесь фиксируем только косяки user/auth потоков, которые нужно закрыть до/параллельно RBAC cutover.
 
@@ -205,7 +205,7 @@ REST/GraphQL должны вызывать этот сервис, оставая
 
 Gate перед выкладкой:
 
-- [ ] Integration tests из раздела 6 проходят.
+- [x] Integration tests из раздела 6 проходят (локальный прогон: `cargo test -p rustok-server auth_lifecycle` + `cargo test -p rustok-server auth`).
 - [ ] REST/GraphQL parity проверена на staging.
 - [ ] Security review по reset/change-password закрыт.
 
@@ -219,7 +219,7 @@ Gate перед выкладкой:
 
 | Гейт | Артефакт | Статус | Подтверждение | Ответственный | Дата |
 | --- | --- | --- | --- | --- | --- |
-| Integration | `cargo test -p rustok-server auth_lifecycle` + auth integration suite | In progress | Локально пройдено: `cargo test -p rustok-server auth_lifecycle` (2026-03-04); `cargo test -p rustok-server auth` (46/46), CI/staging report pending | Platform foundation | 2026-03-04 |
+| Integration | `cargo test -p rustok-server auth_lifecycle` + auth integration suite | Done (local) | Локально пройдено: `cargo test -p rustok-server auth_lifecycle` (26/26, 2026-03-04); `cargo test -p rustok-server auth` (46/46, 2026-03-04), CI/staging report pending | Platform foundation | 2026-03-04 |
 | REST/GraphQL parity | staging report (`create_user`, `confirm_reset`/`reset_password`, `change_password`) | Pending | Ссылка на parity report | Platform foundation | YYYY-MM-DD |
 | Security review | checklist по reset/change-password + inactive-user bypass | Pending | Ссылка на checklist/sign-off | Platform foundation + security reviewer | YYYY-MM-DD |
 
