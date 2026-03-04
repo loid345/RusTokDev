@@ -22,7 +22,7 @@
    - `change_password`: soft-revoke всех остальных активных сессий пользователя (кроме текущей);
    - `sign_out`: soft-revoke только текущей сессии.
 4. Явно разделить ответственность документов:
-   - auth lifecycle consistency и transport parity — в `docs/architecture/user-auth-consistency-remediation-plan.md`;
+   - auth lifecycle consistency, transport parity и release-gate процесс — в `docs/architecture/api.md` (раздел «Auth lifecycle consistency и release-gate»);
    - RBAC relation migration и source-of-truth cutover — в `docs/architecture/rbac-relation-migration-plan.md`.
 
 ## Consequences

@@ -54,9 +54,9 @@
 
 Чтобы не дублировать статусы и задачи между двумя roadmap-документами:
 
-- `docs/architecture/user-auth-consistency-remediation-plan.md` является source-of-truth по user/auth parity (REST/GraphQL), reset-password session invalidation policy и rollout gate-верификации этих изменений.
+- `docs/architecture/api.md` (раздел «Auth lifecycle consistency и release-gate») является source-of-truth по user/auth parity (REST/GraphQL), reset-password session invalidation policy и rollout gate-верификации этих изменений.
 - В этом RBAC-плане фиксируются только RBAC migration/cutover задачи; auth parity упоминается только как зависимость/предусловие readiness.
-- Текущее согласование статуса: кодовые remediation-задачи user/auth закрыты (Phases A-C), открыты только environment-ready verification gates (Phase D).
+- Текущее согласование статуса: кодовые remediation-задачи user/auth закрыты, release-gate переведён в operational handoff (`scripts/auth_release_gate.sh --require-all-gates`).
 
 ---
 
@@ -70,7 +70,7 @@
 - [x] **Фаза 1 — Быстрые исправления консистентности (базовые пункты):**
   - user creation flows для `register/sign_up/create_user/accept_invite` уже заведены через назначение relation RBAC (`assign_role_permissions`).
   - `seed_user` (dev/test seed bootstrap) теперь также вызывает `assign_role_permissions` после создания пользователя.
-  - parity reset-password/session invalidation вынесен и закрыт по коду в отдельном плане `docs/architecture/user-auth-consistency-remediation-plan.md` (Phases A-C done, rollout verification gates Phase D остаются операционным хвостом).
+  - parity reset-password/session invalidation закрыт по коду и документирован в `docs/architecture/api.md` (раздел «Auth lifecycle consistency и release-gate»), rollout verification выполняется операционно через `scripts/auth_release_gate.sh`.
 - [x] **Фаза 2 — Единый Permission Resolver (завершено):**
   - В `rustok-rbac` стандартизирован модульный cross-module integration event contract для role-assignment изменений: добавлены `RbacRoleAssignmentEvent`, `RbacIntegrationEventKind` и стабильные event-type ключи `rbac.*` для единообразной публикации/подписки между модулями.
   - В `AuthService` добавлены tenant-aware методы `get_user_permissions / has_permission / has_any_permission / has_all_permissions`.
@@ -454,7 +454,7 @@
 - [x] В каждом flow гарантированно формируются `user_roles` (все публичные entrypoints покрыты; `GraphQL update_user` синхронизирует через `replace_user_role`).
 - [x] В каждом flow роль и tenant валидируются до записи.
 - [x] Reset password в REST и GraphQL имеет одинаковую policy отзыва сессий (`AuthLifecycleService::confirm_password_reset` используется обоими каналами и всегда вызывает `revoke_user_sessions(..., None)`).
-- [~] Интеграционные тесты по auth parity вынесены в `user-auth-consistency-remediation-plan.md` (Phase D gates pending staging/security evidence); RBAC-специфичные flow-инварианты отслеживаются в этом плане.
+- [x] Интеграционные тесты и release-gate по auth parity документированы в `docs/architecture/api.md` (раздел «Auth lifecycle consistency и release-gate»); RBAC-специфичные flow-инварианты отслеживаются в этом плане.
 
 ### 9.3 Фаза 2 — Resolver
 
