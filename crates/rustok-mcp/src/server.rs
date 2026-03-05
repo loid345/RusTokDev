@@ -159,10 +159,20 @@ impl<R: ScriptRegistry + 'static> RusToKMcpServer<R> {
         }
     }
 
+    fn protocol_version() -> rmcp::model::ProtocolVersion {
+        rmcp::model::ProtocolVersion::V_2024_11_05
+    }
+
+    fn protocol_version_string() -> String {
+        serde_json::to_value(Self::protocol_version())
+            .ok()
+            .and_then(|value| value.as_str().map(str::to_owned))
+            .unwrap_or_else(|| "2024-11-05".to_string())
+    }
     fn health_response(&self, tool_count: usize) -> McpHealthResponse {
         McpHealthResponse {
             status: "ready".to_string(),
-            protocol_version: format!("{:?}", rmcp::model::ProtocolVersion::V_2024_11_05),
+            protocol_version: Self::protocol_version_string(),
             tool_count,
             enabled_tools: self
                 .enabled_tools
@@ -637,7 +647,7 @@ impl<R: ScriptRegistry + Send + Sync + 'static> ServerHandler for RusToKMcpServe
         );
 
         let mut info = ServerInfo::default();
-        info.protocol_version = rmcp::model::ProtocolVersion::V_2024_11_05;
+        info.protocol_version = Self::protocol_version();
         info.capabilities = rmcp::model::ServerCapabilities::default();
         info.server_info = server_info;
         info.instructions = Some(
