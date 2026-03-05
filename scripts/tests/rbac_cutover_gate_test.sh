@@ -56,13 +56,18 @@ test_passes_with_required_artifacts() {
   rg -q "decision_json_output:" "$tmp/out.log" || fail "expected decision json output path in stdout"
   [[ -f "$tmp/cutover/gate-decision.md" ]] || fail "expected default gate markdown decision artifact"
   [[ -f "$tmp/cutover/gate-decision.json" ]] || fail "expected default gate json decision artifact"
+  [[ -f "$tmp/cutover/mismatch-sample.jsonl" ]] || fail "expected default mismatch sample artifact"
+  rg -q "# RBAC Gate Decision" "$tmp/cutover/gate-decision.md" || fail "expected template markdown header"
+  rg -q -- "- decision: go" "$tmp/cutover/gate-decision.md" || fail "expected go decision in markdown"
   python - "$tmp/cutover/gate-decision.json" <<'PY' || fail "expected valid json decision artifact"
 import json
 import sys
 with open(sys.argv[1], 'r', encoding='utf-8') as fh:
     payload = json.load(fh)
-if payload.get('decision') != 'pass':
-    raise SystemExit('decision must be pass')
+if payload.get('decision') != 'go':
+    raise SystemExit('decision must be go')
+if payload.get('decision_volume_delta') != 10:
+    raise SystemExit('decision_volume_delta must be 10')
 PY
   pass "gate passes when required artifacts are valid"
 }
@@ -83,15 +88,15 @@ test_passes_with_custom_decision_output() {
 
   [[ -f "$out_file" ]] || fail "expected custom decision output file"
   [[ -f "$out_json" ]] || fail "expected custom decision json output file"
-  rg -q "decision: PASS" "$out_file" || fail "expected PASS decision in custom output"
+  rg -q -- "- decision: go" "$out_file" || fail "expected go decision in custom output"
   rg -q "auth_gate_report:" "$out_file" || fail "expected auth gate path in custom output"
   python - "$out_json" <<'PY' || fail "expected custom decision json payload"
 import json
 import sys
 with open(sys.argv[1], 'r', encoding='utf-8') as fh:
     payload = json.load(fh)
-if payload.get('decision') != 'pass':
-    raise SystemExit('decision must be pass')
+if payload.get('decision') != 'go':
+    raise SystemExit('decision must be go')
 if 'auth_gate_report' not in payload:
     raise SystemExit('auth_gate_report must be present')
 PY
