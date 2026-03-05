@@ -84,18 +84,18 @@ impl RbacAuthzMode {
             return Self::DualRead;
         }
 
-        if LEGACY_ROLE_FALLBACK_FLAG_ALIASES
-            .iter()
-            .any(|name| env_flag_enabled(name))
-        {
-            return Self::DualRead;
-        }
-
         if RELATION_ENFORCEMENT_FLAG_ALIASES
             .iter()
             .any(|name| env_flag_enabled(name))
         {
             return Self::RelationOnly;
+        }
+
+        if LEGACY_ROLE_FALLBACK_FLAG_ALIASES
+            .iter()
+            .any(|name| env_flag_enabled(name))
+        {
+            return Self::DualRead;
         }
 
         Self::RelationOnly
@@ -318,6 +318,20 @@ mod tests {
             alias.set("true");
             assert_eq!(RbacAuthzMode::from_env(), RbacAuthzMode::RelationOnly);
         }
+    }
+
+    #[test]
+    fn relation_enforcement_alias_has_priority_over_legacy_fallback_alias() {
+        let _lock = env_lock();
+        let mode_env = EnvVarGuard::capture(AUTHZ_MODE_ENV);
+        mode_env.remove();
+
+        let fallback_alias = EnvVarGuard::capture(LEGACY_ROLE_FALLBACK_FLAG_ALIASES[0]);
+        fallback_alias.set("true");
+        let relation_enforcement_alias = EnvVarGuard::capture(RELATION_ENFORCEMENT_FLAG_ALIASES[0]);
+        relation_enforcement_alias.set("true");
+
+        assert_eq!(RbacAuthzMode::from_env(), RbacAuthzMode::RelationOnly);
     }
 
     #[test]

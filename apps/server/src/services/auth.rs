@@ -93,7 +93,7 @@ impl AuthService {
     }
 
     fn is_dual_read_enabled() -> bool {
-        Self::authz_mode() == RbacAuthzMode::DualRead
+        Self::authz_mode().should_run_legacy_role_shadow()
     }
 
     fn should_run_casbin_shadow() -> bool {
@@ -1064,6 +1064,8 @@ mod tests {
     use std::sync::{Mutex, MutexGuard, OnceLock};
 
     const AUTHZ_MODE_ENV: &str = "RUSTOK_RBAC_AUTHZ_MODE";
+    const LEGACY_ROLE_FALLBACK_FLAG_ENV: &str = "RUSTOK_RBAC_LEGACY_ROLE_FALLBACK_ENABLED";
+
 
     struct EnvVarGuard {
         _lock: MutexGuard<'static, ()>,
@@ -1420,6 +1422,42 @@ mod tests {
         env.set("  DUAL_READ  ");
 
         assert!(AuthService::is_dual_read_enabled());
+    }
+
+    #[test]
+    fn authz_mode_enables_dual_read_from_legacy_fallback_alias_when_mode_missing() {
+        let env = EnvVarGuard::lock(AUTHZ_MODE_ENV);
+        env.remove();
+
+        // SAFETY: tests serialize environment mutations via `EnvVarGuard` lock.
+        unsafe {
+            std::env::set_var(LEGACY_ROLE_FALLBACK_FLAG_ENV, "true");
+        }
+
+        assert!(AuthService::is_dual_read_enabled());
+
+        // SAFETY: tests serialize environment mutations via `EnvVarGuard` lock.
+        unsafe {
+            std::env::remove_var(LEGACY_ROLE_FALLBACK_FLAG_ENV);
+        }
+    }
+
+    #[test]
+    fn authz_mode_explicit_relation_only_overrides_legacy_fallback_alias() {
+        let env = EnvVarGuard::lock(AUTHZ_MODE_ENV);
+        env.set("relation_only");
+
+        // SAFETY: tests serialize environment mutations via `EnvVarGuard` lock.
+        unsafe {
+            std::env::set_var(LEGACY_ROLE_FALLBACK_FLAG_ENV, "true");
+        }
+
+        assert!(!AuthService::is_dual_read_enabled());
+
+        // SAFETY: tests serialize environment mutations via `EnvVarGuard` lock.
+        unsafe {
+            std::env::remove_var(LEGACY_ROLE_FALLBACK_FLAG_ENV);
+        }
     }
 
     #[test]
