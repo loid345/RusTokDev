@@ -13,10 +13,9 @@ use tracing::{debug, warn};
 use rustok_core::{Action, Permission, Rbac, Resource, UserRole};
 use rustok_rbac::{
     authorize_all_permissions, authorize_any_permission, authorize_permission,
-    compare_casbin_shadow_decision, evaluate_dual_read, for_each_permission_in_shadow_check,
-    invalidate_cached_permissions, DeniedReasonKind, DualReadOutcome, PermissionCache,
-    PermissionResolver, RbacAuthzMode, RelationPermissionStore, RoleAssignmentStore,
-    RuntimePermissionResolver, ShadowCheck,
+    compare_casbin_shadow_decision, evaluate_dual_read, invalidate_cached_permissions,
+    DeniedReasonKind, DualReadOutcome, PermissionCache, PermissionResolver, RbacAuthzMode,
+    RelationPermissionStore, RoleAssignmentStore, RuntimePermissionResolver, ShadowCheck,
 };
 
 use crate::models::_entities::{permissions, role_permissions, roles, user_roles, users};
@@ -195,7 +194,7 @@ impl AuthService {
 
         if casbin_shadow.mismatch() {
             Self::record_engine_mismatch();
-            for_each_permission_in_shadow_check(shadow_check, |permission| {
+            shadow_check.for_each_permission(|permission| {
                 warn!(
                     tenant_id = %tenant_id,
                     user_id = %user_id,
