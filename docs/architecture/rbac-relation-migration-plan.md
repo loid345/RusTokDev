@@ -111,6 +111,7 @@
   - В `AuthService` добавлен runtime shadow dual-read для `has_permission/has_any_permission/has_all_permissions` под env-флагом `RUSTOK_RBAC_AUTHZ_MODE=dual_read` (также поддерживаются алиасы `dual-read` и `dual`) (relation decision остаётся авторитативным).
   - Режим rollout-конфигурации (`RbacAuthzMode`: `relation_only`/`dual_read`) перенесён в `crates/rustok-rbac` как модульный контракт, `apps/server` использует его без локального enum-дублирования.
   - Для rollout-совместимости `RbacAuthzMode` поддерживает legacy toggle `RUSTOK_RBAC_RELATION_DUAL_READ_ENABLED` (aliases: `RBAC_RELATION_DUAL_READ_ENABLED`, `rbac_relation_dual_read_enabled`) (если `RUSTOK_RBAC_AUTHZ_MODE` не задан), чтобы staged cutover можно было выполнять без одномоментного переезда всех окружений на новый env-ключ.
+  - Зафиксированы дополнительные migration-флаги совместимости в `RbacAuthzMode::from_env`: relation enforcement (`RUSTOK_RBAC_RELATION_ENFORCEMENT_ENABLED`, `RBAC_RELATION_ENFORCEMENT_ENABLED`, `rbac_relation_enforcement_enabled`) и временный legacy fallback (`RUSTOK_RBAC_LEGACY_ROLE_FALLBACK_ENABLED`, `RBAC_LEGACY_ROLE_FALLBACK_ENABLED`, `rbac_legacy_role_fallback_enabled`); в alias-only конфигурации enforcement имеет приоритет над fallback.
   - Legacy-vs-relation shadow decision semantics вынесены в модульный `rustok-rbac::shadow_decision`; `apps/server` оставляет только загрузку legacy-ролей, метрики и logging/feature-flag orchestration.
   - Для server-adapter слоя shadow orchestration унифицирован через `ShadowCheck` + `compare_shadow_decision` (single/any/all без дублирования policy-веток в `AuthService`).
   - В `rustok-rbac` добавлен модульный dual-read orchestrator `evaluate_dual_read` (`DualReadOutcome`), поэтому `apps/server` больше не держит локальную decision-ветвистость для `skip/compare` и использует модульный исход dual-read-решения.
@@ -440,9 +441,9 @@
 - [ ] Определён владелец migration-program (DRI) и резервный DRI.
 - [ ] Определён freeze-период для изменения RBAC API-контрактов.
 - [ ] Зафиксированы feature flags:
-  - [ ] `rbac_relation_dual_read_enabled`
-  - [ ] `rbac_relation_enforcement_enabled`
-  - [ ] `rbac_legacy_role_fallback_enabled` (временный)
+  - [x] `rbac_relation_dual_read_enabled`
+  - [x] `rbac_relation_enforcement_enabled`
+  - [x] `rbac_legacy_role_fallback_enabled` (временный)
 - [ ] Обновлены `docs/architecture/rbac.md` и `docs/index.md`.
 
 ### 9.2 Фаза 1 — Консистентность flow
