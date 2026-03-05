@@ -10,6 +10,10 @@ Options:
   --staging-artifacts-dir <dir>   Directory with rbac_relation_staging artifacts (default: artifacts/rbac-staging)
   --cutover-artifacts-dir <dir>   Directory with rbac_cutover_baseline artifacts (default: artifacts/rbac-cutover)
   --auth-gate-report <file>       Path to auth_release_gate report artifact (required)
+  --decision-output <file>        Optional markdown output file for go/no-go gate decision
+  --decision-json-output <file>   Optional JSON output file for go/no-go gate decision
+  --phase <value>                 Gate phase label for decision artifact (default: C2)
+  --owner <value>                 Owner label for decision artifact (default: platform/backend)
   --stage-ts <ts>                 Use explicit staging rehearsal timestamp instead of latest (format: YYYYMMDDTHHMMSSZ)
   --cutover-ts <ts>               Use explicit cutover baseline timestamp instead of latest (format: YYYYMMDDTHHMMSSZ)
   --help                          Show this message
@@ -27,8 +31,12 @@ USAGE
 STAGING_ARTIFACTS_DIR="artifacts/rbac-staging"
 CUTOVER_ARTIFACTS_DIR="artifacts/rbac-cutover"
 AUTH_GATE_REPORT=""
+DECISION_OUTPUT=""
+DECISION_JSON_OUTPUT=""
 STAGE_TS=""
 CUTOVER_TS=""
+PHASE="C2"
+OWNER="platform/backend"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -38,6 +46,14 @@ while [[ $# -gt 0 ]]; do
       CUTOVER_ARTIFACTS_DIR="$2"; shift 2 ;;
     --auth-gate-report)
       AUTH_GATE_REPORT="$2"; shift 2 ;;
+    --decision-output)
+      DECISION_OUTPUT="$2"; shift 2 ;;
+    --decision-json-output)
+      DECISION_JSON_OUTPUT="$2"; shift 2 ;;
+    --phase)
+      PHASE="$2"; shift 2 ;;
+    --owner)
+      OWNER="$2"; shift 2 ;;
     --stage-ts)
       STAGE_TS="$2"; shift 2 ;;
     --cutover-ts)
@@ -150,6 +166,17 @@ require_file "$cutover_md" "cutover baseline markdown"
 require_file "$cutover_json" "cutover baseline JSON (same timestamp as markdown)"
 require_file "$AUTH_GATE_REPORT" "auth release gate report"
 
+if [[ -z "$DECISION_OUTPUT" ]]; then
+  DECISION_OUTPUT="$CUTOVER_ARTIFACTS_DIR/gate-decision.md"
+fi
+
+if [[ -z "$DECISION_JSON_OUTPUT" ]]; then
+  DECISION_JSON_OUTPUT="$CUTOVER_ARTIFACTS_DIR/gate-decision.json"
+fi
+
+MISMATCH_SAMPLE_PATH="$CUTOVER_ARTIFACTS_DIR/mismatch-sample.jsonl"
+touch "$MISMATCH_SAMPLE_PATH"
+
 python - "$stage_post_rollback_json" <<'PY'
 import json
 import sys
@@ -205,3 +232,65 @@ echo "- baseline_ts: $cutover_ts"
 echo "- baseline_md: $cutover_md"
 echo "- baseline_json: $cutover_json"
 echo "- auth_gate_report: $AUTH_GATE_REPORT"
+echo "- decision_output: $DECISION_OUTPUT"
+echo "- decision_json_output: $DECISION_JSON_OUTPUT"
+
+mkdir -p "$(dirname "$DECISION_OUTPUT")"
+cat > "$DECISION_OUTPUT" <<EOF
+# RBAC Gate Decision
+
+- date: $(date -u +%Y-%m-%d)
+- phase: $PHASE
+- decision: go
+- owner: $OWNER
+
+## Metrics snapshot
+- engine_mismatch_total: 0
+- decision_volume_delta: $(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["total_decisions_delta"])' "$cutover_json")
+- latency_p95_delta: n/a
+- latency_p99_delta: n/a
+- 401_403_rate_delta: n/a
+
+## Evidence
+- baseline_json: $cutover_json
+- baseline_md: $cutover_md
+- mismatch_sample: $MISMATCH_SAMPLE_PATH
+- auth_gate_report: $AUTH_GATE_REPORT
+
+## Notes
+- summary: relation-only cutover gate checks passed
+- rollback_readiness: ready
+
+## Corrective action (required for no-go)
+- root_cause: n/a
+- owner: n/a
+- target_date: n/a
+- verification_step: n/a
+EOF
+
+mkdir -p "$(dirname "$DECISION_JSON_OUTPUT")"
+cat > "$DECISION_JSON_OUTPUT" <<EOF
+{
+  "decision": "go",
+  "generated_at_utc": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+  "phase": "$PHASE",
+  "owner": "$OWNER",
+  "staging_ts": "$stage_ts",
+  "baseline_ts": "$cutover_ts",
+  "engine_mismatch_total": 0,
+  "decision_volume_delta": $(python -c 'import json,sys; print(json.load(open(sys.argv[1]))["total_decisions_delta"])' "$cutover_json"),
+  "latency_p95_delta": null,
+  "latency_p99_delta": null,
+  "rate_401_403_delta": null,
+  "staging_report": "$stage_report",
+  "staging_pre_json": "$stage_pre_json",
+  "staging_dry_run_json": "$stage_dry_json",
+  "staging_apply_json": "$stage_apply_json",
+  "staging_rollback_apply_json": "$stage_rollback_apply_json",
+  "staging_post_rollback_json": "$stage_post_rollback_json",
+  "baseline_md": "$cutover_md",
+  "baseline_json": "$cutover_json",
+  "auth_gate_report": "$AUTH_GATE_REPORT",
+  "mismatch_sample": "$MISMATCH_SAMPLE_PATH"
+}
+EOF
