@@ -122,12 +122,13 @@
   - В baseline helper добавлены дополнительные stop-the-line guardrails: обязательный минимальный объём decision-трафика в окне (`--min-decision-delta`, default `1`) и fail-fast при обнаружении reset-а счётчиков (уменьшение counter-метрик между последовательными samples). Для аудита и post-mortem helper по умолчанию сохраняет raw `/metrics` snapshots по всем sample-точкам (`rbac_cutover_samples_*`), с опциональным отключением через `--no-save-samples`.
   - Для более строгого dual-read gate baseline helper теперь также по умолчанию требует `shadow_compare_failures_delta == 0`; для controlled troubleshooting-окон доступен явный override-флаг `--allow-shadow-failures`.
   - Добавлены тесты helper'а (`scripts/tests/rbac_cutover_baseline_test.sh` + smoke `scripts/test_rbac_cutover_baseline.sh`) с mocked curl-path (`RUSTOK_CURL_BIN`) для проверки mismatch-gate и генерации baseline артефактов.
+  - Принят ADR финального relation-only cutover с обязательным rollback-gate и привязкой к auth parity release-gate: `DECISIONS/2026-03-05-rbac-relation-only-final-cutover-gate.md`.
 - [ ] **Фаза 6 — Cleanup legacy-модели:** не начато.
 
 ### Что осталось приоритетно на ближайший шаг
 
 1. Провести staged dry-run/backfill/rollback в staging и приложить отчёт по инвариантам (MVP-блокер №1, Фаза 4).
-2. Подготовить и согласовать ADR по final cutover (`relation-only`) с чётким rollback-гейтом (MVP-блокер №2) и ссылкой на актуальные auth parity gate-артефакты из user/auth плана.
+2. ✅ ADR по final cutover (`relation-only`) согласован: `DECISIONS/2026-03-05-rbac-relation-only-final-cutover-gate.md` (явный rollback-gate + связь с auth parity gate-артефактами).
 3. Выполнить production dual-read окно наблюдения и зафиксировать baseline-отчёт без регрессий (MVP-блокер №3, Фаза 5).
 
 ### Post-MVP (выполнять только после relation-only стабилизации)
@@ -536,8 +537,8 @@
 
 - [ ] **MVP-блокер 1 (Фаза 4):** staged rehearsal завершён (dry-run/backfill/rollback) + приложен отчёт по инвариантам.
   - Артефакты: `artifacts/rbac-staging/*`, stage-report markdown, pre/post JSON consistency reports; проверка проходит по runbook-последовательности из раздела 13.1/13.5.
-- [ ] **MVP-блокер 2 (Фаза 5 prep):** ADR final cutover согласован с явным rollback-gate и stop-the-line условиями.
-  - Артефакты: ADR в `DECISIONS/` + ссылка в этом плане.
+- [x] **MVP-блокер 2 (Фаза 5 prep):** ADR final cutover согласован с явным rollback-gate и stop-the-line условиями.
+  - Артефакты: `DECISIONS/2026-03-05-rbac-relation-only-final-cutover-gate.md`.
 - [ ] **MVP-блокер 3 (Фаза 5):** production dual-read окно наблюдения завершено, baseline зафиксирован, принято go/no-go решение для relation-only.
   - Артефакты: baseline report/json из `artifacts/rbac-cutover/*`, запись решения (go/no-go) в release-notes/runbook; gate проверяется по разделам 13.2/13.3/13.5.
 
