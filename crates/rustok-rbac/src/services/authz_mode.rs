@@ -354,7 +354,8 @@ mod tests {
         let mode_env = EnvVarGuard::capture(AUTHZ_MODE_ENV);
         mode_env.remove();
 
-        let disabled_relation_enforcement = EnvVarGuard::capture(RELATION_ENFORCEMENT_FLAG_ALIASES[0]);
+        let disabled_relation_enforcement =
+            EnvVarGuard::capture(RELATION_ENFORCEMENT_FLAG_ALIASES[0]);
         disabled_relation_enforcement.set("false");
         let enabled_fallback = EnvVarGuard::capture(LEGACY_ROLE_FALLBACK_FLAG_ALIASES[0]);
         enabled_fallback.set("on");

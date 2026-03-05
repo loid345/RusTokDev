@@ -1065,6 +1065,7 @@ mod tests {
 
     const AUTHZ_MODE_ENV: &str = "RUSTOK_RBAC_AUTHZ_MODE";
     const LEGACY_ROLE_FALLBACK_FLAG_ENV: &str = "RUSTOK_RBAC_LEGACY_ROLE_FALLBACK_ENABLED";
+    const RELATION_ENFORCEMENT_FLAG_ENV: &str = "RUSTOK_RBAC_RELATION_ENFORCEMENT_ENABLED";
 
     struct EnvVarGuard {
         _lock: MutexGuard<'static, ()>,
@@ -1475,6 +1476,27 @@ mod tests {
         env.set("relation_only");
 
         let _fallback_alias = ScopedEnvOverride::set(LEGACY_ROLE_FALLBACK_FLAG_ENV, "true");
+
+        assert!(!AuthService::is_dual_read_enabled());
+    }
+
+    #[test]
+    fn authz_mode_relation_enforcement_alias_keeps_dual_read_disabled_when_mode_missing() {
+        let env = EnvVarGuard::lock(AUTHZ_MODE_ENV);
+        env.remove();
+
+        let _relation_enforcement = ScopedEnvOverride::set(RELATION_ENFORCEMENT_FLAG_ENV, "true");
+
+        assert!(!AuthService::is_dual_read_enabled());
+    }
+
+    #[test]
+    fn authz_mode_relation_enforcement_alias_has_priority_over_legacy_fallback_alias() {
+        let env = EnvVarGuard::lock(AUTHZ_MODE_ENV);
+        env.remove();
+
+        let _fallback_alias = ScopedEnvOverride::set(LEGACY_ROLE_FALLBACK_FLAG_ENV, "true");
+        let _relation_enforcement = ScopedEnvOverride::set(RELATION_ENFORCEMENT_FLAG_ENV, "true");
 
         assert!(!AuthService::is_dual_read_enabled());
     }
