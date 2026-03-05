@@ -13,7 +13,7 @@ use tracing::{debug, warn};
 use rustok_core::{Action, Permission, Rbac, Resource, UserRole};
 use rustok_rbac::{
     authorize_all_permissions, authorize_any_permission, authorize_permission,
-    compare_casbin_shadow_decision, evaluate_dual_read, invalidate_cached_permissions,
+    evaluate_casbin_shadow_comparison, evaluate_dual_read, invalidate_cached_permissions,
     DeniedReasonKind, DualReadOutcome, PermissionCache, PermissionResolver, RbacAuthzMode,
     RelationPermissionStore, RoleAssignmentStore, RuntimePermissionResolver, ShadowCheck,
 };
@@ -180,7 +180,7 @@ impl AuthService {
         let started_at = Instant::now();
         let resolver = Self::resolver(db);
         let resolved = resolver.resolve_permissions(tenant_id, user_id).await?;
-        let casbin_shadow = compare_casbin_shadow_decision(
+        let casbin_shadow = evaluate_casbin_shadow_comparison(
             tenant_id,
             &resolved.permissions,
             shadow_check,
@@ -192,19 +192,19 @@ impl AuthService {
         Self::record_engine_decision("casbin");
         Self::record_engine_eval_duration(eval_latency_ms);
 
-        if casbin_shadow.mismatch() {
+        if casbin_shadow.decision.mismatch() {
             Self::record_engine_mismatch();
-            shadow_check.for_each_permission(|permission| {
+            for permission in casbin_shadow.checked_permissions {
                 warn!(
                     tenant_id = %tenant_id,
                     user_id = %user_id,
                     resource = %permission.resource,
                     action = %permission.action,
-                    relation_decision = casbin_shadow.relation_allowed,
-                    casbin_decision = casbin_shadow.casbin_allowed,
+                    relation_decision = casbin_shadow.decision.relation_allowed,
+                    casbin_decision = casbin_shadow.decision.casbin_allowed,
                     "rbac_engine_mismatch"
                 );
-            });
+            }
         }
 
         Ok(())

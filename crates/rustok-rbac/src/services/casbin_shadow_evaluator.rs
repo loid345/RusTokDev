@@ -1,6 +1,12 @@
 use crate::{has_effective_permission_in_set, ShadowCheck};
 use rustok_core::Permission;
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CasbinShadowComparison {
+    pub decision: CasbinShadowDecision,
+    pub checked_permissions: Vec<Permission>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CasbinShadowDecision {
     pub relation_allowed: bool,
@@ -43,6 +49,26 @@ pub fn compare_casbin_shadow_decision(
     }
 }
 
+pub fn evaluate_casbin_shadow_comparison(
+    tenant_id: &uuid::Uuid,
+    resolved_permissions: &[Permission],
+    shadow_check: ShadowCheck<'_>,
+    relation_allowed: bool,
+) -> CasbinShadowComparison {
+    let decision = compare_casbin_shadow_decision(
+        tenant_id,
+        resolved_permissions,
+        shadow_check,
+        relation_allowed,
+    );
+    let checked_permissions = permissions_for_shadow_check(shadow_check);
+
+    CasbinShadowComparison {
+        decision,
+        checked_permissions,
+    }
+}
+
 pub fn permissions_for_shadow_check(shadow_check: ShadowCheck<'_>) -> Vec<Permission> {
     let mut permissions = Vec::new();
     shadow_check.for_each_permission(|permission| permissions.push(permission));
@@ -52,7 +78,8 @@ pub fn permissions_for_shadow_check(shadow_check: ShadowCheck<'_>) -> Vec<Permis
 #[cfg(test)]
 mod tests {
     use super::{
-        compare_casbin_shadow_decision, evaluate_casbin_shadow, permissions_for_shadow_check,
+        compare_casbin_shadow_decision, evaluate_casbin_shadow, evaluate_casbin_shadow_comparison,
+        permissions_for_shadow_check,
     };
     use crate::ShadowCheck;
     use rustok_core::Permission;
@@ -124,5 +151,22 @@ mod tests {
 
         assert_eq!(single, vec![Permission::USERS_READ]);
         assert_eq!(any, vec![Permission::USERS_READ, Permission::USERS_UPDATE]);
+    }
+
+    #[test]
+    fn comparison_includes_decision_and_checked_permissions() {
+        let tenant_id = uuid::Uuid::new_v4();
+        let comparison = evaluate_casbin_shadow_comparison(
+            &tenant_id,
+            &[Permission::USERS_READ],
+            ShadowCheck::Any(&[Permission::USERS_READ, Permission::USERS_UPDATE]),
+            true,
+        );
+
+        assert!(!comparison.decision.mismatch());
+        assert_eq!(
+            comparison.checked_permissions,
+            vec![Permission::USERS_READ, Permission::USERS_UPDATE]
+        );
     }
 }
