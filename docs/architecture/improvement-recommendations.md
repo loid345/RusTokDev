@@ -2,7 +2,7 @@
 
 - Date: 2026-02-19
 - Status: Living document (updated)
-- Last updated: 2026-03-05 (backlog cleanup pass)
+- Last updated: 2026-03-05 (critical pass по рекомендациям масштабирования/i18n)
 - Author: Platform Architecture Review
 
 ---
@@ -166,11 +166,65 @@ RUSTOK_REDIS_URL / REDIS_URL задан?
 - внедрить поэтапно (сначала internal bundles, затем external/plugin-ready слой);
 - синхронизировать route registration policy и module ownership boundaries.
 
+### 2.5 Надёжность EventBus consumers (минимальный обязательный контур)
+
+**Почему добавлено после критической проверки:** это недорогой шаг с высоким эффектом; закрывает класс `silent desync` для CQRS без крупной перестройки транспорта.
+
+**Что берём в работу сейчас (без overengineering):**
+- в consumer loops, где используется `recv()`, явно обрабатывать `Lagged` и `Closed` (лог + метрика + controlled resubscribe);
+- добавить минимальные метрики: `event_consumer_lagged_total`, `event_consumer_restarted_total`, `event_dispatch_latency_ms`;
+- зафиксировать runbook: когда делать partial/full reindex read-моделей после lag-инцидента.
+
+**Дальнейшие улучшения:**
+- переход на новый брокер по умолчанию после подтверждения эксплуатационной необходимости и плана миграции;
+- выделение отдельного replay-сервиса после накопления сценариев, где это даст измеримый эффект.
+
+### 2.6 Единая политика локалей (platform-wide, без миграционного шока)
+
+**Почему добавлено после критической проверки:** текущая i18n-схема фрагментирована между backend/admin/storefront, а несогласованные fallback-правила создают UX и SEO-регрессии.
+
+**Что берём в работу сейчас:**
+- унифицировать negotiation policy: `URL locale -> cookie -> Accept-Language -> tenant default`;
+- формализовать fallback-цепочку контента: `requested -> tenant.fallback -> tenant.default -> en`;
+- расширить ограничение длины `locale` в БД (минимум до 16) для BCP47-подобных тегов.
+
+**Дальнейшие улучшения:**
+- полный replatforming UI i18n-библиотек по поэтапному плану, без массового переключения в одном релизе;
+- поочерёдное добавление RTL/pluralization в приложения согласно приоритетам продукта.
+
+### 2.7 Тонкий `apps/server` как композиционный корень
+
+**Почему добавлено после критической проверки:** текущий `after_routes` остаётся точкой концентрации ответственности; это повышает риск регрессий при любом изменении старта приложения.
+
+**Что берём в работу сейчас:**
+- вынести инициализацию тяжёлых фоновых подсистем в отдельные init-компоненты (внутри текущего процесса);
+- сделать явные границы: routing/middleware в composition root, доменная логика и воркеры — за портами/адаптерами;
+- покрыть integration smoke-test'ами жизненный цикл init/health/stop.
+
+**Дальнейшие улучшения:**
+- поэтапный переход к отдельным деплойментам после завершения внутренней декомпозиции и стабилизации границ модулей.
+
+### 2.8 Масштабирование БД: только evidence-driven изменения
+
+**Почему добавлено после критической проверки:** партиционирование и агрессивные схемные изменения полезны, но дороги в сопровождении; применять только после метрик и EXPLAIN.
+
+**Что берём в работу сейчас:**
+- обязательный аудит индексов для hot-path запросов (`outbox/events/index/read models`);
+- baseline-метрики через `pg_stat_statements` + сохранение EXPLAIN-планов для топовых запросов;
+- подготовка partition-ready дизайна (time/tenant), но без немедленного включения в прод.
+
+**Дальнейшие улучшения:**
+- включение партиционирования после подтверждённого bottleneck и проверки эффекта на метриках/планах запросов.
+
 ## 3. Приоритизированный план действий (только открытые пункты)
 
 | ID | Рекомендация | Приоритет | Статус | Риск | Ценность | Owner area |
 |---|---|---|---|---|---|---|
+| 2.5 | Надёжность EventBus consumers (`Lagged/Closed`, reindex runbook) | 🔴 Критично | Planned | Высокий | Reliability / consistency | Platform foundation + index |
+| 2.6 | Единая политика локалей и fallback | 🔴 Критично | Planned | Средний | UX / SEO consistency | Platform foundation + frontends + content |
+| 2.7 | Тонкий `apps/server` как composition root | 🔵 Стратегически | Backlog | Высокий | DX / stability | Platform foundation |
 | 2.1 | Вынести `DomainEvent` из core | 🔵 Стратегически | In Progress | Высокий | Extensibility | Platform foundation |
+| 2.8 | Evidence-driven DB scale readiness (индексы, EXPLAIN, partition-ready) | 🟢 Улучшение | Planned | Средний | Performance predictability | Platform foundation |
 | 2.2 | Typed per-tenant module config | 🟢 Улучшение | Backlog | Средний | Consistency / safety | Platform foundation + domain modules |
 | 2.3 | `rustok-notifications` как optional module | 🟢 Улучшение | Backlog | Высокий | New capability | Domain modules |
 | 2.4 | `core-server` + `module-bundles` | 🔵 Стратегически | ADR ready / Backlog | Высокий | DX / scalability | Platform foundation |
@@ -178,10 +232,24 @@ RUSTOK_REDIS_URL / REDIS_URL задан?
 ## 4. Итоговая картина
 
 - Базовые архитектурные проблемы из первого ревью (границы Core/Optional, регистрация core-модулей, валидация `modules.toml`, outbox reliability baseline, Alloy lifecycle baseline) закрыты и больше не ведутся как отдельные action items в этом документе.
-- Текущий фокус смещён на стратегические и расширяемые треки: event contract decoupling, typed module settings, notifications module и server bundling.
+- Текущий фокус разделён на два слоя: (а) быстрые меры снижения риска (event consumer reliability, единая locale-policy, тонкий composition root), (б) стратегические треки (event contract decoupling, typed settings, server bundling).
+- Принцип обновления backlog: берём только изменения с высоким ожидаемым эффектом и управляемой сложностью; крупные инициативы запускаются только после evidence (метрики, EXPLAIN, инциденты).
 - Все новые изменения по этим направлениям должны синхронно отражаться в `docs/architecture/*`, `docs/modules/*` и соответствующих ADR.
 
 ## 5. Roadmap (следующие итерации, только незакрытые работы)
+
+### 5.0 Итерация 0 — быстрые защитные меры (2.5, 2.6, 2.8)
+
+**Scope**
+- добавить обработку `Lagged/Closed` во все event consumers и минимальные метрики деградации доставки;
+- зафиксировать platform-wide locale negotiation/fallback policy и начать её внедрение в backend + storefront;
+- провести evidence-driven performance baseline (pg_stat_statements + EXPLAIN для hot-path) до любых тяжёлых БД-изменений.
+
+**DoD**
+- отсутствуют consumer loops с немой остановкой после lag;
+- документирован единый locale/fallback-контракт и применён минимум в двух пользовательских путях;
+- сформирован список top-N SQL hot paths с планом индексации и подтверждёнными метриками до/после.
+
 
 ### 5.1 Итерация 1 — event contract decoupling (2.1)
 
