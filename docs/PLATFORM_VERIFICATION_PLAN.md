@@ -1134,7 +1134,7 @@
 - [ ] `testing-integration.md` — примеры integration тестов работают
 - [ ] `testing-property.md` — примеры property тестов работают
 - [x] `error-handling.md` — синхронизирован с текущей реализацией `rustok_core::error::{Error, RichError, ErrorResponse}` и актуальным HTTP/status mapping
-- [ ] `input-validation.md` — валидация описана корректно
+- [x] `input-validation.md` — синхронизирован с текущим состоянием: `validator`-based DTO validation подтверждён в `rustok-content` и `rustok-commerce`, сервисные вызовы `.validate()` отражены в гайде
 - [x] `rate-limiting.md` — приведён в соответствие с реализацией: sliding window, `RwLock`, IP-based client extraction (`X-Forwarded-For` / `X-Real-IP`), cleanup task и auth/API middleware wiring
 - [ ] `security-audit.md` — описание совпадает с тестами
 - [x] `observability-quickstart.md` — приведён в соответствие с текущим кодом и compose-конфигами: `docker compose`, endpoint метрик `/metrics`, порт сервера `5150`, OTLP endpoint `http://localhost:4317`

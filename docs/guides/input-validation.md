@@ -2,7 +2,7 @@
 
 ## Overview
 
-RusToK uses the `validator` crate to provide declarative, type-safe input validation for all API inputs. Validation rules are defined directly on DTO structs using attributes, ensuring data integrity at the API boundary.
+RusToK uses the `validator` crate to provide declarative, type-safe input validation for API inputs where DTO validation is currently implemented. Validation rules are defined directly on DTO structs using attributes, and service methods call `.validate()` before persistence.
 
 ## Features
 
@@ -11,7 +11,7 @@ RusToK uses the `validator` crate to provide declarative, type-safe input valida
 - ✅ Clear, structured error messages
 - ✅ Compile-time safety
 - ✅ Automatic validation in services
-- ✅ Consistent across REST and GraphQL APIs
+- ~ Partial adoption across modules: fully wired in `rustok-content` and `rustok-commerce`; other modules often reuse validated content DTO/service flows
 
 ## Basic Usage
 
@@ -54,10 +54,10 @@ use validator::Validate;
 use crate::dto::CreateNodeInput;
 
 pub async fn create_node(input: CreateNodeInput) -> Result<NodeResponse> {
-    // Validate input
-    input.validate()
-        .map_err(|e| ContentError::Validation(format!("Invalid input: {}", e)))?;
-    
+    input
+        .validate()
+        .map_err(|e| ContentError::Validation(e.to_string()))?;
+
     // Process valid input
     // ...
 }
@@ -218,6 +218,22 @@ pub struct NodeTranslationInput {
     pub slug: Option<String>,
 }
 ```
+
+## Current Coverage In Repository
+
+Проверенная текущая реализация:
+
+- `crates/rustok-content/src/dto/node.rs`
+  - `CreateNodeInput`, `UpdateNodeInput`, `NodeTranslationInput`, `BodyInput` используют `#[derive(Validate)]`
+  - `NodeService::create_node_in_tx()` вызывает `input.validate()`
+- `crates/rustok-commerce/src/dto/product.rs`
+  - `CreateProductInput`, `UpdateProductInput`, `ProductTranslationInput`, `ProductOptionInput` используют `#[derive(Validate)]`
+- `crates/rustok-commerce/src/dto/variant.rs`
+  - `CreateVariantInput`, `UpdateVariantInput`, `PriceInput` используют `#[derive(Validate)]`
+- `crates/rustok-commerce/src/services/catalog.rs`
+  - `CatalogService::create_product()` вызывает `input.validate()`
+
+Это соответствует текущему статусу в плане верификации: validator-based validation уже активно используется, но покрытие по модулям пока не абсолютно тотальное.
 
 ## Content Module Validation
 
