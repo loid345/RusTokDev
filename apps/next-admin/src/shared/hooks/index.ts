@@ -8,3 +8,4 @@ export * from '@/hooks/use-media-query';
 export * from '@/hooks/use-mobile';
 export * from '@/hooks/use-multistep-form';
 export * from '@/hooks/use-nav';
+export * from '@/hooks/use-i18n';
