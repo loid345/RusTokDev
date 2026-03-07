@@ -1136,7 +1136,7 @@
 - [x] `error-handling.md` — синхронизирован с текущей реализацией `rustok_core::error::{Error, RichError, ErrorResponse}` и актуальным HTTP/status mapping
 - [x] `input-validation.md` — синхронизирован с текущим состоянием: `validator`-based DTO validation подтверждён в `rustok-content` и `rustok-commerce`, сервисные вызовы `.validate()` отражены в гайде
 - [x] `rate-limiting.md` — приведён в соответствие с реализацией: sliding window, `RwLock`, IP-based client extraction (`X-Forwarded-For` / `X-Real-IP`), cleanup task и auth/API middleware wiring
-- [ ] `security-audit.md` — описание совпадает с тестами
+- [x] `security-audit.md` — синхронизирован с текущими security audit тестами и модулем `rustok_core::security` (headers, rate limit, input validation, SSRF, audit)
 - [x] `observability-quickstart.md` — приведён в соответствие с текущим кодом и compose-конфигами: `docker compose`, endpoint метрик `/metrics`, порт сервера `5150`, OTLP endpoint `http://localhost:4317`
 
 ### 16.3 Module docs
