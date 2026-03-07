@@ -4218,7 +4218,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
- "toml 1.0.3+spec-1.1.0",
+ "toml 1.0.4+spec-1.1.0",
  "tracing",
 ]
 
@@ -4789,7 +4789,7 @@ dependencies = [
  "js-sys",
  "leptos 0.8.17",
  "leptos-graphql",
- "leptos-use 0.18.0",
+ "leptos-use",
  "leptos_router",
  "serde",
  "serde_json",
@@ -4805,7 +4805,7 @@ checksum = "777b6bb2100427b4e5f6c64ec659a27c253b69f4a78ccd58f4bcc5d39c6dcffb"
 dependencies = [
  "chrono",
  "leptos 0.8.17",
- "leptos-use 0.18.0",
+ "leptos-use",
  "log",
  "web-sys",
 ]
@@ -4906,7 +4906,7 @@ checksum = "8512aac7ab65b0e8f4c963abd4a0501fe49eac2ab18b99a046001e7ea73a07df"
 dependencies = [
  "leptos 0.8.17",
  "leptos-struct-table-macro",
- "leptos-use 0.18.0",
+ "leptos-use",
  "send_wrapper",
  "serde",
  "wasm-bindgen",
@@ -4940,27 +4940,6 @@ dependencies = [
  "iu-leptos",
  "leptos 0.8.17",
  "serde",
-]
-
-[[package]]
-name = "leptos-use"
-version = "0.17.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a59caa13dbc0f4d71bf3d610884953273c52a0bbe995b35d36cdb1c8f91142f"
-dependencies = [
- "cfg-if",
- "codee",
- "cookie",
- "default-struct-builder",
- "js-sys",
- "lazy_static",
- "leptos 0.8.17",
- "paste",
- "send_wrapper",
- "thiserror 2.0.18",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
 ]
 
 [[package]]
@@ -5111,9 +5090,9 @@ dependencies = [
 
 [[package]]
 name = "leptos_i18n"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b684f755c59519727f332adbede7479e1e7e0e2d0c386f2246f52bb822ce52a1"
+checksum = "a5b45da8116738d79dc37931ebcdb3de38138f48eb75a301e34dda760be96306"
 dependencies = [
  "codee",
  "default-struct-builder",
@@ -5125,7 +5104,7 @@ dependencies = [
  "icu_locale",
  "icu_plurals",
  "leptos 0.8.17",
- "leptos-use 0.17.0",
+ "leptos-use",
  "leptos_i18n_macro",
  "leptos_meta",
  "serde",
@@ -5136,9 +5115,9 @@ dependencies = [
 
 [[package]]
 name = "leptos_i18n_codegen"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "882404164bbcc3a01150eb7aa2d7b78353faf1803917cee081d9bff2dff849de"
+checksum = "bc9715bc49b7f7fd7e94da4e5f061529b27245a4dfc0e58f1d59323cd881bc92"
 dependencies = [
  "icu_locale",
  "leptos_i18n_parser",
@@ -5150,9 +5129,9 @@ dependencies = [
 
 [[package]]
 name = "leptos_i18n_macro"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f5ad882bbe0510800dea813ea63c223056ea8f16f26dc1ede36cfb831466908a"
+checksum = "20422aff22003a77f2341aa5cfc53545e9017add2df812fce7529eb474584c1c"
 dependencies = [
  "fixed_decimal",
  "icu_locale",
@@ -5164,14 +5143,14 @@ dependencies = [
  "serde_json",
  "syn 2.0.116",
  "tinystr",
- "toml 0.9.12+spec-1.1.0",
+ "toml 1.0.4+spec-1.1.0",
 ]
 
 [[package]]
 name = "leptos_i18n_parser"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "938cb6c7ab8ed61ce47f6a397a846bbbe65fc909de35acc89d748426a7d58970"
+checksum = "582c0d5d254a0b4569d967f7113662ea8cf6c2ebfd401f7f308c841675b03926"
 dependencies = [
  "fixed_decimal",
  "icu_locale",
@@ -5185,7 +5164,7 @@ dependencies = [
  "serde_yaml",
  "syn 2.0.116",
  "tinystr",
- "toml 0.9.12+spec-1.1.0",
+ "toml 1.0.4+spec-1.1.0",
 ]
 
 [[package]]
@@ -5604,7 +5583,7 @@ dependencies = [
  "tokio-util",
  "toml 0.8.23",
  "tower 0.4.13",
- "tower-http",
+ "tower-http 0.6.8",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -7655,7 +7634,7 @@ dependencies = [
  "tokio-rustls",
  "tokio-util",
  "tower 0.5.3",
- "tower-http",
+ "tower-http 0.6.8",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -7693,11 +7672,12 @@ dependencies = [
  "rustls-platform-verifier",
  "serde",
  "serde_json",
+ "serde_urlencoded",
  "sync_wrapper",
  "tokio",
  "tokio-rustls",
  "tower 0.5.3",
- "tower-http",
+ "tower-http 0.6.8",
  "tower-service",
  "url",
  "wasm-bindgen",
@@ -7877,9 +7857,9 @@ dependencies = [
 
 [[package]]
 name = "rmcp"
-version = "0.17.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a0ce46f9101dc911f07e1468084c057839d15b08040d110820c5513312ef56a"
+checksum = "d2cb14cb9278a12eae884c9f3c0cfeca2cc28f361211206424a1d7abed95f090"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
@@ -7899,9 +7879,9 @@ dependencies = [
 
 [[package]]
 name = "rmcp-macros"
-version = "0.17.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abad6f5f46e220e3bda2fc90fd1ad64c1c2a2bd716d52c845eb5c9c64cda7542"
+checksum = "6a02ea81d9482b07e1fe156ac7cf98b6823d51fb84531936a5e1cbb4eec31ad5"
 dependencies = [
  "darling 0.23.0",
  "proc-macro2",
@@ -7991,6 +7971,41 @@ dependencies = [
  "syn 2.0.116",
  "syn_derive 0.2.0",
  "thiserror 2.0.18",
+]
+
+[[package]]
+name = "rust-embed"
+version = "8.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "04113cb9355a377d83f06ef1f0a45b8ab8cd7d8b1288160717d66df5c7988d27"
+dependencies = [
+ "rust-embed-impl",
+ "rust-embed-utils",
+ "walkdir",
+]
+
+[[package]]
+name = "rust-embed-impl"
+version = "8.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "da0902e4c7c8e997159ab384e6d0fc91c221375f6894346ae107f47dd0f3ccaa"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "rust-embed-utils",
+ "shellexpand",
+ "syn 2.0.116",
+ "walkdir",
+]
+
+[[package]]
+name = "rust-embed-utils"
+version = "8.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bcdef0be6fe7f6fa333b1073c949729274b05f123a0ad7efcb8efd878e5c3b1"
+dependencies = [
+ "sha2",
+ "walkdir",
 ]
 
 [[package]]
@@ -8187,7 +8202,7 @@ dependencies = [
  "leptos-shadcn-pagination",
  "leptos-struct-table",
  "leptos-ui",
- "leptos-use 0.18.0",
+ "leptos-use",
  "leptos-zod",
  "leptos-zustand",
  "leptos_i18n",
@@ -8317,7 +8332,7 @@ dependencies = [
  "serde_yaml",
  "thiserror 2.0.18",
  "tokio",
- "toml 1.0.3+spec-1.1.0",
+ "toml 1.0.4+spec-1.1.0",
  "tracing",
  "ulid",
  "url",
@@ -8487,11 +8502,13 @@ dependencies = [
  "lettre",
  "loco-rs",
  "migration",
+ "mime_guess",
  "moka",
  "once_cell",
  "password-hash",
  "redis 1.0.4",
  "rhai",
+ "rust-embed",
  "rust_decimal",
  "rustok-blog",
  "rustok-commerce",
@@ -8503,6 +8520,7 @@ dependencies = [
  "rustok-outbox",
  "rustok-pages",
  "rustok-rbac",
+ "rustok-storefront",
  "rustok-telemetry",
  "rustok-tenant",
  "rustok-test-utils",
@@ -8515,7 +8533,8 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.18",
  "tokio",
- "toml 1.0.3+spec-1.1.0",
+ "toml 1.0.4+spec-1.1.0",
+ "tower-http 0.5.2",
  "tracing",
  "utoipa",
  "uuid",
@@ -8533,7 +8552,8 @@ dependencies = [
  "leptos-next-metadata",
  "leptos-shadcn-pagination",
  "leptos-table",
- "leptos-use 0.18.0",
+ "leptos-ui",
+ "leptos-use",
  "leptos-zod",
  "leptos-zustand",
  "leptos_i18n",
@@ -9384,6 +9404,15 @@ name = "shared_thread"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "52b86057fcb5423f5018e331ac04623e32d6b5ce85e33300f92c79a1973928b0"
+
+[[package]]
+name = "shellexpand"
+version = "3.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "32824fab5e16e6c4d86dc1ba84489390419a39f97699852b66480bb87d297ed8"
+dependencies = [
+ "dirs",
+]
 
 [[package]]
 name = "shlex"
@@ -10299,9 +10328,9 @@ checksum = "1f3ccbac311fea05f86f61904b462b55fb3df8837a366dfc601a0161d0532f20"
 
 [[package]]
 name = "tokio"
-version = "1.49.0"
+version = "1.50.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72a2903cd7736441aac9df9d7688bd0ce48edccaadf181c3b90be801e81d3d86"
+checksum = "27ad5e34374e03cfffefc301becb44e9dc3c17584f414349ebe29ed26661822d"
 dependencies = [
  "bytes",
  "libc",
@@ -10419,20 +10448,18 @@ version = "0.9.12+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf92845e79fc2e2def6a5d828f0801e29a2f8acc037becc5ab08595c7d5e9863"
 dependencies = [
- "indexmap 2.13.0",
  "serde_core",
  "serde_spanned 1.0.4",
  "toml_datetime 0.7.5+spec-1.1.0",
  "toml_parser",
- "toml_writer",
  "winnow 0.7.14",
 ]
 
 [[package]]
 name = "toml"
-version = "1.0.3+spec-1.1.0"
+version = "1.0.4+spec-1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c7614eaf19ad818347db24addfa201729cf2a9b6fdfd9eb0ab870fcacc606c0c"
+checksum = "c94c3321114413476740df133f0d8862c61d87c8d26f04c6841e033c8c80db47"
 dependencies = [
  "indexmap 2.13.0",
  "serde_core",
@@ -10577,6 +10604,31 @@ dependencies = [
  "pin-project-lite",
  "slab",
  "sync_wrapper",
+ "tokio",
+ "tokio-util",
+ "tower-layer",
+ "tower-service",
+ "tracing",
+]
+
+[[package]]
+name = "tower-http"
+version = "0.5.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e9cd434a998747dd2c4276bc96ee2e0c7a2eadf3cae88e52be55a05fa9053f5"
+dependencies = [
+ "bitflags 2.11.0",
+ "bytes",
+ "futures-util",
+ "http",
+ "http-body",
+ "http-body-util",
+ "http-range-header",
+ "httpdate",
+ "mime",
+ "mime_guess",
+ "percent-encoding",
+ "pin-project-lite",
  "tokio",
  "tokio-util",
  "tower-layer",
@@ -12069,7 +12121,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "serde",
- "toml 1.0.3+spec-1.1.0",
+ "toml 1.0.4+spec-1.1.0",
 ]
 
 [[package]]

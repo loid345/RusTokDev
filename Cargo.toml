@@ -27,7 +27,7 @@ repository = "https://github.com/RustokCMS/RusToK"
 loco-rs = "0.16"
 
 # Async Runtime
-tokio = { version = "1.40", features = ["full"] }
+tokio = { version = "1.50", features = ["full"] }
 
 # Web
 axum = "0.8.8"
@@ -37,13 +37,14 @@ tower-http = { version = "0.5", features = ["cors", "fs"] }
 # Database (Loco uses SeaORM)
 sea-orm = { version = "1.0", features = [
     "sqlx-postgres",
+    "sqlx-sqlite",
     "runtime-tokio-rustls",
     "macros",
     "with-uuid",
     "with-chrono",
     "with-json",
 ] }
-sea-orm-migration = { version = "1.0", features = ["runtime-tokio-rustls", "sqlx-postgres"] }
+sea-orm-migration = { version = "1.0", features = ["runtime-tokio-rustls", "sqlx-postgres", "sqlx-sqlite"] }
 
 # GraphQL
 async-graphql = { version = "7.2.1", features = ["uuid", "chrono"] }
@@ -94,7 +95,7 @@ leptos-struct-table = "0.18.0"
 leptos-zustand = { path = "crates/leptos-zustand" }
 leptos-shadcn-pagination = { path = "crates/leptos-shadcn-pagination" }
 leptos-use = "0.18.0"
-leptos_i18n = "0.6.0"
+leptos_i18n = "0.6.1"
 leptos-next-metadata = "1.5.0"
 leptos_query = "0.5.3"
 leptos-chartistry = "0.2"

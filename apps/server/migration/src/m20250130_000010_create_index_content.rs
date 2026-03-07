@@ -1,4 +1,5 @@
 use sea_orm_migration::prelude::*;
+use sea_orm_migration::sea_orm::DatabaseBackend;
 
 #[derive(DeriveMigrationName)]
 pub struct Migration;
@@ -162,17 +163,18 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        manager
-            .get_connection()
-            .execute_unprepared(
-                "CREATE INDEX idx_index_content_search ON index_content USING GIN (search_vector)",
-            )
-            .await?;
+        if manager.get_database_backend() == DatabaseBackend::Postgres {
+            manager
+                .get_connection()
+                .execute_unprepared(
+                    "CREATE INDEX idx_index_content_search ON index_content USING GIN (search_vector)",
+                )
+                .await?;
 
-        manager
-            .get_connection()
-            .execute_unprepared(
-                r#"
+            manager
+                .get_connection()
+                .execute_unprepared(
+                    r#"
                 CREATE OR REPLACE FUNCTION index_content_search_trigger() RETURNS trigger AS $$
                 BEGIN
                     NEW.search_vector :=
@@ -190,23 +192,26 @@ impl MigrationTrait for Migration {
                     FOR EACH ROW
                     EXECUTE FUNCTION index_content_search_trigger();
             "#,
-            )
-            .await?;
+                )
+                .await?;
+        }
 
         Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager
-            .get_connection()
-            .execute_unprepared(
-                "DROP TRIGGER IF EXISTS index_content_search_update ON index_content",
-            )
-            .await?;
-        manager
-            .get_connection()
-            .execute_unprepared("DROP FUNCTION IF EXISTS index_content_search_trigger")
-            .await?;
+        if manager.get_database_backend() == DatabaseBackend::Postgres {
+            manager
+                .get_connection()
+                .execute_unprepared(
+                    "DROP TRIGGER IF EXISTS index_content_search_update ON index_content",
+                )
+                .await?;
+            manager
+                .get_connection()
+                .execute_unprepared("DROP FUNCTION IF EXISTS index_content_search_trigger")
+                .await?;
+        }
         manager
             .drop_table(Table::drop().table(IndexContent::Table).to_owned())
             .await?;

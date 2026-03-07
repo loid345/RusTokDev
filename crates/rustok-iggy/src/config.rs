@@ -97,8 +97,11 @@ impl Default for RemoteConfig {
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct TopologyConfig {
+    #[serde(default = "default_stream_name")]
     pub stream_name: String,
+    #[serde(default = "default_domain_partitions")]
     pub domain_partitions: u32,
+    #[serde(default = "default_replication_factor")]
     pub replication_factor: u8,
 }
 
@@ -110,6 +113,18 @@ impl Default for TopologyConfig {
             replication_factor: 1,
         }
     }
+}
+
+fn default_stream_name() -> String {
+    "rustok".to_string()
+}
+
+fn default_domain_partitions() -> u32 {
+    8
+}
+
+fn default_replication_factor() -> u8 {
+    1
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

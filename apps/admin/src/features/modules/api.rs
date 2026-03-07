@@ -32,8 +32,13 @@ pub async fn fetch_modules(
     token: Option<String>,
     tenant_slug: Option<String>,
 ) -> Result<Vec<ModuleInfo>, ApiError> {
-    let response: ModuleRegistryResponse =
-        request(MODULE_REGISTRY_QUERY, serde_json::json!({}), token, tenant_slug).await?;
+    let response: ModuleRegistryResponse = request(
+        MODULE_REGISTRY_QUERY,
+        serde_json::json!({}),
+        token,
+        tenant_slug,
+    )
+    .await?;
     Ok(response.module_registry)
 }
 
