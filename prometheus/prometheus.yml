@@ -27,11 +27,11 @@ scrape_configs:
   # RusToK Server Metrics
   - job_name: 'rustok-server'
     static_configs:
-      - targets: ['host.docker.internal:3000']  # Adjust port if needed
+      - targets: ['host.docker.internal:5150']
         labels:
           service: 'rustok-server'
           env: 'development'
-    metrics_path: '/api/_health/metrics'  # Adjust to your metrics endpoint
+    metrics_path: '/metrics'
 
   # Prometheus self-monitoring
   - job_name: 'prometheus'

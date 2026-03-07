@@ -13,10 +13,10 @@ Quick guide to get started with RusToK observability stack.
 
 ```bash
 # Start Jaeger, Prometheus, and Grafana
-docker-compose -f docker-compose.observability.yml up -d
+docker compose -f docker-compose.observability.yml up -d
 
 # Check services are running
-docker-compose -f docker-compose.observability.yml ps
+docker compose -f docker-compose.observability.yml ps
 ```
 
 ### 2. Run RusToK Server with Tracing
@@ -199,10 +199,10 @@ info!("Fetching user from database");
 
 ```bash
 # Check Docker logs
-docker-compose -f docker-compose.observability.yml logs
+docker compose -f docker-compose.observability.yml logs
 
 # Restart specific service
-docker-compose -f docker-compose.observability.yml restart jaeger
+docker compose -f docker-compose.observability.yml restart jaeger
 ```
 
 ### No Traces in Jaeger
@@ -224,7 +224,7 @@ curl http://localhost:4317
 **Check:**
 1. Is metrics endpoint accessible?
    ```bash
-   curl http://localhost:3000/api/_health/metrics
+   curl http://localhost:5150/metrics
    ```
 2. Check Prometheus targets:
    - Open http://localhost:9090/targets
@@ -249,13 +249,13 @@ curl http://localhost:4317
 
 ```bash
 # Stop but keep data
-docker-compose -f docker-compose.observability.yml stop
+docker compose -f docker-compose.observability.yml stop
 
 # Stop and remove containers
-docker-compose -f docker-compose.observability.yml down
+docker compose -f docker-compose.observability.yml down
 
 # Stop, remove, and delete data
-docker-compose -f docker-compose.observability.yml down -v
+docker compose -f docker-compose.observability.yml down -v
 ```
 
 ---

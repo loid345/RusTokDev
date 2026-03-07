@@ -1137,7 +1137,7 @@
 - [ ] `input-validation.md` — валидация описана корректно
 - [ ] `rate-limiting.md` — конфигурация rate limiting актуальна
 - [ ] `security-audit.md` — описание совпадает с тестами
-- [ ] `observability-quickstart.md` — настройка метрик/трейсинга работает
+- [x] `observability-quickstart.md` — приведён в соответствие с текущим кодом и compose-конфигами: `docker compose`, endpoint метрик `/metrics`, порт сервера `5150`, OTLP endpoint `http://localhost:4317`
 
 ### 16.3 Module docs
 
