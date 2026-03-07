@@ -1133,7 +1133,7 @@
 - [ ] `testing.md` — гайд по тестированию актуален
 - [ ] `testing-integration.md` — примеры integration тестов работают
 - [ ] `testing-property.md` — примеры property тестов работают
-- [ ] `error-handling.md` — паттерн ошибок совпадает с кодом
+- [x] `error-handling.md` — синхронизирован с текущей реализацией `rustok_core::error::{Error, RichError, ErrorResponse}` и актуальным HTTP/status mapping
 - [ ] `input-validation.md` — валидация описана корректно
 - [x] `rate-limiting.md` — приведён в соответствие с реализацией: sliding window, `RwLock`, IP-based client extraction (`X-Forwarded-For` / `X-Real-IP`), cleanup task и auth/API middleware wiring
 - [ ] `security-audit.md` — описание совпадает с тестами
