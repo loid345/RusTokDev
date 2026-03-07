@@ -1095,17 +1095,18 @@
 
 **Путь:** `grafana/`
 
-- [ ] Dashboard JSON файлы валидны
-- [ ] Dashboards покрывают: HTTP, DB, Cache, Events
-- [ ] Grafana datasource конфигурация корректна
+- [x] Dashboard JSON файлы валидны — оба файла (`grafana/dashboards/rustok-overview.json`, `grafana/dashboards/rustok-advanced.json`) успешно разобраны через `python json.load(...)`
+- [x] Dashboards покрывают: HTTP, DB, Cache, Events
+  - Проверено по panel titles/queries: `rustok-overview.json` покрывает HTTP, `rustok-advanced.json` явно содержит панели `Database Connections`, `Database Query Duration (P95)`, `Cache Hit Rate`, `Cache Size`, `EventBus Queue Depth`, `EventBus Throughput`
+- [x] Grafana datasource конфигурация корректна — `grafana/datasources/datasources.yml` валиден по структуре, содержит provisioning для Prometheus (`http://prometheus:9090`) и Jaeger (`http://jaeger:16686`)
 
 ### 15.5 Docker Compose
 
-- [ ] `docker-compose.yml` — минимальный dev setup (PostgreSQL, Redis)
-- [ ] `docker-compose.full-dev.yml` — полный dev setup
-- [ ] `docker-compose.observability.yml` — Prometheus + Grafana
-- [ ] Все services стартуют без ошибок
-- [ ] Порты не конфликтуют
+- [x] `docker-compose.yml` — минимальный dev setup валиден (`docker compose config` проходит); фактически содержит PostgreSQL и Iggy, Redis в минимальном compose-файле отсутствует
+- [x] `docker-compose.full-dev.yml` — полный dev setup валиден (`docker compose -f docker-compose.full-dev.yml config` проходит); obsolete `version:` удалён
+- [x] `docker-compose.observability.yml` — Prometheus + Grafana валиден (`docker compose -f docker-compose.observability.yml config` проходит); obsolete `version:` удалён
+- [!] Все services стартуют без ошибок — не проверено в этой среде: выполнена только статическая валидация compose-конфигов, без `docker compose up`
+- [x] Порты не конфликтуют на уровне compose-конфигов — явные host ports разведены: base/full-dev `3000/3001/3100/3101/5150/5432/8090`, observability `3000/8080/9090/9100/16686/4317/4318/14250/14268/5775/5778/6831/6832`
 
 ---
 
