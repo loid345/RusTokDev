@@ -1438,7 +1438,7 @@
 - [x] Каждый mutation имеет permission check (не полагается на «auth достаточно»)
   - Проверено по `apps/server/src/graphql/*/mutation.rs`: blog/content/commerce/forum/pages/alloy/auth mutations имеют явные permission/auth checks
 - [~] Каждый query с list возвращает paginated результат (не полную таблицу)
-  - `users`, `products`, `pages`, `posts`, `nodes`, `scripts` используют pagination/page_info, но `forum_categories`, `forum_topics`, `forum_replies`, `enabled_modules`, `tenant_modules`, `module_registry` возвращают обычные списки — нужен отдельный рефакторинг
+  - `users`, `products`, `pages`, `posts`, `nodes`, `scripts` используют pagination/page_info; дополнительно переведены `forum_categories`, `forum_topics`, `forum_replies` на connection-ответы с `page_info`. Непагинированными пока остаются `enabled_modules`, `tenant_modules`, `module_registry`, `recent_activity`, `scripts_for_event`
 - [~] `context.data::<TenantContext>()` используется в каждом resolver (не пропущен)
   - Часть resolvers опирается на аргумент `tenant_id`, а root/resolver-level multi-tenant queries используют `TenantContext`; единый паттерн ещё не везде соблюдён
 - [~] Нет бизнес-логики в resolvers — только вызов domain services
