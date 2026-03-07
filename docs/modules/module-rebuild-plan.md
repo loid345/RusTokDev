@@ -473,14 +473,214 @@ rustok module publish --dry-run     # Проверить без публикац
 
 ---
 
-## Часть 4: Leptos Storefront — модульные слоты
+## Часть 4: Реализация по всем приложениям
+
+План покрывает **все 4 приложения**. Ниже — что реализовано, что нужно
+доработать, и как компоненты переиспользуются между стеками.
+
+### 4.1. Матрица текущего состояния
+
+| Функциональность | Next.js Admin | Next.js Frontend | Leptos Admin | Leptos Storefront |
+|---|---|---|---|---|
+| **Toggle UI** (`/modules`) | ✅ | — | ✅ | — |
+| **GraphQL toggle API** | ✅ | — | ✅ | — |
+| **Slot-реестр** | ✅ nav-based | ✅ `home:afterHero` | ✅ `DashboardSection` | ✅ `HomeAfterHero` |
+| **Shared пакеты** (`@rustok/*`) | ✅ `blog-admin` | ✅ `blog-frontend` | — (compile-time) | — (compile-time) |
+| **`EnabledModulesProvider`** | ❌ | ❌ | ❌ | ❌ |
+| **`ModuleGuard`** | ❌ | ❌ | ❌ | ❌ |
+| **Фильтрация слотов по enabled** | ❌ | ❌ | ❌ | ❌ |
+| **Marketplace каталог UI** | ❌ | — | ❌ | — |
+| **Build progress UI** | ❌ | — | ❌ | — |
+| **Updates tab** | ❌ | — | ❌ | — |
+
+### 4.2. P1 — EnabledModulesProvider (все 4 приложения)
+
+Каждое приложение должно знать, какие модули включены для текущего тенанта,
+чтобы условно показывать/скрывать UI-элементы.
+
+**Next.js Admin:**
+```tsx
+// app/providers/enabled-modules-provider.tsx
+// Server Component → загружает через GraphQL enabledModules query
+// Передаёт через React Context
+export function EnabledModulesProvider({ children }) {
+  const modules = await getEnabledModules(); // GraphQL
+  return (
+    <EnabledModulesContext.Provider value={modules}>
+      {children}
+    </EnabledModulesContext.Provider>
+  );
+}
+
+// hooks/use-enabled-modules.ts
+export function useEnabledModules(): string[] {
+  return useContext(EnabledModulesContext);
+}
+```
+
+**Next.js Frontend (storefront):**
+```tsx
+// Аналогичный провайдер, но данные берёт из серверной сессии
+// или из API при SSR. Используется для фильтрации слотов.
+export function EnabledModulesProvider({ children }) {
+  const modules = await getEnabledModules(); // GraphQL / cookie
+  return <EnabledModulesContext.Provider value={modules}>{children}</EnabledModulesContext.Provider>;
+}
+```
+
+**Leptos Admin:**
+```rust
+// shared/context/enabled_modules.rs
+pub fn provide_enabled_modules_context() {
+    let modules = Resource::new(|| (), |_| async { fetch_enabled_modules().await });
+    provide_context(EnabledModulesContext { modules });
+}
+
+pub fn use_enabled_modules() -> Memo<HashSet<String>> { ... }
+```
+
+**Leptos Storefront:**
+```rust
+// Аналогично, но в SSR-контексте (Axum middleware передаёт enabled modules):
+pub fn provide_enabled_modules(enabled: HashSet<String>) {
+    provide_context(EnabledModulesContext { enabled });
+}
+```
+
+### 4.3. P1 — ModuleGuard (все 4 приложения)
+
+Компонент-обёртка для маршрутов/секций, привязанных к модулю.
+
+**Next.js:**
+```tsx
+function ModuleGuard({ slug, children, fallback }: { slug: string; children: ReactNode; fallback?: ReactNode }) {
+  const enabled = useEnabledModules();
+  if (!enabled.includes(slug)) return fallback ?? <NotFound />;
+  return <>{children}</>;
+}
+
+// Использование в layout:
+<ModuleGuard slug="blog">
+  <BlogPage />
+</ModuleGuard>
+```
+
+**Leptos:**
+```rust
+#[component]
+fn ModuleGuard(slug: &'static str, children: Children) -> impl IntoView {
+    let enabled = use_enabled_modules();
+    move || {
+        if enabled.get().contains(slug) {
+            children().into_any()
+        } else {
+            view! { <NotFound /> }.into_any()
+        }
+    }
+}
+```
+
+### 4.4. P1 — Conditional Sidebar Nav
+
+Сайдбар в обоих админках должен фильтровать nav items по enabled модулям.
+
+**Next.js Admin:**
+- `getAdminNavItems()` уже собирает nav из зарегистрированных модулей.
+- Нужно добавить фильтрацию: `navItems.filter(item => enabledModules.includes(item.moduleSlug))`.
+
+**Leptos Admin:**
+- Sidebar сейчас хардкодит nav items.
+- Нужно: модули регистрируют свои nav items через `AdminComponentRegistration`.
+- Sidebar вызывает `components_for_slot(AdminSlot::NavItem)` и фильтрует по enabled.
+
+### 4.5. P1 — Storefront Slot Filtering
+
+Оба storefront'а (Next.js и Leptos) должны фильтровать слоты по enabled модулям.
+
+**Next.js Frontend:**
+```tsx
+// Сейчас:
+const modules = getModulesForSlot("home:afterHero");
+// Нужно:
+const enabled = useEnabledModules();
+const modules = getModulesForSlot("home:afterHero")
+  .filter(m => enabled.includes(m.moduleSlug));
+```
+
+**Leptos Storefront:**
+```rust
+// Сейчас:
+let modules = components_for_slot(StorefrontSlot::HomeAfterHero);
+// Нужно:
+let enabled = use_enabled_modules();
+let modules = components_for_slot(StorefrontSlot::HomeAfterHero)
+    .into_iter()
+    .filter(|m| enabled.get().contains(m.module_slug))
+    .collect::<Vec<_>>();
+```
+
+Для этого `StorefrontComponentRegistration` расширяется полем:
+```rust
+pub struct StorefrontComponentRegistration {
+    pub id: &'static str,
+    pub module_slug: Option<&'static str>,  // ← NEW
+    pub slot: StorefrontSlot,
+    pub order: usize,
+    pub render: fn() -> AnyView,
+}
+```
+
+### 4.6. P3 — Marketplace UI (обе админки)
+
+Страница `/modules` расширяется вкладками в **обоих** админках:
+
+| Вкладка | Описание | Next.js Admin | Leptos Admin |
+|---|---|---|---|
+| Installed | Текущие модули + toggle | ✅ есть | ✅ есть |
+| Catalog | Каталог маркетплейса | Нужно | Нужно |
+| Updates | Доступные обновления | Нужно | Нужно |
+| History | История сборок | Нужно | Нужно |
+
+Оба админа используют **те же GraphQL queries** (`marketplace`, `availableUpdates`,
+`buildHistory`), поэтому backend — один, а UI дублируется на React и Leptos.
+
+### 4.7. Shared Packages — стратегия переиспользования
+
+**Next.js экосистема** — npm пакеты:
+- `@rustok/blog-admin` — React-компоненты для админки blog.
+- `@rustok/blog-frontend` — React-компоненты для storefront blog.
+- Пакеты самостоятельно регистрируются в реестре через side-effect import.
+
+**Leptos экосистема** — Rust crate compile-time:
+- `rustok-blog` crate содержит `admin/` и `storefront/` директории.
+- Компоненты компилируются в бинарник.
+- Регистрация через `init_modules()` в `main.rs`.
+
+**Единый crate `rustok-blog`** содержит:
+```
+rustok-blog/
+├── src/lib.rs              # Backend: RusToKModule impl
+├── ui/
+│   ├── admin/              # → @rustok/blog-admin (Next.js)
+│   │   └── ...             # → apps/admin/src/... (Leptos, compile-time)
+│   └── frontend/           # → @rustok/blog-frontend (Next.js)
+│       └── ...             # → apps/storefront/src/... (Leptos, compile-time)
+```
+
+---
+
+## Часть 5: Storefront — модульные слоты (Next.js + Leptos)
 
 ### Текущий механизм
 
-Storefront использует `StorefrontSlot` enum для регистрации компонентов:
-- `HomeAfterHero` — слот после hero-секции на главной.
+Оба storefront'а используют slot-based registry:
+- **Next.js**: `StorefrontSlot = "home:afterHero"` (строки, `getModulesForSlot()`).
+- **Leptos**: `StorefrontSlot::HomeAfterHero` (enum, `components_for_slot()`).
 
-### Расширение слотов
+### Расширение слотов (оба storefront'а)
+
+Набор слотов одинаков для обоих стеков. В Next.js — строковые ключи,
+в Leptos — enum. Должны совпадать 1:1.
 
 ```rust
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -538,7 +738,7 @@ pub fn register_components(enabled_modules: &HashSet<String>) {
 
 ---
 
-## Часть 5: Единый стандарт модуля — checklist для авторов
+## Часть 6: Единый стандарт модуля — checklist для авторов
 
 ### Структура модуля
 
@@ -596,24 +796,26 @@ rustok-blog/
 
 ## Приоритеты реализации
 
-| Приоритет | Задача | Сложность | Статус |
-|---|---|---|---|
-| P0 | Tenant-level toggle (backend) | — | Готово |
-| P0 | Leptos admin: страница модулей с toggle | — | Готово |
-| P0 | Next.js admin: страница модулей с toggle | — | Готово |
-| P1 | `EnabledModulesProvider` + conditional nav | Средняя | — |
-| P1 | `ModuleGuard` для маршрутов | Низкая | — |
-| P1 | Фильтрация storefront слотов по enabled | Низкая | — |
-| P2 | `rustok-module.toml` стандарт + валидатор | Средняя | — |
-| P2 | Manifest Manager (CRUD для modules.toml) | Средняя | — |
-| P2 | Build Service API (GraphQL) | Высокая | — |
-| P3 | Build Orchestrator (CI/CD интеграция) | Высокая | — |
-| P3 | UI install/uninstall + build progress | Средняя | — |
-| P3 | Cargo features авто-генерация | Низкая | — |
-| P4 | Маркетплейс: реестр + GraphQL API | Высокая | — |
-| P4 | Маркетплейс: UI каталог в админке | Средняя | — |
-| P4 | CLI `rustok module publish` | Средняя | — |
-| P4 | Validation pipeline для публикации | Высокая | — |
+| Приоритет | Задача | Приложения | Сложность | Статус |
+|---|---|---|---|---|
+| P0 | Tenant-level toggle (backend) | Server | — | Готово |
+| P0 | Leptos admin: страница модулей с toggle | Leptos Admin | — | Готово |
+| P0 | Next.js admin: страница модулей с toggle | Next.js Admin | — | Готово |
+| P1 | `EnabledModulesProvider` | **Все 4** | Средняя | — |
+| P1 | `ModuleGuard` для маршрутов | **Все 4** | Низкая | — |
+| P1 | Conditional sidebar nav по enabled модулям | Leptos Admin, Next.js Admin | Низкая | — |
+| P1 | Фильтрация storefront слотов по enabled | Leptos Storefront, Next.js Frontend | Низкая | — |
+| P2 | `rustok-module.toml` стандарт + валидатор | Server, CLI | Средняя | — |
+| P2 | Manifest Manager (CRUD для modules.toml) | Server | Средняя | — |
+| P2 | Build Service API (GraphQL) | Server | Высокая | — |
+| P3 | Build Orchestrator (CI/CD интеграция) | Server, CI | Высокая | — |
+| P3 | Marketplace каталог UI | Leptos Admin, Next.js Admin | Средняя | — |
+| P3 | Build progress UI | Leptos Admin, Next.js Admin | Средняя | — |
+| P3 | Updates tab UI | Leptos Admin, Next.js Admin | Низкая | — |
+| P3 | Cargo features авто-генерация | Server, CI | Низкая | — |
+| P4 | Маркетплейс: реестр + GraphQL API | Server (отдельный сервис) | Высокая | — |
+| P4 | CLI `rustok module publish` | CLI | Средняя | — |
+| P4 | Validation pipeline для публикации | Server (отдельный сервис) | Высокая | — |
 
 ---
 

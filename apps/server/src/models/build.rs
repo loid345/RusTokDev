@@ -47,14 +47,27 @@ pub enum BuildStage {
     Complete,
 }
 
-/// Deployment profile
+/// Deployment profile — derived from `[build.server]` in modules.toml.
+///
+/// Determined by two booleans: `embed_admin` and `embed_storefront`.
+///
+/// | embed_admin | embed_storefront | Profile            | Description                                    |
+/// |-------------|------------------|--------------------|------------------------------------------------|
+/// | true        | true             | Monolith           | One binary: Axum + Leptos admin + storefront   |
+/// | true        | false            | ServerWithAdmin    | Axum + Leptos admin; storefront(s) separate    |
+/// | false       | true             | ServerWithStorefront | Axum + Leptos storefront; admin separate     |
+/// | false       | false            | HeadlessApi        | Pure API; admin and storefront(s) separate     |
 #[derive(Debug, Clone, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
 #[sea_orm(rs_type = "String", db_type = "String(StringLen::None)")]
 pub enum DeploymentProfile {
     #[sea_orm(string_value = "monolith")]
     Monolith,
-    #[sea_orm(string_value = "headless")]
-    Headless,
+    #[sea_orm(string_value = "server-with-admin")]
+    ServerWithAdmin,
+    #[sea_orm(string_value = "server-with-storefront")]
+    ServerWithStorefront,
+    #[sea_orm(string_value = "headless-api")]
+    HeadlessApi,
 }
 
 /// Build entity
