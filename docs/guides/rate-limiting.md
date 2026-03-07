@@ -72,17 +72,15 @@ async fn setup_app() -> Router {
 
 The rate limiter identifies clients in the following priority order:
 
-1. **User ID** from `X-User-ID` header (set by auth middleware)
-2. **X-Forwarded-For** header (behind proxy)
-3. **X-Real-IP** header (behind nginx)
-4. **Fallback** to `"ip:unknown"`
+1. **X-Forwarded-For** header (behind proxy, first IP only)
+2. **X-Real-IP** header (behind nginx)
+3. **Fallback** to `"ip:unknown"`
+
+> Security note: the implementation intentionally does **not** trust client-supplied `X-User-ID` headers. User-scoped rate limiting must only be introduced after JWT verification in trusted middleware.
 
 ### Example Headers
 
 ```http
-# Authenticated user
-X-User-ID: 550e8400-e29b-41d4-a716-446655440000
-
 # Behind proxy
 X-Forwarded-For: 203.0.113.42, 198.51.100.17
 
@@ -310,6 +308,7 @@ loop {
 - Uses `RwLock` for thread-safe access
 - Read operations don't block each other
 - Write operations (incrementing counter) are fast
+- Cleanup runs every 5 minutes via `cleanup_task()`
 
 ## Troubleshooting
 
@@ -324,7 +323,8 @@ loop {
 **Check**:
 1. Is rate limiting enabled? (`config.enabled == true`)
 2. Is middleware added to the correct routes?
-3. Are client IDs being extracted correctly?
+3. Are client IDs being extracted correctly from `X-Forwarded-For` / `X-Real-IP`?
+4. For auth endpoints, are `/api/auth/login`, `/api/auth/register`, and `/api/auth/reset*` routed through the dedicated auth limiter?
 
 ### Memory growing over time
 

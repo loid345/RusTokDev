@@ -1135,7 +1135,7 @@
 - [ ] `testing-property.md` — примеры property тестов работают
 - [ ] `error-handling.md` — паттерн ошибок совпадает с кодом
 - [ ] `input-validation.md` — валидация описана корректно
-- [ ] `rate-limiting.md` — конфигурация rate limiting актуальна
+- [x] `rate-limiting.md` — приведён в соответствие с реализацией: sliding window, `RwLock`, IP-based client extraction (`X-Forwarded-For` / `X-Real-IP`), cleanup task и auth/API middleware wiring
 - [ ] `security-audit.md` — описание совпадает с тестами
 - [x] `observability-quickstart.md` — приведён в соответствие с текущим кодом и compose-конфигами: `docker compose`, endpoint метрик `/metrics`, порт сервера `5150`, OTLP endpoint `http://localhost:4317`
 
