@@ -42,7 +42,7 @@ pub fn Modules() -> impl IntoView {
                     modules_resource.get().map(|result| {
                         match result {
                             Ok(modules) => {
-                                view! { <ModulesList modules=modules /> }.into_any()
+                                view! { {modules_list(modules)} }.into_any()
                             }
                             Err(err) => {
                                 view! {

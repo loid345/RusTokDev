@@ -1,6 +1,7 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_auth::hooks::use_tenant;
+use leptos_hook_form::FormState;
 
 use crate::shared::ui::{Button, Input, LanguageToggle};
 use crate::{t_string, use_i18n};
@@ -13,8 +14,8 @@ pub fn ResetPassword() -> impl IntoView {
     let initial_tenant = tenant_signal.get().unwrap_or_default();
     let (tenant, set_tenant) = signal(initial_tenant);
     let (email, set_email) = signal(String::new());
-    let (error, set_error) = signal(Option::<String>::None);
-    let (status, set_status) = signal(Option::<String>::None);
+    let (form_state, set_form_state) = signal(FormState::idle());
+    let (success_message, set_success_message) = signal(Option::<String>::None);
 
     let on_request = move |_| {
         if tenant.get().is_empty() || email.get().is_empty() {
@@ -26,15 +27,18 @@ pub fn ResetPassword() -> impl IntoView {
         let tenant_value = tenant.get().trim().to_string();
         let email_value = email.get().trim().to_string();
 
+        set_form_state.set(FormState::submitting());
+        set_success_message.set(None);
+
         spawn_local(async move {
             match leptos_auth::api::forgot_password(email_value, tenant_value).await {
                 Ok(message) => {
-                    set_error.set(None);
-                    set_status.set(Some(message));
+                    set_form_state.set(FormState::idle());
+                    set_success_message.set(Some(message));
                 }
                 Err(e) => {
-                    set_error.set(Some(format!("{}", e)));
-                    set_status.set(None);
+                    set_form_state.set(FormState::with_form_error(format!("{}", e)));
+                    set_success_message.set(None);
                 }
             }
         });
@@ -71,14 +75,14 @@ pub fn ResetPassword() -> impl IntoView {
                         <span>{move || t_string!(i18n, reset.languageLabel)}</span>
                         <LanguageToggle />
                     </div>
-                    <Show when=move || error.get().is_some()>
+                    <Show when=move || form_state.get().form_error.is_some()>
                         <div class="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-2 text-sm text-destructive">
-                            {move || error.get().unwrap_or_default()}
+                            {move || form_state.get().form_error.unwrap_or_default()}
                         </div>
                     </Show>
-                    <Show when=move || status.get().is_some()>
+                    <Show when=move || success_message.get().is_some()>
                         <div class="rounded-md bg-emerald-100 border border-emerald-200 px-4 py-2 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                            {move || status.get().unwrap_or_default()}
+                            {move || success_message.get().unwrap_or_default()}
                         </div>
                     </Show>
                     <Input value=tenant set_value=set_tenant placeholder="demo" label=move || t_string!(i18n, reset.tenantLabel) />

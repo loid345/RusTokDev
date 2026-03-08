@@ -4,7 +4,7 @@ use crate::entities::module::ModuleInfo;
 use crate::{t, t_string, use_i18n};
 
 #[component]
-pub fn ModuleCard(
+pub fn module_card(
     module: ModuleInfo,
     #[prop(into)] loading: Signal<bool>,
     #[prop(optional)] on_toggle: Option<Callback<(String, bool)>>,

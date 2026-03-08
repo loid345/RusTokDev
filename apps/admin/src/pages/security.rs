@@ -1,6 +1,7 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_auth::hooks::{use_auth, use_tenant, use_token};
+use leptos_hook_form::FormState;
 use serde::{Deserialize, Serialize};
 
 use crate::shared::api::{request, ApiError};
@@ -49,8 +50,8 @@ pub fn Security() -> impl IntoView {
 
     let (current_password, set_current_password) = signal(String::new());
     let (new_password, set_new_password) = signal(String::new());
-    let (status, set_status) = signal(Option::<String>::None);
-    let (error, set_error) = signal(Option::<String>::None);
+    let (form_state, set_form_state) = signal(FormState::idle());
+    let (success_message, set_success_message) = signal(Option::<String>::None);
 
     let on_change_password = move |_| {
         if current_password.get().is_empty() || new_password.get().is_empty() {
@@ -69,6 +70,9 @@ pub fn Security() -> impl IntoView {
 
         let current_password_value = current_password.get();
         let new_password_value = new_password.get();
+
+        set_form_state.set(FormState::submitting());
+        set_success_message.set(None);
 
         spawn_local(async move {
             let result = request::<ChangePasswordVariables, ChangePasswordResponse>(
@@ -98,8 +102,8 @@ pub fn Security() -> impl IntoView {
                         ApiError::Network => t_string!(i18n, errors.network).to_string(),
                         ApiError::Graphql(_) => t_string!(i18n, errors.unknown).to_string(),
                     };
-                    set_error.set(Some(message));
-                    set_status.set(None);
+                    set_form_state.set(FormState::with_form_error(message));
+                    set_success_message.set(None);
                 }
             }
         });
@@ -127,7 +131,7 @@ pub fn Security() -> impl IntoView {
                     </p>
                 </div>
                 <div class="flex flex-wrap items-center gap-3">
-                    <Button
+                    <ui_button
                         on_click=on_sign_out_all
                         class="border border-border bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground"
                     >
@@ -144,14 +148,14 @@ pub fn Security() -> impl IntoView {
                     <p class="text-sm text-muted-foreground">
                         {move || t_string!(i18n, security.passwordSubtitle)}
                     </p>
-                    <Input
+                     <ui_input
                         value=current_password
                         set_value=set_current_password
                         placeholder="••••••••"
                         type_="password"
                         label=move || t_string!(i18n, security.currentPasswordLabel)
                     />
-                    <Input
+                    <ui_input
                         value=new_password
                         set_value=set_new_password
                         placeholder="••••••••"
@@ -166,12 +170,12 @@ pub fn Security() -> impl IntoView {
                     </Button>
                     <Show when=move || error.get().is_some()>
                         <div class="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-2 text-sm text-destructive">
-                            {move || error.get().unwrap_or_default()}
+                            {move || form_state.get().form_error.unwrap_or_default()}
                         </div>
                     </Show>
-                    <Show when=move || status.get().is_some()>
+                    <Show when=move || success_message.get().is_some()>
                         <div class="rounded-md bg-emerald-100 border border-emerald-200 px-4 py-2 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                            {move || status.get().unwrap_or_default()}
+                            {move || success_message.get().unwrap_or_default()}
                         </div>
                     </Show>
                 </div>

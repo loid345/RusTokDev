@@ -1,4 +1,5 @@
 use sea_orm_migration::prelude::*;
+use sea_orm_migration::sea_orm::DatabaseBackend;
 
 use super::m20250101_000001_create_tenants::Tenants;
 
@@ -123,16 +124,18 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        manager
-            .create_foreign_key(
-                ForeignKey::create()
-                    .name("fk_nodes_category")
-                    .from(Nodes::Table, Nodes::CategoryId)
-                    .to(Categories::Table, Categories::Id)
-                    .on_delete(ForeignKeyAction::SetNull)
-                    .to_owned(),
-            )
-            .await?;
+        if manager.get_database_backend() != DatabaseBackend::Sqlite {
+            manager
+                .create_foreign_key(
+                    ForeignKey::create()
+                        .name("fk_nodes_category")
+                        .from(Nodes::Table, Nodes::CategoryId)
+                        .to(Categories::Table, Categories::Id)
+                        .on_delete(ForeignKeyAction::SetNull)
+                        .to_owned(),
+                )
+                .await?;
+        }
 
         manager
             .create_index(
@@ -181,14 +184,16 @@ impl MigrationTrait for Migration {
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
-        manager
-            .drop_foreign_key(
-                ForeignKey::drop()
-                    .table(Nodes::Table)
-                    .name("fk_nodes_category")
-                    .to_owned(),
-            )
-            .await?;
+        if manager.get_database_backend() != DatabaseBackend::Sqlite {
+            manager
+                .drop_foreign_key(
+                    ForeignKey::drop()
+                        .table(Nodes::Table)
+                        .name("fk_nodes_category")
+                        .to_owned(),
+                )
+                .await?;
+        }
         manager
             .drop_table(Table::drop().table(CategoryTranslations::Table).to_owned())
             .await?;

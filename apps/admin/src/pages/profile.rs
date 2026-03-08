@@ -1,6 +1,8 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_auth::hooks::{use_current_user, use_tenant, use_token};
+use leptos_hook_form::FormState;
+use leptos_ui::{Select, SelectOption};
 use serde::{Deserialize, Serialize};
 
 use crate::shared::api::{request, ApiError};
@@ -66,8 +68,8 @@ pub fn Profile() -> impl IntoView {
     let (avatar, set_avatar) = signal(String::new());
     let (timezone, set_timezone) = signal(String::from("Europe/Moscow"));
     let (preferred_locale, set_preferred_locale) = signal(String::from("ru"));
-    let (status, set_status) = signal(Option::<String>::None);
-    let (error, set_error) = signal(Option::<String>::None);
+    let (form_state, set_form_state) = signal(FormState::idle());
+    let (success_message, set_success_message) = signal(Option::<String>::None);
 
     let on_save = move |_| {
         let token_value = token.get();
@@ -79,6 +81,9 @@ pub fn Profile() -> impl IntoView {
         }
 
         let name_value = name.get().trim().to_string();
+
+        set_form_state.set(FormState::submitting());
+        set_success_message.set(None);
 
         spawn_local(async move {
             let result = request::<UpdateProfileInput, UpdateProfileResponse>(
@@ -112,8 +117,8 @@ pub fn Profile() -> impl IntoView {
                         ApiError::Network => t_string!(i18n, errors.network).to_string(),
                         ApiError::Graphql(_) => t_string!(i18n, errors.unknown).to_string(),
                     };
-                    set_error.set(Some(message));
-                    set_status.set(None);
+                    set_form_state.set(FormState::with_form_error(message));
+                    set_success_message.set(None);
                 }
             }
         });
@@ -147,7 +152,7 @@ pub fn Profile() -> impl IntoView {
                     <p class="text-sm text-muted-foreground">
                         {move || t_string!(i18n, profile.sectionSubtitle)}
                     </p>
-                    <Input
+                    <ui_input
                         value=name
                         set_value=set_name
                         placeholder="Alex Morgan"
@@ -161,7 +166,7 @@ pub fn Profile() -> impl IntoView {
                             {move || email.get()}
                         </p>
                     </div>
-                    <Input
+                    <ui_input
                         value=avatar
                         set_value=set_avatar
                         placeholder="https://cdn.rustok.io/avatar.png"
@@ -171,16 +176,16 @@ pub fn Profile() -> impl IntoView {
                         <label class="text-sm text-muted-foreground">
                             {move || t_string!(i18n, profile.timezoneLabel)}
                         </label>
-                        <select
-                            class="rounded-xl border border-input bg-background px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-                            on:change=move |ev| set_timezone.set(event_target_value(&ev))
-                            prop:value=timezone
-                        >
-                            <option value="Europe/Moscow">"Europe/Moscow"</option>
-                            <option value="Europe/Berlin">"Europe/Berlin"</option>
-                            <option value="America/New_York">"America/New_York"</option>
-                            <option value="Asia/Dubai">"Asia/Dubai"</option>
-                        </select>
+                        <Select
+                            options=vec![
+                                SelectOption::new("Europe/Moscow", "Europe/Moscow"),
+                                SelectOption::new("Europe/Berlin", "Europe/Berlin"),
+                                SelectOption::new("America/New_York", "America/New_York"),
+                                SelectOption::new("Asia/Dubai", "Asia/Dubai"),
+                            ]
+                            value=Some(timezone)
+                            set_value=Some(set_timezone)
+                        />
                     </div>
                     <div class="flex flex-col gap-2">
                         <label class="text-sm text-muted-foreground">
@@ -198,14 +203,14 @@ pub fn Profile() -> impl IntoView {
                             {move || t_string!(i18n, profile.localeHint)}
                         </p>
                     </div>
-                    <Show when=move || error.get().is_some()>
+                    <Show when=move || form_state.get().form_error.is_some()>
                         <div class="rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-2 text-sm text-destructive">
-                            {move || error.get().unwrap_or_default()}
+                            {move || form_state.get().form_error.unwrap_or_default()}
                         </div>
                     </Show>
-                    <Show when=move || status.get().is_some()>
-                        <div class="rounded-xl bg-emerald-100 px-4 py-2 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                            {move || status.get().unwrap_or_default()}
+                    <Show when=move || success_message.get().is_some()>
+                        <div class="rounded-xl bg-emerald-100 border border-emerald-200 px-4 py-2 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                            {move || success_message.get().unwrap_or_default()}
                         </div>
                     </Show>
                 </div>
@@ -224,7 +229,7 @@ pub fn Profile() -> impl IntoView {
                                 {move || t_string!(i18n, profile.uiLocaleHint)}
                             </p>
                         </div>
-                        <LanguageToggle />
+                        <ui_language_toggle />
                     </div>
                     <div class="flex items-center justify-between gap-4 border-b border-border py-3 last:border-b-0">
                         <div>
@@ -244,7 +249,7 @@ pub fn Profile() -> impl IntoView {
                                 {move || t_string!(i18n, profile.auditHint)}
                             </p>
                         </div>
-                        <Button
+                        <ui_button
                             on_click=move |_| {}
                             class="border border-input bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground"
                         >

@@ -72,7 +72,7 @@ Most platforms are either **fast but complex** (Go/C++) or **productive but slow
 ### Core Platform
 
 - 🔐 **Multi-tenant Isolation** — Native support for multiple stores/sites in one deployment with security-hardened validation
-- 🔑 **Enterprise Auth** — JWT-based authentication with fine-grained RBAC
+- 🔑 **Enterprise Auth** — JWT + sessions with fine-grained RBAC, built-in OAuth2 Authorization Server for external integrations
 - 📊 **Hybrid API** — Unified GraphQL for domain data and REST for infrastructure/OpenAPI
 - 🏗️ **Standardized Modules** — Clean architecture with `entities`, `dto`, and `services` in every crate
 - 🎣 **Event-Driven Pub/Sub** — Async synchronization with validation, backpressure control, and transactional guarantees
@@ -80,6 +80,34 @@ Most platforms are either **fast but complex** (Go/C++) or **productive but slow
 - 🌍 **Global-First** — Built-in i18n and localization support
 - 🛡️ **Security Hardened** — Input validation, injection prevention (SQL/XSS/Path Traversal), reserved name blocking
 - ⚖️ **Backpressure Control** — Automatic rate limiting prevents OOM from event floods
+
+### Deployment Modes — What No Other CMS Can Do
+
+RusTok is the only platform that supports **all three deployment modes** with a single codebase:
+
+| Mode | How it works | Auth | Use case |
+|------|-------------|------|----------|
+| **Monolith** | Admin + storefront(s) compiled into one binary via Leptos SSR. Single process, single port — like WordPress but in Rust | Server sessions (cookie-based) | Self-hosted sites, blogs, small e-commerce |
+| **Headless** | Server exposes GraphQL/REST API. Frontend is separate (React, Flutter, mobile, CRM) | OAuth2 (PKCE, client_credentials) | Enterprise, mobile apps, third-party integrations |
+| **Mixed** | Built-in Leptos UI (sessions) + external clients (OAuth2) at the same time | Both | Built-in admin + external mobile app + CRM via API |
+
+No other CMS offers this combination:
+
+| Capability | WordPress | Shopify | Strapi | Ghost | **RusToK** |
+|---|---|---|---|---|---|
+| Monolith (single binary) | yes | no | no | yes | **yes** |
+| Headless API with OAuth2 AS | plugin | yes | no | no | **built-in** |
+| Mixed mode (both at once) | hacks | no | no | no | **yes** |
+| Multi-tenant | multisite (hacky) | no | no | no | **native** |
+| Compile-time modules | no (PHP plugins) | no (external apps) | no (JS plugins) | no | **Rust crates** |
+| Configurable admin path | plugin | no | no | no | **yes** (`/admin` → `/my-panel`) |
+| SSR + WASM (one language) | no | no | no | no | **Leptos** |
+
+**Monolith mode**: Admin panel served at a configurable prefix (default `/admin`, changeable for security). Storefront(s) on root routes or subdomains. All authentication via server sessions — no OAuth needed. Works in multi-tenant and multi-site configurations.
+
+**Headless mode**: Any frontend connects via OAuth2. Register your app (SPA, mobile, CRM, ERP) through the Admin UI or GraphQL API, get `client_id` + scopes, and you're connected.
+
+**Mixed mode**: Built-in Leptos admin uses sessions. External mobile app uses OAuth2 PKCE. Both work simultaneously on the same server.
 
 ### Developer Experience
 

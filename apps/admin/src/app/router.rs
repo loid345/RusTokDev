@@ -5,9 +5,9 @@ use leptos_router::components::{ParentRoute, Route, Router, Routes};
 use leptos_router::path;
 
 use crate::pages::{
-    dashboard::Dashboard, login::Login, modules::Modules, not_found::NotFound, profile::Profile,
-    register::Register, reset::ResetPassword, security::Security, user_details::UserDetails,
-    users::Users,
+    dashboard::dashboard, login::login, modules::modules, not_found::not_found, profile::profile,
+    register::register, reset::reset_password, security::security, user_details::user_details,
+    users::users,
 };
 use crate::widgets::app_shell::AppLayout;
 use crate::I18nContextProvider;

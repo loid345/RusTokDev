@@ -122,20 +122,20 @@ pub fn UserMenu() -> impl IntoView {
 }
 
 #[component]
-fn DropdownLink(href: &'static str, icon: &'static str, children: Children) -> impl IntoView {
+fn dropdown_link(href: &'static str, icon: &'static str, children: Children) -> impl IntoView {
     view! {
         <A
             href=href
             attr:class="flex items-center gap-3 px-4 py-2 text-sm text-popover-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
         >
-            <MenuIcon icon=icon />
+            <menu_icon icon=icon />
             <span>{children()}</span>
         </A>
     }
 }
 
 #[component]
-fn MenuIcon(icon: &'static str) -> impl IntoView {
+fn menu_icon(icon: &'static str) -> impl IntoView {
     let path = match icon {
         "user" => "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
         "lock" => "M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4",

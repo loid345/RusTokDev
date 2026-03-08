@@ -159,10 +159,20 @@ impl<R: ScriptRegistry + 'static> RusToKMcpServer<R> {
         }
     }
 
+    fn protocol_version() -> rmcp::model::ProtocolVersion {
+        rmcp::model::ProtocolVersion::V_2024_11_05
+    }
+
+    fn protocol_version_string() -> String {
+        serde_json::to_value(Self::protocol_version())
+            .ok()
+            .and_then(|value| value.as_str().map(str::to_owned))
+            .unwrap_or_else(|| "2024-11-05".to_string())
+    }
     fn health_response(&self, tool_count: usize) -> McpHealthResponse {
         McpHealthResponse {
             status: "ready".to_string(),
-            protocol_version: format!("{:?}", rmcp::model::ProtocolVersion::V_2024_11_05),
+            protocol_version: Self::protocol_version_string(),
             tool_count,
             enabled_tools: self
                 .enabled_tools
@@ -628,23 +638,23 @@ impl<R: ScriptRegistry + Send + Sync + 'static> ServerHandler for RusToKMcpServe
     }
 
     fn get_info(&self) -> ServerInfo {
-        ServerInfo {
-            protocol_version: rmcp::model::ProtocolVersion::V_2024_11_05,
-            capabilities: rmcp::model::ServerCapabilities::default(),
-            server_info: Implementation {
-                name: "RusToK MCP Server".to_string(),
-                version: env!("CARGO_PKG_VERSION").to_string(),
-                title: Some("RusToK MCP Server".to_string()),
-                description: Some(
-                    "MCP server for exploring RusToK modules and managing Alloy scripts. Use list_modules to see available modules, alloy_list_scripts to manage scripts.".to_string(),
-                ),
-                icons: None,
-                website_url: None,
-            },
-            instructions: Some(
-                "MCP server for RusToK. Use list_modules/module_exists for module discovery, alloy_* tools for script management.".to_string(),
-            ),
-        }
+        let mut server_info = Implementation::default();
+        server_info.name = "RusToK MCP Server".to_string();
+        server_info.version = env!("CARGO_PKG_VERSION").to_string();
+        server_info.title = Some("RusToK MCP Server".to_string());
+        server_info.description = Some(
+            "MCP server for exploring RusToK modules and managing Alloy scripts. Use list_modules to see available modules, alloy_list_scripts to manage scripts.".to_string(),
+        );
+
+        let mut info = ServerInfo::default();
+        info.protocol_version = Self::protocol_version();
+        info.capabilities = rmcp::model::ServerCapabilities::default();
+        info.server_info = server_info;
+        info.instructions = Some(
+            "MCP server for RusToK. Use list_modules/module_exists for module discovery, alloy_* tools for script management.".to_string(),
+        );
+
+        info
     }
 }
 

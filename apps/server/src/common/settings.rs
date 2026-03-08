@@ -71,7 +71,7 @@ pub struct EventSettings {
     pub iggy: IggyConfig,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RelayRetryPolicy {
     #[serde(default = "default_relay_max_attempts")]
     pub max_attempts: i32,
@@ -81,12 +81,31 @@ pub struct RelayRetryPolicy {
     pub max_backoff_ms: u64,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+impl Default for RelayRetryPolicy {
+    fn default() -> Self {
+        Self {
+            max_attempts: default_relay_max_attempts(),
+            base_backoff_ms: default_relay_backoff_base_ms(),
+            max_backoff_ms: default_relay_backoff_max_ms(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct DlqSettings {
     #[serde(default = "default_dlq_enabled")]
     pub enabled: bool,
     #[serde(default = "default_dlq_max_attempts")]
     pub max_attempts: i32,
+}
+
+impl Default for DlqSettings {
+    fn default() -> Self {
+        Self {
+            enabled: default_dlq_enabled(),
+            max_attempts: default_dlq_max_attempts(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, Default, Eq, PartialEq)]

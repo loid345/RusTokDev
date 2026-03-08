@@ -71,10 +71,10 @@
 
 ### 0.1 Workspace-level сборка
 
-- [ ] `cargo check --workspace` — весь workspace компилируется без ошибок
-- [ ] `cargo check --workspace --all-features` — компиляция со всеми features
-- [ ] `cargo clippy --workspace -- -D warnings` — нет warnings от clippy
-- [ ] `cargo fmt --all -- --check` — код форматирован
+- [!] `cargo check --workspace` — невозможно в текущей среде: нет C linker (ни MSVC `link.exe`, ни MinGW `dlltool.exe`). Требуется установка Visual Studio Build Tools или MinGW.
+- [!] `cargo check --workspace --all-features` — аналогично, нет C linker
+- [!] `cargo clippy --workspace -- -D warnings` — аналогично, нет C linker
+- [x] `cargo fmt --all -- --check` — код форматирован (исправлены 2 файла: `apps/server/src/app.rs` и `crates/rustok-content/tests/node_event_index_integration_test.rs`)
 
 ### 0.2 Отдельные targets
 
@@ -87,7 +87,7 @@
 - [x] `iggy` версия исправлена: `0.9.2` → `0.9.0` (crates.io не имел 0.9.2)
   - Исправлено в `Cargo.toml` (workspace) и `crates/rustok-iggy-connector/Cargo.toml`
 - [ ] `cargo update` не приводит к конфликтам версий
-- [ ] `Cargo.lock` зафиксирован и корректен
+- [x] `Cargo.lock` зафиксирован в git — удалён из `.gitignore` (теперь tracked для бинарных приложений как рекомендовано Cargo docs). Junction `node_modules` → `apps/next-admin/node_modules` создан в корне для Turbopack.
 
 ### 0.3 Каждый crate компилируется независимо
 
@@ -119,9 +119,11 @@
 ### 0.5 Вспомогательные инструменты
 
 - [ ] `cargo build -p xtask` — xtask собирается
-- [ ] `make help` — Makefile содержит актуальные targets
-- [ ] Docker: `docker-compose.yml` валиден (`docker compose config`)
-- [ ] Docker: `docker-compose.full-dev.yml` валиден
+- [x] `make help` — Makefile содержит актуальные targets
+- [x] Docker: `docker-compose.yml` валиден (`docker compose config`)
+- [x] Docker: `docker-compose.full-dev.yml` валиден
+  - Проверено через `docker compose config` и `docker compose -f docker-compose.yml -f docker-compose.full-dev.yml config`
+  - Дополнительно устранены предупреждения Compose V2: удалён устаревший ключ `version` из `docker-compose.full-dev.yml` и `docker-compose.observability.yml`
 
 ---
 
@@ -201,7 +203,7 @@
 - [x] `CacheBackend` trait определён в `context.rs` (re-export через `lib.rs`)
 - [x] `InMemoryCacheBackend` поддерживает per-entry TTL через moka (в `cache.rs`)
 - [x] `RedisCacheBackend` работает с CircuitBreaker (в `cache.rs`)
-- [~] Fallback: Redis → InMemory — CircuitBreaker есть в `RedisCacheBackend`, но автоматический fallback не проверен
+- [x] Fallback: Redis → InMemory — реализован `FallbackCacheBackend` в `crates/rustok-core/src/cache.rs`: при Cache-ошибке от primary (Redis circuit breaker open) читает из InMemory, пишет в оба бэкенда (write-through для прогрева). Экспортирован в `lib.rs` и `prelude`.
 
 #### Error handling
 - [x] `Error` enum определён в `error/mod.rs` с вариантами: InvalidIdFormat, Database, Serialization, Auth, NotFound, Forbidden, Cache, Scripting, Validation, External
@@ -821,7 +823,7 @@
 - [x] Корректные лимиты для auth endpoints (login/register/reset): 20 req/60 сек per IP для `/api/auth/login`, `/api/auth/register`, `/api/auth/reset/*`
   - Cleanup task запускается через `tokio::spawn` каждые 5 мин
   - Response headers: `x-ratelimit-limit`, `x-ratelimit-remaining`, `x-ratelimit-reset`; при 429 — `retry-after`
-- [ ] Корректные лимиты для API endpoints (глобальный rate limit не реализован — только auth endpoints)
+- [x] Корректные лимиты для API endpoints: глобальный rate limit 300 req/60 сек per IP для всех `/api/*` через `rate_limit_for_paths` middleware, подключён в `app.rs::after_routes()`
 
 ---
 
@@ -831,40 +833,40 @@
 
 **Путь:** `apps/admin/`
 
-- [ ] Cargo.toml: зависимости корректны (leptos, leptos-auth, leptos-graphql, iu-leptos, etc.)
-- [ ] Собирается: `cargo build -p rustok-admin`
-- [ ] Entry point: `main.rs` / `lib.rs`
-- [ ] Routing: все admin-страницы доступны
-- [ ] Auth: login page → JWT хранение → authenticated requests
-- [ ] GraphQL client: подключение к `/api/graphql`
-- [ ] Используется `leptos-auth` для auth state
-- [ ] Используется `leptos-zustand` для state management
-- [ ] Используется `leptos-graphql` для GraphQL queries/mutations
-- [ ] Используется `iu-leptos` (IU компоненты) для UI
+- [x] Cargo.toml: зависимости корректны — leptos (csr), leptos_router, leptos-auth, leptos-graphql, leptos-ui, leptos-forms, leptos-hook-form, leptos-zod, leptos-zustand, leptos-shadcn-pagination, leptos_i18n, etc.
+- [ ] Собирается: `cargo build -p rustok-admin` (требует Trunk/WASM toolchain)
+- [x] Entry point: `main.rs` монтирует `<App />` через `mount_to_body`; `lib.rs` экспортирует модули app/entities/features/pages/shared/widgets
+- [x] Routing: `apps/admin/src/app/router.rs` — страницы зарегистрированы (dashboard, login, register, profile, users, user_details, security, reset, not_found)
+- [x] Auth: `leptos-auth` crate используется (`use_auth`, `use_current_user`, `use_token` hooks + GraphQL mutations SignIn/SignUp)
+- [x] GraphQL client: `leptos-graphql` crate (hooks: `use_query`, `use_mutation`, `use_lazy_query`; endpoint через `GRAPHQL_ENDPOINT` const)
+- [x] Используется `leptos-auth` для auth state
+- [x] Используется `leptos-zustand` для state management
+- [x] Используется `leptos-graphql` для GraphQL queries/mutations
+- [x] Используется `leptos-ui` (shadcn-port) для UI компонентов
 
 #### Страницы admin panel
-- [ ] Dashboard (главная)
-- [ ] Products list / create / edit
-- [ ] Orders list / view
-- [ ] Content / Nodes list / create / edit
-- [ ] Blog posts list / create / edit
-- [ ] Pages list / create / edit
-- [ ] Users management
-- [ ] Settings
-- [ ] Module management (toggle per-tenant)
+- [x] Dashboard (`pages/dashboard.rs`)
+- [~] Products list / create / edit — зависит от modules wiring
+- [ ] Orders list / view — OrderService не реализован
+- [~] Content / Nodes list / create / edit — зависит от modules wiring
+- [~] Blog posts list / create / edit — зависит от modules wiring
+- [~] Pages list / create / edit — зависит от modules wiring
+- [x] Users management (`pages/users.rs`, `pages/user_details.rs`)
+- [x] Settings / Security (`pages/security.rs`)
+- [~] Module management (toggle per-tenant) — UI в `app/modules/`
 
 ### 10.2 apps/storefront (Leptos SSR)
 
 **Путь:** `apps/storefront/`
 
-- [ ] Собирается
-- [ ] SSR работает (server-side rendering)
-- [ ] SEO: meta tags, structured data
-- [ ] Product catalog page
-- [ ] Product detail page
-- [ ] Blog posts page
-- [ ] Static pages
-- [ ] Cart / Checkout flow (если реализован)
+- [ ] Собирается (требует Trunk/WASM toolchain)
+- [x] SSR работает — Axum-based SSR в `main.rs`: `render_shell()` + `StorefrontShell` компонент, роутер с поддержкой `?lang=en|ru`
+- [x] SEO: structured HTML с meta-данными через SSR rendering
+- [x] Product catalog page — `ProductCard` компонент + `ProductCardData` struct реализованы
+- [~] Product detail page — не реализована отдельная страница
+- [~] Blog posts page — не реализована отдельная страница
+- [x] Static pages — i18n (ru/en) через `LocaleStrings` struct
+- [ ] Cart / Checkout flow — не реализован
 
 ---
 
@@ -874,29 +876,34 @@
 
 **Путь:** `apps/next-admin/`
 
-- [ ] `package.json`: зависимости корректны
-- [ ] `npm install` проходит
-- [ ] `npm run build` проходит
-- [ ] `npm run lint` проходит
-- [ ] Clerk auth setup (`docs/clerk_setup.md`)
-- [ ] RBAC навигация (`docs/nav-rbac.md`)
-- [ ] Темизация (`docs/themes.md`)
-- [ ] GraphQL клиент подключён и работает
-- [ ] Используются packages из `packages/` (leptos-auth, leptos-graphql, etc.)
-- [ ] Routing: все admin-страницы доступны
-- [ ] TypeScript компилируется без ошибок
+- [x] `package.json`: зависимости корректны — Next.js 16, Clerk, shadcn/ui, recharts, react-day-picker, @tanstack/react-table, etc.
+- [x] `npm install` проходит (с предупреждениями о peerDeps из-за bun.lock)
+- [x] `npm run build` — повторно проверено после фиксов `calendar.tsx`/`chart.tsx`/`next.config.ts`: `npm install && npm run build` проходит в `apps/next-admin`.
+  - Исправлено ранее и перепроверено: `calendar.tsx` — `Chevron` вместо `IconLeft`/`IconRight`, новые `classNames` (month_caption, button_previous, button_next, etc.)
+  - Исправлено ранее и перепроверено: `chart.tsx` — `TooltipProps<ValueType, NameType>` вместо `React.ComponentProps<typeof Tooltip>`
+  - Исправлено ранее и перепроверено: `next.config.ts` — `turbopack.root` для разрешения local crate UI packages; webpack `resolve.alias`
+  - Исправлено ранее и перепроверено: `@rustok/blog-admin` `package.json` — добавлены реальные `dependencies` вместо `peerDependencies`
+- [x] `npm run lint` проходит
+  - Для рабочей локальной верификации `apps/next-admin/package.json` переведён с `next lint` на прямой вызов `eslint src`: в Next.js 16 CLI-команда `next lint` в этом приложении падала с `Invalid project directory .../lint`, а ESLint 10 требовал flat-config миграцию. Добавлены `eslint.config.mjs` и `.eslintignore`, а `eslint` зафиксирован на `8.57.1`, чтобы `npm run lint` реально проверял исходники `src/`.
+- [x] Clerk auth setup — `docs/clerk_setup.md` есть, `src/auth.ts` настроен
+- [x] RBAC навигация — `docs/nav-rbac.md` есть, `src/config/nav-config.ts` использует `getAdminNavItems()` с `access: { role }`
+- [x] Темизация — `docs/themes.md` есть, `src/styles/` + CSS variables
+- [x] GraphQL клиент подключён — `src/lib/graphql/` с Apollo/fetch клиентом
+- [x] Используются packages из `packages/` — `leptos-auth`, `leptos-graphql` через `packages/*/next/index.ts`
+- [x] Routing: admin-страницы через Next.js App Router в `src/app/dashboard/`
+- [x] TypeScript компилируется — полная проверка подтверждена успешным `npm run build`
 
 ### 11.2 apps/next-frontend
 
 **Путь:** `apps/next-frontend/`
 
-- [ ] `package.json`: зависимости корректны
-- [ ] `npm install && npm run build` проходит
-- [ ] SSR / SSG для SEO
-- [ ] Product catalog
-- [ ] Blog
-- [ ] Static pages
-- [ ] TypeScript компилируется без ошибок
+- [x] `package.json`: зависимости корректны — Next.js, next-intl, Tailwind
+- [x] `npm install && npm run build` проходит — `SUCCESS` (проверено локально)
+- [x] SSR / SSG для SEO — Next.js App Router с `generateStaticParams` / Server Components
+- [~] Product catalog — структура есть (`src/app/`), наполнение зависит от API
+- [~] Blog — структура есть, наполнение зависит от API
+- [x] Static pages — i18n через `next-intl` (`messages/ru.json`, `messages/en.json`)
+- [x] TypeScript компилируется без ошибок (build прошёл)
 
 ---
 
@@ -1093,7 +1100,8 @@
 
 - [ ] Dashboard JSON файлы валидны
 - [ ] Dashboards покрывают: HTTP, DB, Cache, Events
-- [ ] Grafana datasource конфигурация корректна
+- [x] Grafana datasource конфигурация корректна
+  - Добавлены стабильные `uid` для `Prometheus` и `Jaeger`, убрана битая ссылка `tracesToLogs.datasourceUid = loki`, которой не было в стеке
 
 ### 15.5 Docker Compose
 
@@ -1205,7 +1213,7 @@
   - [ ] Запускает `cargo check`
   - [ ] Запускает `cargo test`
   - [ ] Запускает `cargo clippy`
-  - [ ] Запускает `cargo fmt --check`
+  - [x] Запускает `cargo fmt --check` (шаг fmt есть в ci.yml)
   - [ ] Запускает frontend builds (если applicable)
 - [ ] `dependencies.yml` — проверка зависимостей (Dependabot / cargo-deny)
 
@@ -1309,7 +1317,7 @@
 - [x] Проверка: `.env` файлы отсутствуют в git (только `.env.dev.example`)
 
 #### Panics в production
-- [x] Поиск `unwrap()` в production коде — все найденные случаи:
+- [~] Нет `.unwrap()` в production коде — отдельные находки есть в некоторых местах (Rhai scripting, generated code), но в основных service/controller файлах используется `?` или `.expect()` с комментариями. Полная проверка требует `cargo clippy`.
   - `Regex::new(r"...").unwrap()` — безопасно, константные regex паттерны (LazyLock)
   - `serde_json::to_value(Vec<String>).unwrap()` — заменено на `.expect("Vec<String> is always valid JSON")`
   - `state_machine.rs` — внутри `#[cfg(test)]` блоков
@@ -1319,7 +1327,7 @@
   - `rustok-rbac/src/services/authz_mode.rs`: только в `#[cfg(test)]` блоке — безопасно
   - `rustok-telemetry/src/{lib,metrics}.rs`: инициализация Prometheus метрик при старте — стандартный паттерн, panic при дублировании регистрации (правильное поведение)
   - `apps/server/src/models/release.rs`: заменено на `.expect("Vec<String> is always valid JSON")`
-- [x] Поиск `panic!` в production коде — нарушений нет
+- [x] Нет `panic!` в production коде — все `panic!` находятся только в `#[cfg(test)]` блоках (auth_lifecycle.rs и др.)
   - `rustok-test-utils/src/helpers.rs` — только в test helper функциях (assert helpers)
   - `apps/server/src/services/auth_lifecycle.rs` — только внутри `#[test]` функций
 
@@ -1367,12 +1375,13 @@
 
 ### 19.6 State machine correctness
 
-- [ ] Каждый state machine модуль имеет `*_proptest.rs`
+- [x] Каждый state machine модуль имеет `*_proptest.rs`
   - `rustok-content/src/state_machine_proptest.rs`
   - `rustok-commerce/src/state_machine_proptest.rs`
   - `rustok-blog/src/state_machine_proptest.rs`
-- [ ] Невалидные переходы возвращают ошибку (не panic)
-- [ ] Нет string-based status checks (`if status == "published"`)
+- [x] Невалидные переходы возвращают ошибку (не panic)
+- [x] Нет string-based status checks (`if status == "published"`)
+  - Проверено по `crates/` и `apps/server/`: строковых сравнений статусов `published|draft|archived` не найдено, используются enum/state-machine переходы
 
 ### 19.7 DTO consistency
 
@@ -1415,21 +1424,29 @@
 - [x] `rustok-core` не зависит от domain crates (нет circular dependencies)
 - [x] Domain crates не вызывают друг друга напрямую (через events)
 - [x] `rustok-test-utils` — только в `[dev-dependencies]`
-- [ ] Нет `path` dependencies на crates вне workspace
+- [x] Нет `path` dependencies на crates вне workspace
+  - Проверены все `Cargo.toml`: path-зависимости указывают только на workspace-компоненты (`crates/*`, `apps/*`, `UI/leptos`, локальная `migration`); внешних path-dependencies вне репозитория нет
 
 ### 19.12 API antipatterns — GraphQL
 
 - [ ] Нет N+1 queries в resolvers (все связанные данные через DataLoader)
   - Искать: resolvers с прямыми DB-запросами внутри `async fn` для дочерних объектов
 - [x] `MergedObject` используется для модульной schema — `Query(RootQuery, AuthQuery, CommerceQuery, ContentQuery, BlogQuery, ForumQuery, AlloyQuery, PagesQuery)` и аналогичная Mutation в `schema.rs`
-- [ ] Нет `String` errors в GraphQL — используются structured error extensions
+- [~] Нет `String` errors в GraphQL — используются structured error extensions
+  - Есть structured errors через `GraphQLError`, но часть query/mutation/loaders всё ещё использует `async_graphql::Error::new(err.to_string())` и `err.to_string().into()`; требуется довести до единого формата
   - `grep -rn "FieldError::new" apps/server/src/graphql/ --include="*.rs"`
-- [ ] Каждый mutation имеет permission check (не полагается на «auth достаточно»)
-- [ ] Каждый query с list возвращает paginated результат (не полную таблицу)
-- [ ] `context.data::<TenantContext>()` используется в каждом resolver (не пропущен)
-- [ ] Нет бизнес-логики в resolvers — только вызов domain services
-- [ ] Naming convention: queries — `camelCase`, mutations — `camelCase` с глаголом (`createProduct`, не `productCreate`)
-- [ ] Subscription (если есть) использует WebSocket, не polling
+- [x] Каждый mutation имеет permission check (не полагается на «auth достаточно»)
+  - Проверено по `apps/server/src/graphql/*/mutation.rs`: blog/content/commerce/forum/pages/alloy/auth mutations имеют явные permission/auth checks
+- [~] Каждый query с list возвращает paginated результат (не полную таблицу)
+  - `users`, `products`, `pages`, `posts`, `nodes`, `scripts` используют pagination/page_info; дополнительно переведены `forum_categories`, `forum_topics`, `forum_replies` на connection-ответы с `page_info`. Непагинированными пока остаются `enabled_modules`, `tenant_modules`, `module_registry`, `recent_activity`, `scripts_for_event`
+- [~] `context.data::<TenantContext>()` используется в каждом resolver (не пропущен)
+  - Часть resolvers опирается на аргумент `tenant_id`, а root/resolver-level multi-tenant queries используют `TenantContext`; единый паттерн ещё не везде соблюдён
+- [~] Нет бизнес-логики в resolvers — только вызов domain services
+  - Основные mutation/resolver-ветки делегируют в сервисы, но в `commerce/query.rs` и частично `queries.rs` остаются прямые SeaORM-запросы и сборка response-моделей в resolver-слое
+- [x] Naming convention: queries — `camelCase`, mutations — `camelCase` с глаголом (`createProduct`, не `productCreate`)
+  - Проверено по именам GraphQL-resolvers: `createProduct`, `updateNode`, `publishPost`, `pageBySlug`, `recentActivity`, `dashboardStats` и т.д.
+- [x] Subscription (если есть) использует WebSocket, не polling
+  - В схеме используется `EmptySubscription`, GraphQL subscription API отсутствует, polling-вариант не реализован
 
 ### 19.13 API antipatterns — REST
 
@@ -1441,12 +1458,15 @@
   - 204 No Content для DELETE — исправлено во всех controllers
   - 404 Not Found для отсутствующих ресурсов — через `Error::NotFound`
   - 422 Unprocessable Entity для validation errors (не 400)
-- [ ] Нет бизнес-логики в controllers — только вызов domain services
-- [ ] `loco_rs::Result` для error handling (не custom error types)
-- [ ] Все `CreateInput`/`UpdateInput` проходят через `validator::Validate`
-- [ ] Нет endpoints без пагинации в list-запросах
-- [ ] Rate limiting применён к auth endpoints (login, register, reset-password)
-- [ ] CORS middleware подключён с правильными origins
+- [~] Нет бизнес-логики в controllers — основные write-endpoints делегируют в domain services, но часть read/list handlers (`commerce/products.rs`, `commerce/variants.rs`, `commerce/inventory.rs`, `forum/categories.rs`) всё ещё содержит прямые SeaORM-запросы и сборку response DTO в controller-слое
+- [x] `loco_rs::Result` для error handling (не custom error types)
+- [~] Все `CreateInput`/`UpdateInput` проходят через `validator::Validate`
+  - Content и Commerce валидируются на уровне DTO/service; blog/forum/pages в основном опираются на `NodeService`, но transport-level audit показал, что единый `Validate` derive покрывает не все input-структуры
+- [~] Нет endpoints без пагинации в list-запросах
+  - Пагинация есть у commerce products, но list endpoints для content/blog/forum/categories/replies/variants пока возвращают plain `Vec<_>` без общей pagination envelope
+- [x] Rate limiting применён к auth endpoints (login, register, reset-password)
+- [~] CORS middleware подключён с правильными origins
+  - В dev используется permissive-конфигурация (`CorsLayer::very_permissive()`), production-specific allowlist требует отдельной настройки через env/config
 
 ### 19.14 REST ↔ GraphQL parity
 
@@ -1533,6 +1553,7 @@
 | 24 | 🟡 Высокий | ✅ Исправлено | Миграции `ScriptsMigration` и `ScriptExecutionsMigration` из `alloy-scripting` не были включены в главный Migrator — таблицы `scripts` и `script_executions` не создавались при деплое. Добавлены wrapper-файлы `m20260302_000001_create_scripts.rs` и `m20260302_000002_create_script_executions.rs`, подключена зависимость `alloy-scripting` в `migration/Cargo.toml`. | `apps/server/migration/src/lib.rs`, `apps/server/migration/src/m20260302_*.rs`, `apps/server/migration/Cargo.toml` | 7.6, 0.3 |
 | 25 | 🟡 Высокий | ✅ Исправлено | Миграция `search_index` существовала в `apps/server/migration/src/` (использует `PgSearchEngine`) но не была зарегистрирована в Migrator. Также конфликт имён модулей (`m20250130_000010` дважды). Файл переименован в `m20250130_000010a_create_search_index.rs`, добавлен в Migrator. | `apps/server/migration/src/lib.rs`, `apps/server/migration/src/m20250130_000010a_create_search_index.rs` | 0.3, 7.7 |
 | 26 | 🟡 Средний | ✅ Исправлено | Commerce DTOs (`CreateProductInput`, `UpdateProductInput`, `CreateVariantInput`, `UpdateVariantInput`, `PriceInput`) не имели `#[derive(Validate)]` и вызовы валидации в сервисах. Добавлены: `validator` в `rustok-commerce/Cargo.toml`, `#[derive(Validate)]` с аннотациями полей в DTO, вызов `.validate()?` в `CatalogService::create_product()` и `update_product()`. Также добавлены вызовы валидации в `NodeService` для `create_node_in_tx` и `update_node_in_tx`. | `crates/rustok-commerce/src/dto/product.rs`, `dto/variant.rs`, `services/catalog.rs`, `crates/rustok-content/src/services/node_service.rs`, `crates/rustok-commerce/Cargo.toml` | 18.4, 19.7 |
+| 27 | 🟡 Средний | ✅ Исправлено | Observability/Grafana конфигурация содержала дрейф от реального стека: datasources не имели стабильных `uid`, а Jaeger datasource ссылался на несуществующий Loki (`tracesToLogs.datasourceUid = loki`). Это ломало привязку dashboard → datasource и вводило в заблуждение операторов. Исправлено: добавлены `uid: prometheus` и `uid: jaeger`, удалена битая `tracesToLogs` ссылка, а в Compose-файлах убран устаревший ключ `version`, чтобы `docker compose config` проходил без предупреждений. | `grafana/datasources/datasources.yml`, `docker-compose.full-dev.yml`, `docker-compose.observability.yml`, `docs/PLATFORM_VERIFICATION_PLAN.md` | 0.5, 15.4 |
 
 ### 21.1 Детали: Проблема #2 — Небезопасная публикация событий в blog/forum
 
@@ -1559,7 +1580,8 @@
 - [x] Рефакторинг `TopicService` → `publish_in_tx()`
 - [x] Рефакторинг `ReplyService::create_reply()` → `publish_in_tx()`
 - [x] Рефакторинг `ModerationService` (3 вызова) → `publish_in_tx()`
-- [ ] Добавить integration тест: проверить что BlogPostCreated публикуется атомарно
+- [x] Добавить integration тест: проверить что BlogPostCreated публикуется атомарно
+  - Добавлены тесты в `crates/rustok-blog/tests/integration.rs`: happy-path для `MemoryTransport` и failure-path для не-transactional/failing transport (событие не наблюдается при ошибке публикации)
 
 ---
 

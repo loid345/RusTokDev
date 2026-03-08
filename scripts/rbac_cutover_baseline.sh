@@ -36,6 +36,7 @@ MIN_DECISION_DELTA=1
 SAVE_SAMPLES="true"
 REQUIRE_ZERO_MISMATCH="true"
 ALLOW_SHADOW_FAILURES="false"
+REQUIRE_ZERO_SHADOW_FAILURES="true"
 CURL_BIN="${RUSTOK_CURL_BIN:-curl}"
 
 while [[ $# -gt 0 ]]; do
@@ -59,7 +60,7 @@ while [[ $# -gt 0 ]]; do
     --allow-mismatch)
       REQUIRE_ZERO_MISMATCH="false"; shift ;;
     --allow-shadow-failures)
-      ALLOW_SHADOW_FAILURES="true"; shift ;;
+      ALLOW_SHADOW_FAILURES="true"; REQUIRE_ZERO_SHADOW_FAILURES="false"; shift ;;
     --help)
       usage; exit 0 ;;
     *)
@@ -226,6 +227,7 @@ fi
   echo "  \"permission_checks_denied_delta\": ${denied_delta},"
   echo "  \"permission_checks_allowed_delta\": ${allowed_delta},"
   echo "  \"permission_checks_total_delta\": ${total_decisions_delta},"
+  echo "  \"total_decisions_delta\": ${total_decisions_delta},"
   echo "  \"counter_reset_detected\": ${counter_reset_detected},"
   echo "  \"min_decision_delta\": ${MIN_DECISION_DELTA},"
   echo "  \"require_zero_mismatch\": ${REQUIRE_ZERO_MISMATCH},"

@@ -1,6 +1,7 @@
 use leptos::prelude::*;
 use leptos_auth::hooks::use_current_user;
 use leptos_router::components::A;
+use leptos_router::hooks::use_location;
 
 use crate::{t_string, use_i18n};
 
@@ -59,18 +60,10 @@ pub fn Sidebar() -> impl IntoView {
                 </div>
             </nav>
 
-            <div class="p-4 border-t border-sidebar-border">
-                <div class="flex items-center gap-2">
-                    <div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10">
-                        <span class="text-primary text-sm font-semibold">
-                            {move || {
-                                current_user.get()
-                                    .and_then(|u| u.name.clone().or(Some(u.email.clone())))
-                                    .and_then(|n| n.chars().next())
-                                    .map(|c| c.to_uppercase().to_string())
-                                    .unwrap_or_else(|| "U".to_string())
-                            }}
-                        </span>
+            <div class="border-t border-border p-4">
+                <div class="flex items-center gap-3 px-2">
+                    <div class="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-bold text-primary">
+                        {move || current_user.get().and_then(|u| u.name.as_ref().and_then(|n| n.chars().next())).unwrap_or('?')}
                     </div>
                     <div class="grid flex-1 min-w-0 text-left text-sm leading-tight">
                         <span class="truncate font-semibold text-sidebar-foreground text-xs">
@@ -87,49 +80,45 @@ pub fn Sidebar() -> impl IntoView {
 }
 
 #[component]
-fn NavGroupLabel(label: impl Fn() -> String + Send + Sync + 'static) -> impl IntoView {
+fn nav_group_label(label: String) -> impl IntoView {
     view! {
-        <div class="px-3 pb-1 text-xs font-semibold text-sidebar-foreground/50 uppercase tracking-wider">
+        <p class="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground/70">
             {label}
-        </div>
+        </p>
     }
 }
 
 #[component]
-fn NavLink(href: &'static str, icon: &'static str, children: Children) -> impl IntoView {
+fn nav_link(href: &'static str, icon: &'static str, label: String) -> impl IntoView {
+    let location = use_location();
+    let is_active = move || {
+        let path = location.pathname.get();
+        if href == "/" {
+            path == "/" || path == "/dashboard"
+        } else {
+            path.starts_with(href)
+        }
+    };
+
     view! {
         <A
             href=href
-            attr:class="flex items-center gap-3 px-3 py-2 text-sm font-medium text-sidebar-foreground rounded-lg hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors mb-1"
+            class=move || format!(
+                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all hover:bg-accent hover:text-accent-foreground {}",
+                if is_active() { "bg-accent text-accent-foreground shadow-sm" } else { "text-muted-foreground" }
+            )
         >
-            <NavIcon icon=icon />
-            <span>{children()}</span>
+            {nav_icon(icon)}
+            {label}
         </A>
     }
 }
 
 #[component]
-fn NavIcon(icon: &'static str) -> impl IntoView {
-    let svg_path = match icon {
-        "grid" => "M4 4h6v6H4V4zm0 10h6v6H4v-6zm10-10h6v6h-6V4zm0 10h6v6h-6v-6z",
-        "users" => "M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
-        "user" => "M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
-        "lock" => "M19 11H5a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2zM7 11V7a5 5 0 0 1 10 0v4",
-        "package" => "M16.5 9.4l-9-5.19M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16zM3.27 6.96L12 12.01l8.73-5.05M12 22.08V12",
-        _ => "M12 12m-10 0a10 10 0 1 0 20 0a10 10 0 1 0-20 0",
-    };
-
+fn nav_icon(d: &'static str) -> impl IntoView {
     view! {
-        <svg
-            class="h-4 w-4 shrink-0"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-        >
-            <path d=svg_path />
+        <svg class="h-4 w-4 shrink-0 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d=d />
         </svg>
     }
 }

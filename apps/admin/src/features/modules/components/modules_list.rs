@@ -13,8 +13,8 @@ pub fn ModulesList(modules: Vec<ModuleInfo>) -> impl IntoView {
     let i18n = use_i18n();
     let (module_list, set_module_list) = signal(modules);
     let (loading_slug, set_loading_slug) = signal::<Option<String>>(None);
-    let (error_msg, set_error_msg) = signal::<Option<String>>(None);
-    let (success_msg, set_success_msg) = signal::<Option<String>>(None);
+    let (form_state, set_form_state) = signal(FormState::idle());
+    let (success_message, set_success_message) = signal::<Option<String>>(None);
 
     let token = use_token();
     let tenant = use_tenant();
@@ -22,13 +22,15 @@ pub fn ModulesList(modules: Vec<ModuleInfo>) -> impl IntoView {
     let on_toggle = Callback::new(move |(slug, enabled): (String, bool)| {
         let slug_clone = slug.clone();
         set_loading_slug.set(Some(slug.clone()));
-        set_error_msg.set(None);
-        set_success_msg.set(None);
+        set_form_state.set(FormState::idle());
+        set_success_message.set(None);
 
         let token_val = token.get();
         let tenant_val = tenant.get();
 
         spawn_local(async move {
+            set_form_state.set(FormState::submitting());
+
             match api::toggle_module(slug_clone.clone(), enabled, token_val, tenant_val).await {
                 Ok(result) => {
                     set_module_list.update(|modules| {
@@ -44,7 +46,7 @@ pub fn ModulesList(modules: Vec<ModuleInfo>) -> impl IntoView {
                     set_success_msg.set(Some(status.to_string()));
                 }
                 Err(err) => {
-                    set_error_msg.set(Some(format!("{}", err)));
+                    set_form_state.set(FormState::with_form_error(format!("{}", err)));
                 }
             }
             set_loading_slug.set(None);
@@ -69,17 +71,15 @@ pub fn ModulesList(modules: Vec<ModuleInfo>) -> impl IntoView {
 
     view! {
         <div class="space-y-8">
-            {move || error_msg.get().map(|msg| view! {
+            <Show when=move || form_state.get().form_error.is_some()>
                 <div class="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                    {msg}
+                    {move || form_state.get().form_error.unwrap_or_default()}
                 </div>
-            })}
+            </Show>
 
-            {move || success_msg.get().map(|msg| view! {
-                <div class="rounded-lg border border-emerald-500/50 bg-emerald-50 px-4 py-3 text-sm text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400">
-                    {msg}
-                </div>
-            })}
+            <Show when=move || success_message.get().is_some()>
+                <ui_success_message message=success_message.get().unwrap_or_default() />
+            </Show>
 
             // Core modules
             <div class="space-y-3">
@@ -97,10 +97,11 @@ pub fn ModulesList(modules: Vec<ModuleInfo>) -> impl IntoView {
                         let slug = module.module_slug.clone();
                         let is_loading = Signal::derive(move || loading_slug.get().as_deref() == Some(&slug));
                         view! {
-                            <ModuleCard
-                                module=module
-                                loading=is_loading
-                            />
+                            {module_card(
+                                module,
+                                is_loading,
+                                None,
+                            )}
                         }
                     }).collect_view()}
                 </div>
@@ -119,11 +120,11 @@ pub fn ModulesList(modules: Vec<ModuleInfo>) -> impl IntoView {
                         let slug = module.module_slug.clone();
                         let is_loading = Signal::derive(move || loading_slug.get().as_deref() == Some(&slug));
                         view! {
-                            <ModuleCard
-                                module=module
-                                loading=is_loading
-                                on_toggle=on_toggle
-                            />
+                            {module_card(
+                                module,
+                                is_loading,
+                                Some(on_toggle),
+                            )}
                         }
                     }).collect_view()}
                 </div>

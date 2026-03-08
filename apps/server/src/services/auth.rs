@@ -12,10 +12,10 @@ use tracing::{debug, warn};
 
 use rustok_core::{Action, Permission, Rbac, Resource, UserRole};
 use rustok_rbac::{
-    authorize_all_permissions, authorize_any_permission, authorize_permission, evaluate_dual_read,
-    invalidate_cached_permissions, DeniedReasonKind, DualReadOutcome, PermissionCache,
-    PermissionResolver, RbacAuthzMode, RelationPermissionStore, RoleAssignmentStore,
-    RuntimePermissionResolver, ShadowCheck,
+    authorize_all_permissions, authorize_any_permission, authorize_permission,
+    evaluate_casbin_shadow_comparison, evaluate_dual_read, invalidate_cached_permissions,
+    DeniedReasonKind, DualReadOutcome, PermissionCache, PermissionResolver, RbacAuthzMode,
+    RelationPermissionStore, RoleAssignmentStore, RuntimePermissionResolver, ShadowCheck,
 };
 
 use crate::models::_entities::{permissions, role_permissions, roles, user_roles, users};
@@ -60,6 +60,11 @@ pub struct RbacResolverMetricsSnapshot {
     pub claim_role_mismatch_total: u64,
     pub decision_mismatch_total: u64,
     pub shadow_compare_failures_total: u64,
+    pub engine_decisions_relation_total: u64,
+    pub engine_decisions_casbin_total: u64,
+    pub engine_mismatch_total: u64,
+    pub engine_eval_duration_ms_total: u64,
+    pub engine_eval_duration_samples: u64,
 }
 
 static RBAC_PERMISSION_CACHE_HITS: AtomicU64 = AtomicU64::new(0);
@@ -76,6 +81,11 @@ static RBAC_DENIED_UNKNOWN: AtomicU64 = AtomicU64::new(0);
 static RBAC_CLAIM_ROLE_MISMATCH_TOTAL: AtomicU64 = AtomicU64::new(0);
 static RBAC_DECISION_MISMATCH_TOTAL: AtomicU64 = AtomicU64::new(0);
 static RBAC_SHADOW_COMPARE_FAILURES_TOTAL: AtomicU64 = AtomicU64::new(0);
+static RBAC_ENGINE_DECISIONS_RELATION_TOTAL: AtomicU64 = AtomicU64::new(0);
+static RBAC_ENGINE_DECISIONS_CASBIN_TOTAL: AtomicU64 = AtomicU64::new(0);
+static RBAC_ENGINE_MISMATCH_TOTAL: AtomicU64 = AtomicU64::new(0);
+static RBAC_ENGINE_EVAL_DURATION_MS_TOTAL: AtomicU64 = AtomicU64::new(0);
+static RBAC_ENGINE_EVAL_DURATION_SAMPLES: AtomicU64 = AtomicU64::new(0);
 
 impl AuthService {
     fn authz_mode() -> RbacAuthzMode {
@@ -83,7 +93,11 @@ impl AuthService {
     }
 
     fn is_dual_read_enabled() -> bool {
-        Self::authz_mode() == RbacAuthzMode::DualRead
+        Self::authz_mode().should_run_legacy_role_shadow()
+    }
+
+    fn should_run_casbin_shadow() -> bool {
+        Self::authz_mode().should_run_casbin_shadow()
     }
 
     async fn load_legacy_role(
@@ -146,6 +160,54 @@ impl AuthService {
                         );
                     }
                 }
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn shadow_compare_casbin_decision(
+        db: &DatabaseConnection,
+        tenant_id: &uuid::Uuid,
+        user_id: &uuid::Uuid,
+        shadow_check: ShadowCheck<'_>,
+        relation_allowed: bool,
+    ) -> Result<()> {
+        if !Self::should_run_casbin_shadow() {
+            return Ok(());
+        }
+
+        let started_at = Instant::now();
+        let resolver = Self::resolver(db);
+        let resolved = resolver.resolve_permissions(tenant_id, user_id).await?;
+        let casbin_shadow = evaluate_casbin_shadow_comparison(
+            tenant_id,
+            &resolved.permissions,
+            shadow_check,
+            relation_allowed,
+        );
+
+        let eval_latency_ms = started_at.elapsed().as_millis() as u64;
+        Self::record_engine_decision("relation");
+        Self::record_engine_decision("casbin");
+        Self::record_engine_eval_duration(eval_latency_ms);
+
+        if casbin_shadow.decision.mismatch() {
+            Self::record_engine_mismatch();
+            let shadow_check_mode = shadow_check.as_str();
+            let checked_permissions_total = casbin_shadow.checked_permissions_total();
+            for permission in casbin_shadow.checked_permissions {
+                warn!(
+                    tenant_id = %tenant_id,
+                    user_id = %user_id,
+                    shadow_check = shadow_check_mode,
+                    checked_permissions_total,
+                    resource = %permission.resource,
+                    action = %permission.action,
+                    relation_decision = casbin_shadow.decision.relation_allowed,
+                    casbin_decision = casbin_shadow.decision.casbin_allowed,
+                    "rbac_engine_mismatch"
+                );
             }
         }
 
@@ -250,6 +312,27 @@ impl AuthService {
         RBAC_SHADOW_COMPARE_FAILURES_TOTAL.fetch_add(1, Ordering::Relaxed);
     }
 
+    fn record_engine_decision(engine: &str) {
+        match engine {
+            "relation" => {
+                RBAC_ENGINE_DECISIONS_RELATION_TOTAL.fetch_add(1, Ordering::Relaxed);
+            }
+            "casbin" => {
+                RBAC_ENGINE_DECISIONS_CASBIN_TOTAL.fetch_add(1, Ordering::Relaxed);
+            }
+            _ => {}
+        }
+    }
+
+    fn record_engine_mismatch() {
+        RBAC_ENGINE_MISMATCH_TOTAL.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn record_engine_eval_duration(latency_ms: u64) {
+        RBAC_ENGINE_EVAL_DURATION_MS_TOTAL.fetch_add(latency_ms, Ordering::Relaxed);
+        RBAC_ENGINE_EVAL_DURATION_SAMPLES.fetch_add(1, Ordering::Relaxed);
+    }
+
     pub fn metrics_snapshot() -> RbacResolverMetricsSnapshot {
         RbacResolverMetricsSnapshot {
             permission_cache_hits: RBAC_PERMISSION_CACHE_HITS.load(Ordering::Relaxed),
@@ -272,6 +355,14 @@ impl AuthService {
             decision_mismatch_total: RBAC_DECISION_MISMATCH_TOTAL.load(Ordering::Relaxed),
             shadow_compare_failures_total: RBAC_SHADOW_COMPARE_FAILURES_TOTAL
                 .load(Ordering::Relaxed),
+            engine_decisions_relation_total: RBAC_ENGINE_DECISIONS_RELATION_TOTAL
+                .load(Ordering::Relaxed),
+            engine_decisions_casbin_total: RBAC_ENGINE_DECISIONS_CASBIN_TOTAL
+                .load(Ordering::Relaxed),
+            engine_mismatch_total: RBAC_ENGINE_MISMATCH_TOTAL.load(Ordering::Relaxed),
+            engine_eval_duration_ms_total: RBAC_ENGINE_EVAL_DURATION_MS_TOTAL
+                .load(Ordering::Relaxed),
+            engine_eval_duration_samples: RBAC_ENGINE_EVAL_DURATION_SAMPLES.load(Ordering::Relaxed),
         }
     }
 
@@ -330,6 +421,25 @@ impl AuthService {
                 required_permission = %required_permission,
                 error = %error,
                 "rbac dual-read shadow compare failed"
+            );
+        }
+
+        if let Err(error) = Self::shadow_compare_casbin_decision(
+            db,
+            tenant_id,
+            user_id,
+            ShadowCheck::Single(required_permission),
+            allowed,
+        )
+        .await
+        {
+            Self::record_shadow_compare_failure();
+            warn!(
+                tenant_id = %tenant_id,
+                user_id = %user_id,
+                required_permission = %required_permission,
+                error = %error,
+                "rbac casbin-shadow compare failed"
             );
         }
 
@@ -395,6 +505,25 @@ impl AuthService {
             );
         }
 
+        if let Err(error) = Self::shadow_compare_casbin_decision(
+            db,
+            tenant_id,
+            user_id,
+            ShadowCheck::Any(required_permissions),
+            allowed,
+        )
+        .await
+        {
+            Self::record_shadow_compare_failure();
+            warn!(
+                tenant_id = %tenant_id,
+                user_id = %user_id,
+                required_permissions = ?required_permissions,
+                error = %error,
+                "rbac casbin-shadow compare failed"
+            );
+        }
+
         Ok(allowed)
     }
 
@@ -457,6 +586,25 @@ impl AuthService {
                 required_permissions = ?required_permissions,
                 error = %error,
                 "rbac dual-read shadow compare failed"
+            );
+        }
+
+        if let Err(error) = Self::shadow_compare_casbin_decision(
+            db,
+            tenant_id,
+            user_id,
+            ShadowCheck::All(required_permissions),
+            allowed,
+        )
+        .await
+        {
+            Self::record_shadow_compare_failure();
+            warn!(
+                tenant_id = %tenant_id,
+                user_id = %user_id,
+                required_permissions = ?required_permissions,
+                error = %error,
+                "rbac casbin-shadow compare failed"
             );
         }
 
@@ -552,7 +700,7 @@ impl AuthService {
     ) -> Result<()> {
         let role_model = Self::get_or_create_role(db, tenant_id, &role).await?;
 
-        user_roles::Entity::insert(user_roles::ActiveModel {
+        match user_roles::Entity::insert(user_roles::ActiveModel {
             id: ActiveValue::Set(rustok_core::generate_id()),
             user_id: ActiveValue::Set(*user_id),
             role_id: ActiveValue::Set(role_model.id),
@@ -563,13 +711,17 @@ impl AuthService {
                 .to_owned(),
         )
         .exec(db)
-        .await?;
+        .await
+        {
+            Ok(_) | Err(sea_orm::DbErr::RecordNotInserted) => {}
+            Err(err) => return Err(err.into()),
+        }
 
         for permission in Rbac::permissions_for_role(&role).iter() {
             let permission_model =
                 Self::get_or_create_permission(db, tenant_id, permission).await?;
 
-            role_permissions::Entity::insert(role_permissions::ActiveModel {
+            match role_permissions::Entity::insert(role_permissions::ActiveModel {
                 id: ActiveValue::Set(rustok_core::generate_id()),
                 role_id: ActiveValue::Set(role_model.id),
                 permission_id: ActiveValue::Set(permission_model.id),
@@ -583,7 +735,11 @@ impl AuthService {
                 .to_owned(),
             )
             .exec(db)
-            .await?;
+            .await
+            {
+                Ok(_) | Err(sea_orm::DbErr::RecordNotInserted) => {}
+                Err(err) => return Err(err.into()),
+            }
         }
 
         Self::invalidate_user_rbac_caches(tenant_id, user_id).await;
@@ -908,6 +1064,8 @@ mod tests {
     use std::sync::{Mutex, MutexGuard, OnceLock};
 
     const AUTHZ_MODE_ENV: &str = "RUSTOK_RBAC_AUTHZ_MODE";
+    const LEGACY_ROLE_FALLBACK_FLAG_ENV: &str = "RUSTOK_RBAC_LEGACY_ROLE_FALLBACK_ENABLED";
+    const RELATION_ENFORCEMENT_FLAG_ENV: &str = "RUSTOK_RBAC_RELATION_ENFORCEMENT_ENABLED";
 
     struct EnvVarGuard {
         _lock: MutexGuard<'static, ()>,
@@ -964,6 +1122,42 @@ mod tests {
     }
 
     impl Drop for EnvVarGuard {
+        fn drop(&mut self) {
+            self.restore();
+        }
+    }
+
+    struct ScopedEnvOverride {
+        name: &'static str,
+        previous: Option<String>,
+    }
+
+    impl ScopedEnvOverride {
+        fn set(name: &'static str, value: &str) -> Self {
+            let previous = std::env::var(name).ok();
+            // SAFETY: tests serialize environment mutations via `EnvVarGuard` lock.
+            unsafe {
+                std::env::set_var(name, value);
+            }
+            Self { name, previous }
+        }
+
+        fn restore(&self) {
+            if let Some(previous) = self.previous.as_ref() {
+                // SAFETY: tests serialize environment mutations via `EnvVarGuard` lock.
+                unsafe {
+                    std::env::set_var(self.name, previous);
+                }
+            } else {
+                // SAFETY: tests serialize environment mutations via `EnvVarGuard` lock.
+                unsafe {
+                    std::env::remove_var(self.name);
+                }
+            }
+        }
+    }
+
+    impl Drop for ScopedEnvOverride {
         fn drop(&mut self) {
             self.restore();
         }
@@ -1264,6 +1458,55 @@ mod tests {
         env.set("  DUAL_READ  ");
 
         assert!(AuthService::is_dual_read_enabled());
+    }
+
+    #[test]
+    fn authz_mode_enables_dual_read_from_legacy_fallback_alias_when_mode_missing() {
+        let env = EnvVarGuard::lock(AUTHZ_MODE_ENV);
+        env.remove();
+
+        let _fallback_alias = ScopedEnvOverride::set(LEGACY_ROLE_FALLBACK_FLAG_ENV, "true");
+
+        assert!(AuthService::is_dual_read_enabled());
+    }
+
+    #[test]
+    fn authz_mode_explicit_relation_only_overrides_legacy_fallback_alias() {
+        let env = EnvVarGuard::lock(AUTHZ_MODE_ENV);
+        env.set("relation_only");
+
+        let _fallback_alias = ScopedEnvOverride::set(LEGACY_ROLE_FALLBACK_FLAG_ENV, "true");
+
+        assert!(!AuthService::is_dual_read_enabled());
+    }
+
+    #[test]
+    fn authz_mode_relation_enforcement_alias_keeps_dual_read_disabled_when_mode_missing() {
+        let env = EnvVarGuard::lock(AUTHZ_MODE_ENV);
+        env.remove();
+
+        let _relation_enforcement = ScopedEnvOverride::set(RELATION_ENFORCEMENT_FLAG_ENV, "true");
+
+        assert!(!AuthService::is_dual_read_enabled());
+    }
+
+    #[test]
+    fn authz_mode_relation_enforcement_alias_has_priority_over_legacy_fallback_alias() {
+        let env = EnvVarGuard::lock(AUTHZ_MODE_ENV);
+        env.remove();
+
+        let _fallback_alias = ScopedEnvOverride::set(LEGACY_ROLE_FALLBACK_FLAG_ENV, "true");
+        let _relation_enforcement = ScopedEnvOverride::set(RELATION_ENFORCEMENT_FLAG_ENV, "true");
+
+        assert!(!AuthService::is_dual_read_enabled());
+    }
+
+    #[test]
+    fn authz_mode_enables_casbin_shadow_from_env() {
+        let env = EnvVarGuard::lock(AUTHZ_MODE_ENV);
+        env.set("casbin_shadow");
+
+        assert!(AuthService::should_run_casbin_shadow());
     }
 
     #[test]

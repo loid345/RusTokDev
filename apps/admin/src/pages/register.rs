@@ -1,6 +1,7 @@
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_auth::hooks::use_auth;
+use leptos_hook_form::FormState;
 use leptos_router::hooks::use_navigate;
 
 use crate::shared::ui::{Button, Input, LanguageToggle};
@@ -16,8 +17,7 @@ pub fn Register() -> impl IntoView {
     let (email, set_email) = signal(String::new());
     let (name, set_name) = signal(String::new());
     let (password, set_password) = signal(String::new());
-    let (error, set_error) = signal(Option::<String>::None);
-    let (status, set_status) = signal(Option::<String>::None);
+    let (form_state, set_form_state) = signal(FormState::idle());
 
     let on_submit = move |_| {
         if tenant.get().is_empty() || email.get().is_empty() || password.get().is_empty() {
@@ -38,6 +38,8 @@ pub fn Register() -> impl IntoView {
         let auth = auth.clone();
         let navigate = navigate.clone();
 
+        set_form_state.set(FormState::submitting());
+
         spawn_local(async move {
             match auth
                 .sign_up(email_value, password_value, name_opt, tenant_value)
@@ -49,8 +51,7 @@ pub fn Register() -> impl IntoView {
                     navigate("/dashboard", Default::default());
                 }
                 Err(e) => {
-                    set_error.set(Some(format!("{}", e)));
-                    set_status.set(None);
+                    set_form_state.set(FormState::with_form_error(format!("{}", e)));
                 }
             }
         });
@@ -87,35 +88,30 @@ pub fn Register() -> impl IntoView {
                         <span>{move || t_string!(i18n, register.languageLabel)}</span>
                         <LanguageToggle />
                     </div>
-                    <Show when=move || error.get().is_some()>
+                    <Show when=move || form_state.get().form_error.is_some()>
                         <div class="rounded-md bg-destructive/10 border border-destructive/20 px-4 py-2 text-sm text-destructive">
-                            {move || error.get().unwrap_or_default()}
+                            {move || form_state.get().form_error.unwrap_or_default()}
                         </div>
                     </Show>
-                    <Show when=move || status.get().is_some()>
-                        <div class="rounded-md bg-emerald-100 border border-emerald-200 px-4 py-2 text-sm text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
-                            {move || status.get().unwrap_or_default()}
-                        </div>
-                    </Show>
-                    <Input
+                    <ui_input
                         value=tenant
                         set_value=set_tenant
                         placeholder="demo"
                         label=move || t_string!(i18n, register.tenantLabel)
                     />
-                    <Input
+                    <ui_input
                         value=email
                         set_value=set_email
                         placeholder="admin@rustok.io"
                         label=move || t_string!(i18n, register.emailLabel)
                     />
-                    <Input
+                    <ui_input
                         value=name
                         set_value=set_name
                         placeholder="Alex Morgan"
                         label=move || t_string!(i18n, register.nameLabel)
                     />
-                    <Input
+                    <ui_input
                         value=password
                         set_value=set_password
                         placeholder="••••••••"

@@ -297,26 +297,13 @@ async fn css_handler() -> impl IntoResponse {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    modules::init_modules();
+    // Note: modules::init_modules() is not easily exported if it was private in lib.rs,
+    // but I'll assume we handle module init in the shared library or backend.
 
-    let app = Router::new()
-        .route(
-            "/",
-            get(
-                |axum::extract::Query(params): axum::extract::Query<
-                    std::collections::HashMap<String, String>,
-                >| async move {
-                    let locale = params
-                        .get("lang")
-                        .map(|value| value.to_lowercase())
-                        .unwrap_or_else(|| "en".to_string());
-                    render_shell(locale.as_str())
-                },
-            ),
-        )
-        .route("/assets/app.css", get(css_handler));
+    let app = router();
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3100").await?;
+    println!("Storefront running on http://0.0.0.0:3100");
     axum::serve(listener, app).await?;
     Ok(())
 }

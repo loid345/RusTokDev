@@ -4,6 +4,7 @@ use leptos::task::spawn_local;
 use leptos_auth::hooks::{use_tenant, use_token};
 use leptos_router::components::A;
 use leptos_router::hooks::{use_navigate, use_query_map};
+use leptos_struct_table::*;
 use leptos_ui::{Badge, BadgeVariant};
 use leptos_use::use_debounce_fn;
 use serde::{Deserialize, Serialize};
@@ -50,17 +51,21 @@ struct GraphqlUserEdge {
     node: GraphqlUser,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize, StructTable)]
+#[struct_table(class = "w-full border-collapse text-sm")]
 struct GraphqlUser {
+    #[struct_table(title = "Email")]
     id: String,
+    #[struct_table(title = "Email")]
     email: String,
+    #[struct_table(title = "Name")]
     name: Option<String>,
+    #[struct_table(title = "Role")]
     role: String,
+    #[struct_table(title = "Status")]
     status: String,
-    #[serde(rename = "createdAt")]
+    #[struct_table(title = "Created At", field_rename = "createdAt")]
     created_at: String,
-    #[serde(rename = "tenantName")]
-    tenant_name: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -336,8 +341,8 @@ pub fn Users() -> impl IntoView {
                 subtitle=t_string!(i18n, users.subtitle).to_string()
                 eyebrow=t_string!(i18n, app.nav.users).to_string()
                 actions=view! {
-                    <LanguageToggle />
-                    <Button
+                    <ui_language_toggle />
+                    <ui_button
                         on_click=refresh
                         class="border border-input bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground"
                     >
@@ -368,19 +373,19 @@ pub fn Users() -> impl IntoView {
                                     {move || t_string!(i18n, users.graphql.total)} " " {total_count}
                                 </p>
                                 <div class="mb-4 grid gap-3 md:grid-cols-3">
-                                    <Input
+                                    <ui_input
                                         value=search_query
                                         set_value=set_search_query
                                         placeholder=move || t_string!(i18n, users.filters.searchPlaceholder)
                                         label=move || t_string!(i18n, users.filters.search)
                                     />
-                                    <Input
+                                    <ui_input
                                         value=role_filter
                                         set_value=set_role_filter
                                         placeholder=move || t_string!(i18n, users.filters.rolePlaceholder)
                                         label=move || t_string!(i18n, users.filters.role)
                                     />
-                                    <Input
+                                    <ui_input
                                         value=status_filter
                                         set_value=set_status_filter
                                         placeholder=move || t_string!(i18n, users.filters.statusPlaceholder)
@@ -448,7 +453,7 @@ pub fn Users() -> impl IntoView {
                                     </table>
                                 </div>
                                 <div class="mt-4 flex flex-wrap items-center gap-3">
-                                    <Button
+                                    <ui_button
                                         on_click=previous_page
                                         class="border border-input bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground"
                                         disabled=Signal::derive(move || page.get() <= 1)
@@ -458,7 +463,7 @@ pub fn Users() -> impl IntoView {
                                     <span class="text-xs text-muted-foreground">
                                         {move || t_string!(i18n, users.pagination.page)} " " {page.get()}
                                     </span>
-                                    <Button
+                                    <ui_button
                                         on_click=next_page
                                         class="border border-input bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground"
                                         disabled=Signal::derive(move || {
@@ -502,32 +507,32 @@ pub fn Users() -> impl IntoView {
                         </Show>
 
                         <div class="space-y-4">
-                            <Input
+                            <ui_input
                                 value=new_email
                                 set_value=set_new_email
                                 placeholder="admin@rustok.io"
                                 label=move || t_string!(i18n, users.create.emailLabel)
                             />
-                            <Input
+                            <ui_input
                                 value=new_name
                                 set_value=set_new_name
                                 placeholder="John Doe"
                                 label=move || t_string!(i18n, users.create.nameLabel)
                             />
-                            <Input
+                            <ui_input
                                 value=new_password
                                 set_value=set_new_password
                                 placeholder="••••••••"
                                 type_="password"
                                 label=move || t_string!(i18n, users.create.passwordLabel)
                             />
-                            <Input
+                            <ui_input
                                 value=new_role
                                 set_value=set_new_role
                                 placeholder="ADMIN, MANAGER, CUSTOMER"
                                 label=move || t_string!(i18n, users.create.roleLabel)
                             />
-                            <Input
+                            <ui_input
                                 value=new_status
                                 set_value=set_new_status
                                 placeholder="ACTIVE, INACTIVE"
@@ -536,7 +541,7 @@ pub fn Users() -> impl IntoView {
                         </div>
 
                         <div class="mt-6 flex gap-3">
-                            <Button
+                            <ui_button
                                 on_click=create_user
                                 disabled=is_creating.into()
                                 class="flex-1"
@@ -546,8 +551,8 @@ pub fn Users() -> impl IntoView {
                                 } else {
                                     t_string!(i18n, users.create.submit).to_string()
                                 }}
-                            </Button>
-                            <Button
+                            </ui_button>
+                            <ui_button
                                 on_click=close_create_modal
                                 class="border border-input bg-transparent text-foreground hover:bg-accent hover:text-accent-foreground"
                             >
