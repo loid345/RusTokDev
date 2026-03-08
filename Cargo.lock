@@ -8900,6 +8900,7 @@ dependencies = [
  "leptos-zod",
  "leptos-zustand",
  "leptos_i18n",
+ "leptos_i18n_build",
  "leptos_query",
  "leptos_router",
  "serde",

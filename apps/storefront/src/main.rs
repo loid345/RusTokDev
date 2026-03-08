@@ -9,44 +9,12 @@ use axum::{
 // GlobalAttributes enables id= usage in view! macros.
 use leptos::prelude::{ClassAttribute, CollectView, ElementChild, GlobalAttributes, RenderHtml};
 use leptos::{component, view, IntoView};
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 use crate::modules::{components_for_slot, StorefrontSlot};
 
-#[derive(Clone, Debug, Deserialize, Serialize)]
-struct LocaleStrings {
-    hero_title: &'static str,
-    hero_subtitle: &'static str,
-    cta_primary: &'static str,
-    cta_secondary: &'static str,
-    featured_title: &'static str,
-    featured_subtitle: &'static str,
-    story_title: &'static str,
-    story_body: &'static str,
-    newsletter_title: &'static str,
-    newsletter_body: &'static str,
-    newsletter_cta: &'static str,
-    newsletter_placeholder: &'static str,
-    newsletter_note: &'static str,
-    cta_view: &'static str,
-    nav_home: &'static str,
-    nav_catalog: &'static str,
-    nav_about: &'static str,
-    nav_contact: &'static str,
-    nav_language: &'static str,
-    footer_tagline: &'static str,
-    badge_new: &'static str,
-    stat_ssr_title: &'static str,
-    stat_ssr_value: &'static str,
-    stat_ssr_desc: &'static str,
-    stat_i18n_title: &'static str,
-    stat_i18n_value: &'static str,
-    stat_i18n_desc: &'static str,
-    stat_modules_title: &'static str,
-    stat_modules_value: &'static str,
-    stat_modules_desc: &'static str,
-}
+include!(concat!(env!("OUT_DIR"), "/i18n/mod.rs"));
+use i18n::*;
 
 #[derive(Clone, Debug)]
 struct ProductCardData {
@@ -54,75 +22,6 @@ struct ProductCardData {
     description: &'static str,
     price: &'static str,
     badge: Option<&'static str>,
-}
-
-fn locale_strings(locale: &str) -> LocaleStrings {
-    match locale {
-        "ru" => LocaleStrings {
-            hero_title: "Витрина RusToK",
-            hero_subtitle: "SSR-платформа на Rust для быстрой коммерции и красивых витрин.",
-            cta_primary: "Открыть каталог",
-            cta_secondary: "О платформе",
-            featured_title: "Избранные коллекции",
-            featured_subtitle: "Заполните карточки товарами из Commerce-модуля и настройте промо.",
-            story_title: "Бренд, которому доверяют",
-            story_body: "RusToK помогает собрать надежную витрину: события, поисковые индексы, многоязычность.",
-            newsletter_title: "Подписка на обновления",
-            newsletter_body: "Подключайте рассылки и промо-кампании прямо из ядра.",
-            newsletter_cta: "Подписаться",
-            newsletter_placeholder: "email@rustok.local",
-            newsletter_note: "Никакого спама. Отписка в любой момент.",
-            cta_view: "Смотреть",
-            nav_home: "Главная",
-            nav_catalog: "Каталог",
-            nav_about: "О нас",
-            nav_contact: "Контакты",
-            nav_language: "Язык",
-            footer_tagline: "RusToK — модульная платформа для современной коммерции.",
-            badge_new: "Новинка",
-            stat_ssr_title: "SSR",
-            stat_ssr_value: "Быстро",
-            stat_ssr_desc: "Первые миллисекунды важны",
-            stat_i18n_title: "i18n",
-            stat_i18n_value: "2+",
-            stat_i18n_desc: "Готово для глобальных рынков",
-            stat_modules_title: "Модули",
-            stat_modules_value: "8",
-            stat_modules_desc: "Коммерция, контент, поиск",
-        },
-        _ => LocaleStrings {
-            hero_title: "RusToK Storefront",
-            hero_subtitle: "SSR-first Rust commerce with fast discovery and clean design.",
-            cta_primary: "Browse catalog",
-            cta_secondary: "Platform overview",
-            featured_title: "Featured collections",
-            featured_subtitle: "Plug Commerce data in and curate promotions in minutes.",
-            story_title: "A brand you can trust",
-            story_body: "RusToK ships with events, search indexes, and multilingual support.",
-            newsletter_title: "Stay in the loop",
-            newsletter_body: "Connect newsletters and promotions from the core.",
-            newsletter_cta: "Subscribe",
-            newsletter_placeholder: "email@rustok.local",
-            newsletter_note: "No spam. Opt-out anytime.",
-            cta_view: "View",
-            nav_home: "Home",
-            nav_catalog: "Catalog",
-            nav_about: "About",
-            nav_contact: "Contact",
-            nav_language: "Language",
-            footer_tagline: "RusToK — the modular platform for modern commerce.",
-            badge_new: "New",
-            stat_ssr_title: "SSR",
-            stat_ssr_value: "Fast",
-            stat_ssr_desc: "First paint in milliseconds",
-            stat_i18n_title: "i18n",
-            stat_i18n_value: "2+",
-            stat_i18n_desc: "Ready for global stores",
-            stat_modules_title: "Modules",
-            stat_modules_value: "8",
-            stat_modules_desc: "Commerce, content, search",
-        },
-    }
 }
 
 fn featured_products(locale: &str) -> Vec<ProductCardData> {
@@ -173,10 +72,10 @@ fn featured_products(locale: &str) -> Vec<ProductCardData> {
 #[component]
 fn ProductCard(
     product: ProductCardData,
-    badge_new: &'static str,
-    cta_view: &'static str,
+    badge_new: String,
+    cta_view: String,
 ) -> impl IntoView {
-    let badge = product.badge.unwrap_or(badge_new);
+    let badge = product.badge.map(|b| b.to_string()).unwrap_or(badge_new);
     view! {
         <div class="rounded-xl border border-border bg-card shadow">
             <div class="h-40 w-full rounded-t-xl bg-gradient-to-br from-primary/10 to-secondary" />
@@ -199,9 +98,12 @@ fn ProductCard(
 
 #[component]
 fn StorefrontShell(locale: String) -> impl IntoView {
-    let strings = locale_strings(locale.as_str());
+    let i18n = use_i18n();
     let products = featured_products(locale.as_str());
     let module_sections = components_for_slot(StorefrontSlot::HomeAfterHero);
+    let badge_new = t_string!(i18n, badge.new).to_string();
+    let cta_view = t_string!(i18n, cta.view).to_string();
+
     view! {
         <div class="min-h-screen bg-background text-foreground">
             <header class="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
@@ -212,16 +114,16 @@ fn StorefrontShell(locale: String) -> impl IntoView {
                         </a>
                     </div>
                     <nav class="hidden lg:flex items-center gap-6">
-                        <a class="text-sm text-muted-foreground hover:text-foreground transition-colors" href="#home">{strings.nav_home}</a>
-                        <a class="text-sm text-muted-foreground hover:text-foreground transition-colors" href="#catalog">{strings.nav_catalog}</a>
-                        <a class="text-sm text-muted-foreground hover:text-foreground transition-colors" href="#about">{strings.nav_about}</a>
-                        <a class="text-sm text-muted-foreground hover:text-foreground transition-colors" href="#contact">{strings.nav_contact}</a>
+                        <a class="text-sm text-muted-foreground hover:text-foreground transition-colors" href="#home">{t_string!(i18n, nav.home)}</a>
+                        <a class="text-sm text-muted-foreground hover:text-foreground transition-colors" href="#catalog">{t_string!(i18n, nav.catalog)}</a>
+                        <a class="text-sm text-muted-foreground hover:text-foreground transition-colors" href="#about">{t_string!(i18n, nav.about)}</a>
+                        <a class="text-sm text-muted-foreground hover:text-foreground transition-colors" href="#contact">{t_string!(i18n, nav.contact)}</a>
                     </nav>
                     <div class="flex items-center gap-3 ml-6">
                         <div class="relative">
                             <details class="group">
                                 <summary class="inline-flex items-center gap-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm text-foreground cursor-pointer hover:bg-accent hover:text-accent-foreground transition-colors list-none">
-                                    {strings.nav_language}
+                                    {t_string!(i18n, nav.language)}
                                 </summary>
                                 <ul class="absolute right-0 mt-1 w-32 rounded-md border border-border bg-popover p-1 shadow-md z-50">
                                     <li>
@@ -238,7 +140,7 @@ fn StorefrontShell(locale: String) -> impl IntoView {
                             </details>
                         </div>
                         <a class="inline-flex items-center justify-center rounded-md bg-primary px-4 py-1.5 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 transition-colors" href="#catalog">
-                            {strings.cta_primary}
+                            {t_string!(i18n, cta.primary)}
                         </a>
                     </div>
                 </div>
@@ -249,33 +151,33 @@ fn StorefrontShell(locale: String) -> impl IntoView {
                     <div class="container-app flex flex-col gap-10 py-16 lg:flex-row lg:items-center lg:justify-between">
                         <div class="max-w-xl space-y-6">
                             <h1 class="text-4xl font-bold text-foreground lg:text-5xl">
-                                {strings.hero_title}
+                                {t_string!(i18n, hero.title)}
                             </h1>
-                            <p class="text-lg text-muted-foreground">{strings.hero_subtitle}</p>
+                            <p class="text-lg text-muted-foreground">{t_string!(i18n, hero.subtitle)}</p>
                             <div class="flex flex-wrap gap-3">
                                 <a class="inline-flex items-center justify-center rounded-md bg-primary px-5 py-2.5 text-sm font-medium text-primary-foreground shadow hover:bg-primary/90 transition-colors" href="#catalog">
-                                    {strings.cta_primary}
+                                    {t_string!(i18n, cta.primary)}
                                 </a>
                                 <a class="inline-flex items-center justify-center rounded-md border border-input bg-background px-5 py-2.5 text-sm font-medium text-foreground shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors" href="#about">
-                                    {strings.cta_secondary}
+                                    {t_string!(i18n, cta.secondary)}
                                 </a>
                             </div>
                         </div>
                         <div class="grid grid-cols-1 divide-y divide-border rounded-xl border border-border bg-card shadow sm:grid-cols-3 sm:divide-x sm:divide-y-0 lg:w-auto">
                             <div class="p-6 text-center">
-                                <p class="text-sm text-muted-foreground">{strings.stat_ssr_title}</p>
-                                <p class="mt-1 text-2xl font-bold text-foreground">{strings.stat_ssr_value}</p>
-                                <p class="mt-1 text-xs text-muted-foreground">{strings.stat_ssr_desc}</p>
+                                <p class="text-sm text-muted-foreground">{t_string!(i18n, stat.ssrTitle)}</p>
+                                <p class="mt-1 text-2xl font-bold text-foreground">{t_string!(i18n, stat.ssrValue)}</p>
+                                <p class="mt-1 text-xs text-muted-foreground">{t_string!(i18n, stat.ssrDesc)}</p>
                             </div>
                             <div class="p-6 text-center">
-                                <p class="text-sm text-muted-foreground">{strings.stat_i18n_title}</p>
-                                <p class="mt-1 text-2xl font-bold text-foreground">{strings.stat_i18n_value}</p>
-                                <p class="mt-1 text-xs text-muted-foreground">{strings.stat_i18n_desc}</p>
+                                <p class="text-sm text-muted-foreground">{t_string!(i18n, stat.i18nTitle)}</p>
+                                <p class="mt-1 text-2xl font-bold text-foreground">{t_string!(i18n, stat.i18nValue)}</p>
+                                <p class="mt-1 text-xs text-muted-foreground">{t_string!(i18n, stat.i18nDesc)}</p>
                             </div>
                             <div class="p-6 text-center">
-                                <p class="text-sm text-muted-foreground">{strings.stat_modules_title}</p>
-                                <p class="mt-1 text-2xl font-bold text-foreground">{strings.stat_modules_value}</p>
-                                <p class="mt-1 text-xs text-muted-foreground">{strings.stat_modules_desc}</p>
+                                <p class="text-sm text-muted-foreground">{t_string!(i18n, stat.modulesTitle)}</p>
+                                <p class="mt-1 text-2xl font-bold text-foreground">{t_string!(i18n, stat.modulesValue)}</p>
+                                <p class="mt-1 text-xs text-muted-foreground">{t_string!(i18n, stat.modulesDesc)}</p>
                             </div>
                         </div>
                     </div>
@@ -289,8 +191,8 @@ fn StorefrontShell(locale: String) -> impl IntoView {
                 <section id="catalog" class="container-app">
                     <div class="mx-auto max-w-6xl space-y-6">
                         <div>
-                            <h2 class="text-3xl font-bold text-foreground">{strings.featured_title}</h2>
-                            <p class="mt-1 text-muted-foreground">{strings.featured_subtitle}</p>
+                            <h2 class="text-3xl font-bold text-foreground">{t_string!(i18n, featured.title)}</h2>
+                            <p class="mt-1 text-muted-foreground">{t_string!(i18n, featured.subtitle)}</p>
                         </div>
                         <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                             {products
@@ -299,8 +201,8 @@ fn StorefrontShell(locale: String) -> impl IntoView {
                                     view! {
                                         <ProductCard
                                             product=product
-                                            badge_new=strings.badge_new
-                                            cta_view=strings.cta_view
+                                            badge_new=badge_new.clone()
+                                            cta_view=cta_view.clone()
                                         />
                                     }
                                 })
@@ -312,8 +214,8 @@ fn StorefrontShell(locale: String) -> impl IntoView {
                 <section id="about" class="container-app">
                     <div class="mx-auto grid max-w-6xl gap-6 lg:grid-cols-2">
                         <div class="rounded-xl border border-border bg-card p-6 shadow space-y-3">
-                            <h3 class="text-lg font-semibold text-card-foreground">{strings.story_title}</h3>
-                            <p class="text-sm text-muted-foreground">{strings.story_body}</p>
+                            <h3 class="text-lg font-semibold text-card-foreground">{t_string!(i18n, story.title)}</h3>
+                            <p class="text-sm text-muted-foreground">{t_string!(i18n, story.body)}</p>
                             <div class="flex gap-2 flex-wrap">
                                 <span class="inline-flex items-center rounded-full border border-border px-2.5 py-0.5 text-xs font-medium text-foreground">"GraphQL"</span>
                                 <span class="inline-flex items-center rounded-full border border-border px-2.5 py-0.5 text-xs font-medium text-foreground">"Events"</span>
@@ -321,18 +223,18 @@ fn StorefrontShell(locale: String) -> impl IntoView {
                             </div>
                         </div>
                         <div class="rounded-xl border border-border bg-card p-6 shadow space-y-4">
-                            <h3 class="text-lg font-semibold text-card-foreground">{strings.newsletter_title}</h3>
-                            <p class="text-sm text-muted-foreground">{strings.newsletter_body}</p>
+                            <h3 class="text-lg font-semibold text-card-foreground">{t_string!(i18n, newsletter.title)}</h3>
+                            <p class="text-sm text-muted-foreground">{t_string!(i18n, newsletter.body)}</p>
                             <div class="flex gap-2">
                                 <input
                                     class="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                                    placeholder=strings.newsletter_placeholder
+                                    placeholder=t_string!(i18n, newsletter.placeholder)
                                 />
                                 <button class="inline-flex items-center justify-center rounded-md bg-secondary px-4 py-2 text-sm font-medium text-secondary-foreground shadow-sm hover:bg-secondary/80 transition-colors">
-                                    {strings.newsletter_cta}
+                                    {t_string!(i18n, newsletter.cta)}
                                 </button>
                             </div>
-                            <span class="text-xs text-muted-foreground">{strings.newsletter_note}</span>
+                            <span class="text-xs text-muted-foreground">{t_string!(i18n, newsletter.note)}</span>
                         </div>
                     </div>
                 </section>
@@ -340,7 +242,7 @@ fn StorefrontShell(locale: String) -> impl IntoView {
 
             <footer id="contact" class="mt-20 border-t border-border bg-muted/40 px-4 py-10">
                 <div class="container-app space-y-3 text-center">
-                    <p class="text-sm text-muted-foreground">{strings.footer_tagline}</p>
+                    <p class="text-sm text-muted-foreground">{t_string!(i18n, footer.tagline)}</p>
                     <div class="flex justify-center gap-3">
                         <span class="inline-flex items-center rounded-full bg-primary px-2.5 py-0.5 text-xs font-medium text-primary-foreground">"SSR"</span>
                         <span class="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground">"Tailwind"</span>
@@ -353,11 +255,16 @@ fn StorefrontShell(locale: String) -> impl IntoView {
 }
 
 fn render_shell(locale: &str) -> String {
-    let locale_owned = locale.to_string();
-    let app_html = {
-        let locale = locale_owned.clone();
-        view! { <StorefrontShell locale=locale /> }.to_html()
+    let locale_enum = match locale {
+        "ru" => Locale::ru,
+        _ => Locale::en,
     };
+    let app_html = leptos::prelude::Owner::new().with(|| {
+        use leptos::prelude::Signal;
+        leptos_i18n::context::provide_i18n_subcontext::<Locale>(Some(Signal::stored(locale_enum)));
+        let locale = locale.to_string();
+        view! { <StorefrontShell locale=locale /> }.to_html()
+    });
     format!(
         r#"<!DOCTYPE html>
 <html lang="{locale}">
