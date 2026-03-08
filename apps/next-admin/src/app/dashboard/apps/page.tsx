@@ -22,7 +22,7 @@ export default function OAuthAppsPage() {
   };
 
   const handleRevokeSuccess = (appId: string) => {
-    setApps(apps.filter(a => a.id !== appId));
+    setApps(apps.filter((a: OAuthApp) => a.id !== appId));
   };
 
   return (

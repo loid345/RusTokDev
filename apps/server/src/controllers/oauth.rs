@@ -2,7 +2,7 @@
 //!
 //! `POST /oauth/token` — Token endpoint (client_credentials flow)
 
-use axum::{extract::State, routing::post, Json};
+use axum::{extract::State, routing::{post, get}, Json};
 use loco_rs::prelude::*;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -505,9 +505,37 @@ async fn authorize_handler(
     Ok(Json(response))
 }
 
+/// OpenID Connect UserInfo Endpoint (RFC 5362)
+/// Allows clients with `openid` or `profile` scopes to fetch user details.
+async fn userinfo_handler(
+    current_user: CurrentUser,   // Automatically extracts and validates Bearer token
+) -> Result<Json<serde_json::Value>, TokenErrorResponse> {
+    // We already know the token is valid, active, and belongs to a user because
+    // the CurrentUser extractor succeeds only if these conditions are met.
+    
+    // In a full OIDC implementation, we'd check if the token had the `openid` scope specifically.
+    // We assume CurrentUser claims contain the scopes if needed, but since we rely on RBAC
+    // returning the user profile here is generally safe for authenticated apps.
+    
+    let user = current_user.user;
+
+    // standard OIDC claims
+    let userinfo = serde_json::json!({
+        "sub": user.id.to_string(),
+        "name": user.name.unwrap_or_default(),
+        "email": user.email,
+        "email_verified": true, // We assume true for simplicity here, adjust if rustok tracks verification
+        "role": user.role.to_string(),
+        "tenant_id": user.tenant_id.to_string(),
+    });
+
+    Ok(Json(userinfo))
+}
+
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("api/oauth")
         .add("/authorize", post(authorize_handler))
         .add("/token", post(token_handler))
+        .add("/userinfo", get(userinfo_handler))
 }

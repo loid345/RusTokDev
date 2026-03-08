@@ -85,6 +85,7 @@ impl Hooks for App {
             .add_route(controllers::auth::routes())
             .add_route(controllers::graphql::routes())
             .add_route(controllers::oauth::routes())
+            .add_route(controllers::oauth_metadata::routes())
             .add_route(controllers::commerce::routes())
             .add_route(controllers::content::routes())
             .add_route(controllers::blog::routes())

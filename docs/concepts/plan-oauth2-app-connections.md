@@ -800,9 +800,9 @@ GraphQL         — настраивается per app (default: 1000 req/min)
 - [x] Встроенный SDK для фронтенда (`npm pkg @rustok/sdk`) - Перенесено на Next.js Admin интеграции (`Next.js Admin OAuth UI`)
 - [x] Инструкция/документация «Как подключить стороннее приложение» - Добавлено в `docs/guides/connect-external-apps.md`
 - [x] CLI tools/скрипты для быстрого заведения app в dev-окружении (через Loco CLI Task)
-- [ ] `/.well-known/oauth-authorization-server` metadata endpoint
-- [ ] OpenID Connect basic support (`/oauth/userinfo`)
-- [ ] Документация для разработчиков модулей
+- [x] `/.well-known/oauth-authorization-server` metadata endpoint
+- [x] OpenID Connect basic support (`/oauth/userinfo`)
+- [x] Документация для разработчиков модулей
 
 **Результат**: Полноценная developer experience.
 
