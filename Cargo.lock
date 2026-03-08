@@ -146,6 +146,7 @@ dependencies = [
  "axum",
  "chrono",
  "cron 0.15.0",
+ "email_address",
  "parking_lot",
  "reqwest 0.13.2",
  "rhai",
@@ -2742,6 +2743,9 @@ name = "email_address"
 version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e079f19b08ca6239f47f8ba8509c11cf3ea30095831f7fed61441475edd8c449"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "embedded-io"
@@ -8675,6 +8679,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "chrono",
+ "email_address",
  "futures",
  "hex",
  "jsonwebtoken 10.3.0",
@@ -8700,6 +8705,7 @@ dependencies = [
  "url",
  "utoipa",
  "uuid",
+ "v_htmlescape",
 ]
 
 [[package]]
@@ -11618,6 +11624,12 @@ dependencies = [
  "num-traits",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "v_htmlescape"
+version = "0.15.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e8257fbc510f0a46eb602c10215901938b5c2a7d5e70fc11483b1d3c9b5b18c"
 
 [[package]]
 name = "validator"

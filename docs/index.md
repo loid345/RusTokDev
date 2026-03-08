@@ -76,12 +76,13 @@ graph TD
 - [Dataloader](./architecture/dataloader.md)
 - [Modules Overview](./architecture/modules.md)
 - [Routing Policy](./architecture/routing.md)
-- [Events & Outbox](./architecture/events.md)
+- [Events & Outbox](./architecture/events.md) — событийная модель, outbox и incident runbook для backlog/DLQ/reindex
 - [Transactional Publishing](./architecture/events-transactional.md)
-- [Event Flow Contract](./architecture/event-flow-contract.md)
+- [Event Flow Contract](./architecture/event-flow-contract.md) — канонический event-path и runtime contract для consumer loops
 - [Tenancy](./architecture/tenancy.md)
+- [Локализация (i18n)](./architecture/i18n.md)
 - [Principles](./architecture/principles.md)
-- [Improvement Recommendations](./architecture/improvement-recommendations.md) (living document, completion pass 2026-02-19)
+- [Improvement Recommendations](./architecture/improvement-recommendations.md) (живой backlog архитектурных улучшений, обновлено 2026-03-08)
 
 ### Guides (`docs/guides/`)
 

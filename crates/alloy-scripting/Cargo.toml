@@ -21,3 +21,4 @@ serde_json = "1"
 reqwest = { workspace = true }
 sea-orm = { workspace = true }
 sea-orm-migration = { workspace = true }
+email_address = "0.2.9"

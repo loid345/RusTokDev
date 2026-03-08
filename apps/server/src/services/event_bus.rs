@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use loco_rs::app::AppContext;
 use rustok_core::events::EventTransport;
-use rustok_core::EventBus;
+use rustok_core::{EventBus, EventConsumerRuntime};
 use rustok_outbox::TransactionalEventBus;
 use tokio::task::JoinHandle;
 
@@ -25,10 +25,23 @@ pub fn event_bus_from_context(ctx: &AppContext) -> EventBus {
 
     if let Some(transport) = ctx.shared_store.get::<Arc<dyn EventTransport>>() {
         let mut receiver = bus.subscribe();
+        let consumer_runtime = EventConsumerRuntime::new("server_event_forwarder");
         let handle = tokio::spawn(async move {
-            while let Ok(envelope) = receiver.recv().await {
-                if let Err(error) = transport.publish(envelope).await {
-                    tracing::error!("Failed to publish domain event to transport: {error}");
+            consumer_runtime.restarted("startup");
+            loop {
+                match receiver.recv().await {
+                    Ok(envelope) => {
+                        if let Err(error) = transport.publish(envelope).await {
+                            tracing::error!("Failed to publish domain event to transport: {error}");
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                        consumer_runtime.lagged(skipped);
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        consumer_runtime.closed();
+                        break;
+                    }
                 }
             }
         });

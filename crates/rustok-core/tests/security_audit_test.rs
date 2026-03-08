@@ -294,10 +294,15 @@ fn test_ssrf_protection_blocks_private_ips() {
 
     let private_urls = vec![
         "http://localhost/admin",
+        "http://localhost./admin",
         "http://127.0.0.1/config",
+        "http://0.0.0.0/config",
         "http://10.0.0.1/api",
         "http://192.168.1.1/router",
         "http://172.16.0.1/internal",
+        "http://[::1]/admin",
+        "http://[fd00::1]/internal",
+        "http://[fe80::1]/link-local",
     ];
 
     for url in private_urls {
@@ -334,11 +339,12 @@ fn test_ssrf_protection_blocks_dangerous_schemes() {
 #[test]
 fn test_ssrf_protection_allows_safe_urls() {
     let ssrf = SsrfProtection::new()
-        .allow_host("api.example.com")
+        .allow_host("API.EXAMPLE.COM")
         .allow_host("trusted-partner.com");
 
     let safe_urls = vec![
         "http://api.example.com/data",
+        "https://api.example.com./trailing-dot",
         "https://api.example.com/secure",
         "https://trusted-partner.com/webhook",
     ];
@@ -374,6 +380,37 @@ fn test_ssrf_protection_blocks_non_allowlisted() {
 }
 
 #[test]
+fn test_ssrf_redirect_chain_requires_all_hops_to_be_safe() {
+    let ssrf = SsrfProtection::new().allow_host("api.example.com");
+
+    let result = ssrf.validate_redirect_chain([
+        "https://api.example.com/start",
+        "https://api.example.com/final",
+    ]);
+
+    assert!(matches!(result, ValidationResult::Valid));
+}
+
+#[test]
+fn test_ssrf_redirect_chain_blocks_unsafe_redirect_target() {
+    let ssrf = SsrfProtection::new().allow_host("api.example.com");
+
+    let result = ssrf
+        .validate_redirect_chain(["https://api.example.com/start", "http://localhost/internal"]);
+
+    assert!(matches!(result, ValidationResult::Invalid { .. }));
+}
+
+#[test]
+fn test_ssrf_redirect_chain_rejects_empty_chain() {
+    let ssrf = SsrfProtection::new().allow_host("api.example.com");
+
+    let result = ssrf.validate_redirect_chain(Vec::<&str>::new());
+
+    assert!(matches!(result, ValidationResult::Invalid { .. }));
+}
+
+#[test]
 fn test_input_validator_sanitizes_html() {
     let validator = InputValidator::new();
 
@@ -382,7 +419,7 @@ fn test_input_validator_sanitizes_html() {
 
     assert_eq!(
         sanitized,
-        "&lt;script&gt;alert(&#x27;xss&#x27;)&lt;/script&gt;"
+        "&lt;script&gt;alert(&#x27;xss&#x27;)&lt;&#x2f;script&gt;"
     );
 }
 

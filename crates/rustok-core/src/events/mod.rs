@@ -1,5 +1,6 @@
 pub mod backpressure;
 mod bus;
+mod consumer;
 mod handler;
 mod memory;
 mod schema;
@@ -12,6 +13,7 @@ pub use backpressure::{
     BackpressureState,
 };
 pub use bus::{EventBus, EventBusStats};
+pub use consumer::EventConsumerRuntime;
 pub use handler::{
     DispatcherConfig, EventDispatcher, EventHandler, HandlerBuilder, HandlerResult,
     RunningDispatcher,

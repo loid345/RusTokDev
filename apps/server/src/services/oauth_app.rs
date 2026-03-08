@@ -696,7 +696,10 @@ async fn upsert_embedded_app(
             active.is_active = Set(true);
             active.revoked_at = Set(None);
             active.updated_at = Set(Utc::now().into());
-            active.update(db).await.map_err(|_| Error::InternalServerError)?;
+            active
+                .update(db)
+                .await
+                .map_err(|_| Error::InternalServerError)?;
         }
     } else {
         let scopes_vec: Vec<String> = scopes.iter().map(|s| s.to_string()).collect();
@@ -756,10 +759,15 @@ async fn upsert_first_party_app(
         let mut active: OAuthAppActiveModel = app.into();
         active.is_active = Set(true);
         active.revoked_at = Set(None);
-        active.scopes = Set(serde_json::to_value(&scopes_vec).map_err(|_| Error::InternalServerError)?);
-        active.grant_types = Set(serde_json::to_value(&grant_types_vec).map_err(|_| Error::InternalServerError)?);
+        active.scopes =
+            Set(serde_json::to_value(&scopes_vec).map_err(|_| Error::InternalServerError)?);
+        active.grant_types =
+            Set(serde_json::to_value(&grant_types_vec).map_err(|_| Error::InternalServerError)?);
         active.updated_at = Set(Utc::now().into());
-        active.update(db).await.map_err(|_| Error::InternalServerError)?;
+        active
+            .update(db)
+            .await
+            .map_err(|_| Error::InternalServerError)?;
     } else {
         let scopes_vec: Vec<String> = scopes.iter().map(|s| s.to_string()).collect();
         let grant_types_vec: Vec<String> = grant_types.iter().map(|s| s.to_string()).collect();
@@ -778,7 +786,9 @@ async fn upsert_first_party_app(
             client_secret_hash: Set(Some(client_secret_hash)),
             redirect_uris: Set(serde_json::json!([])),
             scopes: Set(serde_json::to_value(&scopes_vec).map_err(|_| Error::InternalServerError)?),
-            grant_types: Set(serde_json::to_value(&grant_types_vec).map_err(|_| Error::InternalServerError)?),
+            grant_types: Set(
+                serde_json::to_value(&grant_types_vec).map_err(|_| Error::InternalServerError)?
+            ),
             manifest_ref: Set(Some(slug.to_string())),
             auto_created: Set(true),
             is_active: Set(true),

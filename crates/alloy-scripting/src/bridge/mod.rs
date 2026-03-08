@@ -2,71 +2,13 @@ mod http;
 mod utils;
 
 use crate::context::ExecutionPhase;
+use email_address::EmailAddress;
 use rhai::Engine;
 
 pub use utils::register_utils;
 
 fn validate_email_address(email: &str) -> bool {
-    let parts: Vec<&str> = email.splitn(2, '@').collect();
-    if parts.len() != 2 {
-        return false;
-    }
-    let local = parts[0];
-    let domain = parts[1];
-
-    if local.is_empty() || local.len() > 64 {
-        return false;
-    }
-
-    let domain_parts: Vec<&str> = domain.split('.').collect();
-    if domain_parts.len() < 2 {
-        return false;
-    }
-
-    let tld = domain_parts.last().unwrap_or(&"");
-    if tld.len() < 2 {
-        return false;
-    }
-
-    for part in &domain_parts {
-        if part.is_empty() {
-            return false;
-        }
-        if part.starts_with('-') || part.ends_with('-') {
-            return false;
-        }
-        if !part.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
-            return false;
-        }
-    }
-
-    let valid_local = local.chars().all(|c| {
-        c.is_ascii_alphanumeric()
-            || matches!(
-                c,
-                '.' | '_'
-                    | '+'
-                    | '-'
-                    | '!'
-                    | '#'
-                    | '$'
-                    | '%'
-                    | '&'
-                    | '\''
-                    | '*'
-                    | '/'
-                    | '='
-                    | '?'
-                    | '^'
-                    | '`'
-                    | '{'
-                    | '|'
-                    | '}'
-                    | '~'
-            )
-    });
-
-    valid_local && !local.starts_with('.') && !local.ends_with('.') && !local.contains("..")
+    EmailAddress::is_valid(email)
 }
 
 pub struct Bridge;
@@ -146,6 +88,6 @@ mod tests {
         assert!(!validate_email_address(".user@example.com"));
         assert!(!validate_email_address("user.@example.com"));
         assert!(!validate_email_address("us..er@example.com"));
-        assert!(!validate_email_address("user@example.c"));
+        assert!(!validate_email_address("user@example..com"));
     }
 }

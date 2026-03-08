@@ -96,9 +96,10 @@
 - **Проблема**: Нет Prometheus/OpenTelemetry метрик для скриптов (execution count, latency, error rate).
 - **Рекомендация**: Добавить spans/metrics в executor, учитывая что проект уже использует OpenTelemetry
 
-#### 13. `validate_email` слишком примитивна
-- **Проблема**: `bridge/mod.rs:33-35` — `email.contains('@') && email.contains('.')` — не валидная проверка email (пропустит `@.`, `a@b.` и т.д.)
-- **Рекомендация**: Использовать regex или подключить crate вроде `email_address` для корректной проверки
+#### 13. `validate_email` была слишком примитивна
+- **Статус**: закрыто 2026-03-08
+- **Что было**: helper в `bridge/mod.rs` жил отдельно от platform security validation и проверял email упрощённо.
+- **Что сделали**: helper переведён на `email_address`, чтобы убрать расхождение поведения и не сопровождать собственную реализацию.
 
 #### 14. Нет `execution_id` в логах скриптов
 - **Проблема**: `log()`, `log_warn()`, `log_error()` в `bridge/utils.rs` не включают execution_id или script_name в лог-сообщения. При множестве скриптов невозможно отследить, какой скрипт вывел сообщение.

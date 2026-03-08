@@ -17,6 +17,7 @@
 Агентам: считать этот список обязательным baseline платформы. Логика tenant-toggle/disable для core-модулей централизованно контролируется в `ModuleLifecycleService`.
 
 - [`library-stack.md`](./library-stack.md) — основные backend-библиотеки сервера и их роль (framework, HTTP, ORM, GraphQL, runtime, observability).
+- [`health.md`](./health.md) — health/readiness probes и текущие dependency checks сервера.
 - [`event-transport.md`](./event-transport.md) — как работает конфигурация и runtime-пайплайн транспорта событий.
 - [`event-flow-contract.md`](../../../docs/architecture/event-flow-contract.md) — канонический контракт полного event-пути (publish → outbox → delivery → consumer/read-model).
 - [`loco/README.md`](./loco/README.md) — Loco-specific контекст, workflow для агентов и freshness-политика upstream snapshot.
@@ -38,6 +39,9 @@
 - Auth/RBAC Casbin shadow: при `RUSTOK_RBAC_AUTHZ_MODE=casbin_shadow` permission checks дополнительно запускают `rustok-rbac::evaluate_casbin_shadow` (matcher-compatible in-module evaluator) и пишут structured mismatch лог `rbac_engine_mismatch` (`tenant_id`, `user_id`, `resource`, `action`, `relation_decision`, `casbin_decision`), но активным decision-path остаётся relation.
 - Dev onboarding: `seed_development` creates/updates an idempotent demo tenant (`demo`), demo users, and enables core modules for local environments.
 - Build pipeline: `BuildService::request_build` now publishes `BuildRequested` via configurable `BuildEventPublisher`; `EventBusBuildEventPublisher` maps it to `DomainEvent::BuildRequested`, while default noop publisher logs skipped dispatch when no runtime wiring is provided.
+- Event consumer runtime: long-lived server consumers (`server_event_forwarder`, GraphQL build-progress subscription) follow a shared contract from `rustok-core`: `Lagged -> warn + metric`, `Closed -> explicit stop`, reindex decision path documented in `docs/architecture/events.md`.
+- Tenant cache invalidation: Redis pubsub listener now uses supervised resubscribe with fixed backoff instead of one-shot startup; operational signals go through `rustok_event_consumer_restarted_total` and incident handling stays in the central events runbook.
+- Health/readiness: `tenant_cache_invalidation` is now exposed in `/health/ready`, and current listener state is exported as `rustok_tenant_invalidation_listener_status`; see [`health.md`](./health.md).
 - Auth/session lifecycle: GraphQL `sign_out`, `change_password`, `reset_password` теперь используют soft-revoke через `sessions.revoked_at` (вместо hard delete) и выровнены по поведению с REST (`sign_out` отзывает только текущую сессию, `change_password` — все остальные, `reset_password` — все активные).
 
 - Auth/lifecycle extraction: REST handlers и GraphQL mutations для `register/sign_in`, `login/sign_in`, `refresh`, `change_password`, `reset_password`, `update_profile` теперь маршрутизируют бизнес-логику через общий `AuthLifecycleService` (transport adapters остаются тонкими).

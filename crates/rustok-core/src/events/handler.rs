@@ -1,11 +1,13 @@
 use async_trait::async_trait;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Instant;
 use tokio::sync::{broadcast, Semaphore};
 use tokio::task::JoinHandle;
 use tracing::{debug, error, info, warn, Instrument};
 
 use super::bus::EventBus;
+use super::consumer::EventConsumerRuntime;
 use super::types::{DomainEvent, EventEnvelope};
 use crate::Error;
 
@@ -96,9 +98,11 @@ impl EventDispatcher {
         let mut receiver = self.bus.subscribe();
         let bus = self.bus.clone();
         let backpressure = bus.backpressure();
+        let consumer_runtime = EventConsumerRuntime::new("event_dispatcher");
 
         let handle = tokio::spawn(
             async move {
+                consumer_runtime.restarted("startup");
                 info!(handlers = handlers.len(), "Event dispatcher started");
                 let max_concurrent = config.max_concurrent.max(1);
                 let semaphore = Arc::new(Semaphore::new(max_concurrent));
@@ -117,11 +121,17 @@ impl EventDispatcher {
                             let handlers = handlers.clone();
                             let config = config.clone();
                             let semaphore = semaphore.clone();
+                            let consumer_runtime = consumer_runtime;
 
                             tokio::spawn(
                                 async move {
                                     Self::dispatch_to_handlers(
-                                        envelope, handlers, config, semaphore, bp,
+                                        envelope,
+                                        handlers,
+                                        config,
+                                        semaphore,
+                                        bp,
+                                        consumer_runtime,
                                     )
                                     .await;
                                 }
@@ -129,10 +139,10 @@ impl EventDispatcher {
                             );
                         }
                         Err(broadcast::error::RecvError::Lagged(skipped)) => {
-                            warn!(skipped = skipped, "Event dispatcher lagged, skipped events");
+                            consumer_runtime.lagged(skipped);
                         }
                         Err(broadcast::error::RecvError::Closed) => {
-                            info!("Event bus closed, stopping dispatcher");
+                            consumer_runtime.closed();
                             break;
                         }
                     }
@@ -150,7 +160,10 @@ impl EventDispatcher {
         config: DispatcherConfig,
         semaphore: Arc<Semaphore>,
         backpressure: Option<Arc<super::backpressure::BackpressureController>>,
+        consumer_runtime: EventConsumerRuntime,
     ) {
+        let dispatch_started_at = Instant::now();
+        let event_type = envelope.event.event_type().to_string();
         let matching_handlers: Vec<_> = handlers
             .iter()
             .filter(|handler| handler.handles(&envelope.event))
@@ -158,19 +171,17 @@ impl EventDispatcher {
             .collect();
 
         if matching_handlers.is_empty() {
-            debug!(
-                event_type = envelope.event.event_type(),
-                "No handlers for event"
-            );
+            debug!(event_type = event_type.as_str(), "No handlers for event");
             // Release backpressure slot if no handlers
             if let Some(bp) = backpressure {
                 bp.release();
             }
+            consumer_runtime.record_dispatch_latency(&event_type, dispatch_started_at);
             return;
         }
 
         debug!(
-            event_type = envelope.event.event_type(),
+            event_type = event_type.as_str(),
             handler_count = matching_handlers.len(),
             "Dispatching to handlers"
         );
@@ -180,7 +191,6 @@ impl EventDispatcher {
         if config.fail_fast {
             for handler in matching_handlers {
                 let envelope = envelope.clone();
-                let event_type = envelope.event.event_type().to_string();
                 if let Err(error) = Self::handle_with_retry(handler, envelope, &config).await {
                     error!(
                         event_type = event_type.as_str(),
@@ -194,6 +204,7 @@ impl EventDispatcher {
             if let Some(bp) = backpressure {
                 bp.release();
             }
+            consumer_runtime.record_dispatch_latency(&event_type, dispatch_started_at);
             return;
         }
 
@@ -206,6 +217,9 @@ impl EventDispatcher {
             let permit = semaphore.clone().acquire_owned().await;
             let bp = backpressure.clone();
             let count = Arc::clone(&completion_count);
+            let event_type = event_type.clone();
+            let dispatch_started_at = dispatch_started_at;
+            let consumer_runtime = consumer_runtime;
 
             tokio::spawn(async move {
                 let _permit = permit;
@@ -214,6 +228,9 @@ impl EventDispatcher {
                     count: Arc<AtomicUsize>,
                     limit: usize,
                     bp: Option<Arc<super::backpressure::BackpressureController>>,
+                    consumer_runtime: EventConsumerRuntime,
+                    event_type: String,
+                    dispatch_started_at: Instant,
                 }
 
                 impl Drop for CompletionGuard {
@@ -223,6 +240,10 @@ impl EventDispatcher {
                             if let Some(bp) = &self.bp {
                                 bp.release();
                             }
+                            self.consumer_runtime.record_dispatch_latency(
+                                &self.event_type,
+                                self.dispatch_started_at,
+                            );
                         }
                     }
                 }
@@ -231,6 +252,9 @@ impl EventDispatcher {
                     count,
                     limit: handler_count,
                     bp,
+                    consumer_runtime,
+                    event_type,
+                    dispatch_started_at,
                 };
 
                 let _ = Self::handle_with_retry(handler, envelope, &config).await;

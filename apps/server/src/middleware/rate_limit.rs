@@ -80,7 +80,7 @@ impl RateLimiter {
         self.config.window.as_secs()
     }
 
-    pub async fn check_rate_limit(&self, key: &str) -> Result<RateLimitInfo, StatusCode> {
+    pub async fn check_rate_limit(&self, key: &str) -> Result<RateLimitInfo, RateLimitExceeded> {
         if !self.config.enabled {
             return Ok(RateLimitInfo::unlimited());
         }
@@ -107,7 +107,10 @@ impl RateLimiter {
                     "Rate limit exceeded"
                 );
 
-                return Err(StatusCode::TOO_MANY_REQUESTS);
+                return Err(RateLimitExceeded::new(
+                    self.config.max_requests,
+                    retry_after,
+                ));
             }
         }
 
@@ -139,7 +142,10 @@ impl RateLimiter {
                 "Rate limit exceeded (race condition check)"
             );
 
-            return Err(StatusCode::TOO_MANY_REQUESTS);
+            return Err(RateLimitExceeded::new(
+                self.config.max_requests,
+                retry_after,
+            ));
         }
 
         counter.count += 1;
@@ -199,6 +205,18 @@ impl RateLimitInfo {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RateLimitExceeded {
+    pub limit: usize,
+    pub retry_after: u64,
+}
+
+impl RateLimitExceeded {
+    fn new(limit: usize, retry_after: u64) -> Self {
+        Self { limit, retry_after }
+    }
+}
+
 /// Extract client identifier from the request.
 ///
 /// Priority:
@@ -249,6 +267,29 @@ fn insert_header_if_valid(headers: &mut axum::http::HeaderMap, key: &'static str
     }
 }
 
+fn apply_rate_limit_headers(headers: &mut axum::http::HeaderMap, info: &RateLimitInfo) {
+    insert_header_if_valid(headers, "x-ratelimit-limit", info.limit.to_string());
+    insert_header_if_valid(headers, "x-ratelimit-remaining", info.remaining.to_string());
+    insert_header_if_valid(headers, "x-ratelimit-reset", info.reset.to_string());
+}
+
+fn rate_limited_response(exceeded: &RateLimitExceeded) -> Response {
+    let mut response = Response::new(Body::from("Rate limit exceeded"));
+    *response.status_mut() = StatusCode::TOO_MANY_REQUESTS;
+
+    let headers = response.headers_mut();
+    insert_header_if_valid(headers, "retry-after", exceeded.retry_after.to_string());
+    insert_header_if_valid(headers, "x-ratelimit-limit", exceeded.limit.to_string());
+    insert_header_if_valid(headers, "x-ratelimit-remaining", "0".to_string());
+    insert_header_if_valid(
+        headers,
+        "x-ratelimit-reset",
+        exceeded.retry_after.to_string(),
+    );
+
+    response
+}
+
 pub async fn rate_limit_middleware(
     State(limiter): State<Arc<RateLimiter>>,
     headers: HeaderMap,
@@ -262,27 +303,11 @@ pub async fn rate_limit_middleware(
     match limiter.check_rate_limit(&client_id).await {
         Ok(info) => {
             let mut response = next.run(request).await;
-
-            let headers = response.headers_mut();
-            insert_header_if_valid(headers, "x-ratelimit-limit", info.limit.to_string());
-            insert_header_if_valid(headers, "x-ratelimit-remaining", info.remaining.to_string());
-            insert_header_if_valid(headers, "x-ratelimit-reset", info.reset.to_string());
+            apply_rate_limit_headers(response.headers_mut(), &info);
 
             Ok(response)
         }
-        Err(status) => {
-            let mut response = Response::new(Body::from("Rate limit exceeded"));
-            *response.status_mut() = status;
-
-            let headers = response.headers_mut();
-            insert_header_if_valid(
-                headers,
-                "retry-after",
-                limiter.config.window.as_secs().to_string(),
-            );
-
-            Err(response)
-        }
+        Err(exceeded) => Err(rate_limited_response(&exceeded)),
     }
 }
 
@@ -313,27 +338,11 @@ pub async fn rate_limit_for_paths(
     match limiter.check_rate_limit(&client_id).await {
         Ok(info) => {
             let mut response = next.run(request).await;
-
-            let headers = response.headers_mut();
-            insert_header_if_valid(headers, "x-ratelimit-limit", info.limit.to_string());
-            insert_header_if_valid(headers, "x-ratelimit-remaining", info.remaining.to_string());
-            insert_header_if_valid(headers, "x-ratelimit-reset", info.reset.to_string());
+            apply_rate_limit_headers(response.headers_mut(), &info);
 
             Ok(response)
         }
-        Err(status) => {
-            let mut response = Response::new(Body::from("Rate limit exceeded"));
-            *response.status_mut() = status;
-
-            let headers = response.headers_mut();
-            insert_header_if_valid(
-                headers,
-                "retry-after",
-                limiter.config.window.as_secs().to_string(),
-            );
-
-            Err(response)
-        }
+        Err(exceeded) => Err(rate_limited_response(&exceeded)),
     }
 }
 
@@ -375,7 +384,9 @@ mod tests {
 
         let result = limiter.check_rate_limit("test-client").await;
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), StatusCode::TOO_MANY_REQUESTS);
+        let exceeded = result.unwrap_err();
+        assert_eq!(exceeded.limit, 3);
+        assert!(exceeded.retry_after > 0);
     }
 
     #[tokio::test]
@@ -476,5 +487,16 @@ mod tests {
         let headers = HeaderMap::new();
         let id = extract_client_id(&headers);
         assert_eq!(id, "ip:unknown");
+    }
+
+    #[test]
+    fn rate_limited_response_includes_contract_headers() {
+        let response = rate_limited_response(&RateLimitExceeded::new(20, 42));
+
+        assert_eq!(response.status(), StatusCode::TOO_MANY_REQUESTS);
+        assert_eq!(response.headers()["retry-after"], "42");
+        assert_eq!(response.headers()["x-ratelimit-limit"], "20");
+        assert_eq!(response.headers()["x-ratelimit-remaining"], "0");
+        assert_eq!(response.headers()["x-ratelimit-reset"], "42");
     }
 }

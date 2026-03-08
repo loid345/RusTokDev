@@ -10,6 +10,7 @@
 
 use std::collections::HashSet;
 
+use email_address::EmailAddress;
 use regex::Regex;
 use url::Url;
 
@@ -169,43 +170,29 @@ impl InputValidator {
 
     /// Sanitize HTML content
     pub fn sanitize_html(&self, input: &str) -> String {
-        input
-            .replace('&', "&amp;")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
-            .replace('"', "&quot;")
-            .replace('\'', "&#x27;")
+        v_htmlescape::escape(input).to_string()
     }
 
     /// Validate email address
     pub fn validate_email(&self, email: &str) -> ValidationResult {
-        let email_regex = Regex::new(
-            r"^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$"
-        ).unwrap();
-
-        if !email_regex.is_match(email) {
-            return ValidationResult::Invalid {
-                reason: "Invalid email format".to_string(),
-            };
-        }
-
         if email.len() > 254 {
             return ValidationResult::Invalid {
                 reason: "Email address too long".to_string(),
             };
         }
 
-        ValidationResult::Valid
+        if EmailAddress::is_valid(email) {
+            ValidationResult::Valid
+        } else {
+            ValidationResult::Invalid {
+                reason: "Invalid email format".to_string(),
+            }
+        }
     }
 
     /// Validate UUID
     pub fn validate_uuid(&self, uuid: &str) -> ValidationResult {
-        let uuid_regex = Regex::new(
-            r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
-        )
-        .unwrap();
-
-        if uuid_regex.is_match(uuid) {
+        if uuid::Uuid::parse_str(uuid).is_ok() {
             ValidationResult::Valid
         } else {
             ValidationResult::Invalid {
@@ -246,7 +233,8 @@ impl SsrfProtection {
 
     /// Add allowed host
     pub fn allow_host(mut self, host: impl Into<String>) -> Self {
-        self.allowed_hosts.insert(host.into());
+        self.allowed_hosts
+            .insert(Self::normalize_host(&host.into()));
         self
     }
 
@@ -275,46 +263,103 @@ impl SsrfProtection {
             };
         }
 
-        // Check host
-        if let Some(host) = parsed.host_str() {
-            // Check if in allowed list (if configured)
-            if !self.allowed_hosts.is_empty() && !self.allowed_hosts.contains(host) {
+        let host = match parsed.host() {
+            Some(host) => host,
+            None => {
                 return ValidationResult::Invalid {
-                    reason: format!("Host '{}' is not in the allowlist", host),
+                    reason: "URL must have a host".to_string(),
                 };
             }
+        };
 
-            // Check for private IPs
-            if let Ok(ip) = host.parse::<std::net::IpAddr>() {
-                if self.is_private_ip(&ip) {
-                    return ValidationResult::Invalid {
-                        reason: "Private IP addresses are not allowed".to_string(),
-                    };
-                }
-            }
+        let normalized_host = match host {
+            url::Host::Domain(domain) => Self::normalize_host(domain),
+            url::Host::Ipv4(ipv4) => ipv4.to_string(),
+            url::Host::Ipv6(ipv6) => ipv6.to_string(),
+        };
 
-            // Check for localhost
-            if host == "localhost" || host == "127.0.0.1" || host == "::1" {
-                return ValidationResult::Invalid {
-                    reason: "Localhost URLs are not allowed".to_string(),
-                };
-            }
-        } else {
+        // Check if in allowed list (if configured)
+        if !self.allowed_hosts.is_empty() && !self.allowed_hosts.contains(&normalized_host) {
             return ValidationResult::Invalid {
-                reason: "URL must have a host".to_string(),
+                reason: format!("Host '{}' is not in the allowlist", normalized_host),
+            };
+        }
+
+        if let Ok(ip) = normalized_host.parse::<std::net::IpAddr>() {
+            if self.is_private_ip(&ip) {
+                return ValidationResult::Invalid {
+                    reason: "Private IP addresses are not allowed".to_string(),
+                };
+            }
+        }
+
+        if normalized_host == "localhost" {
+            return ValidationResult::Invalid {
+                reason: "Localhost URLs are not allowed".to_string(),
             };
         }
 
         ValidationResult::Valid
     }
 
+    /// Validate every hop in an HTTP redirect chain.
+    pub fn validate_redirect_chain<I, S>(&self, urls: I) -> ValidationResult
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let mut has_urls = false;
+
+        for (index, url) in urls.into_iter().enumerate() {
+            has_urls = true;
+
+            match self.validate_url(url.as_ref()) {
+                ValidationResult::Valid => {}
+                ValidationResult::Invalid { reason } => {
+                    return ValidationResult::Invalid {
+                        reason: format!("Redirect hop {} rejected: {}", index, reason),
+                    };
+                }
+                ValidationResult::Sanitized { .. } => {
+                    return ValidationResult::Invalid {
+                        reason: format!("Redirect hop {} returned an unexpected result", index),
+                    };
+                }
+            }
+        }
+
+        if has_urls {
+            ValidationResult::Valid
+        } else {
+            ValidationResult::Invalid {
+                reason: "Redirect chain must contain at least one URL".to_string(),
+            }
+        }
+    }
+
     fn is_private_ip(&self, ip: &std::net::IpAddr) -> bool {
         match ip {
             std::net::IpAddr::V4(ipv4) => {
-                ipv4.is_private() || ipv4.is_loopback() || ipv4.is_link_local()
+                ipv4.is_private()
+                    || ipv4.is_loopback()
+                    || ipv4.is_link_local()
+                    || ipv4.is_broadcast()
+                    || ipv4.is_documentation()
+                    || ipv4.is_unspecified()
+                    || ipv4.is_multicast()
             }
-            std::net::IpAddr::V6(ipv6) => ipv6.is_loopback(),
+            std::net::IpAddr::V6(ipv6) => {
+                ipv6.is_loopback()
+                    || ipv6.is_unspecified()
+                    || ipv6.is_unique_local()
+                    || ipv6.is_unicast_link_local()
+                    || ipv6.is_multicast()
+            }
         }
+    }
+
+    fn normalize_host(host: &str) -> String {
+        host.trim_end_matches('.').to_ascii_lowercase()
     }
 }
 
@@ -420,6 +465,21 @@ mod tests {
 
         assert!(matches!(
             validator.validate_email("invalid-email"),
+            ValidationResult::Invalid { .. }
+        ));
+    }
+
+    #[test]
+    fn test_uuid_validation() {
+        let validator = InputValidator::new();
+
+        assert!(matches!(
+            validator.validate_uuid("550e8400-e29b-41d4-a716-446655440000"),
+            ValidationResult::Valid
+        ));
+
+        assert!(matches!(
+            validator.validate_uuid("not-a-uuid"),
             ValidationResult::Invalid { .. }
         ));
     }

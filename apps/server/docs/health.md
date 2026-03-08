@@ -18,6 +18,20 @@
 - `modules`: проверки health для модулей из `ModuleRegistry`
 - `degraded_reasons`: список причин деградации
 
+### Актуальные dependency checks
+
+- `database` — критичная проверка доступности БД.
+- `cache_backend` — базовая проверка tenant cache path.
+- `tenant_cache_invalidation` — не-критичная проверка внешнего Redis pubsub listener для cross-instance invalidation.
+- `event_transport` — критичная проверка инициализации event transport.
+- `search_backend` — не-критичная проверка search connectivity.
+
+Для `tenant_cache_invalidation` действует следующая семантика:
+
+- `disabled` или `healthy` не деградируют readiness.
+- `starting` или `degraded` переводят `/health/ready` в `degraded`, но не в `unhealthy`.
+- текущее состояние дополнительно отражается в `/metrics` как `rustok_tenant_invalidation_listener_status` (`0=disabled`, `1=starting`, `2=healthy`, `3=degraded`).
+
 ### Поля проверки
 
 Каждая запись в `checks` и `modules` содержит:

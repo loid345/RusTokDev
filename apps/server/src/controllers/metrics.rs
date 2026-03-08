@@ -67,7 +67,8 @@ rustok_tenant_cache_negative_hits {negative_hits}\n\
 rustok_tenant_cache_negative_misses {negative_misses}\n\
 rustok_tenant_cache_negative_evictions {negative_evictions}\n\
 rustok_tenant_cache_negative_entries {negative_entries}\n\
-rustok_tenant_cache_negative_inserts {negative_inserts}\n",
+rustok_tenant_cache_negative_inserts {negative_inserts}\n\
+rustok_tenant_invalidation_listener_status {invalidation_listener_status}\n",
         hits = stats.hits,
         misses = stats.misses,
         evictions = stats.evictions,
@@ -77,6 +78,7 @@ rustok_tenant_cache_negative_inserts {negative_inserts}\n",
         negative_evictions = stats.negative_evictions,
         negative_entries = stats.negative_entries,
         negative_inserts = stats.negative_inserts,
+        invalidation_listener_status = stats.invalidation_listener_status,
     )
 }
 

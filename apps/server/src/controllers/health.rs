@@ -14,7 +14,9 @@ use tokio::sync::Mutex;
 use utoipa::ToSchema;
 
 use crate::common::settings::RustokSettings;
-use crate::middleware::tenant::tenant_cache_stats;
+use crate::middleware::tenant::{
+    tenant_cache_stats, tenant_invalidation_listener_snapshot, TenantInvalidationListenerStatus,
+};
 
 const HEALTH_CHECK_TIMEOUT: Duration = Duration::from_secs(2);
 const CIRCUIT_BREAKER_FAILURE_THRESHOLD: u32 = 3;
@@ -154,6 +156,13 @@ pub async fn ready(
         )
         .await,
         run_guarded_check(
+            "tenant_cache_invalidation",
+            DependencyCriticality::NonCritical,
+            "dependency",
+            || check_tenant_invalidation_listener(&ctx),
+        )
+        .await,
+        run_guarded_check(
             "event_transport",
             DependencyCriticality::Critical,
             "dependency",
@@ -249,6 +258,22 @@ async fn check_database(db: &DatabaseConnection) -> std::result::Result<(), Stri
 async fn check_cache_backend(ctx: &AppContext) -> std::result::Result<(), String> {
     let _ = tenant_cache_stats(ctx).await;
     Ok(())
+}
+
+async fn check_tenant_invalidation_listener(ctx: &AppContext) -> std::result::Result<(), String> {
+    let snapshot = tenant_invalidation_listener_snapshot(ctx).await;
+
+    match snapshot.status {
+        TenantInvalidationListenerStatus::Disabled | TenantInvalidationListenerStatus::Healthy => {
+            Ok(())
+        }
+        TenantInvalidationListenerStatus::Starting => {
+            Err("tenant invalidation listener is starting".to_string())
+        }
+        TenantInvalidationListenerStatus::Degraded => Err(snapshot
+            .last_error
+            .unwrap_or_else(|| "tenant invalidation listener is degraded".to_string())),
+    }
 }
 
 async fn check_event_transport(ctx: &AppContext) -> std::result::Result<(), String> {
@@ -450,6 +475,7 @@ pub fn routes() -> Routes {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::middleware::tenant::TenantInvalidationListenerSnapshot;
 
     fn check(
         name: &str,
@@ -552,5 +578,20 @@ mod tests {
         let (host, port) = parse_host_port("http://localhost:7700/search").expect("valid url");
         assert_eq!(host, "localhost");
         assert_eq!(port, 7700);
+    }
+
+    #[test]
+    fn tenant_invalidation_listener_status_codes_are_stable() {
+        let healthy = TenantInvalidationListenerSnapshot {
+            status: TenantInvalidationListenerStatus::Healthy,
+            last_error: None,
+        };
+        let degraded = TenantInvalidationListenerSnapshot {
+            status: TenantInvalidationListenerStatus::Degraded,
+            last_error: Some("redis unavailable".to_string()),
+        };
+
+        assert_eq!(healthy.status.metric_value(), 2);
+        assert_eq!(degraded.status.metric_value(), 3);
     }
 }

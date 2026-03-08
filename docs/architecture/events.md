@@ -365,3 +365,11 @@ max_attempts = 10
 2. Подтвердить root cause (схема, downstream, payload).
 3. Запустить replay батчами и мониторить `outbox_dlq_total` + delivery latency.
 4. Зафиксировать инцидент и remediation action в postmortem.
+
+### 4) Consumer lag / partial vs full reindex
+
+1. Проверить, какой consumer деградирует по `rustok_event_consumer_lagged_total{consumer="..."}` и есть ли одновременный рост `rustok_event_consumer_restarted_total`.
+2. Если деградация затронула только delivery для UI-стрима (`graphql_build_progress`) или cache invalidation path (`tenant_invalidation_listener`) и не касалась read-model consumers, reindex не нужен: сначала восстановить подписку/invalidaton loop, при необходимости локально сбросить cache и убедиться, что `rustok_event_dispatch_latency_ms` или restart counters вернулись к baseline.
+3. `Partial reindex` выбираем, когда известен ограниченный scope потерь: один tenant, один `target_type`, конкретный набор entity-id или короткий интервал, который можно безопасно компенсировать `ReindexRequested`.
+4. `Full rebuild` нужен, если scope потерь не локализуется, lag затронул критичный read-model consumer на длинном интервале, пропущены разные event types/tenants или после partial reindex read-model всё ещё расходится с source-of-truth.
+5. После reindex обязательно проверить стабилизацию `rustok_event_dispatch_latency_ms`, отсутствие дальнейшего роста `rustok_event_consumer_lagged_total` и записать принятое решение (`partial` или `full`) в incident/postmortem.

@@ -19,6 +19,7 @@
 4. **Обработчик (consumer)**
    - `EventDispatcher` выбирает подходящие обработчики по `can_handle(...)`.
    - Каждый обработчик получает retries на уровне dispatcher (`retry_count + 1` попыток).
+   - Для long-lived consumers платформенный runtime-contract одинаковый: `Lagged` не замалчивается (`warn` + `rustok_event_consumer_lagged_total`), `Closed` фиксируется явно и завершает loop контролируемо, а bootstrap/restart отражается через `rustok_event_consumer_restarted_total`.
 
 5. **Обновление read-model/index**
    - Индексаторы (`rustok-index`) пересчитывают денормализованные read-модели (content/product indexes).
@@ -71,6 +72,9 @@
 
 - **Outbox relay retry**: экспоненциальный backoff до `max_attempts`, затем статус `Failed`.
 - **Dispatcher retry**: `retry_count + 1` попыток на каждый handler.
+- **Consumer runtime telemetry**: деградация delivery-path отслеживается минимум тремя сигналами: `rustok_event_consumer_lagged_total`, `rustok_event_consumer_restarted_total`, `rustok_event_dispatch_latency_ms`.
+- **External consumer policy**: loops поверх внешнего runtime/pubsub не должны завершаться после первой ошибки подключения; для них обязателен supervised resubscribe с явным backoff и наблюдаемым restart signal.
+- **Readiness policy**: для внешних consumers должен существовать хотя бы один текущий state signal (`healthy/degraded/...`) в `/health/ready` или эквивалентном health endpoint, а не только исторические counters.
 - **Требование к consumer-логике**: использовать идемпотентные операции (`upsert`, `delete-if-exists`, пересчет по source-of-truth), чтобы безопасно переживать at-least-once delivery.
 
 
@@ -95,4 +99,5 @@
 - [ ] Для каждого нового `DomainEvent` добавлены минимум два интеграционных теста: happy-path и repeat/idempotency.
 - [ ] Имена интеграционных тестов отражают цепочку события (например, `test_product_created_event_updates_index_projection`).
 - [ ] Применено переходное правило legacy event-flow: исторические цепочки покрываются поэтапно, но при любом изменении producer/consumer, routing, outbox/delivery или projection/index в legacy-сценарии интеграционные тесты обновляются в этом же PR.
+- [ ] Если меняется long-lived consumer loop, обновлены telemetry/runbook-артефакты (`rustok_event_consumer_*`, `rustok_event_dispatch_latency_ms`, incident runbook для reindex).
 - [ ] Обновлены документы: этот файл + docs/модуля-публикатора + docs/модуля-consumer.

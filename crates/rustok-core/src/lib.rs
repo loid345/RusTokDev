@@ -46,9 +46,10 @@ pub use error::{
     ValidationErrorBuilder,
 };
 pub use events::{
-    event_schema, DispatcherConfig, DomainEvent, EventBus, EventBusStats, EventDispatcher,
-    EventEnvelope, EventHandler, EventSchema, EventTransport, FieldSchema, HandlerBuilder,
-    HandlerResult, MemoryTransport, ReliabilityLevel, RunningDispatcher, EVENT_SCHEMAS,
+    event_schema, DispatcherConfig, DomainEvent, EventBus, EventBusStats, EventConsumerRuntime,
+    EventDispatcher, EventEnvelope, EventHandler, EventSchema, EventTransport, FieldSchema,
+    HandlerBuilder, HandlerResult, MemoryTransport, ReliabilityLevel, RunningDispatcher,
+    EVENT_SCHEMAS,
 };
 pub use health::{
     checks::{DatabaseHealthCheck, FnHealthCheck},
@@ -92,9 +93,10 @@ pub mod prelude {
     pub use crate::domain_err;
     pub use crate::error::{Error, Result};
     pub use crate::events::{
-        event_schema, DispatcherConfig, DomainEvent, EventBus, EventBusStats, EventDispatcher,
-        EventEnvelope, EventHandler, EventSchema, EventTransport, FieldSchema, HandlerBuilder,
-        HandlerResult, MemoryTransport, ReliabilityLevel, RunningDispatcher, EVENT_SCHEMAS,
+        event_schema, DispatcherConfig, DomainEvent, EventBus, EventBusStats, EventConsumerRuntime,
+        EventDispatcher, EventEnvelope, EventHandler, EventSchema, EventTransport, FieldSchema,
+        HandlerBuilder, HandlerResult, MemoryTransport, ReliabilityLevel, RunningDispatcher,
+        EVENT_SCHEMAS,
     };
     pub use crate::health::{
         HealthCheck, HealthRegistry, HealthResult, HealthStatus, OverallHealth,

@@ -77,6 +77,37 @@ lazy_static! {
         &["event_type"]
     )
     .expect("Failed to create event_bus_lag_seconds");
+
+    /// Total times a consumer lagged and skipped messages
+    pub static ref EVENT_CONSUMER_LAGGED_TOTAL: IntCounterVec = IntCounterVec::new(
+        Opts::new(
+            "rustok_event_consumer_lagged_total",
+            "Total times an event consumer lagged and skipped messages"
+        ),
+        &["consumer"]
+    )
+    .expect("Failed to create event_consumer_lagged_total");
+
+    /// Total consumer loop (re)starts for long-lived subscribers
+    pub static ref EVENT_CONSUMER_RESTARTED_TOTAL: IntCounterVec = IntCounterVec::new(
+        Opts::new(
+            "rustok_event_consumer_restarted_total",
+            "Total long-lived event consumer loop starts and restarts"
+        ),
+        &["consumer", "reason"]
+    )
+    .expect("Failed to create event_consumer_restarted_total");
+
+    /// End-to-end dispatch latency in milliseconds
+    pub static ref EVENT_DISPATCH_LATENCY_MS: HistogramVec = HistogramVec::new(
+        HistogramOpts::new(
+            "rustok_event_dispatch_latency_ms",
+            "End-to-end event dispatch latency in milliseconds"
+        )
+        .buckets(vec![1.0, 5.0, 10.0, 25.0, 50.0, 100.0, 250.0, 500.0, 1000.0, 2500.0, 5000.0]),
+        &["consumer", "event_type"]
+    )
+    .expect("Failed to create event_dispatch_latency_ms");
 }
 
 // ============================================================================
@@ -340,6 +371,9 @@ pub fn register_all(registry: &Registry) -> Result<(), prometheus::Error> {
     registry.register(Box::new(EVENT_BUS_PROCESSING_DURATION_SECONDS.clone()))?;
     registry.register(Box::new(EVENT_BUS_ERRORS_TOTAL.clone()))?;
     registry.register(Box::new(EVENT_BUS_LAG_SECONDS.clone()))?;
+    registry.register(Box::new(EVENT_CONSUMER_LAGGED_TOTAL.clone()))?;
+    registry.register(Box::new(EVENT_CONSUMER_RESTARTED_TOTAL.clone()))?;
+    registry.register(Box::new(EVENT_DISPATCH_LATENCY_MS.clone()))?;
 
     // Circuit Breaker
     registry.register(Box::new(CIRCUIT_BREAKER_STATE.clone()))?;
@@ -421,6 +455,27 @@ pub fn record_event_lag(event_type: &str, lag_secs: f64) {
     EVENT_BUS_LAG_SECONDS
         .with_label_values(&[event_type])
         .observe(lag_secs);
+}
+
+/// Record that a consumer lagged and skipped messages
+pub fn record_event_consumer_lagged(consumer: &str) {
+    EVENT_CONSUMER_LAGGED_TOTAL
+        .with_label_values(&[consumer])
+        .inc();
+}
+
+/// Record a long-lived consumer loop bootstrap or restart
+pub fn record_event_consumer_restarted(consumer: &str, reason: &str) {
+    EVENT_CONSUMER_RESTARTED_TOTAL
+        .with_label_values(&[consumer, reason])
+        .inc();
+}
+
+/// Record dispatch latency in milliseconds
+pub fn record_event_dispatch_latency_ms(consumer: &str, event_type: &str, latency_ms: f64) {
+    EVENT_DISPATCH_LATENCY_MS
+        .with_label_values(&[consumer, event_type])
+        .observe(latency_ms);
 }
 
 /// Update circuit breaker state (0=closed, 1=open, 2=half-open)

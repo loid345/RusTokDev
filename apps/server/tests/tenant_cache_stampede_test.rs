@@ -149,6 +149,7 @@ fn test_tenant_cache_stats_includes_coalesced_metric() {
         negative_entries: 3,
         negative_inserts: 2,
         coalesced_requests: 45, // New field
+        invalidation_listener_status: 2,
     };
 
     assert_eq!(stats.coalesced_requests, 45);

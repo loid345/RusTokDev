@@ -14,12 +14,12 @@ use redis::AsyncCommands;
 use rustok_core::tenant_validation::TenantIdentifierValidator;
 #[cfg(feature = "redis-cache")]
 use rustok_core::RedisCacheBackend;
-use rustok_core::{CacheBackend, InMemoryCacheBackend};
+use rustok_core::{CacheBackend, EventConsumerRuntime, InMemoryCacheBackend};
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{Mutex, Notify};
+use tokio::sync::{Mutex, Notify, RwLock};
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
@@ -32,6 +32,7 @@ const TENANT_INVALIDATION_CHANNEL: &str = "tenant.cache.invalidate";
 const TENANT_CACHE_TTL: Duration = Duration::from_secs(300);
 const TENANT_NEGATIVE_CACHE_TTL: Duration = Duration::from_secs(60);
 const TENANT_CACHE_MAX_CAPACITY: u64 = 1_000;
+const TENANT_INVALIDATION_RETRY_DELAY: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Copy)]
 pub enum TenantIdentifierKind {
@@ -54,6 +55,7 @@ pub struct TenantCacheInfrastructure {
     metrics: Arc<TenantCacheMetricsStore>,
     key_builder: TenantCacheKeyBuilder,
     invalidation_publisher: Arc<TenantInvalidationPublisher>,
+    invalidation_listener_state: Arc<TenantInvalidationListenerState>,
     in_flight: Arc<Mutex<HashMap<String, Arc<Notify>>>>,
 }
 
@@ -145,6 +147,98 @@ struct TenantCacheMetricsStore {
     redis_client: Option<redis::Client>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TenantInvalidationListenerStatus {
+    Disabled,
+    Starting,
+    Healthy,
+    Degraded,
+}
+
+impl TenantInvalidationListenerStatus {
+    fn as_u8(self) -> u8 {
+        match self {
+            Self::Disabled => 0,
+            Self::Starting => 1,
+            Self::Healthy => 2,
+            Self::Degraded => 3,
+        }
+    }
+
+    fn from_u8(value: u8) -> Self {
+        match value {
+            1 => Self::Starting,
+            2 => Self::Healthy,
+            3 => Self::Degraded,
+            _ => Self::Disabled,
+        }
+    }
+
+    pub fn metric_value(self) -> i64 {
+        i64::from(self.as_u8())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct TenantInvalidationListenerSnapshot {
+    pub status: TenantInvalidationListenerStatus,
+    pub last_error: Option<String>,
+}
+
+#[derive(Debug)]
+struct TenantInvalidationListenerState {
+    status: AtomicU8,
+    last_error: RwLock<Option<String>>,
+}
+
+impl TenantInvalidationListenerState {
+    fn new() -> Self {
+        Self {
+            status: AtomicU8::new(TenantInvalidationListenerStatus::Disabled.as_u8()),
+            last_error: RwLock::new(None),
+        }
+    }
+
+    async fn mark_disabled(&self, reason: impl Into<String>) {
+        self.status.store(
+            TenantInvalidationListenerStatus::Disabled.as_u8(),
+            Ordering::Relaxed,
+        );
+        *self.last_error.write().await = Some(reason.into());
+    }
+
+    async fn mark_starting(&self) {
+        self.status.store(
+            TenantInvalidationListenerStatus::Starting.as_u8(),
+            Ordering::Relaxed,
+        );
+        *self.last_error.write().await = None;
+    }
+
+    async fn mark_healthy(&self) {
+        self.status.store(
+            TenantInvalidationListenerStatus::Healthy.as_u8(),
+            Ordering::Relaxed,
+        );
+        *self.last_error.write().await = None;
+    }
+
+    async fn mark_degraded(&self, reason: impl Into<String>) {
+        self.status.store(
+            TenantInvalidationListenerStatus::Degraded.as_u8(),
+            Ordering::Relaxed,
+        );
+        *self.last_error.write().await = Some(reason.into());
+    }
+
+    async fn snapshot(&self) -> TenantInvalidationListenerSnapshot {
+        TenantInvalidationListenerSnapshot {
+            status: TenantInvalidationListenerStatus::from_u8(self.status.load(Ordering::Relaxed)),
+            last_error: self.last_error.read().await.clone(),
+        }
+    }
+}
+
 impl TenantCacheMetricsStore {
     fn new() -> Self {
         Self {
@@ -195,6 +289,7 @@ impl TenantCacheMetricsStore {
             coalesced_requests: self
                 .read_metric("coalesced_requests", &self.coalesced_requests)
                 .await,
+            invalidation_listener_status: TenantInvalidationListenerStatus::Disabled.metric_value(),
         }
     }
 
@@ -222,6 +317,7 @@ impl TenantCacheInfrastructure {
             metrics: Arc::new(TenantCacheMetricsStore::new()),
             key_builder: TenantCacheKeyBuilder::new(TENANT_CACHE_VERSION),
             invalidation_publisher: Arc::new(TenantInvalidationPublisher::new()),
+            invalidation_listener_state: Arc::new(TenantInvalidationListenerState::new()),
             in_flight: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -432,6 +528,11 @@ pub async fn init_tenant_cache_infrastructure(ctx: &AppContext) {
 
     if let Some(task) = spawn_invalidation_listener(infra).await {
         ctx.shared_store.insert(task);
+    } else {
+        infra
+            .invalidation_listener_state
+            .mark_disabled("redis pubsub invalidation listener is disabled")
+            .await;
     }
 }
 
@@ -441,33 +542,43 @@ async fn spawn_invalidation_listener(
     #[cfg(feature = "redis-cache")]
     {
         let client = resolve_redis_client()?;
+        let listener_state = infra.invalidation_listener_state.clone();
         let task = tokio::spawn(async move {
-            let Ok(mut pubsub) = client.get_async_pubsub().await else {
-                return;
-            };
+            let runtime = EventConsumerRuntime::new("tenant_invalidation_listener");
+            let mut reason = "startup";
 
-            if pubsub.subscribe(TENANT_INVALIDATION_CHANNEL).await.is_err() {
-                return;
-            }
+            loop {
+                runtime.restarted(reason);
+                listener_state.mark_starting().await;
 
-            let mut messages = pubsub.on_message();
-            use futures_util::StreamExt;
+                if let Err(error) = consume_tenant_invalidation_messages(
+                    &client,
+                    infra.clone(),
+                    listener_state.clone(),
+                )
+                .await
+                {
+                    listener_state.mark_degraded(error.clone()).await;
+                    runtime.closed();
+                    tracing::warn!(
+                        consumer = runtime.consumer(),
+                        channel = TENANT_INVALIDATION_CHANNEL,
+                        retry_delay_secs = TENANT_INVALIDATION_RETRY_DELAY.as_secs(),
+                        error = %error,
+                        "Tenant invalidation listener stopped unexpectedly; scheduling resubscribe"
+                    );
+                } else {
+                    runtime.closed();
+                    tracing::warn!(
+                        consumer = runtime.consumer(),
+                        channel = TENANT_INVALIDATION_CHANNEL,
+                        retry_delay_secs = TENANT_INVALIDATION_RETRY_DELAY.as_secs(),
+                        "Tenant invalidation listener stopped without error; scheduling resubscribe"
+                    );
+                }
 
-            while let Some(msg) = messages.next().await {
-                let payload: Result<String, _> = msg.get_payload();
-                let Ok(payload) = payload else {
-                    continue;
-                };
-
-                let mut parts = payload.split('|');
-                let Some(cache_key) = parts.next() else {
-                    continue;
-                };
-                let Some(negative_key) = parts.next() else {
-                    continue;
-                };
-
-                infra.invalidate_pair(cache_key, negative_key).await;
+                reason = "retry";
+                tokio::time::sleep(TENANT_INVALIDATION_RETRY_DELAY).await;
             }
         });
 
@@ -476,6 +587,58 @@ async fn spawn_invalidation_listener(
 
     #[allow(unreachable_code)]
     None
+}
+
+#[cfg(feature = "redis-cache")]
+async fn consume_tenant_invalidation_messages(
+    client: &redis::Client,
+    infra: Arc<TenantCacheInfrastructure>,
+    listener_state: Arc<TenantInvalidationListenerState>,
+) -> Result<(), String> {
+    let mut pubsub = client
+        .get_async_pubsub()
+        .await
+        .map_err(|error| format!("pubsub connection failed: {error}"))?;
+
+    pubsub
+        .subscribe(TENANT_INVALIDATION_CHANNEL)
+        .await
+        .map_err(|error| format!("pubsub subscribe failed: {error}"))?;
+
+    listener_state.mark_healthy().await;
+
+    let mut messages = pubsub.on_message();
+    use futures_util::StreamExt;
+
+    while let Some(msg) = messages.next().await {
+        let payload: Result<String, _> = msg.get_payload();
+        let Ok(payload) = payload else {
+            continue;
+        };
+
+        let Some((cache_key, negative_key)) = parse_invalidation_payload(&payload) else {
+            tracing::warn!(
+                channel = TENANT_INVALIDATION_CHANNEL,
+                payload = %payload,
+                "Ignoring malformed tenant invalidation payload"
+            );
+            continue;
+        };
+
+        infra.invalidate_pair(cache_key, negative_key).await;
+    }
+
+    Err("pubsub stream closed".to_string())
+}
+
+fn parse_invalidation_payload(payload: &str) -> Option<(&str, &str)> {
+    let mut parts = payload.split('|');
+    let cache_key = parts.next()?;
+    let negative_key = parts.next()?;
+    if cache_key.is_empty() || negative_key.is_empty() {
+        return None;
+    }
+    Some((cache_key, negative_key))
 }
 
 fn tenant_infra(ctx: &AppContext) -> Option<Arc<TenantCacheInfrastructure>> {
@@ -689,6 +852,7 @@ pub struct TenantCacheStats {
     pub negative_entries: u64,
     pub negative_inserts: u64,
     pub coalesced_requests: u64,
+    pub invalidation_listener_status: i64,
 }
 
 pub async fn tenant_cache_stats(ctx: &AppContext) -> TenantCacheStats {
@@ -704,12 +868,29 @@ pub async fn tenant_cache_stats(ctx: &AppContext) -> TenantCacheStats {
             negative_entries: 0,
             negative_inserts: 0,
             coalesced_requests: 0,
+            invalidation_listener_status: TenantInvalidationListenerStatus::Disabled.metric_value(),
         };
     };
 
     let stats = infra.tenant_cache.stats();
     let negative_stats = infra.tenant_negative_cache.stats();
-    infra.metrics.snapshot(stats, negative_stats).await
+    let listener_snapshot = infra.invalidation_listener_state.snapshot().await;
+    let mut snapshot = infra.metrics.snapshot(stats, negative_stats).await;
+    snapshot.invalidation_listener_status = listener_snapshot.status.metric_value();
+    snapshot
+}
+
+pub async fn tenant_invalidation_listener_snapshot(
+    ctx: &AppContext,
+) -> TenantInvalidationListenerSnapshot {
+    let Some(infra) = tenant_infra(ctx) else {
+        return TenantInvalidationListenerSnapshot {
+            status: TenantInvalidationListenerStatus::Disabled,
+            last_error: Some("tenant cache infrastructure not initialized".to_string()),
+        };
+    };
+
+    infra.invalidation_listener_state.snapshot().await
 }
 
 /// Invalidate cached tenant (call after tenant or domain update)
@@ -741,4 +922,44 @@ async fn invalidate_cache_keys(ctx: &AppContext, kind: TenantIdentifierKind, val
 
     let payload = format!("{cache_key}|{negative_key}");
     infra.invalidation_publisher.publish(&payload).await;
+}
+
+#[cfg(test)]
+mod invalidation_tests {
+    use super::{
+        parse_invalidation_payload, TenantInvalidationListenerState,
+        TenantInvalidationListenerStatus,
+    };
+
+    #[test]
+    fn parse_invalidation_payload_returns_both_keys() {
+        let payload = "tenant:v1:slug:demo|tenant_negative:v1:slug:demo";
+        let parsed = parse_invalidation_payload(payload);
+
+        assert_eq!(
+            parsed,
+            Some(("tenant:v1:slug:demo", "tenant_negative:v1:slug:demo"))
+        );
+    }
+
+    #[test]
+    fn parse_invalidation_payload_rejects_malformed_payload() {
+        assert_eq!(parse_invalidation_payload("tenant:v1:slug:demo"), None);
+        assert_eq!(
+            parse_invalidation_payload("|tenant_negative:v1:slug:demo"),
+            None
+        );
+        assert_eq!(parse_invalidation_payload("tenant:v1:slug:demo|"), None);
+    }
+
+    #[tokio::test]
+    async fn listener_state_snapshot_reflects_degraded_status() {
+        let state = TenantInvalidationListenerState::new();
+        state.mark_degraded("redis unavailable").await;
+
+        let snapshot = state.snapshot().await;
+
+        assert_eq!(snapshot.status, TenantInvalidationListenerStatus::Degraded);
+        assert_eq!(snapshot.last_error.as_deref(), Some("redis unavailable"));
+    }
 }

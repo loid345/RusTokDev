@@ -575,10 +575,13 @@ async fn revoke_handler(
 
     // Verify client_secret if the app has one
     if let Some(secret_hash) = &app.client_secret_hash {
-        let client_secret = req.client_secret.as_deref().ok_or_else(|| TokenErrorResponse {
-            error: "invalid_client".to_string(),
-            error_description: "client_secret is required".to_string(),
-        })?;
+        let client_secret = req
+            .client_secret
+            .as_deref()
+            .ok_or_else(|| TokenErrorResponse {
+                error: "invalid_client".to_string(),
+                error_description: "client_secret is required".to_string(),
+            })?;
         let valid =
             OAuthAppService::verify_client_secret(client_secret, secret_hash).map_err(|_| {
                 TokenErrorResponse {

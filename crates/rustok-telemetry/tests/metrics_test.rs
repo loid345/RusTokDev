@@ -26,6 +26,8 @@ fn test_register_all_metrics() {
     // EventBus metrics
     assert!(metric_names.contains(&"rustok_event_bus_published_total".to_string()));
     assert!(metric_names.contains(&"rustok_event_bus_queue_depth".to_string()));
+    assert!(metric_names.contains(&"rustok_event_consumer_lagged_total".to_string()));
+    assert!(metric_names.contains(&"rustok_event_dispatch_latency_ms".to_string()));
 
     // Circuit Breaker metrics
     assert!(metric_names.contains(&"rustok_circuit_breaker_state".to_string()));
@@ -53,6 +55,11 @@ fn test_event_bus_metrics() {
 
     // Record lag
     metrics::record_event_lag("ProductCreated", 1.5);
+
+    // Record consumer-loop telemetry
+    metrics::record_event_consumer_lagged("event_dispatcher");
+    metrics::record_event_consumer_restarted("event_dispatcher", "startup");
+    metrics::record_event_dispatch_latency_ms("event_dispatcher", "ProductCreated", 12.0);
 
     // Metrics should be recorded (no assertions, just ensuring no panics)
 }

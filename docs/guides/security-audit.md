@@ -17,7 +17,7 @@ RusToK реализует защиту от OWASP Top 10 2021:
 | A07 | Auth Failures | Rate limiting, JWT, secure sessions |
 | A08 | Data Integrity | Request validation framework |
 | A09 | Logging Failures | Security audit logging через telemetry |
-| A10 | SSRF | URL validation, allowlist enforcement |
+| A10 | SSRF | URL validation, allowlist enforcement, redirect-chain checks |
 
 ## Ключевые инварианты
 

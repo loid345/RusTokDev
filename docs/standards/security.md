@@ -133,6 +133,17 @@ match ssrf.validate_url(url) {
         println!("SSRF protection triggered: {}", reason);
     }
 }
+
+match ssrf.validate_redirect_chain([
+    "https://api.example.com/start",
+    "https://api.example.com/final",
+]) {
+    ValidationResult::Valid => println!("Redirect chain is safe"),
+    ValidationResult::Invalid { reason } => {
+        println!("Unsafe redirect chain: {}", reason);
+    }
+    ValidationResult::Sanitized { .. } => unreachable!(),
+}
 ```
 
 ### Protected Against
@@ -141,7 +152,7 @@ match ssrf.validate_url(url) {
 - XSS Attacks (`<script>`, `javascript:`, event handlers)
 - Command Injection (`;`, `|`, backticks)
 - Path Traversal (`../`, `..\`)
-- SSRF (localhost, private IPs, file://)
+- SSRF (localhost, private IPv4/IPv6, link-local/unspecified IPs, unsafe redirect chains, file://)
 
 ## Security Audit Logging
 
