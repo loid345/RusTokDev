@@ -294,6 +294,34 @@ pub enum DomainEvent {
         moderator_id: Option<Uuid>,
     },
 
+    // Content orchestration events
+    TopicPromotedToPost {
+        topic_id: Uuid,
+        post_id: Uuid,
+        moved_comments: u64,
+        locale: String,
+        reason: Option<String>,
+    },
+    PostDemotedToTopic {
+        post_id: Uuid,
+        topic_id: Uuid,
+        moved_comments: u64,
+        locale: String,
+        reason: Option<String>,
+    },
+    TopicSplit {
+        source_topic_id: Uuid,
+        target_topic_id: Uuid,
+        moved_comment_ids: Vec<Uuid>,
+        moved_comments: u64,
+        reason: Option<String>,
+    },
+    TopicsMerged {
+        target_topic_id: Uuid,
+        moved_comments: u64,
+        reason: Option<String>,
+    },
+
     // ════════════════════════════════════════════════════════════════
     // TENANT EVENTS
     // ════════════════════════════════════════════════════════════════
@@ -372,6 +400,10 @@ impl DomainEvent {
             Self::ForumTopicStatusChanged { .. } => "forum.topic.status_changed",
             Self::ForumTopicPinned { .. } => "forum.topic.pinned",
             Self::ForumReplyStatusChanged { .. } => "forum.reply.status_changed",
+            Self::TopicPromotedToPost { .. } => "content.topic.promoted_to_post",
+            Self::PostDemotedToTopic { .. } => "content.post.demoted_to_topic",
+            Self::TopicSplit { .. } => "content.topic.split",
+            Self::TopicsMerged { .. } => "content.topics.merged",
 
             Self::TenantCreated { .. } => "tenant.created",
             Self::TenantUpdated { .. } => "tenant.updated",
@@ -453,6 +485,10 @@ impl DomainEvent {
             Self::ForumTopicStatusChanged { .. } => 1,
             Self::ForumTopicPinned { .. } => 1,
             Self::ForumReplyStatusChanged { .. } => 1,
+            Self::TopicPromotedToPost { .. } => 1,
+            Self::PostDemotedToTopic { .. } => 1,
+            Self::TopicSplit { .. } => 1,
+            Self::TopicsMerged { .. } => 1,
 
             // Tenant events (v1)
             Self::TenantCreated { .. } => 1,
@@ -893,6 +929,72 @@ impl ValidateEvent for DomainEvent {
                 validators::validate_not_empty("new_status", new_status)?;
                 validators::validate_max_length("new_status", new_status, 50)?;
                 validators::validate_optional_uuid("moderator_id", moderator_id)?;
+                Ok(())
+            }
+            Self::TopicPromotedToPost {
+                topic_id,
+                post_id,
+                locale,
+                reason,
+                ..
+            } => {
+                validators::validate_not_nil_uuid("topic_id", topic_id)?;
+                validators::validate_not_nil_uuid("post_id", post_id)?;
+                validators::validate_not_empty("locale", locale)?;
+                validators::validate_max_length("locale", locale, 10)?;
+                if let Some(reason) = reason {
+                    validators::validate_max_length("reason", reason, 500)?;
+                }
+                Ok(())
+            }
+            Self::PostDemotedToTopic {
+                post_id,
+                topic_id,
+                locale,
+                reason,
+                ..
+            } => {
+                validators::validate_not_nil_uuid("post_id", post_id)?;
+                validators::validate_not_nil_uuid("topic_id", topic_id)?;
+                validators::validate_not_empty("locale", locale)?;
+                validators::validate_max_length("locale", locale, 10)?;
+                if let Some(reason) = reason {
+                    validators::validate_max_length("reason", reason, 500)?;
+                }
+                Ok(())
+            }
+            Self::TopicSplit {
+                source_topic_id,
+                target_topic_id,
+                moved_comment_ids,
+                reason,
+                ..
+            } => {
+                validators::validate_not_nil_uuid("source_topic_id", source_topic_id)?;
+                validators::validate_not_nil_uuid("target_topic_id", target_topic_id)?;
+                if moved_comment_ids.is_empty() {
+                    return Err(EventValidationError::InvalidValue(
+                        "moved_comment_ids",
+                        "must not be empty".to_string(),
+                    ));
+                }
+                for id in moved_comment_ids {
+                    validators::validate_not_nil_uuid("moved_comment_ids[]", id)?;
+                }
+                if let Some(reason) = reason {
+                    validators::validate_max_length("reason", reason, 500)?;
+                }
+                Ok(())
+            }
+            Self::TopicsMerged {
+                target_topic_id,
+                reason,
+                ..
+            } => {
+                validators::validate_not_nil_uuid("target_topic_id", target_topic_id)?;
+                if let Some(reason) = reason {
+                    validators::validate_max_length("reason", reason, 500)?;
+                }
                 Ok(())
             }
 

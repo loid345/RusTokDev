@@ -15,7 +15,10 @@ mod state_machine_proptest;
 pub use dto::*;
 pub use entities::{Body, Node, NodeTranslation};
 pub use error::{ContentError, ContentResult};
-pub use services::NodeService;
+pub use services::{
+    ContentOrchestrationService, DemotePostToTopicInput, MergeTopicsInput, NodeService,
+    OrchestrationResult, PromoteTopicToPostInput, SplitTopicInput,
+};
 pub use state_machine::{Archived, ContentNode, Draft, Published, ToContentStatus};
 
 pub struct ContentModule;
