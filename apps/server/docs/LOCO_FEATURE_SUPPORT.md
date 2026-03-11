@@ -119,6 +119,8 @@
 **Сейчас:** password reset email отправляется кастомным `EmailService` (`lettre`).  
 **Целевое решение:** использовать Loco Mailer как основной integration contract, сохранив проектные provider-настройки и observability.
 
+**Правило границ:** Mailer не выносится в отдельный платформенный модуль. Это инфраструктурная ответственность `apps/server` на базе Loco API.
+
 ### 3.2 Workers/Queue (осознанно самопис)
 
 **Сейчас:** outbox relay worker + event-driven pipeline.  
@@ -128,6 +130,8 @@
 
 **Сейчас:** единого Loco storage abstraction для всех модулей нет.  
 **Целевое решение:** ввести общий Loco storage слой (policy + adapters), чтобы модульные upload/storage use-cases не расползались на ad-hoc реализации.
+
+**Правило границ:** Storage не выносится в отдельный платформенный модуль. Единый storage-contract живёт в server infra-слое и используется доменными модулями как shared capability.
 
 ---
 
@@ -222,6 +226,13 @@
   2. Включить rollback toggle (provider=`smtp` или legacy storage provider) в runtime config.
   3. Проверить восстановление SLA в 2 последовательных окнах наблюдения.
   4. Сохранить post-incident summary и обновить этот roadmap перед повторным rollout.
+
+## 6.1 Зафиксированное архитектурное правило (2026-03-11)
+
+- Mailer и Storage считаются частью Loco-backed infrastructure в `apps/server`.
+- Для Mailer/Storage запрещено создавать отдельный модуль платформы в `crates/rustok-*`.
+- Доменные модули используют эти возможности через server-level adapters/policies.
+- Детали решения зафиксированы в ADR: `DECISIONS/2026-03-11-loco-mailer-storage-as-server-infra.md`.
 
 ---
 
