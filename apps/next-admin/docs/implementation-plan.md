@@ -35,3 +35,12 @@
 - Расширить e2e покрытие критических разделов (auth, users, content, settings).
 - Добавить contract-тесты API маппинга и проверки typed clients.
 - Увеличить unit/component coverage для shared UI и form logic.
+
+
+## Готовность Blog/Forum/Pages к rich-text (Tiptap/Page Builder)
+
+- [x] Подключена Tiptap-форма постов из `@rustok/blog-admin` к маршрутам dashboard для блога.
+- [x] Добавлены отдельные маршруты для сценариев:
+  - `/dashboard/blog/page-builder` для блочного конструктора `PageBuilder` (функционал страниц внутри меню блога).
+  - `/dashboard/forum/reply` для `ForumReplyEditor` (`rt_json_v1`) внутри меню форума.
+- [ ] Заменить placeholder ID на выбор реальных сущностей (селекторы page/topic) через live GraphQL-запросы.
