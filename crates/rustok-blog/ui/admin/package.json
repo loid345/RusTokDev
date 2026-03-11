@@ -11,7 +11,9 @@
     "nuqs": "^2.4.1",
     "react-hook-form": "^7.54.1",
     "sonner": "^2.0.7",
-    "zod": "^4.1.8"
+    "zod": "^4.1.8",
+    "@tiptap/react": "^2.10.4",
+    "@tiptap/starter-kit": "^2.10.4"
   },
   "peerDependencies": {
     "next": ">=16",

@@ -191,6 +191,7 @@ graph TD
 - [Commerce module docs](../crates/rustok-commerce/docs/README.md)
 - [Commerce module implementation plan](../crates/rustok-commerce/docs/implementation-plan.md)
 - [Blog module docs](../crates/rustok-blog/docs/README.md)
+- [Blog admin UI package](../crates/rustok-blog/ui/admin/README.md) *(if present in branch)*
 - [Blog module implementation plan](../crates/rustok-blog/docs/implementation-plan.md)
 - [Forum module docs](../crates/rustok-forum/docs/README.md)
 - [Forum module implementation plan](../crates/rustok-forum/docs/implementation-plan.md)

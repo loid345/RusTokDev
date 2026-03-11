@@ -29,6 +29,7 @@ export interface PostResponse {
   slug: string | null;
   excerpt: string | null;
   body: string | null;
+  contentJson?: Record<string, unknown> | null;
   status: BlogPostStatus;
   authorId: string | null;
   createdAt: string;
