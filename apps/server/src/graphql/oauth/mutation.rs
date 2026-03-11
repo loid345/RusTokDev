@@ -7,6 +7,8 @@ use uuid::Uuid;
 use crate::context::AuthContext;
 use crate::services::oauth_app::{self, OAuthAppService};
 
+use super::ensure_oauth_admin;
+
 use super::types::{
     CreateOAuthAppInput, CreateOAuthAppResultGql, OAuthAppGql, RotateSecretResultGql,
 };
@@ -26,10 +28,7 @@ impl OAuthMutation {
         let auth = ctx.data::<AuthContext>()?;
         let db = ctx.data::<DatabaseConnection>()?;
 
-        let sc = auth.security_context();
-        if !sc.is_admin() {
-            return Err("Admin access required".into());
-        }
+        ensure_oauth_admin(auth, db).await?;
 
         let service_input = oauth_app::CreateOAuthAppInput {
             name: input.name,
@@ -61,10 +60,7 @@ impl OAuthMutation {
         let auth = ctx.data::<AuthContext>()?;
         let db = ctx.data::<DatabaseConnection>()?;
 
-        let sc = auth.security_context();
-        if !sc.is_admin() {
-            return Err("Admin access required".into());
-        }
+        ensure_oauth_admin(auth, db).await?;
 
         // Verify tenant ownership
         let app = crate::models::oauth_apps::Entity::find_by_id(id)
@@ -92,10 +88,7 @@ impl OAuthMutation {
         let auth = ctx.data::<AuthContext>()?;
         let db = ctx.data::<DatabaseConnection>()?;
 
-        let sc = auth.security_context();
-        if !sc.is_admin() {
-            return Err("Admin access required".into());
-        }
+        ensure_oauth_admin(auth, db).await?;
 
         // Verify tenant ownership
         let app = crate::models::oauth_apps::Entity::find_by_id(id)

@@ -7,7 +7,10 @@ use crate::context::AuthContext;
 use crate::services::oauth_app::OAuthAppService;
 use sea_orm::DatabaseConnection;
 
-use super::types::{AppType, OAuthAppGql};
+use super::{
+    ensure_oauth_admin,
+    types::{AppType, OAuthAppGql},
+};
 
 #[derive(Default)]
 pub struct OAuthQuery;
@@ -24,10 +27,7 @@ impl OAuthQuery {
         let db = ctx.data::<DatabaseConnection>()?;
 
         // Require admin permissions
-        let sc = auth.security_context();
-        if !sc.is_admin() {
-            return Err("Admin access required".into());
-        }
+        ensure_oauth_admin(auth, db).await?;
 
         let apps = OAuthAppService::list_by_tenant(db, auth.tenant_id)
             .await
@@ -50,10 +50,7 @@ impl OAuthQuery {
         let auth = ctx.data::<AuthContext>()?;
         let db = ctx.data::<DatabaseConnection>()?;
 
-        let sc = auth.security_context();
-        if !sc.is_admin() {
-            return Err("Admin access required".into());
-        }
+        ensure_oauth_admin(auth, db).await?;
 
         let app = crate::models::oauth_apps::Entity::find_by_id(id)
             .one(db)
