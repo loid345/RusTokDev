@@ -88,6 +88,25 @@ default_enabled = ["content", "commerce", "pages"]
 > из `RusToKModule` во время сборки и регистрации в `ModuleRegistry`.
 
 
+## UI-контракты модулей в манифесте и сборке
+
+Для `ModuleKind::Optional` модулей действует правило композиции UI через модульные пакеты:
+
+- UI (экраны, меню, nav items, guards, редакторы) поставляется из `crates/rustok-<module>/ui/*`.
+- Приложения (`apps/admin`, `apps/next-admin`, `apps/storefront`, `apps/next-frontend`) подключают эти пакеты через единый модульный контракт/registry, без хардкода optional-domain UI внутри приложений.
+
+Рекомендуемая структура и entry points:
+
+- `crates/rustok-<module>/ui/admin` → экспорт `adminNavItems` (или эквивалент).
+- `crates/rustok-<module>/ui/frontend` → экспорт `frontendNavItems` (или эквивалент).
+
+Исключение:
+
+- Core-модули `index`, `tenant`, `rbac`.
+- Платформенные core crate'ы (`rustok-core`, `rustok-outbox`, `rustok-telemetry`) и инфраструктурные слои.
+
+Эти компоненты могут оставаться на отдельном UI-подходе и не обязаны реализовывать `ui/admin`/`ui/frontend` пакеты.
+
 ## Deployment profiles (composable layers)
 
 Подробное описание — в ADR [`2026-03-07-deployment-profiles-and-ui-stack.md`](../../DECISIONS/2026-03-07-deployment-profiles-and-ui-stack.md).
