@@ -5,7 +5,7 @@ use uuid::Uuid;
 use rustok_content::{
     BodyInput, CreateNodeInput, ListNodesFilter, NodeService, NodeTranslationInput, UpdateNodeInput,
 };
-use rustok_core::{DomainEvent, SecurityContext};
+use rustok_core::{prepare_content_payload, DomainEvent, SecurityContext};
 use rustok_outbox::TransactionalEventBus;
 
 use crate::dto::{
@@ -57,6 +57,14 @@ impl CommentService {
 
         let locale = input.locale.clone();
         let content = input.content;
+        let prepared_content = prepare_content_payload(
+            Some(&input.content_format),
+            Some(&content),
+            input.content_json.as_ref(),
+            &locale,
+            "Comment content",
+        )
+        .map_err(BlogError::validation)?;
         let translation_title = Self::build_comment_translation_title(&content);
         let metadata = serde_json::json!({
             "parent_comment_id": input.parent_comment_id,
@@ -89,8 +97,8 @@ impl CommentService {
                     }],
                     bodies: vec![BodyInput {
                         locale: locale.clone(),
-                        body: Some(content),
-                        format: Some("markdown".to_string()),
+                        body: Some(prepared_content.body),
+                        format: Some(prepared_content.format),
                     }],
                 },
             )
@@ -154,13 +162,26 @@ impl CommentService {
         let existing = self
             .get_comment(tenant_id, comment_id, &input.locale)
             .await?;
-        let bodies = input.content.map(|content| {
-            vec![BodyInput {
+        let bodies = if input.content.is_some()
+            || input.content_json.is_some()
+            || input.content_format.is_some()
+        {
+            let prepared_content = prepare_content_payload(
+                input.content_format.as_deref(),
+                input.content.as_deref(),
+                input.content_json.as_ref(),
+                &input.locale,
+                "Comment content",
+            )
+            .map_err(BlogError::validation)?;
+            Some(vec![BodyInput {
                 locale: input.locale.clone(),
-                body: Some(content),
-                format: Some("markdown".to_string()),
-            }]
-        });
+                body: Some(prepared_content.body),
+                format: Some(prepared_content.format),
+            }])
+        } else {
+            None
+        };
 
         let node = self
             .nodes

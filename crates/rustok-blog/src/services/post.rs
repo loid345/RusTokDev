@@ -5,9 +5,7 @@ use uuid::Uuid;
 use rustok_content::{
     BodyInput, CreateNodeInput, ListNodesFilter, NodeService, NodeTranslationInput, UpdateNodeInput,
 };
-use rustok_core::{
-    validate_and_sanitize_rt_json, DomainEvent, RtJsonValidationConfig, SecurityContext,
-};
+use rustok_core::{prepare_content_payload, DomainEvent, SecurityContext, CONTENT_FORMAT_MARKDOWN};
 use rustok_outbox::TransactionalEventBus;
 use serde_json::Value;
 
@@ -61,11 +59,14 @@ impl PostService {
         let author_id = security.user_id.ok_or(BlogError::AuthorRequired)?;
         let locale = input.locale.clone();
 
-        let body_json: Value = serde_json::from_str(&input.body)
-            .map_err(|_| BlogError::validation("Body must be valid rt_json JSON payload"))?;
-        let body_validation =
-            validate_and_sanitize_rt_json(&body_json, &RtJsonValidationConfig::for_locale(&locale))
-                .map_err(BlogError::validation)?;
+        let prepared_body = prepare_content_payload(
+            Some(&input.body_format),
+            Some(&input.body),
+            input.content_json.as_ref(),
+            &locale,
+            "Body",
+        )
+        .map_err(BlogError::validation)?;
 
         let mut metadata = input.metadata.unwrap_or_else(|| serde_json::json!({}));
         if let Value::Object(map) = &mut metadata {
@@ -124,8 +125,8 @@ impl PostService {
                     }],
                     bodies: vec![BodyInput {
                         locale: locale.clone(),
-                        body: Some(body_validation.sanitized.to_string()),
-                        format: Some("rt_json".to_string()),
+                        body: Some(prepared_body.body),
+                        format: Some(prepared_body.format),
                     }],
                 },
             )
@@ -171,18 +172,19 @@ impl PostService {
             }]);
         }
 
-        if let Some(body) = input.body {
-            let body_json: Value = serde_json::from_str(&body)
-                .map_err(|_| BlogError::validation("Body must be valid rt_json JSON payload"))?;
-            let body_validation = validate_and_sanitize_rt_json(
-                &body_json,
-                &RtJsonValidationConfig::for_locale(&locale),
+        if input.body.is_some() || input.content_json.is_some() || input.body_format.is_some() {
+            let prepared_body = prepare_content_payload(
+                input.body_format.as_deref(),
+                input.body.as_deref(),
+                input.content_json.as_ref(),
+                &locale,
+                "Body",
             )
             .map_err(BlogError::validation)?;
             update.bodies = Some(vec![BodyInput {
                 locale: locale.clone(),
-                body: Some(body_validation.sanitized.to_string()),
-                format: Some("rt_json".to_string()),
+                body: Some(prepared_body.body),
+                format: Some(prepared_body.format),
             }]);
         }
 
@@ -446,7 +448,7 @@ impl PostService {
             body: body_resp.and_then(|b| b.body.clone()).unwrap_or_default(),
             body_format: body_resp
                 .map(|b| b.format.clone())
-                .unwrap_or_else(|| "markdown".to_string()),
+                .unwrap_or_else(|| CONTENT_FORMAT_MARKDOWN.to_string()),
             excerpt: translation.and_then(|t| t.excerpt.clone()),
             status: map_content_status(node.status),
             category_id,
