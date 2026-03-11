@@ -158,16 +158,18 @@ Track errors by module.
 
 ### Module Entrypoint Adoption Metrics
 
-Track whether key module entry points go through rustok libraries or bypass paths.
+Track whether key entry points go through shared rustok module APIs, platform kernel runtime, or bypass paths.
+
+> Note: in RusToK, most custom shared libraries are frontend-focused; backend platform-critical logic may intentionally live in `apps/server` and core crates.
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `rustok_module_entrypoint_calls_total` | Counter | `module`, `entry_point`, `path` | Calls split by `path=library|bypass` |
+| `rustok_module_entrypoint_calls_total` | Counter | `module`, `entry_point`, `path` | Calls split by `path=library|core_runtime|bypass` |
 
 **PromQL examples:**
 
 ```promql
-# Library adoption rate by module (0..100)
+# Library adoption rate by module (0..100), excluding core_runtime from denominator
 100 *
 sum by (module) (increase(rustok_module_entrypoint_calls_total{path="library"}[7d]))
 /
@@ -175,6 +177,9 @@ clamp_min(
   sum by (module) (increase(rustok_module_entrypoint_calls_total{path=~"library|bypass"}[7d])),
   1
 )
+
+# Core runtime volume by module (platform kernel path)
+sum by (module) (increase(rustok_module_entrypoint_calls_total{path="core_runtime"}[7d]))
 
 # New bypass points in last 7 days
 sum by (module, entry_point) (increase(rustok_module_entrypoint_calls_total{path="bypass"}[7d])) > 0
@@ -684,6 +689,7 @@ scripts/module_path_adoption_report.sh \
 The report includes:
 - `% scenarios through rustok libraries` by module
 - `library vs bypass` ratio by entry point
+- separate `core_runtime` volume (server + core paths)
 - new bypass points vs baseline snapshot
 
 Recommended use: attach this report to the platform verification cycle evidence bundle.

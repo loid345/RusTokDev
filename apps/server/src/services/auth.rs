@@ -711,7 +711,7 @@ impl AuthService {
         tenant_id: &uuid::Uuid,
         role: UserRole,
     ) -> Result<()> {
-        Self::record_authz_entrypoint_call("assign_role_permissions_via_store", "bypass");
+        Self::record_authz_entrypoint_call("assign_role_permissions_via_store", "core_runtime");
         let role_model = Self::get_or_create_role(db, tenant_id, &role).await?;
 
         match user_roles::Entity::insert(user_roles::ActiveModel {
@@ -767,7 +767,7 @@ impl AuthService {
         tenant_id: &uuid::Uuid,
         role: UserRole,
     ) -> Result<()> {
-        Self::record_authz_entrypoint_call("replace_user_role_via_store", "bypass");
+        Self::record_authz_entrypoint_call("replace_user_role_via_store", "core_runtime");
         Self::remove_tenant_role_assignments_via_store(db, user_id, tenant_id).await?;
 
         Self::assign_role_permissions_via_store(db, user_id, tenant_id, role).await
@@ -778,7 +778,10 @@ impl AuthService {
         user_id: &uuid::Uuid,
         tenant_id: &uuid::Uuid,
     ) -> Result<()> {
-        Self::record_authz_entrypoint_call("remove_tenant_role_assignments_via_store", "bypass");
+        Self::record_authz_entrypoint_call(
+            "remove_tenant_role_assignments_via_store",
+            "core_runtime",
+        );
         let tenant_role_models = roles::Entity::find()
             .filter(roles::Column::TenantId.eq(*tenant_id))
             .all(db)

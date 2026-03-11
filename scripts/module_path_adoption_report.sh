@@ -23,6 +23,11 @@ Options:
 
 Metric source:
   rustok_module_entrypoint_calls_total{module,entry_point,path}
+
+Path semantics:
+  library      - shared rustok module/library API path
+  core_runtime - platform kernel path (apps/server + core crates)
+  bypass       - direct/legacy path outside shared contracts
 USAGE
 }
 
@@ -77,17 +82,18 @@ with metrics_path.open() as f:
         labels = {k: v for k, v in label_re.findall(labels_raw)}
         rows.append((labels.get("module", ""), labels.get("entry_point", ""), labels.get("path", ""), float(value_raw)))
 
-agg = defaultdict(lambda: {"library": 0.0, "bypass": 0.0})
+agg = defaultdict(lambda: {"library": 0.0, "core_runtime": 0.0, "bypass": 0.0})
 for module, entry, path, value in rows:
     if not module or not entry:
         continue
-    if path not in ("library", "bypass"):
+    if path not in ("library", "core_runtime", "bypass"):
         continue
     agg[(module, entry)][path] += value
 
-module_totals = defaultdict(lambda: {"library": 0.0, "bypass": 0.0})
+module_totals = defaultdict(lambda: {"library": 0.0, "core_runtime": 0.0, "bypass": 0.0})
 for (module, _entry), vals in agg.items():
     module_totals[module]["library"] += vals["library"]
+    module_totals[module]["core_runtime"] += vals["core_runtime"]
     module_totals[module]["bypass"] += vals["bypass"]
 
 snapshot = {
@@ -98,6 +104,7 @@ snapshot = {
             "module": module,
             "entry_point": entry,
             "library": vals["library"],
+            "core_runtime": vals["core_runtime"],
             "bypass": vals["bypass"],
         }
         for (module, entry), vals in sorted(agg.items())
@@ -128,29 +135,34 @@ lines.append(f"- Generated (UTC): {snapshot['generated_at_utc']}")
 lines.append("")
 lines.append("## % scenarios through rustok libraries")
 lines.append("")
-lines.append("| Module | Library calls | Bypass calls | Library adoption % |")
-lines.append("|---|---:|---:|---:|")
+lines.append("| Module | Library calls | Core runtime calls | Bypass calls | Library adoption %* |")
+lines.append("|---|---:|---:|---:|---:|")
 for module in sorted(module_totals.keys()):
     library = module_totals[module]["library"]
+    core_runtime = module_totals[module]["core_runtime"]
     bypass = module_totals[module]["bypass"]
-    total = library + bypass
-    adoption = (library / total * 100.0) if total > 0 else 0.0
-    lines.append(f"| {module} | {library:.0f} | {bypass:.0f} | {adoption:.2f}% |")
+    eligible_total = library + bypass
+    adoption = (library / eligible_total * 100.0) if eligible_total > 0 else 0.0
+    lines.append(f"| {module} | {library:.0f} | {core_runtime:.0f} | {bypass:.0f} | {adoption:.2f}% |")
 if not module_totals:
-    lines.append("| n/a | 0 | 0 | 0.00% |")
+    lines.append("| n/a | 0 | 0 | 0 | 0.00% |")
+
+lines.append("")
+lines.append("\* adoption% uses only library vs bypass calls; core_runtime is tracked separately and is not treated as bypass.")
 
 lines.append("")
 lines.append("## Library vs bypass ratio by entry point")
 lines.append("")
-lines.append("| Module | Entry point | Library | Bypass | Ratio (library:bypass) |")
-lines.append("|---|---|---:|---:|---:|")
+lines.append("| Module | Entry point | Library | Core runtime | Bypass | Ratio (library:bypass) |")
+lines.append("|---|---|---:|---:|---:|---:|")
 for (module, entry), vals in sorted(agg.items()):
     lib = vals["library"]
+    core_runtime = vals["core_runtime"]
     byp = vals["bypass"]
     ratio = "∞" if byp == 0 and lib > 0 else ("0" if lib == 0 and byp > 0 else ("0" if lib == 0 and byp == 0 else f"{lib/byp:.2f}"))
-    lines.append(f"| {module} | {entry} | {lib:.0f} | {byp:.0f} | {ratio} |")
+    lines.append(f"| {module} | {entry} | {lib:.0f} | {core_runtime:.0f} | {byp:.0f} | {ratio} |")
 if not agg:
-    lines.append("| n/a | n/a | 0 | 0 | 0 |")
+    lines.append("| n/a | n/a | 0 | 0 | 0 | 0 |")
 
 lines.append("")
 lines.append("## New bypass points in period")

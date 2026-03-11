@@ -258,8 +258,9 @@ lazy_static! {
     /// Module entry-point invocations split by integration path.
     ///
     /// `path` label values:
-    /// - `library`: call goes through rustok module/library API.
-    /// - `bypass`: direct/legacy path that bypasses shared module API.
+    /// - `library`: call goes through rustok shared module/library API.
+    /// - `core_runtime`: call is served by platform kernel path (`apps/server` + core crates).
+    /// - `bypass`: direct/legacy path that should be migrated away from shared contracts.
     pub static ref MODULE_ENTRYPOINT_CALLS_TOTAL: IntCounterVec = IntCounterVec::new(
         Opts::new(
             "rustok_module_entrypoint_calls_total",
@@ -575,7 +576,7 @@ pub fn record_module_error(module: &str, error_type: &str, severity: &str) {
         .inc();
 }
 
-/// Record module entry-point invocation path (`library` or `bypass`).
+/// Record module entry-point invocation path (`library`, `core_runtime`, or `bypass`).
 pub fn record_module_entrypoint_call(module: &str, entry_point: &str, path: &str) {
     MODULE_ENTRYPOINT_CALLS_TOTAL
         .with_label_values(&[module, entry_point, path])

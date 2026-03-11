@@ -1078,7 +1078,7 @@
 - [x] Outbox metrics (backlog_size, retries, dlq) — `OUTBOX_BACKLOG_SIZE`, `OUTBOX_RETRIES_TOTAL`, `OUTBOX_DLQ_TOTAL`
 - [x] Module health metrics — `MODULE_HEALTH` gauge per module slug в `/health/ready`
 - [~] Custom business metrics — нет; только инфраструктурные метрики
-- [x] Метрика прохождения через библиотечные entry points добавлена: `rustok_module_entrypoint_calls_total{module,entry_point,path}` с разметкой `path=library|bypass`; для RBAC покрыты ключевые entry points и legacy bypass-пути.
+- [x] Метрика прохождения через entry points добавлена: `rustok_module_entrypoint_calls_total{module,entry_point,path}` с разметкой `path=library|core_runtime|bypass`; `core_runtime` фиксирует допустимые kernel-пути (`apps/server` + core crates), отдельно от bypass.
 - [x] Еженедельный adoption-отчёт подключён в verification cycle: `scripts/module_path_adoption_report.sh` формирует % library-path сценариев и список новых bypass-точек за период.
 
 ### 15.2 Tracing / OpenTelemetry
