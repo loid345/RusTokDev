@@ -16,3 +16,9 @@ export { default as PostForm } from './components/post-form';
 export { PostTable } from './components/post-table';
 export { columns as postColumns } from './components/post-table/columns';
 export * from './api/posts';
+
+export { RtJsonEditor } from './components/rt-json-editor';
+export { PageBuilder } from './components/page-builder';
+export { ForumReplyEditor } from './components/forum-reply-editor';
+export * from './api/pages';
+export * from './api/forum';
