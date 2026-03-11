@@ -1481,15 +1481,16 @@
 
 - [ ] Нет повтора валидации доменных правил в `apps/server`/frontend-adapter слое
   - Автопоиск кандидатов: `./scripts/verify/verify-anti-bypass.sh`
-  - Ручной review: сверка найденных мест с API `crates/rustok-<domain>`
+  - Ручной review: сверка найденных мест с допустимым target-слоем (`crates/rustok-<domain>`, либо platform/core в `apps/server` + `crates/rustok-core`)
 - [ ] Нет ручной публикации событий в app-слое вместо модульных сервисов
   - Автопоиск кандидатов: `./scripts/verify/verify-anti-bypass.sh --manual-review`
   - Для release-gate: `./scripts/verify/verify-anti-bypass.sh --strict`
 - [ ] Нет прямых запросов к таблицам домена из app-слоя мимо crate API
   - Автопоиск сигнатур `Entity::find*`, `from_raw_sql`, `DatabaseConnection` в `apps/server/src`
 - [ ] Каждый найденный случай оформлен как migration-task
-  - Формат: перенос логики в `crates/rustok-<domain>`, app-слой оставлять orchestration-only
-  - Минимум: ссылка на issue/task + owner + целевой crate API
+  - Формат: перенос в корректный слой (домен → `crates/rustok-<domain>`, platform/core orchestration — допускается в `apps/server` + `crates/rustok-core`)
+  - Минимум: ссылка на issue/task + owner + целевой API/слой
+  - Для frontend-слоя: дублирование выносить в самописные frontend-библиотеки (shared UI/contracts), не в backend domain crates
 
 ---
 

@@ -214,7 +214,9 @@
 - `--manual-review` — расширенный вывод кандидатов
 - `--strict` — найденные кандидаты считаются ошибкой (use in CI gate при необходимости)
 
-**Severity:** MEDIUM→HIGH. Цель — системно ловить drift и фиксировать migration-task на перенос логики в `crates/rustok-<domain>`.
+Важно: anti-bypass аудит не требует «бездумно всё выносить в модули». Разбор кандидатов делается вручную с учётом допустимого platform/core слоя и frontend-library слоя.
+
+**Severity:** MEDIUM→HIGH. Цель — системно ловить drift и фиксировать migration-task с корректным target-слоем: доменная логика → `crates/rustok-<domain>`, platform/core orchestration → `apps/server` + `crates/rustok-core`, frontend дублирование → самописные frontend-библиотеки.
 
 ---
 ### `verify-all.sh`

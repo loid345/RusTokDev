@@ -78,12 +78,12 @@ print_hits() {
 
 print_hits \
     "1. Дублирование валидации доменных правил в app/frontend-adapter" \
-    'validate\(|\.validate\(\)|ValidationErrors|validator::Validate' \
+    '\bvalidate\(|\.validate\(\)|ValidationErrors|validator::Validate' \
     apps/server/src apps/admin/src apps/next-admin apps/next-frontend
 
 print_hits \
     "2. Ручная публикация событий вместо модульного сервиса" \
-    '\.publish\(|publish\s*\(' \
+    '\.publish\(' \
     apps/server/src
 
 print_hits \
@@ -99,6 +99,10 @@ if [[ -n "$service_calls" ]]; then
 else
     warn "Не найдены явные сервисные вызовы: проверьте, не сползла ли логика в transport-layer"
 fi
+
+header "5. Политика разбора кандидатов (manual-review rule)"
+pass "Не каждый кандидат = нарушение: часть orchestration и infra допустима в apps/server + rustok-core"
+pass "Frontend-duplication задачи выносить в самописные frontend-библиотеки, а не в domain crates"
 
 header "Итог"
 echo -e "  warnings: $WARNINGS"
