@@ -12,7 +12,9 @@ use rustok_core::events::{
 };
 use rustok_core::{EventBus, MemoryTransport, SecurityContext, UserRole};
 use rustok_outbox::TransactionalEventBus;
-use sea_orm::{ConnectionTrait, ConnectOptions, Database, DatabaseConnection, DbBackend, Statement};
+use sea_orm::{
+    ConnectOptions, ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement,
+};
 use uuid::Uuid;
 
 #[derive(Clone, Default)]
@@ -243,9 +245,55 @@ async fn ensure_content_schema(db: &DatabaseConnection) {
     ))
     .await
     .expect("failed to create bodies table");
+
+    db.execute(Statement::from_string(
+        DbBackend::Sqlite,
+        "CREATE TABLE IF NOT EXISTS content_orchestration_operations (
+            id TEXT PRIMARY KEY,
+            tenant_id TEXT NOT NULL,
+            operation TEXT NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            source_id TEXT NOT NULL,
+            target_id TEXT NOT NULL,
+            moved_comments INTEGER NOT NULL,
+            created_at TEXT NOT NULL
+        )"
+        .to_string(),
+    ))
+    .await
+    .expect("failed to create content_orchestration_operations table");
+
+    db.execute(Statement::from_string(
+        DbBackend::Sqlite,
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_content_orchestration_ops_idempotency
+            ON content_orchestration_operations(tenant_id, operation, idempotency_key)"
+            .to_string(),
+    ))
+    .await
+    .expect("failed to create idx_content_orchestration_ops_idempotency");
+
+    db.execute(Statement::from_string(
+        DbBackend::Sqlite,
+        "CREATE TABLE IF NOT EXISTS content_orchestration_audit_logs (
+            id TEXT PRIMARY KEY,
+            tenant_id TEXT NOT NULL,
+            operation TEXT NOT NULL,
+            idempotency_key TEXT NOT NULL,
+            actor_id TEXT NULL,
+            source_id TEXT NOT NULL,
+            target_id TEXT NOT NULL,
+            payload TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )"
+        .to_string(),
+    ))
+    .await
+    .expect("failed to create content_orchestration_audit_logs table");
 }
 
-fn drain_event_envelopes(receiver: &mut tokio::sync::broadcast::Receiver<EventEnvelope>) -> Vec<EventEnvelope> {
+fn drain_event_envelopes(
+    receiver: &mut tokio::sync::broadcast::Receiver<EventEnvelope>,
+) -> Vec<EventEnvelope> {
     let mut envelopes = Vec::new();
     loop {
         match receiver.try_recv() {
@@ -402,6 +450,7 @@ async fn test_orchestration_topic_post_split_merge_and_idempotency_with_events()
                 topic_id: topic.id,
                 locale: "en".to_string(),
                 reason: Some("editorial".to_string()),
+                idempotency_key: "promote-key-1".to_string(),
             },
         )
         .await
@@ -425,13 +474,17 @@ async fn test_orchestration_topic_post_split_merge_and_idempotency_with_events()
                 post_id: promoted.target_id,
                 locale: "en".to_string(),
                 reason: Some("revert".to_string()),
+                idempotency_key: "demote-key-1".to_string(),
             },
         )
         .await
         .expect("post->topic should succeed");
     assert_eq!(demoted.moved_comments, 2);
 
-    let demoted_topic = node_service.get_node(tenant_id, demoted.target_id).await.unwrap();
+    let demoted_topic = node_service
+        .get_node(tenant_id, demoted.target_id)
+        .await
+        .unwrap();
     assert_eq!(demoted_topic.kind, "forum_topic");
 
     node_service
@@ -462,6 +515,7 @@ async fn test_orchestration_topic_post_split_merge_and_idempotency_with_events()
                 reply_ids: vec![reply1.id],
                 new_title: "Topic split".to_string(),
                 reason: Some("cleanup".to_string()),
+                idempotency_key: "split-key-1".to_string(),
             },
         )
         .await
@@ -478,6 +532,7 @@ async fn test_orchestration_topic_post_split_merge_and_idempotency_with_events()
                 reply_ids: vec![reply1.id],
                 new_title: "Topic split repeat".to_string(),
                 reason: Some("retry".to_string()),
+                idempotency_key: "split-key-1".to_string(),
             },
         )
         .await
@@ -497,6 +552,7 @@ async fn test_orchestration_topic_post_split_merge_and_idempotency_with_events()
                 target_topic_id: demoted.target_id,
                 source_topic_ids: vec![split.target_id],
                 reason: Some("merge-back".to_string()),
+                idempotency_key: "merge-key-1".to_string(),
             },
         )
         .await
