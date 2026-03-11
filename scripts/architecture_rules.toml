@@ -1,0 +1,54 @@
+[apps]
+allowed_internal_dep_prefixes = ["rustok-"]
+allowed_internal_dep_exceptions = [
+  # Workspace app/libs outside rustok-* naming kept for compatibility.
+  "migration",
+  "alloy-scripting",
+  "leptos-auth",
+  "leptos-forms",
+  "leptos-graphql",
+  "leptos-hook-form",
+  "leptos-shadcn-pagination",
+  "leptos-table",
+  "leptos-ui",
+  "leptos-zod",
+  "leptos-zustand",
+]
+
+[domain]
+crates = [
+  "rustok-blog",
+  "rustok-commerce",
+  "rustok-content",
+  "rustok-forum",
+  "rustok-index",
+  "rustok-pages",
+  "rustok-rbac",
+  "rustok-tenant",
+]
+allowed_edges = [
+  "rustok-blog -> rustok-content",
+  "rustok-forum -> rustok-content",
+  "rustok-pages -> rustok-content",
+]
+
+[imports]
+# use rustok_*::<segment>::... where <segment> below is considered internal.
+deny_internal_segments = [
+  "entities",
+  "entity",
+  "internal",
+  "infrastructure",
+  "infra",
+  "repository",
+  "repositories",
+  "adapter",
+  "adapters",
+]
+
+# Explicitly allowed nested paths from apps/* (must be reviewed intentionally).
+explicitly_allowed_paths = [
+  "rustok_commerce::entities",
+  "rustok_content::entities",
+  "rustok_outbox::entity",
+]
