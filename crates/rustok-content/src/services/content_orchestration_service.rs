@@ -513,7 +513,7 @@ impl ContentOrchestrationService {
 
     fn ensure_safe_text(&self, field: &str, value: &str) -> ContentResult<()> {
         let validator = InputValidator::new();
-        match validator.validate_input(value) {
+        match validator.validate(value) {
             ValidationResult::Valid => Ok(()),
             ValidationResult::Invalid { reason } => Err(ContentError::Validation(format!(
                 "{field} contains unsafe payload: {reason}"
