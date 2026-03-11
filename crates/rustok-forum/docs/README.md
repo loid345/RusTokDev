@@ -16,3 +16,4 @@
 - При `rt_json_v1` поле `content_json` обязательно; backend выполняет `schema validation + sanitize` на сервере.
 - Клиентские валидаторы считаются advisory-only и не являются источником истины.
 - Детали спецификации: [docs/standards/rt-json-v1.md](../../../docs/standards/rt-json-v1.md).
+- **Response contract (read path):** backend всегда возвращает `*_format` (`body_format`/`content_format`) и нормализованное поле `content_json` для `rt_json_v1`; при `markdown` `content_json = null`, а текст остаётся в `body/content` для обратной совместимости.

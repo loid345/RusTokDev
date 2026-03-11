@@ -458,6 +458,16 @@ impl PostService {
             .and_then(|v| v.as_str())
             .map(String::from);
 
+        let body = body_resp.and_then(|b| b.body.clone()).unwrap_or_default();
+        let body_format = body_resp
+            .map(|b| b.format.clone())
+            .unwrap_or_else(|| "markdown".to_string());
+        let content_json = if body_format == "rt_json_v1" {
+            serde_json::from_str(&body).ok()
+        } else {
+            None
+        };
+
         Ok(PostResponse {
             id: node.id,
             tenant_id: node.tenant_id,
@@ -469,10 +479,9 @@ impl PostService {
             locale: locale.to_string(),
             effective_locale: tr.effective_locale,
             available_locales: all_locales,
-            body: body_resp.and_then(|b| b.body.clone()).unwrap_or_default(),
-            body_format: body_resp
-                .map(|b| b.format.clone())
-                .unwrap_or_else(|| "markdown".to_string()),
+            body,
+            body_format,
+            content_json,
             excerpt: translation.and_then(|t| t.excerpt.clone()),
             status: map_content_status(node.status),
             category_id,
