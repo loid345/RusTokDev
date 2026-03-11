@@ -93,3 +93,12 @@
 2. sanitize (drop unknown nodes/marks, normalize attrs),
 3. сохранение только sanitized JSON,
 4. повторный sanitize/normalization перед HTML-рендером (defense in depth).
+
+## Контракт чтения (response DTO)
+
+Для blog/forum в ответах используется единый контракт чтения rich-контента:
+
+- `body_format`/`content_format` всегда присутствует и определяет формат (`markdown` или `rt_json_v1`).
+- При `*_format = "rt_json_v1"` backend возвращает нормализованный JSON в отдельном поле `content_json` (объект).
+- При `*_format = "markdown"` поле `content_json` равно `null`, а текст читается из `body`/`content`.
+- Поля `body`/`content` сохраняются в response для backward compatibility; для `rt_json_v1` в них может лежать строковое JSON-представление того же документа.
