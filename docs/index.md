@@ -83,7 +83,7 @@ graph TD
 - [Tenancy](./architecture/tenancy.md)
 - [Локализация (i18n)](./architecture/i18n.md)
 - [Principles](./architecture/principles.md)
-- [Improvement Recommendations](./architecture/improvement-recommendations.md) (живой backlog архитектурных улучшений, обновлено 2026-03-08)
+- [Improvement Recommendations](./architecture/improvement-recommendations.md) (живой backlog архитектурных улучшений, обновлено 2026-03-11)
 
 ### Guides (`docs/guides/`)
 

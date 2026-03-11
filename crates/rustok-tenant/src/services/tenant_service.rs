@@ -43,6 +43,7 @@ impl TenantService {
             slug: Set(input.slug),
             domain: Set(input.domain),
             settings: Set(serde_json::json!({})),
+            default_locale: Set("en".to_string()),
             is_active: Set(true),
             created_at: Set(now),
             updated_at: Set(now),

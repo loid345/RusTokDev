@@ -15,6 +15,7 @@ pub struct TenantContext {
     pub slug: String,
     pub domain: Option<String>,
     pub settings: serde_json::Value,
+    pub default_locale: String,
     pub is_active: bool,
 }
 
@@ -26,6 +27,7 @@ impl TenantContext {
             slug: tenant.slug.clone(),
             domain: tenant.domain.clone(),
             settings: tenant.settings.clone(),
+            default_locale: tenant.default_locale.clone(),
             is_active: tenant.is_active,
         }
     }

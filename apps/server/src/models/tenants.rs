@@ -21,6 +21,7 @@ impl ActiveModel {
             slug: sea_orm::ActiveValue::Set(slug.to_string()),
             domain: sea_orm::ActiveValue::NotSet,
             settings: sea_orm::ActiveValue::Set(serde_json::json!({})),
+            default_locale: sea_orm::ActiveValue::Set("en".to_string()),
             is_active: sea_orm::ActiveValue::Set(true),
             created_at: sea_orm::ActiveValue::NotSet,
             updated_at: sea_orm::ActiveValue::NotSet,

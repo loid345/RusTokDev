@@ -192,9 +192,10 @@ pub async fn update_block(
     State(ctx): State<AppContext>,
     tenant: TenantContext,
     RequirePagesUpdate(user): RequirePagesUpdate,
-    Path((_, block_id)): Path<(Uuid, Uuid)>,
+    Path(path): Path<(Uuid, Uuid)>,
     Json(input): Json<UpdateBlockInput>,
 ) -> Result<Json<BlockResponse>> {
+    let (_, block_id) = path;
     let service = BlockService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let block = service
         .update(tenant.id, user.security_context(), block_id, input)
@@ -221,8 +222,9 @@ pub async fn delete_block(
     State(ctx): State<AppContext>,
     tenant: TenantContext,
     RequirePagesDelete(user): RequirePagesDelete,
-    Path((_, block_id)): Path<(Uuid, Uuid)>,
+    Path(path): Path<(Uuid, Uuid)>,
 ) -> Result<StatusCode> {
+    let (_, block_id) = path;
     let service = BlockService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     service
         .delete(tenant.id, user.security_context(), block_id)

@@ -26,6 +26,7 @@ use uuid::Uuid;
 use crate::common::settings::RustokSettings;
 use crate::context::{TenantContext, TenantContextExtension};
 use crate::models::tenants;
+use crate::services::redis_runtime::{resolve_redis_client, resolve_redis_url};
 
 const TENANT_CACHE_VERSION: &str = "v1";
 const TENANT_INVALIDATION_CHANNEL: &str = "tenant.cache.invalidate";
@@ -495,24 +496,6 @@ async fn build_negative_tenant_cache_backend() -> Arc<dyn CacheBackend> {
         TENANT_NEGATIVE_CACHE_TTL,
         TENANT_CACHE_MAX_CAPACITY,
     ))
-}
-
-#[cfg(feature = "redis-cache")]
-fn resolve_redis_url() -> Option<String> {
-    std::env::var("RUSTOK_REDIS_URL")
-        .ok()
-        .or_else(|| std::env::var("REDIS_URL").ok())
-        .filter(|url| !url.trim().is_empty())
-}
-
-#[cfg(not(feature = "redis-cache"))]
-fn resolve_redis_url() -> Option<String> {
-    None
-}
-
-#[cfg(feature = "redis-cache")]
-fn resolve_redis_client() -> Option<redis::Client> {
-    resolve_redis_url().and_then(|url| redis::Client::open(url).ok())
 }
 
 pub async fn init_tenant_cache_infrastructure(ctx: &AppContext) {

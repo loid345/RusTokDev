@@ -61,14 +61,43 @@ pub struct EventSettings {
     pub transport: EventTransportKind,
     #[serde(default)]
     pub relay_target: RelayTargetKind,
+    #[serde(default)]
+    pub allow_relay_target_fallback: bool,
     #[serde(default = "default_relay_interval_ms")]
     pub relay_interval_ms: u64,
+    #[serde(default = "default_event_channel_capacity")]
+    pub channel_capacity: usize,
     #[serde(default)]
     pub relay_retry_policy: RelayRetryPolicy,
     #[serde(default)]
     pub dlq: DlqSettings,
     #[serde(default)]
+    pub backpressure: EventBackpressureSettings,
+    #[serde(default)]
     pub iggy: IggyConfig,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct EventBackpressureSettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_backpressure_max_queue_depth")]
+    pub max_queue_depth: usize,
+    #[serde(default = "default_backpressure_warning_threshold")]
+    pub warning_threshold: f64,
+    #[serde(default = "default_backpressure_critical_threshold")]
+    pub critical_threshold: f64,
+}
+
+impl Default for EventBackpressureSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            max_queue_depth: default_backpressure_max_queue_depth(),
+            warning_threshold: default_backpressure_warning_threshold(),
+            critical_threshold: default_backpressure_critical_threshold(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -169,10 +198,26 @@ pub struct SearchSettings {
 pub struct RateLimitSettings {
     #[serde(default)]
     pub enabled: bool,
+    #[serde(default)]
+    pub backend: RateLimitBackendKind,
+    #[serde(default = "default_rate_limit_redis_key_prefix")]
+    pub redis_key_prefix: String,
     #[serde(default = "default_requests_per_minute")]
     pub requests_per_minute: u32,
     #[serde(default = "default_burst")]
     pub burst: u32,
+    #[serde(default = "default_auth_requests_per_minute")]
+    pub auth_requests_per_minute: u32,
+    #[serde(default = "default_auth_burst")]
+    pub auth_burst: u32,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, Default, Eq, PartialEq)]
+#[serde(rename_all = "lowercase")]
+pub enum RateLimitBackendKind {
+    #[default]
+    Memory,
+    Redis,
 }
 
 impl Default for TenantSettings {
@@ -214,8 +259,12 @@ impl Default for RateLimitSettings {
     fn default() -> Self {
         Self {
             enabled: false,
+            backend: RateLimitBackendKind::Memory,
+            redis_key_prefix: default_rate_limit_redis_key_prefix(),
             requests_per_minute: default_requests_per_minute(),
             burst: default_burst(),
+            auth_requests_per_minute: default_auth_requests_per_minute(),
+            auth_burst: default_auth_burst(),
         }
     }
 }
@@ -245,6 +294,39 @@ impl RustokSettings {
                 std::io::ErrorKind::InvalidInput,
                 "rustok.events.dlq.max_attempts must be > 0",
             )));
+        }
+
+        if parsed.events.channel_capacity == 0 {
+            return Err(serde_json::Error::io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "rustok.events.channel_capacity must be > 0",
+            )));
+        }
+
+        let backpressure = &parsed.events.backpressure;
+        if backpressure.enabled {
+            if backpressure.max_queue_depth == 0 {
+                return Err(serde_json::Error::io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "rustok.events.backpressure.max_queue_depth must be > 0",
+                )));
+            }
+
+            if !(0.0..1.0).contains(&backpressure.warning_threshold) {
+                return Err(serde_json::Error::io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "rustok.events.backpressure.warning_threshold must be in range (0, 1)",
+                )));
+            }
+
+            if !(backpressure.warning_threshold..=1.0).contains(&backpressure.critical_threshold)
+                || backpressure.critical_threshold <= backpressure.warning_threshold
+            {
+                return Err(serde_json::Error::io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "rustok.events.backpressure.critical_threshold must be in range (warning_threshold, 1]",
+                )));
+            }
         }
 
         Ok(parsed)
@@ -293,12 +375,28 @@ fn default_requests_per_minute() -> u32 {
     60
 }
 
+fn default_rate_limit_redis_key_prefix() -> String {
+    "rate-limit:v1".to_string()
+}
+
 fn default_burst() -> u32 {
     10
 }
 
+fn default_auth_requests_per_minute() -> u32 {
+    20
+}
+
+fn default_auth_burst() -> u32 {
+    0
+}
+
 fn default_relay_interval_ms() -> u64 {
     1_000
+}
+
+fn default_event_channel_capacity() -> usize {
+    128
 }
 
 fn default_relay_max_attempts() -> i32 {
@@ -321,6 +419,18 @@ fn default_dlq_max_attempts() -> i32 {
     10
 }
 
+fn default_backpressure_max_queue_depth() -> usize {
+    10_000
+}
+
+fn default_backpressure_warning_threshold() -> f64 {
+    0.7
+}
+
+fn default_backpressure_critical_threshold() -> f64 {
+    0.9
+}
+
 fn default_email_from() -> String {
     "no-reply@rustok.local".to_string()
 }
@@ -339,7 +449,7 @@ fn default_smtp_port() -> u16 {
 
 #[cfg(test)]
 mod tests {
-    use super::{EventTransportKind, RelayTargetKind, RustokSettings};
+    use super::{EventTransportKind, RateLimitBackendKind, RelayTargetKind, RustokSettings};
     use std::sync::{Mutex, OnceLock};
 
     const EVENT_TRANSPORT_ENV: &str = "RUSTOK_EVENT_TRANSPORT";
@@ -429,6 +539,8 @@ mod tests {
         let settings = RustokSettings::from_settings(&Some(raw)).expect("settings parsed");
         assert_eq!(settings.events.transport, EventTransportKind::Outbox);
         assert_eq!(settings.events.relay_target, RelayTargetKind::Iggy);
+        assert!(!settings.events.allow_relay_target_fallback);
+        assert_eq!(settings.events.channel_capacity, 128);
         assert_eq!(settings.events.relay_retry_policy.max_attempts, 5);
         assert_eq!(settings.events.relay_retry_policy.base_backoff_ms, 1_000);
         assert_eq!(settings.events.relay_retry_policy.max_backoff_ms, 60_000);
@@ -466,5 +578,36 @@ mod tests {
         let err =
             RustokSettings::from_settings(&Some(bad_dlq)).expect_err("dlq validation expected");
         assert!(err.to_string().contains("dlq.max_attempts must be > 0"));
+    }
+
+    #[test]
+    fn rejects_zero_event_channel_capacity() {
+        let _guard = env_lock().lock().expect("env lock poisoned");
+        let _env_guard = EnvVarGuard::clear(EVENT_TRANSPORT_ENV);
+
+        let raw = serde_json::json!({
+            "rustok": {
+                "events": {
+                    "channel_capacity": 0
+                }
+            }
+        });
+
+        let err = RustokSettings::from_settings(&Some(raw)).expect_err("capacity validation");
+        assert!(err
+            .to_string()
+            .contains("rustok.events.channel_capacity must be > 0"));
+    }
+
+    #[test]
+    fn reads_rate_limit_backend_defaults() {
+        let _guard = env_lock().lock().expect("env lock poisoned");
+        let _env_guard = EnvVarGuard::clear(EVENT_TRANSPORT_ENV);
+
+        let settings =
+            RustokSettings::from_settings(&Some(serde_json::json!({ "rustok": {} }))).unwrap();
+
+        assert_eq!(settings.rate_limit.backend, RateLimitBackendKind::Memory);
+        assert_eq!(settings.rate_limit.redis_key_prefix, "rate-limit:v1");
     }
 }

@@ -12,6 +12,7 @@ pub struct Model {
     #[sea_orm(unique)]
     pub domain: Option<String>,
     pub settings: Json,
+    pub default_locale: String,
     pub is_active: bool,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,

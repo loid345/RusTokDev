@@ -11,3 +11,4 @@ pub mod build_service;
 pub mod event_transport_factory;
 pub mod index_dispatcher;
 pub mod rbac_consistency;
+pub mod redis_runtime;

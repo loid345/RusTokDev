@@ -1,8 +1,10 @@
 use axum::{
     extract::FromRequestParts,
-    http::{request::Parts, StatusCode},
+    http::{request::Parts, HeaderMap, StatusCode},
 };
 use uuid::Uuid;
+
+use crate::context::TenantContextExtension;
 
 #[derive(Debug, Clone)]
 pub struct RequestContext {
@@ -25,11 +27,20 @@ where
     type Rejection = (StatusCode, &'static str);
 
     async fn from_request_parts(parts: &mut Parts, _state: &S) -> Result<Self, Self::Rejection> {
-        let tenant_id = parts
-            .headers
-            .get("X-Tenant-ID")
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| Uuid::parse_str(value).ok())
+        let tenant_context = parts
+            .extensions
+            .get::<TenantContextExtension>()
+            .map(|ext| &ext.0);
+
+        let tenant_id = tenant_context
+            .map(|tenant| tenant.id)
+            .or_else(|| {
+                parts
+                    .headers
+                    .get("X-Tenant-ID")
+                    .and_then(|value| value.to_str().ok())
+                    .and_then(|value| Uuid::parse_str(value).ok())
+            })
             .ok_or((StatusCode::BAD_REQUEST, "X-Tenant-ID header required"))?;
 
         let user_id = parts
@@ -38,18 +49,118 @@ where
             .and_then(|value| value.to_str().ok())
             .and_then(|value| Uuid::parse_str(value).ok());
 
-        let locale = parts
-            .headers
-            .get("Accept-Language")
-            .and_then(|value| value.to_str().ok())
-            .and_then(|value| value.split(',').next())
-            .unwrap_or("en")
-            .to_string();
+        let locale = extract_requested_locale(&parts.headers)
+            .or_else(|| {
+                tenant_context.and_then(|tenant| normalize_locale_tag(&tenant.default_locale))
+            })
+            .unwrap_or_else(|| "en".to_string());
 
         Ok(RequestContext {
             tenant_id,
             user_id,
             locale,
         })
+    }
+}
+
+fn extract_requested_locale(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get("Accept-Language")
+        .and_then(|value| value.to_str().ok())
+        .and_then(parse_accept_language)
+}
+
+fn parse_accept_language(value: &str) -> Option<String> {
+    value
+        .split(',')
+        .filter_map(|entry| entry.split(';').next())
+        .find_map(normalize_locale_tag)
+}
+
+fn normalize_locale_tag(raw: &str) -> Option<String> {
+    let candidate = raw.trim().replace('_', "-");
+    if candidate.is_empty() || candidate.len() > 16 {
+        return None;
+    }
+
+    if !candidate
+        .chars()
+        .all(|ch| ch.is_ascii_alphanumeric() || ch == '-')
+    {
+        return None;
+    }
+
+    let mut parts = candidate.split('-');
+    let language = parts.next()?.trim();
+    if language.len() < 2 || language.len() > 8 {
+        return None;
+    }
+
+    let mut normalized = language.to_ascii_lowercase();
+    for part in parts {
+        if part.is_empty() || part.len() > 8 {
+            return None;
+        }
+
+        normalized.push('-');
+        if part.len() == 2 && part.chars().all(|ch| ch.is_ascii_alphabetic()) {
+            normalized.push_str(&part.to_ascii_uppercase());
+        } else {
+            normalized.push_str(&part.to_ascii_lowercase());
+        }
+    }
+
+    Some(normalized)
+}
+
+#[cfg(test)]
+mod tests {
+    use axum::http::Request;
+    use tokio::runtime::Runtime;
+
+    use crate::context::TenantContext;
+
+    use super::*;
+
+    #[test]
+    fn normalizes_accept_language_header() {
+        let request = Request::builder()
+            .header("X-Tenant-ID", Uuid::nil().to_string())
+            .header("Accept-Language", "ru-ru,ru;q=0.9,en;q=0.8")
+            .body(())
+            .expect("request");
+        let (mut parts, _) = request.into_parts();
+
+        let runtime = Runtime::new().expect("tokio runtime");
+        let context = runtime
+            .block_on(RequestContext::from_request_parts(&mut parts, &()))
+            .expect("request context");
+
+        assert_eq!(context.locale, "ru-RU");
+    }
+
+    #[test]
+    fn falls_back_to_tenant_default_locale() {
+        let request = Request::builder().body(()).expect("request");
+        let (mut parts, _) = request.into_parts();
+        parts
+            .extensions
+            .insert(TenantContextExtension(TenantContext {
+                id: Uuid::nil(),
+                name: "Test".to_string(),
+                slug: "test".to_string(),
+                domain: None,
+                settings: serde_json::json!({}),
+                default_locale: "ru".to_string(),
+                is_active: true,
+            }));
+
+        let runtime = Runtime::new().expect("tokio runtime");
+        let context = runtime
+            .block_on(RequestContext::from_request_parts(&mut parts, &()))
+            .expect("request context");
+
+        assert_eq!(context.locale, "ru");
+        assert_eq!(context.tenant_id, Uuid::nil());
     }
 }

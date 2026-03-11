@@ -280,6 +280,17 @@ async fn check_event_transport(ctx: &AppContext) -> std::result::Result<(), Stri
     use rustok_core::events::EventTransport;
     use std::sync::Arc;
 
+    if let Some(runtime) = ctx
+        .shared_store
+        .get::<Arc<crate::services::event_transport_factory::EventRuntime>>()
+    {
+        if runtime.relay_fallback_active {
+            return Err(
+                "event relay target is degraded: fallback-to-memory mode is active".to_string(),
+            );
+        }
+    }
+
     ctx.shared_store
         .get::<Arc<dyn EventTransport>>()
         .map(|_| ())

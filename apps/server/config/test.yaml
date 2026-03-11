@@ -44,8 +44,15 @@ settings:
       oauth_enabled: false
     rate_limit:
       enabled: false
+      backend: memory
+      redis_key_prefix: rate-limit:v1
       requests_per_minute: 60
       burst: 10
+      auth_requests_per_minute: 20
+      auth_burst: 0
     events:
       transport: memory
+      relay_target: memory
+      allow_relay_target_fallback: true
       relay_interval_ms: 100
+      channel_capacity: 64

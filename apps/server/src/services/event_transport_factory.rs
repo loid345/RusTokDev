@@ -14,6 +14,8 @@ use crate::common::settings::{EventTransportKind, RelayTargetKind, RustokSetting
 pub struct EventRuntime {
     pub transport: Arc<dyn EventTransport>,
     pub relay_config: Option<RelayRuntimeConfig>,
+    pub channel_capacity: usize,
+    pub relay_fallback_active: bool,
 }
 
 #[derive(Clone)]
@@ -30,10 +32,12 @@ pub async fn build_event_runtime(ctx: &AppContext) -> Result<EventRuntime> {
         EventTransportKind::Memory => Ok(EventRuntime {
             transport: Arc::new(MemoryTransport::new()),
             relay_config: None,
+            channel_capacity: settings.events.channel_capacity,
+            relay_fallback_active: false,
         }),
         EventTransportKind::Outbox => {
             let outbox_transport = Arc::new(OutboxTransport::new(ctx.db.clone()));
-            let relay_target = resolve_relay_target(&settings).await;
+            let (relay_target, relay_fallback_active) = resolve_relay_target(&settings).await?;
             let relay_policy = &settings.events.relay_retry_policy;
             let max_attempts = if settings.events.dlq.enabled {
                 settings.events.dlq.max_attempts
@@ -53,6 +57,8 @@ pub async fn build_event_runtime(ctx: &AppContext) -> Result<EventRuntime> {
             Ok(EventRuntime {
                 transport: outbox_transport,
                 relay_config: Some(relay_config),
+                channel_capacity: settings.events.channel_capacity,
+                relay_fallback_active,
             })
         }
         EventTransportKind::Iggy => {
@@ -66,6 +72,8 @@ pub async fn build_event_runtime(ctx: &AppContext) -> Result<EventRuntime> {
             Ok(EventRuntime {
                 transport: Arc::new(transport),
                 relay_config: None,
+                channel_capacity: settings.events.channel_capacity,
+                relay_fallback_active: false,
             })
         }
     }
@@ -101,17 +109,25 @@ fn resolve_iggy_config(settings: &RustokSettings) -> IggyConfig {
     settings.events.iggy.clone()
 }
 
-async fn resolve_relay_target(settings: &RustokSettings) -> Arc<dyn EventTransport> {
+async fn resolve_relay_target(
+    settings: &RustokSettings,
+) -> Result<(Arc<dyn EventTransport>, bool)> {
     match settings.events.relay_target {
-        RelayTargetKind::Memory => Arc::new(MemoryTransport::new()),
+        RelayTargetKind::Memory => Ok((Arc::new(MemoryTransport::new()), false)),
         RelayTargetKind::Iggy => match IggyTransport::new(resolve_iggy_config(settings)).await {
-            Ok(transport) => Arc::new(transport),
+            Ok(transport) => Ok((Arc::new(transport), false)),
             Err(error) => {
-                tracing::warn!(
-                    error = %error,
-                    "Failed to initialize relay_target=iggy, fallback to memory"
-                );
-                Arc::new(MemoryTransport::new())
+                if settings.events.allow_relay_target_fallback {
+                    tracing::warn!(
+                        error = %error,
+                        "Failed to initialize relay_target=iggy, fallback to memory due to explicit opt-in"
+                    );
+                    Ok((Arc::new(MemoryTransport::new()), true))
+                } else {
+                    Err(loco_rs::Error::BadRequest(format!(
+                        "Failed to initialize relay_target=iggy and fallback is disabled: {error}"
+                    )))
+                }
             }
         },
     }

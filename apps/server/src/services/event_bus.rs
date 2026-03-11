@@ -21,7 +21,12 @@ pub fn event_bus_from_context(ctx: &AppContext) -> EventBus {
         return (*shared.0).clone();
     }
 
-    let bus = Arc::new(EventBus::default());
+    let bus = Arc::new(
+        ctx.shared_store
+            .get::<Arc<crate::services::event_transport_factory::EventRuntime>>()
+            .map(|runtime| EventBus::with_capacity(runtime.channel_capacity))
+            .unwrap_or_default(),
+    );
 
     if let Some(transport) = ctx.shared_store.get::<Arc<dyn EventTransport>>() {
         let mut receiver = bus.subscribe();

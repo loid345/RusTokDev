@@ -17,6 +17,7 @@ use std::path::Path;
 
 use sea_orm::EntityTrait;
 
+use crate::common::settings::RustokSettings;
 use crate::controllers;
 use crate::initializers;
 use crate::middleware;
@@ -137,6 +138,10 @@ impl Hooks for App {
     }
 
     async fn after_routes(router: AxumRouter, ctx: &AppContext) -> Result<AxumRouter> {
+        let rustok_settings =
+            RustokSettings::from_settings(&ctx.config.settings).map_err(|error| {
+                loco_rs::Error::BadRequest(format!("Invalid rustok settings: {error}"))
+            })?;
         let event_runtime = build_event_runtime(ctx).await?;
         ctx.shared_store.insert(event_runtime.transport.clone());
         spawn_index_dispatcher(ctx);
@@ -181,19 +186,54 @@ impl Hooks for App {
         });
         let alloy_rest_router = controllers::alloy::router(alloy_app_state);
 
-        // Global API rate limiter: 300 req/min per IP for all /api/* endpoints
-        let api_limiter = Arc::new(RateLimiter::new(RateLimitConfig::new(300, 60)));
-        let api_limiter_for_cleanup = api_limiter.clone();
-        tokio::spawn(async move {
-            cleanup_task(api_limiter_for_cleanup).await;
-        });
+        let api_rate_limit_config = if rustok_settings.rate_limit.enabled {
+            RateLimitConfig::per_minute(
+                rustok_settings.rate_limit.requests_per_minute,
+                rustok_settings.rate_limit.burst,
+            )
+        } else {
+            RateLimitConfig::disabled()
+        };
+        let api_limiter = Arc::new(
+            RateLimiter::build_for_backend(
+                api_rate_limit_config,
+                rustok_settings.rate_limit.backend,
+                &rustok_settings.rate_limit.redis_key_prefix,
+                "api",
+            )
+            .map_err(loco_rs::Error::BadRequest)?,
+        );
+        if rustok_settings.rate_limit.enabled {
+            let api_limiter_for_cleanup = api_limiter.clone();
+            tokio::spawn(async move {
+                cleanup_task(api_limiter_for_cleanup).await;
+            });
+        }
         let api_prefixes = Arc::new(vec!["/api/"]);
 
-        let auth_limiter = Arc::new(RateLimiter::new(RateLimitConfig::new(20, 60)));
-        let auth_limiter_for_cleanup = auth_limiter.clone();
-        tokio::spawn(async move {
-            cleanup_task(auth_limiter_for_cleanup).await;
-        });
+        let auth_rate_limit_config = if rustok_settings.rate_limit.enabled {
+            RateLimitConfig::per_minute(
+                rustok_settings.rate_limit.auth_requests_per_minute,
+                rustok_settings.rate_limit.auth_burst,
+            )
+        } else {
+            RateLimitConfig::disabled()
+        };
+        let auth_limiter = Arc::new(
+            RateLimiter::build_for_backend(
+                auth_rate_limit_config,
+                rustok_settings.rate_limit.backend,
+                &rustok_settings.rate_limit.redis_key_prefix,
+                "auth",
+            )
+            .map_err(loco_rs::Error::BadRequest)?,
+        );
+        if rustok_settings.rate_limit.enabled {
+            let auth_limiter_for_cleanup = auth_limiter.clone();
+            tokio::spawn(async move {
+                cleanup_task(auth_limiter_for_cleanup).await;
+            });
+        }
 
         let auth_prefixes = Arc::new(vec![
             "/api/auth/login",

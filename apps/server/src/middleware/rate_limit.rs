@@ -9,6 +9,8 @@ use axum::{
     middleware::Next,
     response::{IntoResponse, Response},
 };
+use once_cell::sync::Lazy;
+use redis::Script;
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::str::FromStr;
@@ -16,6 +18,9 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tracing::{debug, warn};
+
+use crate::common::settings::RateLimitBackendKind;
+use crate::services::redis_runtime::resolve_redis_client;
 
 /// Configuration for rate limiting
 #[derive(Clone, Debug)]
@@ -47,6 +52,14 @@ impl RateLimitConfig {
         }
     }
 
+    pub fn per_minute(requests_per_minute: u32, burst: u32) -> Self {
+        Self {
+            max_requests: requests_per_minute.saturating_add(burst).max(1) as usize,
+            window: Duration::from_secs(60),
+            enabled: true,
+        }
+    }
+
     pub fn disabled() -> Self {
         Self {
             max_requests: 0,
@@ -63,15 +76,35 @@ struct RequestCounter {
 }
 
 #[derive(Clone)]
+enum RateLimiterBackend {
+    Memory {
+        requests: Arc<RwLock<HashMap<String, RequestCounter>>>,
+    },
+    Redis {
+        client: redis::Client,
+        key_prefix: String,
+    },
+}
+
+#[derive(Clone)]
 pub struct RateLimiter {
-    requests: Arc<RwLock<HashMap<String, RequestCounter>>>,
+    backend: RateLimiterBackend,
     config: RateLimitConfig,
 }
 
 impl RateLimiter {
     pub fn new(config: RateLimitConfig) -> Self {
         Self {
-            requests: Arc::new(RwLock::new(HashMap::new())),
+            backend: RateLimiterBackend::Memory {
+                requests: Arc::new(RwLock::new(HashMap::new())),
+            },
+            config,
+        }
+    }
+
+    pub fn with_redis(config: RateLimitConfig, client: redis::Client, key_prefix: String) -> Self {
+        Self {
+            backend: RateLimiterBackend::Redis { client, key_prefix },
             config,
         }
     }
@@ -80,15 +113,34 @@ impl RateLimiter {
         self.config.window.as_secs()
     }
 
-    pub async fn check_rate_limit(&self, key: &str) -> Result<RateLimitInfo, RateLimitExceeded> {
+    pub fn is_distributed(&self) -> bool {
+        matches!(self.backend, RateLimiterBackend::Redis { .. })
+    }
+
+    pub async fn check_rate_limit(&self, key: &str) -> Result<RateLimitInfo, RateLimitCheckError> {
         if !self.config.enabled {
             return Ok(RateLimitInfo::unlimited());
         }
 
+        match &self.backend {
+            RateLimiterBackend::Memory { requests } => {
+                self.check_rate_limit_memory(requests, key).await
+            }
+            RateLimiterBackend::Redis { client, key_prefix } => {
+                self.check_rate_limit_redis(client, key_prefix, key).await
+            }
+        }
+    }
+
+    async fn check_rate_limit_memory(
+        &self,
+        requests: &Arc<RwLock<HashMap<String, RequestCounter>>>,
+        key: &str,
+    ) -> Result<RateLimitInfo, RateLimitCheckError> {
         let now = Instant::now();
 
         {
-            let requests = self.requests.read().await;
+            let requests = requests.read().await;
             if let Some(counter) = requests.get(key).filter(|counter| {
                 now.duration_since(counter.window_start) <= self.config.window
                     && counter.count >= self.config.max_requests
@@ -107,14 +159,14 @@ impl RateLimiter {
                     "Rate limit exceeded"
                 );
 
-                return Err(RateLimitExceeded::new(
+                return Err(RateLimitCheckError::Exceeded(RateLimitExceeded::new(
                     self.config.max_requests,
                     retry_after,
-                ));
+                )));
             }
         }
 
-        let mut requests = self.requests.write().await;
+        let mut requests = requests.write().await;
         let counter = requests
             .entry(key.to_string())
             .or_insert_with(|| RequestCounter {
@@ -142,10 +194,10 @@ impl RateLimiter {
                 "Rate limit exceeded (race condition check)"
             );
 
-            return Err(RateLimitExceeded::new(
+            return Err(RateLimitCheckError::Exceeded(RateLimitExceeded::new(
                 self.config.max_requests,
                 retry_after,
-            ));
+            )));
         }
 
         counter.count += 1;
@@ -160,8 +212,76 @@ impl RateLimiter {
         })
     }
 
+    async fn check_rate_limit_redis(
+        &self,
+        client: &redis::Client,
+        key_prefix: &str,
+        key: &str,
+    ) -> Result<RateLimitInfo, RateLimitCheckError> {
+        static RATE_LIMIT_REDIS_SCRIPT: Lazy<Script> = Lazy::new(|| {
+            Script::new(
+                r#"
+local current = redis.call('INCR', KEYS[1])
+if current == 1 then
+    redis.call('EXPIRE', KEYS[1], ARGV[1])
+end
+local ttl = redis.call('TTL', KEYS[1])
+return {current, ttl}
+"#,
+            )
+        });
+
+        let redis_key = format!("{key_prefix}:{key}");
+        let window_secs = self.window_secs().max(1);
+        let mut connection = client
+            .get_multiplexed_async_connection()
+            .await
+            .map_err(|error| {
+                RateLimitCheckError::BackendUnavailable(format!(
+                    "failed to connect to redis rate-limit backend: {error}"
+                ))
+            })?;
+
+        let (current, ttl): (i64, i64) = RATE_LIMIT_REDIS_SCRIPT
+            .key(redis_key.as_str())
+            .arg(window_secs as i64)
+            .invoke_async(&mut connection)
+            .await
+            .map_err(|error| {
+                RateLimitCheckError::BackendUnavailable(format!(
+                    "failed to execute redis rate-limit script: {error}"
+                ))
+            })?;
+
+        let current = current.max(0) as usize;
+        let retry_after = ttl.max(1) as u64;
+
+        if current > self.config.max_requests {
+            warn!(
+                key = %key,
+                limit = self.config.max_requests,
+                current,
+                retry_after,
+                "Distributed rate limit exceeded"
+            );
+            return Err(RateLimitCheckError::Exceeded(RateLimitExceeded::new(
+                self.config.max_requests,
+                retry_after,
+            )));
+        }
+
+        Ok(RateLimitInfo {
+            limit: self.config.max_requests,
+            remaining: self.config.max_requests.saturating_sub(current),
+            reset: retry_after,
+        })
+    }
+
     pub async fn cleanup_expired(&self) {
-        let mut requests = self.requests.write().await;
+        let RateLimiterBackend::Memory { requests } = &self.backend else {
+            return;
+        };
+        let mut requests = requests.write().await;
         let now = Instant::now();
 
         requests
@@ -174,10 +294,41 @@ impl RateLimiter {
     }
 
     pub async fn get_stats(&self) -> RateLimitStats {
-        let requests = self.requests.read().await;
-        RateLimitStats {
-            active_clients: requests.len(),
-            total_entries: requests.len(),
+        match &self.backend {
+            RateLimiterBackend::Memory { requests } => {
+                let requests = requests.read().await;
+                RateLimitStats {
+                    active_clients: requests.len(),
+                    total_entries: requests.len(),
+                    distributed: false,
+                }
+            }
+            RateLimiterBackend::Redis { .. } => RateLimitStats {
+                active_clients: 0,
+                total_entries: 0,
+                distributed: true,
+            },
+        }
+    }
+
+    pub fn build_for_backend(
+        config: RateLimitConfig,
+        backend: RateLimitBackendKind,
+        redis_key_prefix: &str,
+        namespace: &str,
+    ) -> Result<Self, String> {
+        match backend {
+            RateLimitBackendKind::Memory => Ok(Self::new(config)),
+            RateLimitBackendKind::Redis => {
+                let client = resolve_redis_client().ok_or_else(|| {
+                    "rate_limit.backend=redis requires a configured Redis runtime".to_string()
+                })?;
+                Ok(Self::with_redis(
+                    config,
+                    client,
+                    format!("{redis_key_prefix}:{namespace}"),
+                ))
+            }
         }
     }
 }
@@ -186,6 +337,7 @@ impl RateLimiter {
 pub struct RateLimitStats {
     pub active_clients: usize,
     pub total_entries: usize,
+    pub distributed: bool,
 }
 
 #[derive(Debug)]
@@ -215,6 +367,12 @@ impl RateLimitExceeded {
     fn new(limit: usize, retry_after: u64) -> Self {
         Self { limit, retry_after }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RateLimitCheckError {
+    Exceeded(RateLimitExceeded),
+    BackendUnavailable(String),
 }
 
 /// Extract client identifier from the request.
@@ -290,6 +448,14 @@ fn rate_limited_response(exceeded: &RateLimitExceeded) -> Response {
     response
 }
 
+fn rate_limit_backend_unavailable_response(reason: &str) -> Response {
+    let mut response = Response::new(Body::from("Rate limit backend unavailable"));
+    *response.status_mut() = StatusCode::SERVICE_UNAVAILABLE;
+    insert_header_if_valid(response.headers_mut(), "retry-after", "1".to_string());
+    tracing::error!(reason, "Rate limit backend unavailable");
+    response
+}
+
 pub async fn rate_limit_middleware(
     State(limiter): State<Arc<RateLimiter>>,
     headers: HeaderMap,
@@ -307,7 +473,10 @@ pub async fn rate_limit_middleware(
 
             Ok(response)
         }
-        Err(exceeded) => Err(rate_limited_response(&exceeded)),
+        Err(RateLimitCheckError::Exceeded(exceeded)) => Err(rate_limited_response(&exceeded)),
+        Err(RateLimitCheckError::BackendUnavailable(reason)) => {
+            Err(rate_limit_backend_unavailable_response(&reason))
+        }
     }
 }
 
@@ -342,7 +511,10 @@ pub async fn rate_limit_for_paths(
 
             Ok(response)
         }
-        Err(exceeded) => Err(rate_limited_response(&exceeded)),
+        Err(RateLimitCheckError::Exceeded(exceeded)) => Err(rate_limited_response(&exceeded)),
+        Err(RateLimitCheckError::BackendUnavailable(reason)) => {
+            Err(rate_limit_backend_unavailable_response(&reason))
+        }
     }
 }
 
@@ -384,7 +556,9 @@ mod tests {
 
         let result = limiter.check_rate_limit("test-client").await;
         assert!(result.is_err());
-        let exceeded = result.unwrap_err();
+        let RateLimitCheckError::Exceeded(exceeded) = result.unwrap_err() else {
+            panic!("expected exceeded error");
+        };
         assert_eq!(exceeded.limit, 3);
         assert!(exceeded.retry_after > 0);
     }
@@ -436,7 +610,10 @@ mod tests {
         limiter.check_rate_limit("client-3").await.ok();
 
         {
-            let requests = limiter.requests.read().await;
+            let RateLimiterBackend::Memory { requests } = &limiter.backend else {
+                panic!("expected in-memory limiter");
+            };
+            let requests = requests.read().await;
             assert_eq!(requests.len(), 3);
         }
 
@@ -445,7 +622,10 @@ mod tests {
         limiter.cleanup_expired().await;
 
         {
-            let requests = limiter.requests.read().await;
+            let RateLimiterBackend::Memory { requests } = &limiter.backend else {
+                panic!("expected in-memory limiter");
+            };
+            let requests = requests.read().await;
             assert_eq!(requests.len(), 0);
         }
     }
