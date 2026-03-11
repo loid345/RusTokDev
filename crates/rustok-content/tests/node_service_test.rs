@@ -1081,6 +1081,8 @@ async fn test_create_node_sanitizes_unknown_rt_json_nodes() {
         .await
         .expect("create must succeed");
 
+    assert_eq!(created.bodies[0].format, "rt_json_v1");
+
     let body_raw = created.bodies[0].body.clone().expect("body");
     let body_json: serde_json::Value = serde_json::from_str(&body_raw).expect("json");
     assert_eq!(body_json["doc"]["content"].as_array().unwrap().len(), 1);
@@ -1112,6 +1114,37 @@ async fn test_create_node_rejects_oversized_rt_json_payload() {
 }
 
 #[tokio::test]
+async fn test_create_node_accepts_rt_json_v1_and_keeps_canonical_format() {
+    let (_db, service) = setup().await;
+    let tenant_id = Uuid::new_v4();
+    let security = admin_context();
+
+    let mut input = create_test_input();
+    input.bodies = vec![BodyInput {
+        locale: "en".to_string(),
+        body: Some(
+            serde_json::json!({
+                "version":"rt_json_v1",
+                "locale":"en",
+                "doc":{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"canonical"}]}]}
+            })
+            .to_string(),
+        ),
+        format: Some("rt_json_v1".to_string()),
+    }];
+
+    let created = service
+        .create_node(tenant_id, security, input)
+        .await
+        .expect("create must succeed");
+
+    assert_eq!(created.bodies[0].format, "rt_json_v1");
+
+    let body_raw = created.bodies[0].body.clone().expect("body");
+    let body_json: serde_json::Value = serde_json::from_str(&body_raw).expect("json");
+    assert_eq!(body_json["version"], "rt_json_v1");
+}
+#[tokio::test]
 async fn test_create_node_legacy_rt_json_payload_gets_wrapped_to_v1() {
     let (_db, service) = setup().await;
     let tenant_id = Uuid::new_v4();
@@ -1134,6 +1167,8 @@ async fn test_create_node_legacy_rt_json_payload_gets_wrapped_to_v1() {
         .create_node(tenant_id, security, input)
         .await
         .expect("create must succeed");
+
+    assert_eq!(created.bodies[0].format, "rt_json_v1");
 
     let body_raw = created.bodies[0].body.clone().expect("body");
     let body_json: serde_json::Value = serde_json::from_str(&body_raw).expect("json");

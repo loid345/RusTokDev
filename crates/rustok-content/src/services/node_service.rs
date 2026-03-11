@@ -974,14 +974,14 @@ fn normalize_body_input(input: BodyInput) -> ContentResult<BodyInput> {
         .clone()
         .unwrap_or_else(|| "markdown".to_string());
 
-    if format == "rt_json" {
+    if format == "rt_json" || format == "rt_json_v1" {
         let locale = input.locale.clone();
         let body = input
             .body
-            .ok_or_else(|| ContentError::Validation("rt_json body is required".to_string()))?;
+            .ok_or_else(|| ContentError::Validation(format!("{format} body is required")))?;
 
         let body_json: serde_json::Value = serde_json::from_str(&body).map_err(|_| {
-            ContentError::Validation("rt_json body must be a valid JSON payload".to_string())
+            ContentError::Validation(format!("{format} body must be a valid JSON payload"))
         })?;
 
         let sanitized = sanitize_rt_json_before_html_render(
@@ -993,7 +993,7 @@ fn normalize_body_input(input: BodyInput) -> ContentResult<BodyInput> {
         return Ok(BodyInput {
             locale,
             body: Some(sanitized.to_string()),
-            format: Some(format),
+            format: Some("rt_json_v1".to_string()),
         });
     }
 
