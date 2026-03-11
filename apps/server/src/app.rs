@@ -1,5 +1,6 @@
 use async_trait::async_trait;
 use axum::middleware as axum_middleware;
+use axum::response::IntoResponse;
 use axum::Extension;
 use axum::Router as AxumRouter;
 use loco_rs::{
@@ -33,13 +34,52 @@ use crate::services::marketplace_catalog::{
 use crate::tasks;
 use loco_rs::prelude::Queue;
 use migration::Migrator;
+#[cfg(feature = "embed-admin-assets")]
 use rust_embed::RustEmbed;
 use std::sync::Arc;
 use tower_http::services::ServeDir;
 
+#[cfg(feature = "embed-admin-assets")]
 #[derive(RustEmbed)]
 #[folder = "../../apps/admin/dist"]
 struct AdminAssets;
+
+#[cfg(feature = "embed-admin-assets")]
+fn admin_router() -> AxumRouter {
+    AxumRouter::new().fallback(move |path: axum::extract::Path<String>| async move {
+        let path = path.0.trim_start_matches('/');
+        let path = if path.is_empty() { "index.html" } else { path };
+
+        match AdminAssets::get(path) {
+            Some(content) => {
+                let mime = mime_guess::from_path(path).first_or_octet_stream();
+                (
+                    [(axum::http::header::CONTENT_TYPE, mime.as_ref())],
+                    content.data,
+                )
+                    .into_response()
+            }
+            None => match AdminAssets::get("index.html") {
+                Some(content) => (
+                    [(axum::http::header::CONTENT_TYPE, "text/html")],
+                    content.data,
+                )
+                    .into_response(),
+                None => (axum::http::StatusCode::NOT_FOUND, "Admin UI not bundled").into_response(),
+            },
+        }
+    })
+}
+
+#[cfg(not(feature = "embed-admin-assets"))]
+fn admin_router() -> AxumRouter {
+    AxumRouter::new().fallback(|| async {
+        (
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            "Admin UI is disabled. Rebuild server with feature `embed-admin-assets` and prepare apps/admin/dist artifacts.",
+        )
+    })
+}
 
 pub struct App;
 
@@ -161,31 +201,7 @@ impl Hooks for App {
             "/api/auth/reset",
         ]);
 
-        let admin_router =
-            AxumRouter::new().fallback(move |path: axum::extract::Path<String>| async move {
-                let path = path.0.trim_start_matches('/');
-                let path = if path.is_empty() { "index.html" } else { path };
-
-                match AdminAssets::get(path) {
-                    Some(content) => {
-                        let mime = mime_guess::from_path(path).first_or_octet_stream();
-                        (
-                            [(axum::http::header::CONTENT_TYPE, mime.as_ref())],
-                            content.data,
-                        )
-                            .into_response()
-                    }
-                    None => match AdminAssets::get("index.html") {
-                        Some(content) => (
-                            [(axum::http::header::CONTENT_TYPE, "text/html")],
-                            content.data,
-                        )
-                            .into_response(),
-                        None => (axum::http::StatusCode::NOT_FOUND, "Admin UI not bundled")
-                            .into_response(),
-                    },
-                }
-            });
+        let admin_router = admin_router();
 
         let storefront_router = rustok_storefront::router();
 
