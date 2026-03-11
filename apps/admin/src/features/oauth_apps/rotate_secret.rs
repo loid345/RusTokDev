@@ -34,13 +34,13 @@ pub fn RotateSecretDialog(
             <div class="flex items-center gap-2 pt-4">
                 <UiButton
                     variant=crate::shared::ui::ButtonVariant::Destructive
-                    on_click=Some(Box::new(move || rotate_action.dispatch(())))
+                    on_click=Box::new(move || { rotate_action.dispatch(()); })
                 >
                     "Yes, Rotate Secret"
                 </UiButton>
                 <UiButton
                     variant=crate::shared::ui::ButtonVariant::Outline
-                    on_click=Some(Box::new(move || on_cancel()))
+                    on_click=Box::new(move || on_cancel())
                 >
                     "Cancel"
                 </UiButton>

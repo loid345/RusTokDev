@@ -4,8 +4,6 @@ use leptos::task::spawn_local;
 use leptos_auth::hooks::{use_tenant, use_token};
 use leptos_router::components::A;
 use leptos_router::hooks::{use_navigate, use_query_map};
-use leptos_struct_table::*;
-use leptos_struct_table::{struct_table, StructTable};
 use leptos_ui::{Badge, BadgeVariant};
 use leptos_use::use_debounce_fn;
 use serde::{Deserialize, Serialize};
@@ -52,20 +50,13 @@ struct GraphqlUserEdge {
     node: GraphqlUser,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, StructTable)]
-#[struct_table(class = "w-full border-collapse text-sm")]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct GraphqlUser {
-    #[struct_table(title = "Email")]
     id: String,
-    #[struct_table(title = "Email")]
     email: String,
-    #[struct_table(title = "Name")]
     name: Option<String>,
-    #[struct_table(title = "Role")]
     role: String,
-    #[struct_table(title = "Status")]
     status: String,
-    #[struct_table(title = "Created At", field_rename = "createdAt")]
     created_at: String,
 }
 

@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use leptos::prelude::*;
 use leptos_auth::hooks::{use_tenant, use_token};
 
@@ -9,7 +10,7 @@ use crate::features::modules::components::ModulesList;
 use crate::shared::ui::PageHeader;
 use crate::{t_string, use_i18n};
 
-#[derive(Clone)]
+#[derive(Clone, Deserialize, Serialize)]
 struct ModulesPageData {
     modules: Vec<ModuleInfo>,
     marketplace_modules: Vec<MarketplaceModule>,

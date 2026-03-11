@@ -106,13 +106,13 @@ pub fn CreateAppForm(
             </div>
             <div class="flex items-center gap-2 pt-4">
                 <UiButton
-                    on_click=Some(Box::new(move || create_action.dispatch(())))
+                    on_click=Box::new(move || { create_action.dispatch(()); })
                 >
                     "Create App"
                 </UiButton>
                 <UiButton
                     variant=crate::shared::ui::ButtonVariant::Outline
-                    on_click=Some(Box::new(move || on_cancel()))
+                    on_click=Box::new(move || on_cancel())
                 >
                     "Cancel"
                 </UiButton>

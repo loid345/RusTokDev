@@ -21,8 +21,8 @@ pub fn OAuthAppsPage() -> impl IntoView {
     let (apps, set_apps) = create_signal(Vec::<OAuthApp>::new());
     let (modal_state, set_modal_state) = create_signal(ModalState::None);
 
-    let on_rotate = move |app| set_modal_state.set(ModalState::RotateSecret(app));
-    let on_revoke = move |app| set_modal_state.set(ModalState::RevokeApp(app));
+    let on_rotate = Callback::new(move |app| set_modal_state.set(ModalState::RotateSecret(app)));
+    let on_revoke = Callback::new(move |app| set_modal_state.set(ModalState::RevokeApp(app)));
 
     let close_modal = move || set_modal_state.set(ModalState::None);
 
@@ -40,7 +40,7 @@ pub fn OAuthAppsPage() -> impl IntoView {
                         "Manage third-party applications, API clients, and external integrations."
                     </p>
                 </div>
-                <UiButton on_click=Some(Box::new(move || set_modal_state.set(ModalState::CreateApp)))>
+                <UiButton on_click=Box::new(move || set_modal_state.set(ModalState::CreateApp))>
                     "Create New App"
                 </UiButton>
             </div>
@@ -66,7 +66,7 @@ pub fn OAuthAppsPage() -> impl IntoView {
                                         }
                                         on_cancel=move || close()
                                     />
-                                }.into_view()
+                                }.into_any()
                             },
                             ModalState::RotateSecret(app) => {
                                 let close = close_modal.clone();
@@ -79,7 +79,7 @@ pub fn OAuthAppsPage() -> impl IntoView {
                                         }
                                         on_cancel=move || close()
                                     />
-                                }.into_view()
+                                }.into_any()
                             },
                             ModalState::RevokeApp(app) => {
                                 let close = close_modal.clone();
@@ -93,7 +93,7 @@ pub fn OAuthAppsPage() -> impl IntoView {
                                         }
                                         on_cancel=move || close()
                                     />
-                                }.into_view()
+                                }.into_any()
                             },
                             ModalState::SecretRevealed(secret) => {
                                 let close = close_modal.clone();
@@ -107,13 +107,13 @@ pub fn OAuthAppsPage() -> impl IntoView {
                                         </div>
                                         <UiSuccessMessage message="Store this secret safely. You will not be able to see it again." />
 
-                                        <UiButton class="w-full" on_click=Some(Box::new(move || close()))>
+                                        <UiButton class="w-full" on_click=Box::new(move || close())>
                                             "I have saved it"
                                         </UiButton>
                                     </div>
-                                }.into_view()
+                                }.into_any()
                             },
-                            ModalState::None => view! { <div></div> }.into_view(),
+                            ModalState::None => view! { <div></div> }.into_any(),
                         }}
                     </div>
                 </div>

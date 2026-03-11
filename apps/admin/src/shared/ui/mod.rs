@@ -74,28 +74,28 @@ pub fn LanguageToggle() -> impl IntoView {
             <button
                 type="button"
                 class=move || {
-                    let is_active = i18n.get_locale() == Locale::Ru;
+                    let is_active = i18n.get_locale() == Locale::ru;
                     if is_active {
                         "inline-flex items-center justify-center rounded-md border border-primary bg-primary px-3 py-1 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                     } else {
                         "inline-flex items-center justify-center rounded-md border border-input px-3 py-1 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                     }
                 }
-                on:click=move |_| i18n.set_locale(Locale::Ru)
+                on:click=move |_| i18n.set_locale(Locale::ru)
             >
                 "RU"
             </button>
             <button
                 type="button"
                 class=move || {
-                    let is_active = i18n.get_locale() == Locale::En;
+                    let is_active = i18n.get_locale() == Locale::en;
                     if is_active {
                         "inline-flex items-center justify-center rounded-md border border-primary bg-primary px-3 py-1 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                     } else {
                         "inline-flex items-center justify-center rounded-md border border-input px-3 py-1 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                     }
                 }
-                on:click=move |_| i18n.set_locale(Locale::En)
+                on:click=move |_| i18n.set_locale(Locale::en)
             >
                 "EN"
             </button>
