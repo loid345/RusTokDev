@@ -38,12 +38,18 @@ impl NodeService {
         &self.event_bus
     }
 
-    fn kind_to_resource(kind: &str) -> Resource {
+    fn kind_to_resource(kind: &str) -> ContentResult<Resource> {
         match kind {
-            "post" => Resource::Posts,
-            "page" => Resource::Pages,
-            "comment" => Resource::Comments,
-            _ => Resource::Posts,
+            "post" | "article" | "custom" => Ok(Resource::Posts),
+            "page" => Ok(Resource::Pages),
+            "comment" => Ok(Resource::Comments),
+            "blog_post" => Ok(Resource::BlogPosts),
+            "forum_category" => Ok(Resource::ForumCategories),
+            "forum_topic" => Ok(Resource::ForumTopics),
+            "forum_reply" => Ok(Resource::ForumReplies),
+            _ => Err(ContentError::Validation(format!(
+                "Unsupported kind for RBAC mapping: {kind}"
+            ))),
         }
     }
 
@@ -95,10 +101,7 @@ impl NodeService {
         let existing = query.one(db).await?;
 
         if existing.is_some() {
-            return Err(ContentError::Validation(format!(
-                "Slug '{}' already exists for locale '{}'",
-                slug, locale
-            )));
+            return Err(ContentError::duplicate_slug(slug, locale));
         }
 
         Ok(())
@@ -108,10 +111,7 @@ impl NodeService {
     fn check_version(&self, expected: Option<i32>, actual: i32) -> ContentResult<()> {
         if let Some(expected) = expected {
             if expected != actual {
-                return Err(ContentError::Validation(format!(
-                    "Concurrent modification detected: expected version {}, found {}",
-                    expected, actual
-                )));
+                return Err(ContentError::concurrent_modification(expected, actual));
             }
         }
         Ok(())
@@ -148,7 +148,7 @@ impl NodeService {
             .validate()
             .map_err(|e| ContentError::Validation(e.to_string()))?;
 
-        let resource = Self::kind_to_resource(&input.kind);
+        let resource = Self::kind_to_resource(&input.kind)?;
         let scope = security.get_scope(resource, Action::Create);
 
         match scope {
@@ -309,7 +309,7 @@ impl NodeService {
 
         self.check_version(update.expected_version, node_model.version)?;
 
-        let resource = Self::kind_to_resource(&node_model.kind);
+        let resource = Self::kind_to_resource(&node_model.kind)?;
         let scope = security.get_scope(resource, Action::Update);
         self.enforce_scope(scope, node_model.author_id, security.user_id)?;
 
@@ -487,7 +487,7 @@ impl NodeService {
             ));
         }
 
-        let resource = Self::kind_to_resource(&node_model.kind);
+        let resource = Self::kind_to_resource(&node_model.kind)?;
         let scope = security.get_scope(resource, Action::Update);
         self.enforce_scope(scope, node_model.author_id, security.user_id)?;
 
@@ -692,7 +692,7 @@ impl NodeService {
     ) -> ContentResult<()> {
         let node_model = self.find_node(tenant_id, node_id).await?;
 
-        let resource = Self::kind_to_resource(&node_model.kind);
+        let resource = Self::kind_to_resource(&node_model.kind)?;
         let scope = security.get_scope(resource, Action::Delete);
         self.enforce_scope(scope, node_model.author_id, security.user_id)?;
 
@@ -734,7 +734,7 @@ impl NodeService {
         }
 
         // Scope Enforcement
-        let resource = Self::kind_to_resource(&node_model.kind);
+        let resource = Self::kind_to_resource(&node_model.kind)?;
         let scope = security.get_scope(resource, Action::Update);
         self.enforce_scope(scope, node_model.author_id, security.user_id)?;
 
@@ -786,7 +786,7 @@ impl NodeService {
         let node_model = self.find_node_with_deleted(tenant_id, node_id).await?;
 
         // Only admins can hard delete
-        let resource = Self::kind_to_resource(&node_model.kind);
+        let resource = Self::kind_to_resource(&node_model.kind)?;
         let scope = security.get_scope(resource, Action::Delete);
         if !matches!(scope, PermissionScope::All) {
             return Err(ContentError::Forbidden(
@@ -890,6 +890,7 @@ impl NodeService {
             .kind
             .as_deref()
             .map(Self::kind_to_resource)
+            .transpose()?
             .unwrap_or(Resource::Posts);
         let scope = security.get_scope(resource, Action::List);
 
