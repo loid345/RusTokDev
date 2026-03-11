@@ -95,8 +95,8 @@ impl TopicService {
                     }],
                     bodies: vec![BodyInput {
                         locale: locale.clone(),
-                        body: Some(body_validation.sanitized.to_string()),
-                        format: Some("rt_json".to_string()),
+                        body: Some(body_value),
+                        format: Some(body_format),
                     }],
                 },
             )
@@ -166,24 +166,37 @@ impl TopicService {
             None
         };
 
-        let bodies = input
-            .body
-            .map(|body| {
-                let body_json: serde_json::Value = serde_json::from_str(&body).map_err(|_| {
-                    ForumError::Validation("Topic body must be valid rt_json payload".to_string())
+        let bodies = if input.body.is_some()
+            || input.body_format.is_some()
+            || input.content_json.is_some()
+        {
+            let body_format = input
+                .body_format
+                .clone()
+                .unwrap_or_else(|| "markdown".to_string());
+            let body_value = if body_format == "rt_json_v1" {
+                let body_json = input.content_json.clone().ok_or_else(|| {
+                    ForumError::Validation(
+                        "content_json is required when body_format is rt_json_v1".to_string(),
+                    )
                 })?;
                 let body_validation = validate_and_sanitize_rt_json(
                     &body_json,
                     &RtJsonValidationConfig::for_locale(&input.locale),
                 )
                 .map_err(ForumError::Validation)?;
-                Ok(vec![BodyInput {
-                    locale: input.locale.clone(),
-                    body: Some(body_validation.sanitized.to_string()),
-                    format: Some("rt_json".to_string()),
-                }])
-            })
-            .transpose()?;
+                body_validation.sanitized.to_string()
+            } else {
+                input.body.clone().unwrap_or_default()
+            };
+            Some(vec![BodyInput {
+                locale: input.locale.clone(),
+                body: Some(body_value),
+                format: Some(body_format),
+            }])
+        } else {
+            None
+        };
 
         let node = self
             .nodes

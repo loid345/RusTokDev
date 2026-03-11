@@ -61,11 +61,23 @@ impl PostService {
         let author_id = security.user_id.ok_or(BlogError::AuthorRequired)?;
         let locale = input.locale.clone();
 
-        let body_json: Value = serde_json::from_str(&input.body)
-            .map_err(|_| BlogError::validation("Body must be valid rt_json JSON payload"))?;
-        let body_validation =
-            validate_and_sanitize_rt_json(&body_json, &RtJsonValidationConfig::for_locale(&locale))
-                .map_err(BlogError::validation)?;
+        let body_format = input
+            .body_format
+            .clone()
+            .unwrap_or_else(|| "markdown".to_string());
+        let body_value = if body_format == "rt_json_v1" {
+            let body_json = input.content_json.clone().ok_or_else(|| {
+                BlogError::validation("content_json is required when body_format is rt_json_v1")
+            })?;
+            let body_validation = validate_and_sanitize_rt_json(
+                &body_json,
+                &RtJsonValidationConfig::for_locale(&locale),
+            )
+            .map_err(BlogError::validation)?;
+            body_validation.sanitized.to_string()
+        } else {
+            input.body.clone()
+        };
 
         let mut metadata = input.metadata.unwrap_or_else(|| serde_json::json!({}));
         if let Value::Object(map) = &mut metadata {
@@ -124,8 +136,8 @@ impl PostService {
                     }],
                     bodies: vec![BodyInput {
                         locale: locale.clone(),
-                        body: Some(body_validation.sanitized.to_string()),
-                        format: Some("rt_json".to_string()),
+                        body: Some(body_value),
+                        format: Some(body_format),
                     }],
                 },
             )
@@ -171,18 +183,28 @@ impl PostService {
             }]);
         }
 
-        if let Some(body) = input.body {
-            let body_json: Value = serde_json::from_str(&body)
-                .map_err(|_| BlogError::validation("Body must be valid rt_json JSON payload"))?;
-            let body_validation = validate_and_sanitize_rt_json(
-                &body_json,
-                &RtJsonValidationConfig::for_locale(&locale),
-            )
-            .map_err(BlogError::validation)?;
+        if input.body.is_some() || input.body_format.is_some() || input.content_json.is_some() {
+            let body_format = input
+                .body_format
+                .clone()
+                .unwrap_or_else(|| "markdown".to_string());
+            let body_value = if body_format == "rt_json_v1" {
+                let body_json = input.content_json.clone().ok_or_else(|| {
+                    BlogError::validation("content_json is required when body_format is rt_json_v1")
+                })?;
+                let body_validation = validate_and_sanitize_rt_json(
+                    &body_json,
+                    &RtJsonValidationConfig::for_locale(&locale),
+                )
+                .map_err(BlogError::validation)?;
+                body_validation.sanitized.to_string()
+            } else {
+                input.body.clone().unwrap_or_default()
+            };
             update.bodies = Some(vec![BodyInput {
                 locale: locale.clone(),
-                body: Some(body_validation.sanitized.to_string()),
-                format: Some("rt_json".to_string()),
+                body: Some(body_value),
+                format: Some(body_format),
             }]);
         }
 
