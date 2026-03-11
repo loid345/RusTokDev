@@ -46,7 +46,10 @@ impl PageService {
         let bodies = if let Some(body) = input.body {
             let format =
                 normalize_content_format(body.format.as_deref()).map_err(PagesError::validation)?;
-            if format == CONTENT_FORMAT_RT_JSON_V1 && body.content_json.is_none() {
+            if format == CONTENT_FORMAT_RT_JSON_V1
+                && body.content_json.is_none()
+                && body.content.trim().is_empty()
+            {
                 return Err(PagesError::validation(
                     "content_json is required for rt_json_v1 format",
                 ));
@@ -246,7 +249,10 @@ impl PageService {
         let bodies = if let Some(body) = input.body {
             let format =
                 normalize_content_format(body.format.as_deref()).map_err(PagesError::validation)?;
-            if format == CONTENT_FORMAT_RT_JSON_V1 && body.content_json.is_none() {
+            if format == CONTENT_FORMAT_RT_JSON_V1
+                && body.content_json.is_none()
+                && body.content.trim().is_empty()
+            {
                 return Err(PagesError::validation(
                     "content_json is required for rt_json_v1 format",
                 ));

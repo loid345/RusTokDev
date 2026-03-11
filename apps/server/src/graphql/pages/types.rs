@@ -29,7 +29,7 @@ pub struct GqlPageBody {
     pub locale: String,
     pub content: String,
     pub format: String,
-    pub content_json: Option<String>,
+    pub content_json: Option<Value>,
     pub updated_at: String,
 }
 
@@ -123,7 +123,7 @@ impl From<rustok_pages::PageBodyResponse> for GqlPageBody {
             locale: r.locale,
             content: r.content,
             format: r.format,
-            content_json: r.content_json.map(|payload| payload.to_string()),
+            content_json: r.content_json,
             updated_at: r.updated_at,
         }
     }
