@@ -31,6 +31,10 @@ impl NodeService {
         &self.db
     }
 
+    pub(crate) fn event_bus(&self) -> &TransactionalEventBus {
+        &self.event_bus
+    }
+
     fn kind_to_resource(kind: &str) -> Resource {
         match kind {
             "post" => Resource::Posts,

@@ -257,7 +257,7 @@ When upgrading existing systems:
 
 | Module | Services | Dependency Added | Status |
 |--------|----------|------------------|--------|
-| `rustok-content` | `NodeService` | ✅ Yes | ✅ Migrated |
+| `rustok-content` | `NodeService`, `ContentOrchestrationService` | ✅ Yes | ✅ Migrated |
 | `rustok-blog` | `PostService` | ✅ Yes | ✅ Migrated |
 | `rustok-forum` | `CategoryService`, `TopicService`, `ReplyService`, `ModerationService` | ✅ Yes | ✅ Migrated |
 | `rustok-pages` | `PageService`, `BlockService`, `MenuService` | ✅ Yes | ✅ Migrated |

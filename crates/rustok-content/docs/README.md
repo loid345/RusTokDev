@@ -10,3 +10,8 @@
 
 - [Event flow contract (central)](../../../docs/architecture/event-flow-contract.md)
 
+
+## Orchestration
+
+- `ContentOrchestrationService` реализует кросс-доменные use-case операции: `promote_topic_to_post`, `demote_post_to_topic`, `split_topic`, `merge_topics` с транзакционным переносом reply/comment узлов через node-layer и публикацией доменных событий.
+- Mapping статусов/метаданных вынесен в `src/services/orchestration_mapping.rs` для переиспользования без дублирования в API handlers.
