@@ -3,9 +3,11 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use rustok_content::{
-    BodyInput, CreateNodeInput, ListNodesFilter, NodeService, NodeTranslationInput, UpdateNodeInput,
+    BodyInput, CreateNodeInput, ListNodesFilter, NodeService, NodeTranslationInput,
+    UpdateNodeInput, PLATFORM_FALLBACK_LOCALE,
 };
-use rustok_core::{prepare_content_payload, DomainEvent, SecurityContext};
+use rustok_core::{prepare_content_payload, SecurityContext};
+use rustok_events::DomainEvent;
 use rustok_outbox::TransactionalEventBus;
 
 use crate::constants::{topic_status, KIND_TOPIC};
@@ -13,7 +15,9 @@ use crate::dto::{
     CreateTopicInput, ListTopicsFilter, TopicListItem, TopicResponse, UpdateTopicInput,
 };
 use crate::error::{ForumError, ForumResult};
-use crate::locale::{available_locales, resolve_body, resolve_translation};
+use crate::locale::{
+    available_locales, resolve_body_with_fallback, resolve_translation_with_fallback,
+};
 
 pub struct TopicService {
     db: DatabaseConnection,
@@ -130,13 +134,29 @@ impl TopicService {
         topic_id: Uuid,
         locale: &str,
     ) -> ForumResult<TopicResponse> {
+        self.get_with_locale_fallback(tenant_id, topic_id, locale, None)
+            .await
+    }
+
+    #[instrument(skip(self))]
+    pub async fn get_with_locale_fallback(
+        &self,
+        tenant_id: Uuid,
+        topic_id: Uuid,
+        locale: &str,
+        fallback_locale: Option<&str>,
+    ) -> ForumResult<TopicResponse> {
         let node = self.nodes.get_node(tenant_id, topic_id).await?;
 
         if node.kind != KIND_TOPIC {
             return Err(ForumError::TopicNotFound(topic_id));
         }
 
-        Ok(Self::node_to_topic(node, locale))
+        Ok(Self::node_to_topic_with_fallback(
+            node,
+            locale,
+            fallback_locale,
+        ))
     }
 
     #[instrument(skip(self, security, input))]
@@ -227,10 +247,26 @@ impl TopicService {
         security: SecurityContext,
         filter: ListTopicsFilter,
     ) -> ForumResult<(Vec<TopicListItem>, u64)> {
-        let locale = filter.locale.clone().unwrap_or_else(|| "en".to_string());
+        self.list_with_locale_fallback(tenant_id, security, filter, None)
+            .await
+    }
+
+    #[instrument(skip(self, security))]
+    pub async fn list_with_locale_fallback(
+        &self,
+        tenant_id: Uuid,
+        security: SecurityContext,
+        filter: ListTopicsFilter,
+        fallback_locale: Option<&str>,
+    ) -> ForumResult<(Vec<TopicListItem>, u64)> {
+        let locale = filter
+            .locale
+            .clone()
+            .or_else(|| fallback_locale.map(str::to_string))
+            .unwrap_or_else(|| PLATFORM_FALLBACK_LOCALE.to_string());
         let (items, total) = self
             .nodes
-            .list_nodes(
+            .list_nodes_with_locale_fallback(
                 tenant_id,
                 security,
                 ListNodesFilter {
@@ -244,6 +280,7 @@ impl TopicService {
                     include_deleted: false,
                     category_id: filter.category_id,
                 },
+                fallback_locale,
             )
             .await?;
 
@@ -254,7 +291,7 @@ impl TopicService {
                 TopicListItem {
                     id: item.id,
                     locale: locale.clone(),
-                    effective_locale: locale.clone(),
+                    effective_locale: item.effective_locale,
                     category_id: item.category_id.unwrap_or(Uuid::nil()),
                     author_id: item.author_id,
                     title: item.title.unwrap_or_default(),
@@ -285,8 +322,17 @@ impl TopicService {
     }
 
     fn node_to_topic(node: rustok_content::NodeResponse, locale: &str) -> TopicResponse {
-        let resolved_tr = resolve_translation(&node.translations, locale);
-        let resolved_body = resolve_body(&node.bodies, locale);
+        Self::node_to_topic_with_fallback(node, locale, None)
+    }
+
+    fn node_to_topic_with_fallback(
+        node: rustok_content::NodeResponse,
+        locale: &str,
+        fallback_locale: Option<&str>,
+    ) -> TopicResponse {
+        let resolved_tr =
+            resolve_translation_with_fallback(&node.translations, locale, fallback_locale);
+        let resolved_body = resolve_body_with_fallback(&node.bodies, locale, fallback_locale);
         let locales = available_locales(&node.translations);
         let metadata = node.metadata;
 
@@ -308,6 +354,7 @@ impl TopicService {
 
         TopicResponse {
             id: node.id,
+            requested_locale: locale.to_string(),
             locale: locale.to_string(),
             effective_locale: resolved_tr.effective_locale,
             available_locales: locales,

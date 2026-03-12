@@ -45,7 +45,8 @@ use rustok_test_utils::db::setup_test_db_with_migrations;
 
 ```rust
 use rustok_test_utils::MockEventBus;
-use rustok_core::{DomainEvent, EventBus};
+use rustok_core::EventBus;
+use rustok_events::DomainEvent;
 use uuid::Uuid;
 
 #[tokio::test]

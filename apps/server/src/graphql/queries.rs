@@ -2,14 +2,14 @@ use std::collections::{HashMap, HashSet};
 
 use async_graphql::{Context, FieldError, Object, Result};
 use chrono::{Duration, Utc};
-use rustok_content::entities::node::{Column as NodesColumn, Entity as NodesEntity};
 use rustok_core::{Action, ModuleRegistry, Permission, Resource};
-use rustok_outbox::entity::{Column as SysEventsColumn, Entity as SysEventsEntity};
+use rustok_telemetry::metrics;
 use sea_orm::{
-    sea_query::Expr, ColumnTrait, Condition, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
-    QuerySelect,
+    ColumnTrait, Condition, ConnectionTrait, DbBackend, EntityTrait, PaginatorTrait, QueryFilter,
+    QueryOrder, QuerySelect, Statement,
 };
 use semver::{Version, VersionReq};
+use std::time::Instant;
 
 use crate::context::{AuthContext, TenantContext};
 use crate::graphql::common::{encode_cursor, PageInfo, PaginationInput};
@@ -26,9 +26,9 @@ use crate::models::build::{Column as BuildColumn, Entity as BuildEntity};
 use crate::models::release::{Column as ReleaseColumn, Entity as ReleaseEntity, ReleaseStatus};
 use crate::models::users;
 use crate::modules::ManifestManager;
-use crate::services::auth::AuthService;
 use crate::services::build_service::BuildService;
 use crate::services::marketplace_catalog::marketplace_catalog_from_context;
+use crate::services::rbac_service::RbacService;
 
 fn calculate_percent_change(current: i64, previous: i64) -> f64 {
     if previous == 0 {
@@ -42,12 +42,185 @@ fn calculate_percent_change(current: i64, previous: i64) -> f64 {
     }
 }
 
-fn parse_order_total(payload: &serde_json::Value) -> Option<i64> {
-    payload
-        .get("event")
-        .and_then(|event| event.get("data"))
-        .and_then(|data| data.get("total"))
-        .and_then(serde_json::Value::as_i64)
+fn clamp_collection_limit(limit: Option<i32>) -> usize {
+    limit.unwrap_or(100).clamp(1, 100) as usize
+}
+
+fn requested_collection_limit(limit: Option<i32>) -> Option<u64> {
+    limit.map(|value| value.max(0) as u64)
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct OrderStatsSnapshot {
+    total_orders: i64,
+    total_revenue: i64,
+    current_orders: i64,
+    previous_orders: i64,
+    current_revenue: i64,
+    previous_revenue: i64,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct PeriodCountSnapshot {
+    total_count: i64,
+    current_count: i64,
+    previous_count: i64,
+}
+
+async fn load_period_count_snapshot(
+    db: &sea_orm::DatabaseConnection,
+    table: &str,
+    tenant_id: uuid::Uuid,
+    current_period_start: chrono::DateTime<Utc>,
+    previous_period_start: chrono::DateTime<Utc>,
+    extra_filter_sql: Option<&str>,
+    extra_value: Option<&str>,
+) -> std::result::Result<PeriodCountSnapshot, sea_orm::DbErr> {
+    let backend = db.get_database_backend();
+    let filter_sql = extra_filter_sql.unwrap_or("");
+
+    let statement = match backend {
+        DbBackend::Sqlite => {
+            let sql = format!(
+                r#"
+                SELECT
+                    CAST(COUNT(*) AS INTEGER) AS total_count,
+                    CAST(COALESCE(SUM(CASE WHEN created_at >= ?2 THEN 1 ELSE 0 END), 0) AS INTEGER) AS current_count,
+                    CAST(COALESCE(SUM(CASE WHEN created_at >= ?3 AND created_at < ?2 THEN 1 ELSE 0 END), 0) AS INTEGER) AS previous_count
+                FROM {table}
+                WHERE tenant_id = ?1{filter_sql}
+                "#
+            );
+
+            let mut values = vec![
+                tenant_id.into(),
+                current_period_start.into(),
+                previous_period_start.into(),
+            ];
+            if let Some(extra_value) = extra_value {
+                values.push(extra_value.into());
+            }
+
+            Statement::from_sql_and_values(backend, sql, values)
+        }
+        _ => {
+            let sql = format!(
+                r#"
+                SELECT
+                    COUNT(*)::bigint AS total_count,
+                    COALESCE(SUM(CASE WHEN created_at >= $2 THEN 1 ELSE 0 END), 0)::bigint AS current_count,
+                    COALESCE(SUM(CASE WHEN created_at >= $3 AND created_at < $2 THEN 1 ELSE 0 END), 0)::bigint AS previous_count
+                FROM {table}
+                WHERE tenant_id = $1{filter_sql}
+                "#
+            );
+
+            let mut values = vec![
+                tenant_id.into(),
+                current_period_start.into(),
+                previous_period_start.into(),
+            ];
+            if let Some(extra_value) = extra_value {
+                values.push(extra_value.into());
+            }
+
+            Statement::from_sql_and_values(backend, sql, values)
+        }
+    };
+
+    let Some(row) = db.query_one(statement).await? else {
+        return Ok(PeriodCountSnapshot::default());
+    };
+
+    Ok(PeriodCountSnapshot {
+        total_count: row.try_get("", "total_count")?,
+        current_count: row.try_get("", "current_count")?,
+        previous_count: row.try_get("", "previous_count")?,
+    })
+}
+
+async fn load_order_stats_snapshot(
+    db: &sea_orm::DatabaseConnection,
+    tenant_id: uuid::Uuid,
+    current_period_start: chrono::DateTime<Utc>,
+    previous_period_start: chrono::DateTime<Utc>,
+) -> std::result::Result<OrderStatsSnapshot, sea_orm::DbErr> {
+    let backend = db.get_database_backend();
+    let tenant_id = tenant_id.to_string();
+
+    let statement = match backend {
+        DbBackend::Sqlite => Statement::from_sql_and_values(
+            backend,
+            r#"
+            SELECT
+                CAST(COUNT(*) AS INTEGER) AS total_orders,
+                CAST(COALESCE(SUM(COALESCE(CAST(json_extract(payload, '$.event.data.total') AS INTEGER), 0)), 0) AS INTEGER) AS total_revenue,
+                CAST(COALESCE(SUM(CASE WHEN created_at >= ?2 THEN 1 ELSE 0 END), 0) AS INTEGER) AS current_orders,
+                CAST(COALESCE(SUM(CASE WHEN created_at >= ?3 AND created_at < ?2 THEN 1 ELSE 0 END), 0) AS INTEGER) AS previous_orders,
+                CAST(COALESCE(SUM(CASE
+                    WHEN created_at >= ?2 THEN COALESCE(CAST(json_extract(payload, '$.event.data.total') AS INTEGER), 0)
+                    ELSE 0
+                END), 0) AS INTEGER) AS current_revenue,
+                CAST(COALESCE(SUM(CASE
+                    WHEN created_at >= ?3 AND created_at < ?2 THEN COALESCE(CAST(json_extract(payload, '$.event.data.total') AS INTEGER), 0)
+                    ELSE 0
+                END), 0) AS INTEGER) AS previous_revenue
+            FROM sys_events
+            WHERE event_type = 'order.placed'
+              AND (
+                  json_extract(payload, '$.tenant_id') = ?1
+                  OR json_extract(payload, '$.event.tenant_id') = ?1
+              )
+            "#,
+            vec![
+                tenant_id.into(),
+                current_period_start.into(),
+                previous_period_start.into(),
+            ],
+        ),
+        _ => Statement::from_sql_and_values(
+            backend,
+            r#"
+            SELECT
+                COUNT(*)::bigint AS total_orders,
+                COALESCE(SUM(COALESCE((payload->'event'->'data'->>'total')::bigint, 0)), 0)::bigint AS total_revenue,
+                COALESCE(SUM(CASE WHEN created_at >= $2 THEN 1 ELSE 0 END), 0)::bigint AS current_orders,
+                COALESCE(SUM(CASE WHEN created_at >= $3 AND created_at < $2 THEN 1 ELSE 0 END), 0)::bigint AS previous_orders,
+                COALESCE(SUM(CASE
+                    WHEN created_at >= $2 THEN COALESCE((payload->'event'->'data'->>'total')::bigint, 0)
+                    ELSE 0
+                END), 0)::bigint AS current_revenue,
+                COALESCE(SUM(CASE
+                    WHEN created_at >= $3 AND created_at < $2 THEN COALESCE((payload->'event'->'data'->>'total')::bigint, 0)
+                    ELSE 0
+                END), 0)::bigint AS previous_revenue
+            FROM sys_events
+            WHERE event_type = 'order.placed'
+              AND (
+                  payload->>'tenant_id' = $1
+                  OR payload->'event'->>'tenant_id' = $1
+              )
+            "#,
+            vec![
+                tenant_id.into(),
+                current_period_start.into(),
+                previous_period_start.into(),
+            ],
+        ),
+    };
+
+    let Some(row) = db.query_one(statement).await? else {
+        return Ok(OrderStatsSnapshot::default());
+    };
+
+    Ok(OrderStatsSnapshot {
+        total_orders: row.try_get("", "total_orders")?,
+        total_revenue: row.try_get("", "total_revenue")?,
+        current_orders: row.try_get("", "current_orders")?,
+        previous_orders: row.try_get("", "previous_orders")?,
+        current_revenue: row.try_get("", "current_revenue")?,
+        previous_revenue: row.try_get("", "previous_revenue")?,
+    })
 }
 
 fn humanize_slug(slug: &str) -> String {
@@ -236,7 +409,7 @@ async fn ensure_modules_read_permission(ctx: &Context<'_>) -> Result<()> {
     let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
     let tenant = ctx.data::<TenantContext>()?;
 
-    let can_read_modules = AuthService::has_any_permission(
+    let can_read_modules = RbacService::has_any_permission(
         &app_ctx.db,
         &tenant.id,
         &auth.user_id,
@@ -291,20 +464,46 @@ impl RootQuery {
         })
     }
 
-    async fn enabled_modules(&self, ctx: &Context<'_>) -> Result<Vec<String>> {
+    async fn enabled_modules(&self, ctx: &Context<'_>, limit: Option<i32>) -> Result<Vec<String>> {
         let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
         let tenant = ctx.data::<TenantContext>()?;
-        let modules = TenantModulesEntity::find_enabled(&app_ctx.db, tenant.id)
+        let requested_limit = requested_collection_limit(limit);
+        let limit = clamp_collection_limit(limit);
+        let modules = TenantModulesEntity::find()
+            .filter(TenantModulesColumn::TenantId.eq(tenant.id))
+            .filter(TenantModulesColumn::Enabled.eq(true))
+            .order_by_asc(TenantModulesColumn::ModuleSlug)
+            .limit(limit as u64)
+            .all(&app_ctx.db)
             .await
             .map_err(|err| err.to_string())?;
+
+        let modules = modules
+            .into_iter()
+            .map(|module| module.module_slug)
+            .collect::<Vec<_>>();
+
+        metrics::record_read_path_budget(
+            "graphql",
+            "root.enabled_modules",
+            requested_limit,
+            limit as u64,
+            modules.len(),
+        );
 
         Ok(modules)
     }
 
-    async fn module_registry(&self, ctx: &Context<'_>) -> Result<Vec<ModuleRegistryItem>> {
+    async fn module_registry(
+        &self,
+        ctx: &Context<'_>,
+        limit: Option<i32>,
+    ) -> Result<Vec<ModuleRegistryItem>> {
         let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
         let tenant = ctx.data::<TenantContext>()?;
         let registry = ctx.data::<ModuleRegistry>()?;
+        let requested_limit = requested_collection_limit(limit);
+        let limit = clamp_collection_limit(limit);
         let manifest = ManifestManager::load()
             .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
         let catalog_by_slug: HashMap<String, crate::modules::CatalogManifestModule> =
@@ -318,9 +517,10 @@ impl RootQuery {
             .map_err(|err| err.to_string())?;
         let enabled_set: HashSet<String> = enabled_modules.into_iter().collect();
 
-        Ok(registry
+        let modules = registry
             .list()
             .into_iter()
+            .take(limit)
             .map(|module| {
                 let catalog_entry = catalog_by_slug.get(module.slug());
 
@@ -354,38 +554,83 @@ impl RootQuery {
                         .unwrap_or_default(),
                 }
             })
-            .collect())
+            .collect::<Vec<_>>();
+
+        metrics::record_read_path_budget(
+            "graphql",
+            "root.module_registry",
+            requested_limit,
+            limit as u64,
+            modules.len(),
+        );
+
+        Ok(modules)
     }
 
-    async fn tenant_modules(&self, ctx: &Context<'_>) -> Result<Vec<TenantModule>> {
+    async fn tenant_modules(
+        &self,
+        ctx: &Context<'_>,
+        limit: Option<i32>,
+    ) -> Result<Vec<TenantModule>> {
         let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
         let tenant = ctx.data::<TenantContext>()?;
+        let requested_limit = requested_collection_limit(limit);
+        let limit = clamp_collection_limit(limit);
         let modules = TenantModulesEntity::find()
             .filter(TenantModulesColumn::TenantId.eq(tenant.id))
+            .order_by_asc(TenantModulesColumn::ModuleSlug)
+            .limit(limit as u64)
             .all(&app_ctx.db)
             .await
             .map_err(|err| err.to_string())?;
 
-        Ok(modules
+        let modules = modules
             .into_iter()
             .map(|module| TenantModule {
                 module_slug: module.module_slug,
                 enabled: module.enabled,
                 settings: module.settings.to_string(),
             })
-            .collect())
+            .collect::<Vec<_>>();
+
+        metrics::record_read_path_budget(
+            "graphql",
+            "root.tenant_modules",
+            requested_limit,
+            limit as u64,
+            modules.len(),
+        );
+
+        Ok(modules)
     }
 
-    async fn installed_modules(&self, ctx: &Context<'_>) -> Result<Vec<InstalledModule>> {
+    async fn installed_modules(
+        &self,
+        ctx: &Context<'_>,
+        limit: Option<i32>,
+    ) -> Result<Vec<InstalledModule>> {
         ensure_modules_read_permission(ctx).await?;
+        let requested_limit = requested_collection_limit(limit);
+        let limit = clamp_collection_limit(limit);
 
         let manifest = ManifestManager::load()
             .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
 
-        Ok(ManifestManager::installed_modules(&manifest)
+        let modules = ManifestManager::installed_modules(&manifest)
             .iter()
+            .take(limit)
             .map(InstalledModule::from)
-            .collect())
+            .collect::<Vec<_>>();
+
+        metrics::record_read_path_budget(
+            "graphql",
+            "root.installed_modules",
+            requested_limit,
+            limit as u64,
+            modules.len(),
+        );
+
+        Ok(modules)
     }
 
     async fn marketplace(
@@ -397,11 +642,14 @@ impl RootQuery {
         trust_level: Option<String>,
         only_compatible: Option<bool>,
         installed_only: Option<bool>,
+        limit: Option<i32>,
     ) -> Result<Vec<MarketplaceModule>> {
         ensure_modules_read_permission(ctx).await?;
 
         let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
         let registry = ctx.data::<ModuleRegistry>()?;
+        let requested_limit = requested_collection_limit(limit);
+        let limit = clamp_collection_limit(limit);
         let manifest = ManifestManager::load()
             .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
         let installed_modules = ManifestManager::installed_modules(&manifest);
@@ -425,7 +673,7 @@ impl RootQuery {
         let only_compatible = only_compatible.unwrap_or(true);
         let installed_only = installed_only.unwrap_or(false);
 
-        Ok(marketplace_modules_from_catalog(
+        let modules = marketplace_modules_from_catalog(
             load_marketplace_catalog(app_ctx, &manifest, registry).await?,
             registry,
             &installed_modules,
@@ -450,7 +698,18 @@ impl RootQuery {
                     || module.crate_name.to_lowercase().contains(&search)
             })
         })
-        .collect())
+        .take(limit)
+        .collect::<Vec<_>>();
+
+        metrics::record_read_path_budget(
+            "graphql",
+            "root.marketplace",
+            requested_limit,
+            limit as u64,
+            modules.len(),
+        );
+
+        Ok(modules)
     }
 
     async fn marketplace_module(
@@ -497,6 +756,7 @@ impl RootQuery {
         ensure_modules_read_permission(ctx).await?;
 
         let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
+        let requested_limit = limit.max(0) as u64;
         let limit = limit.clamp(1, 100) as u64;
         let offset = offset.max(0) as u64;
 
@@ -508,7 +768,17 @@ impl RootQuery {
             .await
             .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
 
-        Ok(builds.iter().map(BuildJob::from_model).collect())
+        let builds = builds.iter().map(BuildJob::from_model).collect::<Vec<_>>();
+
+        metrics::record_read_path_budget(
+            "graphql",
+            "root.build_history",
+            Some(requested_limit),
+            limit,
+            builds.len(),
+        );
+
+        Ok(builds)
     }
 
     async fn active_release(&self, ctx: &Context<'_>) -> Result<Option<ReleaseInfo>> {
@@ -534,6 +804,7 @@ impl RootQuery {
         ensure_modules_read_permission(ctx).await?;
 
         let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
+        let requested_limit = limit.max(0) as u64;
         let limit = limit.clamp(1, 100) as u64;
         let offset = offset.max(0) as u64;
 
@@ -545,7 +816,20 @@ impl RootQuery {
             .await
             .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
 
-        Ok(releases.iter().map(ReleaseInfo::from_model).collect())
+        let releases = releases
+            .iter()
+            .map(ReleaseInfo::from_model)
+            .collect::<Vec<_>>();
+
+        metrics::record_read_path_budget(
+            "graphql",
+            "root.release_history",
+            Some(requested_limit),
+            limit,
+            releases.len(),
+        );
+
+        Ok(releases)
     }
 
     async fn me(&self, ctx: &Context<'_>) -> Result<Option<User>> {
@@ -573,7 +857,7 @@ impl RootQuery {
         let tenant = ctx.data::<TenantContext>()?;
         let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
 
-        let can_read_users = AuthService::has_permission(
+        let can_read_users = RbacService::has_permission(
             &app_ctx.db,
             &tenant.id,
             &auth.user_id,
@@ -610,7 +894,7 @@ impl RootQuery {
         let tenant = ctx.data::<TenantContext>()?;
         let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
 
-        let can_list_users = AuthService::has_permission(
+        let can_list_users = RbacService::has_permission(
             &app_ctx.db,
             &tenant.id,
             &auth.user_id,
@@ -625,6 +909,7 @@ impl RootQuery {
             ));
         }
 
+        let requested_limit = pagination.requested_limit();
         let (offset, limit) = pagination.normalize()?;
         let mut query = users::Entity::find().filter(UsersColumn::TenantId.eq(tenant.id));
 
@@ -649,18 +934,35 @@ impl RootQuery {
                 query = query.filter(condition);
             }
         }
+        let count_started_at = Instant::now();
         let total = query
             .clone()
             .count(&app_ctx.db)
             .await
             .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?
             as i64;
+        metrics::record_read_path_query(
+            "graphql",
+            "root.users",
+            "count",
+            count_started_at.elapsed().as_secs_f64(),
+            total.max(0) as u64,
+        );
+
+        let page_started_at = Instant::now();
         let users = query
             .offset(offset as u64)
             .limit(limit as u64)
             .all(&app_ctx.db)
             .await
             .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
+        metrics::record_read_path_query(
+            "graphql",
+            "root.users",
+            "users_page",
+            page_started_at.elapsed().as_secs_f64(),
+            users.len() as u64,
+        );
 
         let edges = users
             .iter()
@@ -669,7 +971,15 @@ impl RootQuery {
                 node: User::from(user),
                 cursor: encode_cursor(offset + index as i64),
             })
-            .collect();
+            .collect::<Vec<_>>();
+
+        metrics::record_read_path_budget(
+            "graphql",
+            "root.users",
+            Some(requested_limit),
+            limit as u64,
+            edges.len(),
+        );
 
         Ok(UserConnection {
             edges,
@@ -685,107 +995,87 @@ impl RootQuery {
         let current_period_start = now - Duration::days(30);
         let previous_period_start = current_period_start - Duration::days(30);
 
-        let total_users = users::Entity::find()
-            .filter(UsersColumn::TenantId.eq(tenant.id))
-            .count(&app_ctx.db)
-            .await
-            .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?
-            as i64;
+        let user_stats_started_at = Instant::now();
+        let user_stats = load_period_count_snapshot(
+            &app_ctx.db,
+            "users",
+            tenant.id,
+            current_period_start,
+            previous_period_start,
+            None,
+            None,
+        )
+        .await
+        .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
+        metrics::record_read_path_query(
+            "graphql",
+            "root.dashboard_stats",
+            "users_snapshot",
+            user_stats_started_at.elapsed().as_secs_f64(),
+            user_stats.total_count.max(0) as u64,
+        );
 
-        let total_posts = NodesEntity::find()
-            .filter(NodesColumn::TenantId.eq(tenant.id))
-            .filter(NodesColumn::Kind.eq("post"))
-            .count(&app_ctx.db)
-            .await
-            .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?
-            as i64;
+        let post_stats_started_at = Instant::now();
+        let post_stats = load_period_count_snapshot(
+            &app_ctx.db,
+            "nodes",
+            tenant.id,
+            current_period_start,
+            previous_period_start,
+            Some(match app_ctx.db.get_database_backend() {
+                DbBackend::Sqlite => " AND kind = ?4",
+                _ => " AND kind = $4",
+            }),
+            Some("post"),
+        )
+        .await
+        .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
+        metrics::record_read_path_query(
+            "graphql",
+            "root.dashboard_stats",
+            "posts_snapshot",
+            post_stats_started_at.elapsed().as_secs_f64(),
+            post_stats.total_count.max(0) as u64,
+        );
 
-        let current_users = users::Entity::find()
-            .filter(UsersColumn::TenantId.eq(tenant.id))
-            .filter(UsersColumn::CreatedAt.gte(current_period_start))
-            .count(&app_ctx.db)
-            .await
-            .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?
-            as i64;
-
-        let previous_users = users::Entity::find()
-            .filter(UsersColumn::TenantId.eq(tenant.id))
-            .filter(UsersColumn::CreatedAt.gte(previous_period_start))
-            .filter(UsersColumn::CreatedAt.lt(current_period_start))
-            .count(&app_ctx.db)
-            .await
-            .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?
-            as i64;
-
-        let current_posts = NodesEntity::find()
-            .filter(NodesColumn::TenantId.eq(tenant.id))
-            .filter(NodesColumn::Kind.eq("post"))
-            .filter(NodesColumn::CreatedAt.gte(current_period_start))
-            .count(&app_ctx.db)
-            .await
-            .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?
-            as i64;
-
-        let previous_posts = NodesEntity::find()
-            .filter(NodesColumn::TenantId.eq(tenant.id))
-            .filter(NodesColumn::Kind.eq("post"))
-            .filter(NodesColumn::CreatedAt.gte(previous_period_start))
-            .filter(NodesColumn::CreatedAt.lt(current_period_start))
-            .count(&app_ctx.db)
-            .await
-            .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?
-            as i64;
-
-        let tenant_id_str = tenant.id.to_string();
-
-        let order_events = SysEventsEntity::find()
-            .filter(SysEventsColumn::EventType.eq("order.placed"))
-            .filter(
-                Condition::any()
-                    .add(Expr::cust_with_values(
-                        "payload->>'tenant_id' = $1",
-                        [tenant_id_str.clone()],
-                    ))
-                    .add(Expr::cust_with_values(
-                        "payload->'event'->>'tenant_id' = $1",
-                        [tenant_id_str],
-                    )),
-            )
-            .all(&app_ctx.db)
-            .await
-            .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
-
-        let mut total_orders = 0i64;
-        let mut total_revenue = 0i64;
-        let mut current_orders = 0i64;
-        let mut previous_orders = 0i64;
-        let mut current_revenue = 0i64;
-        let mut previous_revenue = 0i64;
-
-        for event in order_events {
-            let order_total = parse_order_total(&event.payload).unwrap_or(0);
-            total_orders += 1;
-            total_revenue += order_total;
-
-            let created_at = event.created_at;
-            if created_at >= current_period_start {
-                current_orders += 1;
-                current_revenue += order_total;
-            } else if created_at >= previous_period_start {
-                previous_orders += 1;
-                previous_revenue += order_total;
-            }
-        }
+        let order_stats_started_at = Instant::now();
+        let order_stats = load_order_stats_snapshot(
+            &app_ctx.db,
+            tenant.id,
+            current_period_start,
+            previous_period_start,
+        )
+        .await
+        .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
+        metrics::record_read_path_query(
+            "graphql",
+            "root.dashboard_stats",
+            "orders_snapshot",
+            order_stats_started_at.elapsed().as_secs_f64(),
+            order_stats.total_orders.max(0) as u64,
+        );
 
         Ok(DashboardStats {
-            total_users,
-            total_posts,
-            total_orders,
-            total_revenue,
-            users_change: calculate_percent_change(current_users, previous_users),
-            posts_change: calculate_percent_change(current_posts, previous_posts),
-            orders_change: calculate_percent_change(current_orders, previous_orders),
-            revenue_change: calculate_percent_change(current_revenue, previous_revenue),
+            total_users: user_stats.total_count,
+            total_posts: post_stats.total_count,
+            total_orders: order_stats.total_orders,
+            total_revenue: order_stats.total_revenue,
+            users_change: calculate_percent_change(
+                user_stats.current_count,
+                user_stats.previous_count,
+            ),
+            posts_change: calculate_percent_change(
+                post_stats.current_count,
+                post_stats.previous_count,
+            ),
+            orders_change: calculate_percent_change(
+                order_stats.current_orders,
+                order_stats.previous_orders,
+            ),
+            revenue_change: calculate_percent_change(
+                order_stats.current_revenue,
+                order_stats.previous_revenue,
+            ),
         })
     }
 
@@ -797,8 +1087,10 @@ impl RootQuery {
         let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
         let tenant = ctx.data::<TenantContext>()?;
 
+        let requested_limit = limit.max(0) as u64;
         let limit = limit.clamp(1, 50);
 
+        let recent_users_started_at = Instant::now();
         let recent_users = users::Entity::find()
             .filter(UsersColumn::TenantId.eq(tenant.id))
             .order_by_desc(UsersColumn::CreatedAt)
@@ -806,6 +1098,13 @@ impl RootQuery {
             .all(&app_ctx.db)
             .await
             .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
+        metrics::record_read_path_query(
+            "graphql",
+            "root.recent_activity",
+            "recent_users",
+            recent_users_started_at.elapsed().as_secs_f64(),
+            recent_users.len() as u64,
+        );
 
         let activities = recent_users
             .into_iter()
@@ -819,7 +1118,15 @@ impl RootQuery {
                     name: user.name,
                 }),
             })
-            .collect();
+            .collect::<Vec<_>>();
+
+        metrics::record_read_path_budget(
+            "graphql",
+            "root.recent_activity",
+            Some(requested_limit),
+            limit as u64,
+            activities.len(),
+        );
 
         Ok(activities)
     }

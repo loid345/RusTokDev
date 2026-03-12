@@ -114,9 +114,13 @@ impl MigrationTrait for Migration {
 
         // Partial index on tenant for active apps only
         manager
-            .get_connection()
-            .execute_unprepared(
-                "CREATE INDEX idx_oauth_apps_tenant_active ON oauth_apps (tenant_id) WHERE is_active = TRUE",
+            .create_index(
+                Index::create()
+                    .name("idx_oauth_apps_tenant_active")
+                    .table(OAuthApps::Table)
+                    .col(OAuthApps::TenantId)
+                    .and_where(Expr::col((OAuthApps::Table, OAuthApps::IsActive)).eq(true))
+                    .to_owned(),
             )
             .await?;
 

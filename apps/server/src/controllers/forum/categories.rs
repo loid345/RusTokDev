@@ -7,20 +7,25 @@ use loco_rs::prelude::*;
 use rustok_forum::{
     CategoryListItem, CategoryResponse, CategoryService, CreateCategoryInput, UpdateCategoryInput,
 };
+use rustok_telemetry::metrics;
 use serde::Deserialize;
+use std::time::Instant;
 use utoipa::IntoParams;
 use uuid::Uuid;
 
-use crate::context::TenantContext;
+use crate::common::PaginationParams;
 use crate::extractors::rbac::{
     RequireForumCategoriesCreate, RequireForumCategoriesDelete, RequireForumCategoriesList,
     RequireForumCategoriesUpdate,
 };
 use crate::services::event_bus::transactional_event_bus_from_context;
+use crate::{common::RequestContext, context::TenantContext};
 
 #[derive(Debug, Deserialize, IntoParams)]
 pub struct CategoryListParams {
     pub locale: Option<String>,
+    #[serde(flatten)]
+    pub pagination: Option<PaginationParams>,
 }
 
 #[utoipa::path(
@@ -38,14 +43,46 @@ pub async fn list_categories(
     State(ctx): State<AppContext>,
     tenant: TenantContext,
     RequireForumCategoriesList(user): RequireForumCategoriesList,
+    request_context: RequestContext,
     Query(params): Query<CategoryListParams>,
 ) -> Result<Json<Vec<CategoryListItem>>> {
-    let locale = params.locale.unwrap_or_else(|| "en".to_string());
+    let locale = params
+        .locale
+        .unwrap_or_else(|| request_context.locale.clone());
+    let requested_limit = params
+        .pagination
+        .as_ref()
+        .map(|pagination| pagination.per_page);
+    let pagination = params.pagination.unwrap_or_default();
     let service = CategoryService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
-    let categories = service
-        .list(tenant.id, user.security_context(), &locale)
+    let list_started_at = Instant::now();
+    let (categories, _) = service
+        .list_paginated_with_locale_fallback(
+            tenant.id,
+            user.security_context(),
+            &locale,
+            pagination.page,
+            pagination.limit(),
+            Some(tenant.default_locale.as_str()),
+        )
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
+    metrics::record_read_path_query(
+        "http",
+        "forum.list_categories",
+        "service_list",
+        list_started_at.elapsed().as_secs_f64(),
+        categories.len() as u64,
+    );
+
+    metrics::record_read_path_budget(
+        "http",
+        "forum.list_categories",
+        requested_limit,
+        pagination.limit(),
+        categories.len(),
+    );
+
     Ok(Json(categories))
 }
 
@@ -68,13 +105,16 @@ pub async fn get_category(
     State(ctx): State<AppContext>,
     tenant: TenantContext,
     RequireForumCategoriesList(_user): RequireForumCategoriesList,
+    request_context: RequestContext,
     Path(id): Path<Uuid>,
     Query(params): Query<CategoryListParams>,
 ) -> Result<Json<CategoryResponse>> {
-    let locale = params.locale.unwrap_or_else(|| "en".to_string());
+    let locale = params
+        .locale
+        .unwrap_or_else(|| request_context.locale.clone());
     let service = CategoryService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let category = service
-        .get(tenant.id, id, &locale)
+        .get_with_locale_fallback(tenant.id, id, &locale, Some(tenant.default_locale.as_str()))
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(Json(category))

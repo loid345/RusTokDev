@@ -12,10 +12,10 @@ use rustok_blog::state_machine::{BlogPost, BlogPostStatus, CommentStatus, ToBlog
 use rustok_blog::BlogError;
 use rustok_blog::{CommentService, PostService};
 use rustok_content::ContentError;
-use rustok_core::events::EventEnvelope;
 use rustok_core::{
     DomainEvent, EventTransport, MemoryTransport, ReliabilityLevel, SecurityContext, UserRole,
 };
+use rustok_events::EventEnvelope;
 use rustok_outbox::TransactionalEventBus;
 use sea_orm::{
     ConnectOptions, ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement,
@@ -720,9 +720,11 @@ mod unit_tests {
             receiver.try_recv(),
             Err(broadcast::error::TryRecvError::Empty)
         ));
-        assert!(tokio::time::timeout(std::time::Duration::from_millis(100), receiver.recv())
-            .await
-            .is_err());
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_millis(100), receiver.recv())
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]

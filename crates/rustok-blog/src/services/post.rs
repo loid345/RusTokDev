@@ -3,9 +3,11 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use rustok_content::{
-    BodyInput, CreateNodeInput, ListNodesFilter, NodeService, NodeTranslationInput, UpdateNodeInput,
+    BodyInput, CreateNodeInput, ListNodesFilter, NodeService, NodeTranslationInput,
+    UpdateNodeInput, PLATFORM_FALLBACK_LOCALE,
 };
-use rustok_core::{prepare_content_payload, DomainEvent, SecurityContext};
+use rustok_core::{prepare_content_payload, SecurityContext};
+use rustok_events::DomainEvent;
 use rustok_outbox::TransactionalEventBus;
 use serde_json::Value;
 
@@ -13,7 +15,9 @@ use crate::dto::{
     CreatePostInput, PostListQuery, PostListResponse, PostResponse, PostSummary, UpdatePostInput,
 };
 use crate::error::{BlogError, BlogResult};
-use crate::locale::{available_locales, resolve_body, resolve_translation};
+use crate::locale::{
+    available_locales, resolve_body_with_fallback, resolve_translation_with_fallback,
+};
 use crate::state_machine::BlogPostStatus;
 
 const KIND_POST: &str = "post";
@@ -164,7 +168,10 @@ impl PostService {
     ) -> BlogResult<()> {
         self.ensure_post_kind(tenant_id, post_id).await?;
 
-        let locale = input.locale.clone().unwrap_or_else(|| "en".to_string());
+        let locale = input
+            .locale
+            .clone()
+            .unwrap_or_else(|| PLATFORM_FALLBACK_LOCALE.to_string());
         let mut update = UpdateNodeInput::default();
 
         if input.title.is_some() || input.slug.is_some() || input.excerpt.is_some() {
@@ -386,10 +393,22 @@ impl PostService {
         post_id: Uuid,
         locale: &str,
     ) -> BlogResult<PostResponse> {
+        self.get_post_with_locale_fallback(tenant_id, post_id, locale, None)
+            .await
+    }
+
+    #[instrument(skip(self))]
+    pub async fn get_post_with_locale_fallback(
+        &self,
+        tenant_id: Uuid,
+        post_id: Uuid,
+        locale: &str,
+        fallback_locale: Option<&str>,
+    ) -> BlogResult<PostResponse> {
         let node = self.ensure_post_kind(tenant_id, post_id).await?;
 
-        let tr = resolve_translation(&node.translations, locale);
-        let br = resolve_body(&node.bodies, locale);
+        let tr = resolve_translation_with_fallback(&node.translations, locale, fallback_locale);
+        let br = resolve_body_with_fallback(&node.bodies, locale, fallback_locale);
         let all_locales = available_locales(&node.translations);
 
         let translation = tr.translation;
@@ -448,6 +467,7 @@ impl PostService {
                 .and_then(|t| t.title.clone())
                 .unwrap_or_default(),
             slug: translation.and_then(|t| t.slug.clone()).unwrap_or_default(),
+            requested_locale: locale.to_string(),
             locale: locale.to_string(),
             effective_locale: tr.effective_locale,
             available_locales: all_locales,
@@ -485,12 +505,28 @@ impl PostService {
         security: SecurityContext,
         query: PostListQuery,
     ) -> BlogResult<PostListResponse> {
-        let locale = query.locale.clone().unwrap_or_else(|| "en".to_string());
+        self.list_posts_with_locale_fallback(tenant_id, security, query, None)
+            .await
+    }
+
+    #[instrument(skip(self, security))]
+    pub async fn list_posts_with_locale_fallback(
+        &self,
+        tenant_id: Uuid,
+        security: SecurityContext,
+        query: PostListQuery,
+        fallback_locale: Option<&str>,
+    ) -> BlogResult<PostListResponse> {
+        let locale = query
+            .locale
+            .clone()
+            .or_else(|| fallback_locale.map(str::to_string))
+            .unwrap_or_else(|| PLATFORM_FALLBACK_LOCALE.to_string());
 
         let filter = ListNodesFilter {
             kind: Some(KIND_POST.to_string()),
             status: query.status.map(map_blog_status_to_content),
-            locale: query.locale.clone(),
+            locale: Some(locale.clone()),
             author_id: query.author_id,
             category_id: query.category_id,
             page: query.page() as u64,
@@ -500,7 +536,7 @@ impl PostService {
 
         let (node_list, total) = self
             .nodes
-            .list_nodes(tenant_id, security.clone(), filter)
+            .list_nodes_with_locale_fallback(tenant_id, security.clone(), filter, fallback_locale)
             .await
             .map_err(BlogError::from)?;
 
@@ -535,7 +571,7 @@ impl PostService {
                 title: item.title.unwrap_or_default(),
                 slug: item.slug.unwrap_or_default(),
                 locale: locale.clone(),
-                effective_locale: locale.clone(),
+                effective_locale: item.effective_locale,
                 excerpt: item.excerpt,
                 status: map_content_status(item.status),
                 author_id: item.author_id.unwrap_or_default(),

@@ -8,8 +8,9 @@ use crate::consumer::ConsumerGroupManager;
 use crate::producer;
 use crate::serialization::{EventSerializer, JsonSerializer, PostcardSerializer};
 use crate::topology::TopologyManager;
-use rustok_core::events::{EventEnvelope, EventTransport, ReliabilityLevel};
+use rustok_core::events::{EventTransport, ReliabilityLevel};
 use rustok_core::Result;
+use rustok_events::EventEnvelope;
 use rustok_iggy_connector::{ConnectorConfig, EmbeddedConnector, IggyConnector, RemoteConnector};
 
 pub struct IggyTransport {

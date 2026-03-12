@@ -9,6 +9,7 @@ description = "Test utilities for RusToK - fixtures, mocks, and helpers for test
 async-trait.workspace = true
 chrono.workspace = true
 rustok-core.workspace = true
+rustok-events.workspace = true
 rustok-content = { workspace = true, optional = true }
 rustok-commerce = { workspace = true, optional = true }
 rustok-outbox.workspace = true

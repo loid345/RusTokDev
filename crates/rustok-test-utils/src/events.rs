@@ -2,7 +2,8 @@
 //!
 //! Provides a mock event bus for testing event publishing and handling.
 
-use rustok_core::{DomainEvent, EventBus, EventEnvelope, EventTransport, ReliabilityLevel};
+use rustok_core::{EventBus, EventTransport, ReliabilityLevel};
+use rustok_events::{DomainEvent, EventEnvelope};
 use rustok_outbox::TransactionalEventBus;
 use std::any::Any;
 use std::sync::{Arc, Mutex};

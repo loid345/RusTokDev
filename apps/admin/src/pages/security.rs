@@ -55,14 +55,18 @@ pub fn Security() -> impl IntoView {
 
     let on_change_password = move |_| {
         if current_password.get().is_empty() || new_password.get().is_empty() {
-            set_form_state.set(FormState::with_form_error(t_string!(i18n, security.passwordRequired).to_string()));
+            set_form_state.set(FormState::with_form_error(
+                t_string!(i18n, security.passwordRequired).to_string(),
+            ));
             return;
         }
 
         let token_value = token.get();
         let tenant_value = tenant.get();
         if token_value.is_none() {
-            set_form_state.set(FormState::with_form_error(t_string!(i18n, errors.auth.unauthorized).to_string()));
+            set_form_state.set(FormState::with_form_error(
+                t_string!(i18n, errors.auth.unauthorized).to_string(),
+            ));
             return;
         }
 
@@ -89,7 +93,8 @@ pub fn Security() -> impl IntoView {
             match result {
                 Ok(_) => {
                     set_form_state.set(FormState::idle());
-                    set_success_message.set(Some(t_string!(i18n, security.passwordUpdated).to_string()));
+                    set_success_message
+                        .set(Some(t_string!(i18n, security.passwordUpdated).to_string()));
                     set_current_password.set(String::new());
                     set_new_password.set(String::new());
                 }

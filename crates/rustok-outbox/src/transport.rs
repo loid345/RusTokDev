@@ -3,8 +3,9 @@ use chrono::Utc;
 use sea_orm::{ActiveModelTrait, ConnectionTrait, DatabaseConnection, EntityTrait, Set};
 use std::any::Any;
 
-use rustok_core::events::{EventEnvelope, EventTransport, ReliabilityLevel};
+use rustok_core::events::{EventTransport, ReliabilityLevel};
 use rustok_core::Result;
+use rustok_events::EventEnvelope;
 
 use crate::entity;
 use crate::entity::SysEventStatus;

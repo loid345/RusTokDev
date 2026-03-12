@@ -74,20 +74,29 @@ impl MigrationTrait for Migration {
 
         // Partial index on token_hash for active (non-revoked) tokens
         manager
-            .get_connection()
-            .execute_unprepared(
-                "CREATE UNIQUE INDEX idx_oauth_tokens_hash ON oauth_tokens (token_hash) WHERE revoked_at IS NULL",
+            .create_index(
+                Index::create()
+                    .name("idx_oauth_tokens_hash")
+                    .table(OAuthTokens::Table)
+                    .col(OAuthTokens::TokenHash)
+                    .unique()
+                    .and_where(Expr::col((OAuthTokens::Table, OAuthTokens::RevokedAt)).is_null())
+                    .to_owned(),
             )
             .await?;
 
         // Partial index on (app_id, tenant_id) for active tokens
         manager
-            .get_connection()
-            .execute_unprepared(
-                "CREATE INDEX idx_oauth_tokens_app_tenant ON oauth_tokens (app_id, tenant_id) WHERE revoked_at IS NULL",
+            .create_index(
+                Index::create()
+                    .name("idx_oauth_tokens_app_tenant")
+                    .table(OAuthTokens::Table)
+                    .col(OAuthTokens::AppId)
+                    .col(OAuthTokens::TenantId)
+                    .and_where(Expr::col((OAuthTokens::Table, OAuthTokens::RevokedAt)).is_null())
+                    .to_owned(),
             )
             .await
-            .map(|_| ())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {

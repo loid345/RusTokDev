@@ -10,6 +10,5 @@ pub use relay::{OutboxRelay, RelayConfig, RelayMetricsSnapshot};
 pub use transactional::TransactionalEventBus;
 pub use transport::OutboxTransport;
 
-
 #[cfg(test)]
 mod contract_tests;

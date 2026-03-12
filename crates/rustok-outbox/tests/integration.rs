@@ -5,8 +5,9 @@ use std::sync::OnceLock;
 
 use async_trait::async_trait;
 use chrono::Utc;
-use rustok_core::events::{EventEnvelope, EventTransport, ReliabilityLevel};
-use rustok_core::{DomainEvent, Error, Result};
+use rustok_core::events::{EventTransport, ReliabilityLevel};
+use rustok_core::{Error, Result};
+use rustok_events::{DomainEvent, EventEnvelope};
 use rustok_outbox::entity::{self, SysEventStatus};
 use rustok_outbox::{OutboxRelay, RelayConfig, SysEventsMigration};
 use sea_orm::{ActiveModelTrait, Database, DatabaseConnection, EntityTrait, Set};

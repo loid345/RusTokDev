@@ -1,6 +1,6 @@
-use leptos::prelude::*;
 use crate::shared::i18n::translate;
 use crate::shared::ui::Button;
+use leptos::prelude::*;
 use leptos_router::components::A;
 
 #[component]

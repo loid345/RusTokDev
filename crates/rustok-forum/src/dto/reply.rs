@@ -47,6 +47,7 @@ fn default_content_format() -> String {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ReplyResponse {
     pub id: Uuid,
+    pub requested_locale: String,
     pub locale: String,
     pub effective_locale: String,
     pub topic_id: Uuid,
@@ -86,6 +87,7 @@ mod tests {
     ) -> ReplyResponse {
         ReplyResponse {
             id: Uuid::new_v4(),
+            requested_locale: "en".into(),
             locale: "en".into(),
             effective_locale: "en".into(),
             topic_id: Uuid::new_v4(),

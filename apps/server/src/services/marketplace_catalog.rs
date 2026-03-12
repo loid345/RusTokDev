@@ -346,6 +346,12 @@ mod tests {
             depends_on: Vec::new(),
             ownership: "third_party".to_string(),
             trust_level: "unverified".to_string(),
+            rustok_min_version: None,
+            rustok_max_version: None,
+            publisher: None,
+            checksum_sha256: None,
+            signature: None,
+            versions: Vec::new(),
             recommended_admin_surfaces: Vec::new(),
             showcase_admin_surfaces: Vec::new(),
         }

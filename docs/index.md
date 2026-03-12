@@ -69,6 +69,7 @@ graph TD
 - [Обзор](./architecture/overview.md)
 - [Архитектура «Матрёшка» (7 слоёв)](./architecture/matryoshka.md) — базовое видение: семислойная модель платформы (RusToK / Alloy / Graal).
 - [Схема базы данных](./architecture/database.md)
+- [Performance baseline](./architecture/performance-baseline.md) — repeatable workflow for `pg_stat_statements` and `EXPLAIN` evidence on hot paths.
 - [Архитектура API](./architecture/api.md)
   - включает раздел Rich-text input contract (`markdown` + `rt_json_v1`/`content_json`) для blog/forum/pages
   - включает актуальный раздел по auth lifecycle consistency и release-gate (`AuthLifecycleService` + `scripts/auth_release_gate.sh`)
@@ -188,7 +189,7 @@ graph TD
 - [Карта реестра доменных модулей](./modules/registry.md)
 - [README платформенного ядра](../crates/rustok-core/README.md)
 - [План реализации платформенного ядра](../crates/rustok-core/docs/implementation-plan.md)
-- [README crate-контрактов событий](../crates/rustok-events/README.md)
+- [README crate-контрактов событий](../crates/rustok-events/README.md) — канонический источник `DomainEvent`/`EventEnvelope`.
 - [Документация crate-контрактов событий](../crates/rustok-events/docs/README.md)
 - [План реализации контрактов событий](../crates/rustok-events/docs/implementation-plan.md)
 - [Документация модуля Content](../crates/rustok-content/docs/README.md)
@@ -290,7 +291,7 @@ graph TD
 - `rustok-commerce`: [README](../crates/rustok-commerce/README.md), [docs/README](../crates/rustok-commerce/docs/README.md), [docs/implementation-plan](../crates/rustok-commerce/docs/implementation-plan.md)
 - `rustok-content`: [README](../crates/rustok-content/README.md), [docs/README](../crates/rustok-content/docs/README.md), [docs/implementation-plan](../crates/rustok-content/docs/implementation-plan.md)
 - `rustok-core`: [README](../crates/rustok-core/README.md), [docs/README](../crates/rustok-core/docs/README.md), [docs/implementation-plan](../crates/rustok-core/docs/implementation-plan.md)
-- `rustok-events`: [README](../crates/rustok-events/README.md)
+- `rustok-events`: [README](../crates/rustok-events/README.md) — канонический источник event-контрактов
 - `rustok-forum`: [README](../crates/rustok-forum/README.md), [docs/README](../crates/rustok-forum/docs/README.md), [docs/implementation-plan](../crates/rustok-forum/docs/implementation-plan.md)
 - `rustok-iggy`: [README](../crates/rustok-iggy/README.md), [docs/README](../crates/rustok-iggy/docs/README.md), [docs/implementation-plan](../crates/rustok-iggy/docs/implementation-plan.md)
 - `rustok-iggy-connector`: [README](../crates/rustok-iggy-connector/README.md), [docs/README](../crates/rustok-iggy-connector/docs/README.md), [docs/implementation-plan](../crates/rustok-iggy-connector/docs/implementation-plan.md)

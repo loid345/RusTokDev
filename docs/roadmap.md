@@ -25,6 +25,9 @@
 Актуальный список рекомендаций по улучшению архитектуры:
 → [`docs/architecture/improvement-recommendations.md`](./architecture/improvement-recommendations.md)
 
+Evidence workflow for `2.8`:
+→ [`docs/architecture/performance-baseline.md`](./architecture/performance-baseline.md)
+
 ## Как обновлять roadmap
 
 1. При закрытии значимого milestone обновляйте этот файл и `CHANGELOG.md`.

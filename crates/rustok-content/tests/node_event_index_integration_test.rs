@@ -4,8 +4,8 @@
 use rustok_content::dto::{BodyInput, CreateNodeInput, NodeTranslationInput, UpdateNodeInput};
 use rustok_content::entities::node::ContentStatus;
 use rustok_content::services::NodeService;
-use rustok_core::events::DomainEvent;
 use rustok_core::{SecurityContext, UserRole};
+use rustok_events::DomainEvent;
 use rustok_outbox::TransactionalEventBus;
 use rustok_test_utils::MockEventTransport;
 use sea_orm::{

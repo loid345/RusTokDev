@@ -40,7 +40,11 @@ pub async fn setup_test_db() -> DatabaseConnection {
         Uuid::new_v4()
     );
     let mut opts = ConnectOptions::new(db_url);
-    opts.max_connections(5)
+    // In-memory SQLite schema state is connection-scoped enough that
+    // migrations can observe inconsistent DDL across pooled connections.
+    // Keep test databases on a single connection for deterministic schema
+    // visibility during migrations and test execution.
+    opts.max_connections(1)
         .min_connections(1)
         .sqlx_logging(false);
 
@@ -90,7 +94,9 @@ where
         Uuid::new_v4()
     );
     let mut opts = ConnectOptions::new(db_url);
-    opts.max_connections(5)
+    // For in-memory SQLite, migrations and subsequent queries must share
+    // the same connection to avoid "no such table" races across the pool.
+    opts.max_connections(1)
         .min_connections(1)
         .sqlx_logging(false);
 
@@ -98,7 +104,18 @@ where
         .await
         .expect("Failed to connect to test database");
 
-    M::up(&db, None).await.expect("Failed to run migrations");
+    loop {
+        let pending = M::get_pending_migrations(&db)
+            .await
+            .expect("Failed to load pending migrations");
+        let Some(next_migration) = pending.into_iter().next() else {
+            break;
+        };
+        let migration_name = next_migration.name().to_owned();
+        M::up(&db, Some(1))
+            .await
+            .unwrap_or_else(|error| panic!("Failed to run migration {migration_name}: {error:?}"));
+    }
 
     db
 }

@@ -68,7 +68,6 @@ pub fn Input(
 pub fn LanguageToggle() -> impl IntoView {
     let i18n = use_i18n();
 
-
     view! {
         <div class="flex gap-2">
             <button

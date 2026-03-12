@@ -11,8 +11,9 @@ use sea_orm::{
 use serde_json::from_value;
 use uuid::Uuid;
 
-use rustok_core::events::{EventEnvelope, EventTransport};
+use rustok_core::events::EventTransport;
 use rustok_core::{Error, Result};
+use rustok_events::EventEnvelope;
 
 use crate::entity;
 use crate::entity::SysEventStatus;

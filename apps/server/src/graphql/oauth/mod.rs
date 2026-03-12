@@ -7,11 +7,11 @@ use sea_orm::DatabaseConnection;
 
 use crate::context::AuthContext;
 use crate::graphql::errors::GraphQLError;
-use crate::services::auth::AuthService;
+use crate::services::rbac_service::RbacService;
 use rustok_core::Permission;
 
 pub(super) async fn ensure_oauth_admin(auth: &AuthContext, db: &DatabaseConnection) -> Result<()> {
-    let has_admin_permission = AuthService::has_any_permission(
+    let has_admin_permission = RbacService::has_any_permission(
         db,
         &auth.tenant_id,
         &auth.user_id,

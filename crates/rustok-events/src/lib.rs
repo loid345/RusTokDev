@@ -1,12 +1,15 @@
-//! Event contracts crate for RusToK.
-//!
-//! This crate is introduced as the first extraction step from `rustok-core`.
-//! Current implementation re-exports event primitives from `rustok-core`
-//! to provide a stable dependency point for downstream modules.
+//! Canonical event contracts crate for RusToK.
 
-pub use rustok_core::events::{DomainEvent, EventEnvelope};
-pub use rustok_core::{DomainEvent as RootDomainEvent, EventEnvelope as RootEventEnvelope};
+mod schema;
+mod types;
+pub mod validation;
 
+pub use schema::{event_schema, EventSchema, FieldSchema, EVENT_SCHEMAS};
+pub use types::{DomainEvent, EventEnvelope};
+pub use validation::{EventValidationError, ValidateEvent};
+
+pub use DomainEvent as RootDomainEvent;
+pub use EventEnvelope as RootEventEnvelope;
 
 #[cfg(test)]
 mod contract_tests;

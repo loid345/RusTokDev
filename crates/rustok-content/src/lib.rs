@@ -6,6 +6,7 @@ use sea_orm_migration::MigrationTrait;
 pub mod dto;
 pub mod entities;
 pub mod error;
+pub mod locale;
 pub mod services;
 pub mod state_machine;
 
@@ -15,6 +16,10 @@ mod state_machine_proptest;
 pub use dto::*;
 pub use entities::{Body, Node, NodeTranslation};
 pub use error::{ContentError, ContentResult};
+pub use locale::{
+    available_locales_from, resolve_by_locale, resolve_by_locale_with_fallback, ResolvedLocale,
+    PLATFORM_FALLBACK_LOCALE,
+};
 pub use services::{
     ContentOrchestrationService, DemotePostToTopicInput, MergeTopicsInput, NodeService,
     OrchestrationResult, PromoteTopicToPostInput, SplitTopicInput,
@@ -103,7 +108,6 @@ impl MigrationSource for ContentModule {
         Vec::new() // Migrations are currently handled by the main app
     }
 }
-
 
 #[cfg(test)]
 mod contract_tests;

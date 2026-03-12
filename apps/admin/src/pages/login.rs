@@ -20,7 +20,9 @@ pub fn Login() -> impl IntoView {
 
     let on_submit = move |_| {
         if tenant.get().is_empty() || email.get().is_empty() || password.get().is_empty() {
-            set_form_state.set(FormState::with_form_error(t_string!(i18n, auth.errorRequired).to_string()));
+            set_form_state.set(FormState::with_form_error(
+                t_string!(i18n, auth.errorRequired).to_string(),
+            ));
             return;
         }
 

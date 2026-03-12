@@ -48,6 +48,5 @@ impl RusToKModule for TenantModule {
     }
 }
 
-
 #[cfg(test)]
 mod contract_tests;

@@ -1,19 +1,20 @@
 use axum::{extract::State, routing::get, Extension, Json};
 use loco_rs::prelude::*;
+use std::sync::Arc;
 
+use crate::common::RequestContext;
 use crate::context::{AuthContext, TenantContext};
 use crate::extractors::auth::OptionalCurrentUser;
-use crate::graphql::build_schema;
 use crate::graphql::persisted::is_admin_persisted_hash;
-use crate::services::build_event_hub::build_event_hub_from_context;
-use crate::services::event_bus::{event_bus_from_context, transactional_event_bus_from_context};
+use crate::graphql::AppSchema;
 use rustok_core::ModuleRegistry;
 
 async fn graphql_handler(
     State(ctx): State<AppContext>,
     Extension(registry): Extension<ModuleRegistry>,
-    Extension(alloy_state): Extension<crate::graphql::alloy::AlloyState>,
+    Extension(schema): Extension<Arc<AppSchema>>,
     tenant_ctx: TenantContext,
+    request_context: RequestContext,
     OptionalCurrentUser(current_user): OptionalCurrentUser,
     Json(req): Json<async_graphql::Request>,
 ) -> Json<async_graphql::Response> {
@@ -29,14 +30,11 @@ async fn graphql_handler(
         }
     }
 
-    let schema = build_schema(
-        ctx.db.clone(),
-        event_bus_from_context(&ctx),
-        transactional_event_bus_from_context(&ctx),
-        build_event_hub_from_context(&ctx),
-        alloy_state,
-    );
-    let mut request = req.data(ctx).data(tenant_ctx).data(registry);
+    let mut request = req
+        .data(ctx)
+        .data(tenant_ctx)
+        .data(request_context)
+        .data(registry);
 
     if let Some(current_user) = current_user {
         let auth_ctx = AuthContext {

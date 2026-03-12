@@ -16,6 +16,7 @@ use crate::entities::{
     body, node, node_translation, orchestration_audit_log, orchestration_operation,
 };
 use crate::error::{ContentError, ContentResult};
+use crate::locale::resolve_by_locale;
 use crate::services::orchestration_mapping::{
     map_post_to_topic_input, map_topic_to_post_input, stamp_audit_metadata, AuditStamp, KIND_POST,
     KIND_TOPIC,
@@ -603,17 +604,16 @@ impl ContentOrchestrationService {
             .all(txn)
             .await?;
 
-        let effective_locale = if translations.iter().any(|tr| tr.locale == locale) {
-            locale.to_string()
-        } else if translations.iter().any(|tr| tr.locale == "en") {
-            "en".to_string()
-        } else if let Some(first) = translations.first() {
-            first.locale.clone()
-        } else {
-            return Err(ContentError::Validation(format!(
-                "Node {node_id} has no translations for locale resolution"
-            )));
-        };
+        let resolved_locale =
+            resolve_by_locale(&translations, locale, |translation| &translation.locale);
+        let effective_locale = resolved_locale
+            .item
+            .map(|_| resolved_locale.effective_locale)
+            .ok_or_else(|| {
+                ContentError::Validation(format!(
+                    "Node {node_id} has no translations for locale resolution"
+                ))
+            })?;
 
         let bodies = body::Entity::find()
             .filter(body::Column::NodeId.eq(node_id))

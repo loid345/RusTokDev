@@ -1,6 +1,8 @@
 # Контракт потока доменных событий (Event Flow Contract)
 
 Документ фиксирует канонический путь `DomainEvent` в RusToK: от доменной операции до обновления read-model/index.
+Канонические определения `DomainEvent` и `EventEnvelope` поддерживаются в crate
+`rustok-events`; `rustok-core::events` сохраняет совместимый re-export для переходного периода.
 
 ## Канонический путь события
 

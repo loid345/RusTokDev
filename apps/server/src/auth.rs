@@ -200,10 +200,7 @@ pub fn encode_oauth_access_token(
 }
 
 pub fn decode_access_token(config: &AuthConfig, token: &str) -> Result<Claims> {
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.validate_exp = true;
-    validation.set_issuer(&[config.issuer.as_str()]);
-    validation.set_audience(&[config.audience.as_str()]);
+    let validation = strict_jwt_validation(config);
 
     decode::<Claims>(
         token,
@@ -276,10 +273,7 @@ pub fn decode_password_reset_token(
     config: &AuthConfig,
     token: &str,
 ) -> Result<PasswordResetClaims> {
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.validate_exp = true;
-    validation.set_issuer(&[config.issuer.as_str()]);
-    validation.set_audience(&[config.audience.as_str()]);
+    let validation = strict_jwt_validation(config);
 
     let claims = decode::<PasswordResetClaims>(
         token,
@@ -327,10 +321,7 @@ pub fn decode_email_verification_token(
     config: &AuthConfig,
     token: &str,
 ) -> Result<EmailVerificationClaims> {
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.validate_exp = true;
-    validation.set_issuer(&[config.issuer.as_str()]);
-    validation.set_audience(&[config.audience.as_str()]);
+    let validation = strict_jwt_validation(config);
 
     let claims = decode::<EmailVerificationClaims>(
         token,
@@ -350,10 +341,7 @@ pub fn decode_email_verification_token(
 }
 
 pub fn decode_invite_token(config: &AuthConfig, token: &str) -> Result<InviteClaims> {
-    let mut validation = Validation::new(Algorithm::HS256);
-    validation.validate_exp = true;
-    validation.set_issuer(&[config.issuer.as_str()]);
-    validation.set_audience(&[config.audience.as_str()]);
+    let validation = strict_jwt_validation(config);
 
     let claims = decode::<InviteClaims>(
         token,
@@ -368,6 +356,17 @@ pub fn decode_invite_token(config: &AuthConfig, token: &str) -> Result<InviteCla
     }
 
     Ok(claims)
+}
+
+fn strict_jwt_validation(config: &AuthConfig) -> Validation {
+    let mut validation = Validation::new(Algorithm::HS256);
+    validation.validate_exp = true;
+    validation.leeway = 0;
+    // RFC 7519 says a token MUST NOT be accepted on or after `exp`.
+    validation.reject_tokens_expiring_in_less_than = 1;
+    validation.set_issuer(&[config.issuer.as_str()]);
+    validation.set_audience(&[config.audience.as_str()]);
+    validation
 }
 
 #[cfg(test)]

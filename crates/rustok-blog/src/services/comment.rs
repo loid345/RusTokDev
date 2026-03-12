@@ -3,16 +3,18 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use rustok_content::{
-    BodyInput, CreateNodeInput, ListNodesFilter, NodeService, NodeTranslationInput, UpdateNodeInput,
+    BodyInput, CreateNodeInput, ListNodesFilter, NodeService, NodeTranslationInput,
+    UpdateNodeInput, PLATFORM_FALLBACK_LOCALE,
 };
-use rustok_core::{prepare_content_payload, DomainEvent, SecurityContext};
+use rustok_core::{prepare_content_payload, SecurityContext};
+use rustok_events::DomainEvent;
 use rustok_outbox::TransactionalEventBus;
 
 use crate::dto::{
     CommentListItem, CommentResponse, CreateCommentInput, ListCommentsFilter, UpdateCommentInput,
 };
 use crate::error::{BlogError, BlogResult};
-use crate::locale::resolve_body;
+use crate::locale::resolve_body_with_fallback;
 use crate::state_machine::CommentStatus;
 
 const KIND_POST: &str = "post";
@@ -136,6 +138,18 @@ impl CommentService {
         comment_id: Uuid,
         locale: &str,
     ) -> BlogResult<CommentResponse> {
+        self.get_comment_with_locale_fallback(tenant_id, comment_id, locale, None)
+            .await
+    }
+
+    #[instrument(skip(self))]
+    pub async fn get_comment_with_locale_fallback(
+        &self,
+        tenant_id: Uuid,
+        comment_id: Uuid,
+        locale: &str,
+        fallback_locale: Option<&str>,
+    ) -> BlogResult<CommentResponse> {
         let node = self
             .nodes
             .get_node(tenant_id, comment_id)
@@ -149,7 +163,12 @@ impl CommentService {
         let post_id = node
             .parent_id
             .ok_or_else(|| BlogError::comment_not_found(comment_id))?;
-        Ok(Self::node_to_comment(node, post_id, locale))
+        Ok(Self::node_to_comment_with_fallback(
+            node,
+            post_id,
+            locale,
+            fallback_locale,
+        ))
     }
 
     #[instrument(skip(self, security, input))]
@@ -223,10 +242,27 @@ impl CommentService {
         post_id: Uuid,
         filter: ListCommentsFilter,
     ) -> BlogResult<(Vec<CommentListItem>, u64)> {
-        let locale = filter.locale.clone().unwrap_or_else(|| "en".to_string());
+        self.list_for_post_with_locale_fallback(tenant_id, security, post_id, filter, None)
+            .await
+    }
+
+    #[instrument(skip(self, security))]
+    pub async fn list_for_post_with_locale_fallback(
+        &self,
+        tenant_id: Uuid,
+        security: SecurityContext,
+        post_id: Uuid,
+        filter: ListCommentsFilter,
+        fallback_locale: Option<&str>,
+    ) -> BlogResult<(Vec<CommentListItem>, u64)> {
+        let locale = filter
+            .locale
+            .clone()
+            .or_else(|| fallback_locale.map(str::to_string))
+            .unwrap_or_else(|| PLATFORM_FALLBACK_LOCALE.to_string());
         let (items, total) = self
             .nodes
-            .list_nodes(
+            .list_nodes_with_locale_fallback(
                 tenant_id,
                 security,
                 ListNodesFilter {
@@ -240,6 +276,7 @@ impl CommentService {
                     include_deleted: false,
                     category_id: None,
                 },
+                fallback_locale,
             )
             .await
             .map_err(BlogError::from)?;
@@ -254,7 +291,7 @@ impl CommentService {
         let comments = full_nodes
             .into_iter()
             .map(|node| {
-                let resolved = resolve_body(&node.bodies, &locale);
+                let resolved = resolve_body_with_fallback(&node.bodies, &locale, fallback_locale);
                 let content = resolved
                     .body
                     .and_then(|b| b.body.clone())
@@ -291,7 +328,16 @@ impl CommentService {
         post_id: Uuid,
         locale: &str,
     ) -> CommentResponse {
-        let resolved = resolve_body(&node.bodies, locale);
+        Self::node_to_comment_with_fallback(node, post_id, locale, None)
+    }
+
+    fn node_to_comment_with_fallback(
+        node: rustok_content::NodeResponse,
+        post_id: Uuid,
+        locale: &str,
+        fallback_locale: Option<&str>,
+    ) -> CommentResponse {
+        let resolved = resolve_body_with_fallback(&node.bodies, locale, fallback_locale);
 
         let content = resolved
             .body
@@ -311,6 +357,7 @@ impl CommentService {
 
         CommentResponse {
             id: node.id,
+            requested_locale: locale.to_string(),
             locale: locale.to_string(),
             effective_locale: resolved.effective_locale,
             post_id,

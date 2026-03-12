@@ -11,7 +11,6 @@ use crate::models::_entities::users::Column as UsersColumn;
 use crate::models::release::{Column as ReleaseColumn, Entity as ReleaseEntity, ReleaseStatus};
 use crate::models::users;
 use crate::modules::{ManifestDiff, ManifestError, ManifestManager, ModulesManifest};
-use crate::services::auth::AuthService;
 use crate::services::auth_lifecycle::{AuthLifecycleError, AuthLifecycleService};
 use crate::services::build_event_hub::{
     build_event_hub_from_context, BuildEventHubPublisher, CompositeBuildEventPublisher,
@@ -20,6 +19,7 @@ use crate::services::build_service::EventBusBuildEventPublisher;
 use crate::services::build_service::{BuildRequest, BuildService};
 use crate::services::event_bus::event_bus_from_context;
 use crate::services::module_lifecycle::{ModuleLifecycleService, ToggleModuleError};
+use crate::services::rbac_service::RbacService;
 use rustok_core::{Action, ModuleRegistry, Permission, Resource};
 use std::sync::Arc;
 use uuid::Uuid;
@@ -82,7 +82,7 @@ async fn ensure_modules_manage_permission(
     let tenant = ctx.data::<TenantContext>()?.clone();
     let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
 
-    let can_manage_modules = AuthService::has_permission(
+    let can_manage_modules = RbacService::has_permission(
         &app_ctx.db,
         &tenant.id,
         &auth.user_id,
@@ -178,7 +178,7 @@ impl RootMutation {
         let tenant = ctx.data::<TenantContext>()?;
         let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
 
-        let can_create_users = AuthService::has_any_permission(
+        let can_create_users = RbacService::has_any_permission(
             &app_ctx.db,
             &tenant.id,
             &auth.user_id,
@@ -229,7 +229,7 @@ impl RootMutation {
         let tenant = ctx.data::<TenantContext>()?;
         let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
 
-        let can_update_users = AuthService::has_any_permission(
+        let can_update_users = RbacService::has_any_permission(
             &app_ctx.db,
             &tenant.id,
             &auth.user_id,
@@ -306,7 +306,7 @@ impl RootMutation {
             .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
 
         if let Some(role) = requested_role {
-            AuthService::replace_user_role(&tx, &user.id, &tenant.id, role)
+            RbacService::replace_user_role(&tx, &user.id, &tenant.id, role)
                 .await
                 .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
         }
@@ -325,7 +325,7 @@ impl RootMutation {
         let tenant = ctx.data::<TenantContext>()?;
         let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
 
-        let can_manage_users = AuthService::has_permission(
+        let can_manage_users = RbacService::has_permission(
             &app_ctx.db,
             &tenant.id,
             &auth.user_id,
@@ -365,7 +365,7 @@ impl RootMutation {
         let tenant = ctx.data::<TenantContext>()?;
         let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
 
-        let can_manage_users = AuthService::has_permission(
+        let can_manage_users = RbacService::has_permission(
             &app_ctx.db,
             &tenant.id,
             &auth.user_id,
@@ -565,7 +565,7 @@ impl RootMutation {
         let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
         let tenant = ctx.data::<TenantContext>()?;
 
-        let can_manage_modules = AuthService::has_permission(
+        let can_manage_modules = RbacService::has_permission(
             &app_ctx.db,
             &tenant.id,
             &auth.user_id,

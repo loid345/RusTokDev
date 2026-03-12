@@ -1,11 +1,12 @@
 use axum::{
-    extract::ConnectInfo,
+    extract::{ConnectInfo, Query},
     http::header::USER_AGENT,
     routing::{get, post},
     Json,
 };
 use chrono::Utc;
 use loco_rs::prelude::*;
+use rustok_telemetry::metrics;
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder,
     QuerySelect, Set,
@@ -124,6 +125,11 @@ pub struct SessionItem {
 #[derive(Debug, Serialize, ToSchema)]
 pub struct SessionsResponse {
     pub sessions: Vec<SessionItem>,
+}
+
+#[derive(Debug, Deserialize, ToSchema, utoipa::IntoParams)]
+pub struct SessionListParams {
+    pub limit: Option<u64>,
 }
 
 #[derive(Serialize, ToSchema)]
@@ -455,20 +461,36 @@ async fn confirm_verification(
 }
 
 #[utoipa::path(get, path = "/api/auth/sessions", tag = "auth", security(("bearer_auth" = [])),
+    params(
+        ("limit" = Option<u64>, Query, description = "Maximum number of sessions to return (1-100)")
+    ),
     responses((status = 200, description = "Active sessions", body = SessionsResponse)))]
 async fn list_sessions(
     State(ctx): State<AppContext>,
     CurrentTenant(tenant): CurrentTenant,
     current: CurrentUser,
+    Query(params): Query<SessionListParams>,
 ) -> Result<Response> {
+    let requested_limit = params.limit;
+    let limit = clamp_session_limit(params.limit);
+
     let rows = sessions::Entity::find()
         .filter(sessions::Column::TenantId.eq(tenant.id))
         .filter(sessions::Column::UserId.eq(current.user.id))
         .filter(sessions::Column::RevokedAt.is_null())
         .filter(sessions::Column::ExpiresAt.gt(Utc::now()))
         .order_by_desc(sessions::Column::CreatedAt)
+        .limit(limit)
         .all(&ctx.db)
         .await?;
+
+    metrics::record_read_path_budget(
+        "http",
+        "auth.list_sessions",
+        requested_limit,
+        limit,
+        rows.len(),
+    );
 
     let data = rows
         .into_iter()
@@ -545,19 +567,34 @@ async fn update_profile(
 }
 
 #[utoipa::path(get, path = "/api/auth/history", tag = "auth", security(("bearer_auth" = [])),
+    params(
+        ("limit" = Option<u64>, Query, description = "Maximum number of history entries to return (1-100)")
+    ),
     responses((status = 200, description = "Login history", body = SessionsResponse)))]
 async fn login_history(
     State(ctx): State<AppContext>,
     CurrentTenant(tenant): CurrentTenant,
     current: CurrentUser,
+    Query(params): Query<SessionListParams>,
 ) -> Result<Response> {
+    let requested_limit = params.limit;
+    let limit = clamp_session_limit(params.limit);
+
     let rows = sessions::Entity::find()
         .filter(sessions::Column::TenantId.eq(tenant.id))
         .filter(sessions::Column::UserId.eq(current.user.id))
         .order_by_desc(sessions::Column::CreatedAt)
-        .limit(50)
+        .limit(limit)
         .all(&ctx.db)
         .await?;
+
+    metrics::record_read_path_budget(
+        "http",
+        "auth.login_history",
+        requested_limit,
+        limit,
+        rows.len(),
+    );
 
     let data = rows
         .into_iter()
@@ -593,4 +630,8 @@ pub fn routes() -> Routes {
         .add("/change-password", post(change_password))
         .add("/profile", post(update_profile))
         .add("/history", get(login_history))
+}
+
+fn clamp_session_limit(limit: Option<u64>) -> u64 {
+    limit.unwrap_or(50).clamp(1, 100)
 }

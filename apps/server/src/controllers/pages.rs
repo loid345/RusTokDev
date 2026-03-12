@@ -13,11 +13,11 @@ use rustok_pages::{
     UpdateBlockInput, UpdatePageInput,
 };
 
-use crate::context::TenantContext;
 use crate::extractors::rbac::{
     RequirePagesCreate, RequirePagesDelete, RequirePagesRead, RequirePagesUpdate,
 };
 use crate::services::event_bus::transactional_event_bus_from_context;
+use crate::{common::RequestContext, context::TenantContext};
 
 #[derive(Debug, Deserialize, IntoParams, ToSchema)]
 pub struct GetPageParams {
@@ -47,14 +47,23 @@ pub async fn get_page(
     State(ctx): State<AppContext>,
     tenant: TenantContext,
     RequirePagesRead(user): RequirePagesRead,
+    request_context: RequestContext,
     Query(params): Query<GetPageParams>,
 ) -> Result<Json<PageResponse>> {
     let slug = params.slug.unwrap_or_else(|| "home".to_string());
-    let locale = params.locale.unwrap_or_else(|| "en".to_string());
+    let locale = params
+        .locale
+        .unwrap_or_else(|| request_context.locale.clone());
 
     let service = PageService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let page = service
-        .get_by_slug(tenant.id, user.security_context(), &locale, &slug)
+        .get_by_slug_with_locale_fallback(
+            tenant.id,
+            user.security_context(),
+            &locale,
+            &slug,
+            Some(tenant.default_locale.as_str()),
+        )
         .await
         .map_err(|err| Error::BadRequest(err.to_string()))?;
 

@@ -2,8 +2,12 @@ use sea_orm::{DatabaseConnection, TransactionTrait};
 use tracing::instrument;
 use uuid::Uuid;
 
-use rustok_content::{BodyInput, CreateNodeInput, ListNodesFilter, NodeService, UpdateNodeInput};
-use rustok_core::{prepare_content_payload, DomainEvent, SecurityContext};
+use rustok_content::{
+    BodyInput, CreateNodeInput, ListNodesFilter, NodeService, UpdateNodeInput,
+    PLATFORM_FALLBACK_LOCALE,
+};
+use rustok_core::{prepare_content_payload, SecurityContext};
+use rustok_events::DomainEvent;
 use rustok_outbox::TransactionalEventBus;
 
 use crate::constants::{reply_status, topic_status, KIND_REPLY, KIND_TOPIC};
@@ -11,7 +15,7 @@ use crate::dto::{
     CreateReplyInput, ListRepliesFilter, ReplyListItem, ReplyResponse, UpdateReplyInput,
 };
 use crate::error::{ForumError, ForumResult};
-use crate::locale::resolve_body;
+use crate::locale::resolve_body_with_fallback;
 
 pub struct ReplyService {
     db: DatabaseConnection,
@@ -132,6 +136,18 @@ impl ReplyService {
         reply_id: Uuid,
         locale: &str,
     ) -> ForumResult<ReplyResponse> {
+        self.get_with_locale_fallback(tenant_id, reply_id, locale, None)
+            .await
+    }
+
+    #[instrument(skip(self))]
+    pub async fn get_with_locale_fallback(
+        &self,
+        tenant_id: Uuid,
+        reply_id: Uuid,
+        locale: &str,
+        fallback_locale: Option<&str>,
+    ) -> ForumResult<ReplyResponse> {
         let node = self.nodes.get_node(tenant_id, reply_id).await?;
 
         if node.kind != KIND_REPLY {
@@ -139,7 +155,12 @@ impl ReplyService {
         }
 
         let topic_id = node.parent_id.ok_or(ForumError::ReplyNotFound(reply_id))?;
-        Ok(Self::node_to_reply(node, topic_id, locale))
+        Ok(Self::node_to_reply_with_fallback(
+            node,
+            topic_id,
+            locale,
+            fallback_locale,
+        ))
     }
 
     #[instrument(skip(self, security, input))]
@@ -209,10 +230,27 @@ impl ReplyService {
         topic_id: Uuid,
         filter: ListRepliesFilter,
     ) -> ForumResult<(Vec<ReplyListItem>, u64)> {
-        let locale = filter.locale.clone().unwrap_or_else(|| "en".to_string());
+        self.list_for_topic_with_locale_fallback(tenant_id, security, topic_id, filter, None)
+            .await
+    }
+
+    #[instrument(skip(self, security))]
+    pub async fn list_for_topic_with_locale_fallback(
+        &self,
+        tenant_id: Uuid,
+        security: SecurityContext,
+        topic_id: Uuid,
+        filter: ListRepliesFilter,
+        fallback_locale: Option<&str>,
+    ) -> ForumResult<(Vec<ReplyListItem>, u64)> {
+        let locale = filter
+            .locale
+            .clone()
+            .or_else(|| fallback_locale.map(str::to_string))
+            .unwrap_or_else(|| PLATFORM_FALLBACK_LOCALE.to_string());
         let (items, total) = self
             .nodes
-            .list_nodes(
+            .list_nodes_with_locale_fallback(
                 tenant_id,
                 security,
                 ListNodesFilter {
@@ -226,6 +264,7 @@ impl ReplyService {
                     include_deleted: false,
                     category_id: None,
                 },
+                fallback_locale,
             )
             .await?;
 
@@ -242,7 +281,7 @@ impl ReplyService {
         let replies = full_nodes
             .into_iter()
             .map(|node| {
-                let resolved = resolve_body(&node.bodies, &locale);
+                let resolved = resolve_body_with_fallback(&node.bodies, &locale, fallback_locale);
                 let metadata = &node.metadata;
                 let content = resolved
                     .body
@@ -278,7 +317,16 @@ impl ReplyService {
         topic_id: Uuid,
         locale: &str,
     ) -> ReplyResponse {
-        let resolved = resolve_body(&node.bodies, locale);
+        Self::node_to_reply_with_fallback(node, topic_id, locale, None)
+    }
+
+    fn node_to_reply_with_fallback(
+        node: rustok_content::NodeResponse,
+        topic_id: Uuid,
+        locale: &str,
+        fallback_locale: Option<&str>,
+    ) -> ReplyResponse {
+        let resolved = resolve_body_with_fallback(&node.bodies, locale, fallback_locale);
         let metadata = node.metadata;
 
         let content = resolved
@@ -299,6 +347,7 @@ impl ReplyService {
 
         ReplyResponse {
             id: node.id,
+            requested_locale: locale.to_string(),
             locale: locale.to_string(),
             effective_locale: resolved.effective_locale,
             topic_id,

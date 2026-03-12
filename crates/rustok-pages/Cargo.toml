@@ -8,6 +8,7 @@ description.workspace = true
 [dependencies]
 async-trait.workspace = true
 rustok-core.workspace = true
+rustok-events.workspace = true
 rustok-content.workspace = true
 rustok-outbox.workspace = true
 sea-orm.workspace = true

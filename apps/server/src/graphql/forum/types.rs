@@ -7,6 +7,7 @@ use uuid::Uuid;
 #[derive(Clone, Debug, SimpleObject)]
 pub struct GqlForumCategory {
     pub id: Uuid,
+    pub requested_locale: String,
     pub locale: String,
     pub effective_locale: String,
     pub name: String,
@@ -21,6 +22,7 @@ pub struct GqlForumCategory {
 #[derive(Clone, Debug, SimpleObject)]
 pub struct GqlForumTopic {
     pub id: Uuid,
+    pub requested_locale: String,
     pub locale: String,
     pub effective_locale: String,
     pub category_id: Uuid,
@@ -40,6 +42,7 @@ pub struct GqlForumTopic {
 #[derive(Clone, Debug, SimpleObject)]
 pub struct GqlForumReply {
     pub id: Uuid,
+    pub requested_locale: String,
     pub locale: String,
     pub effective_locale: String,
     pub topic_id: Uuid,

@@ -18,4 +18,4 @@ pub mod schema;
 pub mod subscriptions;
 pub mod types;
 
-pub use schema::{build_schema, AppSchema};
+pub use schema::{build_schema, AppSchema, SharedGraphqlSchema};

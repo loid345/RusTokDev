@@ -54,6 +54,7 @@ fn default_content_format() -> String {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct TopicResponse {
     pub id: Uuid,
+    pub requested_locale: String,
     pub locale: String,
     pub effective_locale: String,
     pub available_locales: Vec<String>,
@@ -102,6 +103,7 @@ mod tests {
     ) -> TopicResponse {
         TopicResponse {
             id: Uuid::new_v4(),
+            requested_locale: "en".into(),
             locale: "en".into(),
             effective_locale: "en".into(),
             available_locales: vec!["en".into()],

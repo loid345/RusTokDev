@@ -11,10 +11,15 @@ use sea_orm::{
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
+use crate::middleware::rate_limit::{
+    SharedApiRateLimiter, SharedAuthRateLimiter, SharedOAuthRateLimiter,
+};
 use crate::middleware::tenant::tenant_cache_stats;
-use crate::services::auth::AuthService;
 use crate::services::auth_lifecycle::AuthLifecycleService;
 use crate::services::rbac_consistency::{load_rbac_consistency_stats, RbacConsistencyStats};
+use crate::services::rbac_service::{RbacResolverMetricsSnapshot, RbacService};
+use crate::services::runtime_guardrails::collect_runtime_guardrail_snapshot;
+use rustok_telemetry::metrics::update_queue_depth;
 use tracing::warn;
 
 static RBAC_CONSISTENCY_QUERY_FAILURES_TOTAL: AtomicU64 = AtomicU64::new(0);
@@ -34,12 +39,14 @@ static RBAC_CONSISTENCY_QUERY_LATENCY_SAMPLES: AtomicU64 = AtomicU64::new(0);
 pub async fn metrics(State(ctx): State<AppContext>) -> Result<Response> {
     match rustok_telemetry::metrics_handle() {
         Some(handle) => {
+            sync_rate_limit_metrics(&ctx).await;
             let mut payload = handle.render();
             payload.push('\n');
             payload.push_str(&render_tenant_cache_metrics(&ctx).await);
             payload.push_str(&render_outbox_metrics(&ctx).await);
             payload.push_str(&render_auth_lifecycle_metrics());
             payload.push_str(&render_rbac_metrics(&ctx).await);
+            payload.push_str(&render_runtime_guardrail_metrics(&ctx).await);
 
             Ok((
                 StatusCode::OK,
@@ -54,6 +61,26 @@ pub async fn metrics(State(ctx): State<AppContext>) -> Result<Response> {
 
 pub fn routes() -> Routes {
     Routes::new().prefix("metrics").add("/", get(metrics))
+}
+
+async fn sync_rate_limit_metrics(ctx: &AppContext) {
+    if let Some(shared) = ctx.shared_store.get::<SharedApiRateLimiter>() {
+        if let Err(error) = shared.0.sync_runtime_metrics().await {
+            warn!(error = %error, "failed to sync API rate-limit metrics");
+        }
+    }
+
+    if let Some(shared) = ctx.shared_store.get::<SharedAuthRateLimiter>() {
+        if let Err(error) = shared.0.sync_runtime_metrics().await {
+            warn!(error = %error, "failed to sync auth rate-limit metrics");
+        }
+    }
+
+    if let Some(shared) = ctx.shared_store.get::<SharedOAuthRateLimiter>() {
+        if let Err(error) = shared.0.sync_runtime_metrics().await {
+            warn!(error = %error, "failed to sync oauth rate-limit metrics");
+        }
+    }
 }
 
 async fn render_tenant_cache_metrics(ctx: &AppContext) -> String {
@@ -80,6 +107,62 @@ rustok_tenant_invalidation_listener_status {invalidation_listener_status}\n",
         negative_inserts = stats.negative_inserts,
         invalidation_listener_status = stats.invalidation_listener_status,
     )
+}
+
+async fn render_runtime_guardrail_metrics(ctx: &AppContext) -> String {
+    let snapshot = collect_runtime_guardrail_snapshot(ctx).await;
+    let queue_depth = snapshot.event_bus.current_depth as i64;
+    update_queue_depth("server_event_bus", queue_depth);
+    let mut rate_limit_lines = String::new();
+    for limiter in &snapshot.rate_limits {
+        rate_limit_lines.push_str(&format!(
+            "rustok_runtime_guardrail_rate_limit_backend_healthy{{namespace=\"{namespace}\",backend=\"{backend}\"}} {healthy}\n\
+rustok_runtime_guardrail_rate_limit_state{{namespace=\"{namespace}\"}} {state}\n\
+rustok_runtime_guardrail_rate_limit_total_entries{{namespace=\"{namespace}\"}} {total_entries}\n\
+rustok_runtime_guardrail_rate_limit_active_clients{{namespace=\"{namespace}\"}} {active_clients}\n",
+            namespace = limiter.namespace,
+            backend = limiter.backend,
+            healthy = if limiter.healthy { 1 } else { 0 },
+            state = limiter.state.metric_value(),
+            total_entries = limiter.total_entries,
+            active_clients = limiter.active_clients,
+        ));
+    }
+
+    let mut payload = format!(
+        "rustok_runtime_guardrail_rollout_mode {rollout_mode}\n\
+rustok_runtime_guardrail_observed_status {observed_status}\n\
+rustok_runtime_guardrail_status {overall_status}\n\
+rustok_runtime_guardrail_event_transport_fallback_active {relay_fallback_active}\n\
+rustok_runtime_guardrail_event_backpressure_enabled {backpressure_enabled}\n\
+rustok_runtime_guardrail_event_backpressure_state {backpressure_state}\n\
+rustok_runtime_guardrail_event_backpressure_current_depth {current_depth}\n\
+rustok_runtime_guardrail_event_backpressure_max_depth {max_depth}\n\
+rustok_runtime_guardrail_event_backpressure_rejected_total {events_rejected}\n\
+rustok_runtime_guardrail_event_backpressure_warning_total {warning_count}\n\
+rustok_runtime_guardrail_event_backpressure_critical_total {critical_count}\n",
+        rollout_mode = snapshot.rollout.metric_value(),
+        observed_status = snapshot.observed_status.metric_value(),
+        overall_status = snapshot.status.metric_value(),
+        relay_fallback_active = if snapshot.event_transport.relay_fallback_active {
+            1
+        } else {
+            0
+        },
+        backpressure_enabled = if snapshot.event_bus.backpressure_enabled {
+            1
+        } else {
+            0
+        },
+        backpressure_state = snapshot.event_bus.state.metric_value(),
+        current_depth = snapshot.event_bus.current_depth,
+        max_depth = snapshot.event_bus.max_depth,
+        events_rejected = snapshot.event_bus.events_rejected,
+        warning_count = snapshot.event_bus.warning_count,
+        critical_count = snapshot.event_bus.critical_count,
+    );
+    payload.push_str(&rate_limit_lines);
+    payload
 }
 
 async fn render_outbox_metrics(ctx: &AppContext) -> String {
@@ -115,7 +198,7 @@ outbox_retries_total {retries_total}\n",
 }
 
 async fn render_rbac_metrics(ctx: &AppContext) -> String {
-    let stats = AuthService::metrics_snapshot();
+    let stats = RbacService::metrics_snapshot();
     let started_at = Instant::now();
     let consistency = match load_rbac_consistency_stats(ctx).await {
         Ok(stats) => stats,
@@ -152,7 +235,7 @@ auth_login_inactive_user_attempt_total {login_inactive_user_attempt_total}\n",
 }
 
 fn format_rbac_metrics(
-    stats: crate::services::auth::RbacResolverMetricsSnapshot,
+    stats: RbacResolverMetricsSnapshot,
     users_without_roles_total: i64,
     orphan_user_roles_total: i64,
     orphan_role_permissions_total: i64,
@@ -231,8 +314,8 @@ fn format_rbac_metrics(
 #[cfg(test)]
 mod tests {
     use super::{format_rbac_metrics, render_auth_lifecycle_metrics};
-    use crate::services::auth::AuthService;
     use crate::services::auth_lifecycle::AuthLifecycleService;
+    use crate::services::rbac_service::RbacService;
 
     fn assert_metric_line(payload: &str, metric_name: &str) {
         let has_exact_line = payload.lines().any(|line| {
@@ -257,31 +340,31 @@ mod tests {
 
     #[test]
     fn rbac_metrics_include_claim_role_mismatch_counter() {
-        let payload = format_rbac_metrics(AuthService::metrics_snapshot(), 0, 0, 0);
+        let payload = format_rbac_metrics(RbacService::metrics_snapshot(), 0, 0, 0);
         assert!(payload.contains("rustok_rbac_claim_role_mismatch_total"));
     }
 
     #[test]
     fn rbac_metrics_include_decision_mismatch_counter() {
-        let payload = format_rbac_metrics(AuthService::metrics_snapshot(), 0, 0, 0);
+        let payload = format_rbac_metrics(RbacService::metrics_snapshot(), 0, 0, 0);
         assert!(payload.contains("rustok_rbac_decision_mismatch_total"));
     }
 
     #[test]
     fn rbac_metrics_include_shadow_compare_failures_counter() {
-        let payload = format_rbac_metrics(AuthService::metrics_snapshot(), 0, 0, 0);
+        let payload = format_rbac_metrics(RbacService::metrics_snapshot(), 0, 0, 0);
         assert!(payload.contains("rustok_rbac_shadow_compare_failures_total"));
     }
 
     #[test]
     fn rbac_metrics_include_engine_mismatch_counter() {
-        let payload = format_rbac_metrics(AuthService::metrics_snapshot(), 0, 0, 0);
+        let payload = format_rbac_metrics(RbacService::metrics_snapshot(), 0, 0, 0);
         assert!(payload.contains("rustok_rbac_engine_mismatch_total"));
     }
 
     #[test]
     fn rbac_metrics_include_engine_decision_and_latency_counters() {
-        let payload = format_rbac_metrics(AuthService::metrics_snapshot(), 0, 0, 0);
+        let payload = format_rbac_metrics(RbacService::metrics_snapshot(), 0, 0, 0);
         assert_metric_line(&payload, "rbac_engine_decisions_total");
         assert_metric_line(&payload, "rustok_rbac_engine_decisions_relation_total");
         assert_metric_line(&payload, "rustok_rbac_engine_decisions_casbin_total");
@@ -304,38 +387,38 @@ mod tests {
 
     #[test]
     fn rbac_metrics_include_users_without_roles_counter() {
-        let payload = format_rbac_metrics(AuthService::metrics_snapshot(), 0, 0, 0);
+        let payload = format_rbac_metrics(RbacService::metrics_snapshot(), 0, 0, 0);
         assert!(payload.contains("rustok_rbac_users_without_roles_total"));
     }
 
     #[test]
     fn rbac_metrics_include_orphan_user_roles_counter() {
-        let payload = format_rbac_metrics(AuthService::metrics_snapshot(), 0, 0, 0);
+        let payload = format_rbac_metrics(RbacService::metrics_snapshot(), 0, 0, 0);
         assert!(payload.contains("rustok_rbac_orphan_user_roles_total"));
     }
 
     #[test]
     fn rbac_metrics_include_orphan_role_permissions_counter() {
-        let payload = format_rbac_metrics(AuthService::metrics_snapshot(), 0, 0, 0);
+        let payload = format_rbac_metrics(RbacService::metrics_snapshot(), 0, 0, 0);
         assert!(payload.contains("rustok_rbac_orphan_role_permissions_total"));
     }
 
     #[test]
     fn rbac_metrics_include_consistency_query_failures_counter() {
-        let payload = format_rbac_metrics(AuthService::metrics_snapshot(), 0, 0, 0);
+        let payload = format_rbac_metrics(RbacService::metrics_snapshot(), 0, 0, 0);
         assert!(payload.contains("rustok_rbac_consistency_query_failures_total"));
     }
 
     #[test]
     fn rbac_metrics_include_consistency_query_latency_counters() {
-        let payload = format_rbac_metrics(AuthService::metrics_snapshot(), 0, 0, 0);
+        let payload = format_rbac_metrics(RbacService::metrics_snapshot(), 0, 0, 0);
         assert!(payload.contains("rustok_rbac_consistency_query_latency_ms_total"));
         assert!(payload.contains("rustok_rbac_consistency_query_latency_samples"));
     }
 
     #[test]
     fn rbac_metrics_render_consistency_values() {
-        let payload = format_rbac_metrics(AuthService::metrics_snapshot(), 7, 3, 1);
+        let payload = format_rbac_metrics(RbacService::metrics_snapshot(), 7, 3, 1);
         assert!(payload.contains("rustok_rbac_users_without_roles_total 7"));
         assert!(payload.contains("rustok_rbac_orphan_user_roles_total 3"));
         assert!(payload.contains("rustok_rbac_orphan_role_permissions_total 1"));

@@ -19,6 +19,7 @@ use crate::dto::{
 };
 use crate::entities::{body, node, node_translation};
 use crate::error::{ContentError, ContentResult};
+use crate::locale::{resolve_by_locale_with_fallback, PLATFORM_FALLBACK_LOCALE};
 
 pub struct NodeService {
     db: DatabaseConnection,
@@ -878,7 +879,19 @@ impl NodeService {
         &self,
         tenant_id: Uuid,
         security: SecurityContext,
+        filter: ListNodesFilter,
+    ) -> ContentResult<(Vec<NodeListItem>, u64)> {
+        self.list_nodes_with_locale_fallback(tenant_id, security, filter, None)
+            .await
+    }
+
+    #[instrument(skip(self, security, filter), fields(tenant_id = %tenant_id, user_id = ?security.user_id, kind = ?filter.kind))]
+    pub async fn list_nodes_with_locale_fallback(
+        &self,
+        tenant_id: Uuid,
+        security: SecurityContext,
         mut filter: ListNodesFilter,
+        fallback_locale: Option<&str>,
     ) -> ContentResult<(Vec<NodeListItem>, u64)> {
         debug!(
             page = filter.page,
@@ -904,7 +917,11 @@ impl NodeService {
             }
         }
 
-        let locale = filter.locale.clone().unwrap_or_else(|| "en".to_string());
+        let locale = filter
+            .locale
+            .clone()
+            .or_else(|| fallback_locale.map(str::to_string))
+            .unwrap_or_else(|| PLATFORM_FALLBACK_LOCALE.to_string());
         let mut query = node::Entity::find().filter(node::Column::TenantId.eq(tenant_id));
 
         // Filter out soft-deleted nodes unless explicitly requested
@@ -935,26 +952,50 @@ impl NodeService {
         let node_ids: Vec<Uuid> = nodes.iter().map(|node| node.id).collect();
         let translations = node_translation::Entity::find()
             .filter(node_translation::Column::NodeId.is_in(node_ids))
-            .filter(node_translation::Column::Locale.eq(locale))
             .all(&self.db)
             .await?;
 
-        let mut translations_map = std::collections::HashMap::new();
+        let mut translations_map: std::collections::HashMap<Uuid, Vec<node_translation::Model>> =
+            std::collections::HashMap::new();
         for translation in translations {
-            translations_map.insert(translation.node_id, translation);
+            translations_map
+                .entry(translation.node_id)
+                .or_default()
+                .push(translation);
         }
 
         let items = nodes
             .into_iter()
             .map(|node| {
-                let translation = translations_map.get(&node.id);
+                let resolved_translation = translations_map.get(&node.id).map(|translations| {
+                    resolve_by_locale_with_fallback(translations, &locale, fallback_locale, |tr| {
+                        &tr.locale
+                    })
+                });
+
                 NodeListItem {
                     id: node.id,
                     kind: node.kind,
                     status: node.status,
-                    title: translation.and_then(|t| t.title.clone()),
-                    slug: translation.and_then(|t| t.slug.clone()),
-                    excerpt: translation.and_then(|t| t.excerpt.clone()),
+                    effective_locale: resolved_translation
+                        .as_ref()
+                        .map(|resolved| resolved.effective_locale.clone())
+                        .unwrap_or_else(|| locale.clone()),
+                    title: resolved_translation.as_ref().and_then(|resolved| {
+                        resolved
+                            .item
+                            .and_then(|translation| translation.title.clone())
+                    }),
+                    slug: resolved_translation.as_ref().and_then(|resolved| {
+                        resolved
+                            .item
+                            .and_then(|translation| translation.slug.clone())
+                    }),
+                    excerpt: resolved_translation.as_ref().and_then(|resolved| {
+                        resolved
+                            .item
+                            .and_then(|translation| translation.excerpt.clone())
+                    }),
                     author_id: node.author_id,
                     category_id: node.category_id,
                     metadata: node.metadata,

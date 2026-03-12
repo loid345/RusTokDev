@@ -7,7 +7,7 @@ use rustok_commerce::dto::{
 };
 use rustok_commerce::entities::product::ProductStatus;
 use rustok_commerce::services::CatalogService;
-use rustok_core::events::DomainEvent;
+use rustok_events::DomainEvent;
 use rustok_outbox::TransactionalEventBus;
 use rustok_test_utils::{db::setup_test_db, MockEventTransport};
 use std::str::FromStr;

@@ -25,7 +25,7 @@ use sea_orm::ActiveValue::Set;
 
 use crate::auth::hash_password;
 use crate::models::{tenants, users};
-use crate::services::auth::AuthService;
+use crate::services::rbac_service::RbacService;
 
 pub struct SuperAdminInitializer;
 
@@ -84,7 +84,7 @@ impl Initializer for SuperAdminInitializer {
         user.name = Set(Some("Super Admin".to_string()));
         let user = user.insert(&ctx.db).await?;
 
-        AuthService::assign_role_permissions(
+        RbacService::assign_role_permissions(
             &ctx.db,
             &user.id,
             &tenant.id,

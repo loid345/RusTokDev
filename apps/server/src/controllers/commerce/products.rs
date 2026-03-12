@@ -4,20 +4,25 @@ use axum::{
     Json,
 };
 use loco_rs::prelude::*;
-use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
+use rustok_telemetry::metrics;
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
+};
+use std::time::Instant;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
 use rustok_commerce::dto::{CreateProductInput, ProductResponse, UpdateProductInput};
 use rustok_commerce::CatalogService;
 
-use crate::common::{PaginatedResponse, PaginationMeta, PaginationParams};
+use crate::common::{PaginatedResponse, PaginationMeta, PaginationParams, RequestContext};
 use crate::context::TenantContext;
 use crate::extractors::rbac::{
     RequireProductsCreate, RequireProductsDelete, RequireProductsList, RequireProductsRead,
     RequireProductsUpdate,
 };
 use crate::services::event_bus::transactional_event_bus_from_context;
+use crate::services::product_search::product_translation_title_search_condition;
 
 /// List commerce products
 #[utoipa::path(
@@ -37,12 +42,20 @@ pub(super) async fn list_products(
     State(ctx): State<AppContext>,
     tenant: TenantContext,
     RequireProductsList(_user): RequireProductsList,
+    request_context: RequestContext,
     Query(params): Query<ListProductsParams>,
 ) -> Result<Json<PaginatedResponse<ProductListItem>>> {
     use rustok_commerce::entities::{product, product_translation};
 
+    let requested_limit = params
+        .pagination
+        .as_ref()
+        .map(|pagination| pagination.per_page);
     let pagination = params.pagination.unwrap_or_default();
-    let locale = params.locale.as_deref().unwrap_or("en");
+    let locale = params
+        .locale
+        .as_deref()
+        .unwrap_or(request_context.locale.as_str());
 
     let mut query = product::Entity::find().filter(product::Column::TenantId.eq(tenant.id));
 
@@ -57,32 +70,28 @@ pub(super) async fn list_products(
     }
 
     if let Some(search) = &params.search {
-        let search_ids: Vec<Uuid> = product_translation::Entity::find()
-            .filter(product_translation::Column::Locale.eq(locale))
-            .filter(product_translation::Column::Title.contains(search))
-            .all(&ctx.db)
-            .await
-            .map_err(|err| Error::BadRequest(err.to_string()))?
-            .into_iter()
-            .map(|translation| translation.product_id)
-            .collect();
-
-        if search_ids.is_empty() {
-            return Ok(Json(PaginatedResponse {
-                data: Vec::new(),
-                meta: PaginationMeta::new(pagination.page, pagination.per_page, 0),
-            }));
-        }
-
-        query = query.filter(product::Column::Id.is_in(search_ids));
+        query = query.filter(product_translation_title_search_condition(
+            ctx.db.get_database_backend(),
+            locale,
+            search,
+        ));
     }
 
+    let count_started_at = Instant::now();
     let total = query
         .clone()
         .count(&ctx.db)
         .await
         .map_err(|err| Error::BadRequest(err.to_string()))?;
+    metrics::record_read_path_query(
+        "http",
+        "commerce.list_products",
+        "count",
+        count_started_at.elapsed().as_secs_f64(),
+        total,
+    );
 
+    let products_started_at = Instant::now();
     let products = query
         .order_by_desc(product::Column::CreatedAt)
         .offset(pagination.offset())
@@ -90,14 +99,34 @@ pub(super) async fn list_products(
         .all(&ctx.db)
         .await
         .map_err(|err| Error::BadRequest(err.to_string()))?;
+    metrics::record_read_path_query(
+        "http",
+        "commerce.list_products",
+        "products_page",
+        products_started_at.elapsed().as_secs_f64(),
+        products.len() as u64,
+    );
 
     let product_ids: Vec<Uuid> = products.iter().map(|product| product.id).collect();
-    let translations = product_translation::Entity::find()
-        .filter(product_translation::Column::ProductId.is_in(product_ids.clone()))
-        .filter(product_translation::Column::Locale.eq(locale))
-        .all(&ctx.db)
-        .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+    let translations = if product_ids.is_empty() {
+        Vec::new()
+    } else {
+        let translations_started_at = Instant::now();
+        let translations = product_translation::Entity::find()
+            .filter(product_translation::Column::ProductId.is_in(product_ids.clone()))
+            .filter(product_translation::Column::Locale.eq(locale))
+            .all(&ctx.db)
+            .await
+            .map_err(|err| Error::BadRequest(err.to_string()))?;
+        metrics::record_read_path_query(
+            "http",
+            "commerce.list_products",
+            "translations",
+            translations_started_at.elapsed().as_secs_f64(),
+            translations.len() as u64,
+        );
+        translations
+    };
 
     let translation_map: std::collections::HashMap<Uuid, _> = translations
         .into_iter()
@@ -123,7 +152,15 @@ pub(super) async fn list_products(
                 published_at: product.published_at.map(|value| value.to_rfc3339()),
             }
         })
-        .collect();
+        .collect::<Vec<_>>();
+
+    metrics::record_read_path_budget(
+        "http",
+        "commerce.list_products",
+        requested_limit,
+        pagination.limit(),
+        items.len(),
+    );
 
     Ok(Json(PaginatedResponse {
         data: items,

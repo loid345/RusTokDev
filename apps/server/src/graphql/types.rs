@@ -11,8 +11,8 @@ use crate::models::build::{BuildStage, BuildStatus, DeploymentProfile, Model as 
 use crate::models::release::{Model as ReleaseModel, ReleaseStatus};
 use crate::models::users;
 use crate::modules::InstalledManifestModule;
-use crate::services::auth::AuthService;
 use crate::services::build_service::BuildEvent;
+use crate::services::rbac_service::RbacService;
 
 #[derive(SimpleObject, Clone)]
 pub struct Tenant {
@@ -106,7 +106,7 @@ impl User {
         let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
         let permission = Permission::from_str(&action).map_err(|err| err.to_string())?;
 
-        AuthService::has_permission(&app_ctx.db, &self.tenant_id, &self.id, &permission)
+        RbacService::has_permission(&app_ctx.db, &self.tenant_id, &self.id, &permission)
             .await
             .map_err(|err| err.to_string().into())
     }

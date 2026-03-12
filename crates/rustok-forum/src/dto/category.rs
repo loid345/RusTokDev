@@ -30,6 +30,7 @@ pub struct UpdateCategoryInput {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct CategoryResponse {
     pub id: Uuid,
+    pub requested_locale: String,
     pub locale: String,
     pub effective_locale: String,
     pub available_locales: Vec<String>,

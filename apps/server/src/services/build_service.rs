@@ -3,7 +3,8 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use chrono::Utc;
-use rustok_core::{events::DomainEvent, EventBus};
+use rustok_core::EventBus;
+use rustok_events::DomainEvent;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter, QueryOrder,
     QuerySelect, Set, TransactionTrait,

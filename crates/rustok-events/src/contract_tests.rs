@@ -8,6 +8,9 @@ fn crate_api_defines_minimal_contract_sections() {
         "### События / outbox-побочные эффекты",
         "### Ошибки / коды отказов",
     ] {
-        assert!(api.contains(marker), "CRATE_API.md must contain section: {marker}");
+        assert!(
+            api.contains(marker),
+            "CRATE_API.md must contain section: {marker}"
+        );
     }
 }

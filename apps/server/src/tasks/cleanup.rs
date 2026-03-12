@@ -107,7 +107,7 @@ impl Task for CleanupTask {
                 } else {
                     for user in &users_without_tenant_roles {
                         let assign_result =
-                            crate::services::auth::AuthService::assign_role_permissions(
+                            crate::services::rbac_service::RbacService::assign_role_permissions(
                                 &ctx.db,
                                 &user.id,
                                 &user.tenant_id,
@@ -213,13 +213,14 @@ impl Task for CleanupTask {
                         continue;
                     }
 
-                    let result = crate::services::auth::AuthService::remove_user_role_assignment(
-                        &ctx.db,
-                        &entry.user_id,
-                        &entry.tenant_id,
-                        entry.role.clone(),
-                    )
-                    .await;
+                    let result =
+                        crate::services::rbac_service::RbacService::remove_user_role_assignment(
+                            &ctx.db,
+                            &entry.user_id,
+                            &entry.tenant_id,
+                            entry.role.clone(),
+                        )
+                        .await;
 
                     match result {
                         Ok(()) => reverted += 1,

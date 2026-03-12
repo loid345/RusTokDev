@@ -1,4 +1,5 @@
-use rustok_core::events::{DomainEvent, EventEnvelope, EventTransport};
+use rustok_core::events::EventTransport;
+use rustok_events::{DomainEvent, EventEnvelope};
 use rustok_outbox::{OutboxTransport, SysEvents, SysEventsMigration};
 use sea_orm::{
     ConnectOptions, Database, DatabaseConnection, EntityTrait, PaginatorTrait, TransactionTrait,

@@ -1,4 +1,7 @@
-use async_graphql::{InputObject, Result, SimpleObject};
+use async_graphql::{Context, InputObject, Result, SimpleObject};
+use rustok_content::PLATFORM_FALLBACK_LOCALE;
+
+use crate::common::RequestContext;
 
 #[derive(SimpleObject, Debug, Clone)]
 pub struct PageInfo {
@@ -45,6 +48,10 @@ pub struct PaginationInput {
 }
 
 impl PaginationInput {
+    pub fn requested_limit(&self) -> u64 {
+        self.first.or(self.last).unwrap_or(self.limit).max(0) as u64
+    }
+
     pub fn normalize(&self) -> Result<(i64, i64)> {
         if self.first.is_some() && self.last.is_some() {
             return Err("Provide only one of `first` or `last`".into());
@@ -91,4 +98,16 @@ pub fn decode_cursor(s: &str) -> Option<i64> {
         .ok()
         .and_then(|bytes| String::from_utf8(bytes).ok())
         .and_then(|value| value.parse().ok())
+}
+
+pub fn resolve_graphql_locale(ctx: &Context<'_>, requested: Option<&str>) -> String {
+    requested
+        .map(str::trim)
+        .filter(|locale| !locale.is_empty())
+        .map(ToOwned::to_owned)
+        .or_else(|| {
+            ctx.data_opt::<RequestContext>()
+                .map(|request| request.locale.clone())
+        })
+        .unwrap_or_else(|| PLATFORM_FALLBACK_LOCALE.to_string())
 }

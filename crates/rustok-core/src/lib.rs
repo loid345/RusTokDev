@@ -127,6 +127,5 @@ pub mod prelude {
     pub use uuid::Uuid;
 }
 
-
 #[cfg(test)]
 mod contract_tests;

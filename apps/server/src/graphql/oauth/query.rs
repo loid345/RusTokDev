@@ -1,12 +1,13 @@
 //! GraphQL queries for OAuth App management
 
 use async_graphql::{Context, FieldError, Object, Result};
+use rustok_telemetry::metrics;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
 use uuid::Uuid;
 
 use crate::context::AuthContext;
 use crate::graphql::errors::GraphQLError;
-use crate::services::oauth_app::OAuthAppService;
-use sea_orm::{DatabaseConnection, EntityTrait};
+use sea_orm::DatabaseConnection;
 
 use super::{
     ensure_oauth_admin,
@@ -28,25 +29,42 @@ impl OAuthQuery {
         &self,
         ctx: &Context<'_>,
         app_type: Option<AppType>,
+        limit: Option<i32>,
     ) -> Result<Vec<OAuthAppGql>> {
         let auth = require_auth_context(ctx)?;
         let db = ctx.data::<DatabaseConnection>()?;
+        let requested_limit = requested_limit(limit);
+        let limit = clamp_limit(limit);
 
         // Require admin permissions
         ensure_oauth_admin(auth, db).await?;
 
-        let apps = OAuthAppService::list_by_tenant(db, auth.tenant_id)
+        use crate::models::oauth_apps;
+
+        let mut query = oauth_apps::Entity::find()
+            .filter(oauth_apps::Column::TenantId.eq(auth.tenant_id))
+            .filter(oauth_apps::Column::IsActive.eq(true))
+            .filter(oauth_apps::Column::RevokedAt.is_null())
+            .order_by_desc(oauth_apps::Column::CreatedAt)
+            .limit(limit);
+
+        if let Some(app_type) = app_type {
+            query = query.filter(oauth_apps::Column::AppType.eq(app_type.as_str()));
+        }
+
+        let apps = query
+            .all(db)
             .await
             .map_err(|e| async_graphql::Error::new(format!("Failed to list apps: {e}")))?;
 
-        let apps = if let Some(app_type) = app_type {
-            apps.into_iter()
-                .filter(|a| a.app_type == app_type.as_str())
-                .map(OAuthAppGql)
-                .collect()
-        } else {
-            apps.into_iter().map(OAuthAppGql).collect()
-        };
+        let apps = apps.into_iter().map(OAuthAppGql).collect::<Vec<_>>();
+        metrics::record_read_path_budget(
+            "graphql",
+            "oauth.oauth_apps",
+            requested_limit,
+            limit,
+            apps.len(),
+        );
 
         Ok(apps)
     }
@@ -73,21 +91,25 @@ impl OAuthQuery {
     async fn my_authorized_apps(
         &self,
         ctx: &Context<'_>,
+        limit: Option<i32>,
     ) -> Result<Vec<super::types::AuthorizedAppGql>> {
         let auth = require_auth_context(ctx)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let user_id = auth.user_id;
+        let requested_limit = requested_limit(limit);
+        let limit = clamp_limit(limit);
 
         // Find active consents joined with apps
         use crate::models::oauth_apps;
         use crate::models::oauth_consents;
-        use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 
         let active_consents: Vec<(oauth_consents::Model, Option<oauth_apps::Model>)> =
             oauth_consents::Entity::find()
                 .filter(oauth_consents::Column::UserId.eq(user_id))
                 .filter(oauth_consents::Column::TenantId.eq(auth.tenant_id))
                 .filter(oauth_consents::Column::RevokedAt.is_null())
+                .order_by_desc(oauth_consents::Column::GrantedAt)
+                .limit(limit)
                 .find_also_related(oauth_apps::Entity)
                 .all(db)
                 .await
@@ -109,13 +131,29 @@ impl OAuthQuery {
             }
         }
 
+        metrics::record_read_path_budget(
+            "graphql",
+            "oauth.my_authorized_apps",
+            requested_limit,
+            limit,
+            results.len(),
+        );
+
         Ok(results)
     }
 }
 
+fn clamp_limit(limit: Option<i32>) -> u64 {
+    limit.unwrap_or(50).clamp(1, 100) as u64
+}
+
+fn requested_limit(limit: Option<i32>) -> Option<u64> {
+    limit.map(|value| value.max(0) as u64)
+}
+
 #[cfg(test)]
 mod tests {
-    use async_graphql::{EmptyMutation, EmptySubscription, Request, Schema};
+    use async_graphql::{EmptyMutation, EmptySubscription, Request, Schema, Value};
     use sea_orm::Database;
 
     use super::OAuthQuery;
@@ -133,6 +171,19 @@ mod tests {
         }
     }
 
+    fn error_code(response: &async_graphql::Response) -> Option<&str> {
+        response.errors.first().and_then(|error| {
+            error
+                .extensions
+                .as_ref()
+                .and_then(|ext| ext.get("code"))
+                .and_then(|value| match value {
+                    Value::String(code) => Some(code.as_str()),
+                    _ => None,
+                })
+        })
+    }
+
     #[tokio::test]
     async fn my_authorized_apps_requires_auth_context() {
         let schema =
@@ -142,13 +193,7 @@ mod tests {
             .execute(Request::new("{ myAuthorizedApps { scopes } }"))
             .await;
 
-        let code = response.errors[0]
-            .extensions
-            .as_ref()
-            .and_then(|ext| ext.get("code"))
-            .and_then(|value| value.as_str());
-
-        assert_eq!(code, Some("UNAUTHENTICATED"));
+        assert_eq!(error_code(&response), Some("UNAUTHENTICATED"));
     }
 
     #[tokio::test]
@@ -167,7 +212,10 @@ mod tests {
                 .extensions
                 .as_ref()
                 .and_then(|ext| ext.get("code"))
-                .and_then(|value| value.as_str());
+                .and_then(|value| match value {
+                    Value::String(code) => Some(code.as_str()),
+                    _ => None,
+                });
             assert_ne!(code, Some("UNAUTHENTICATED"));
         } else {
             assert!(response.errors.is_empty());

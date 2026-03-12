@@ -2,6 +2,7 @@ use async_graphql::{Enum, InputObject, SimpleObject};
 use uuid::Uuid;
 
 use rustok_content::dto;
+use rustok_content::{available_locales_from, resolve_by_locale_with_fallback};
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
 #[graphql(rename_items = "SCREAMING_SNAKE_CASE")]
@@ -37,6 +38,9 @@ pub struct GqlNode {
     pub tenant_id: Uuid,
     pub kind: String,
     pub status: GqlContentStatus,
+    pub requested_locale: Option<String>,
+    pub effective_locale: Option<String>,
+    pub available_locales: Vec<String>,
     pub parent_id: Option<Uuid>,
     pub author_id: Option<Uuid>,
     pub category_id: Option<Uuid>,
@@ -46,6 +50,8 @@ pub struct GqlNode {
     pub created_at: String,
     pub updated_at: String,
     pub published_at: Option<String>,
+    pub translation: Option<GqlNodeTranslation>,
+    pub body: Option<GqlBody>,
     pub translations: Vec<GqlNodeTranslation>,
     pub bodies: Vec<GqlBody>,
 }
@@ -71,6 +77,7 @@ pub struct GqlNodeListItem {
     pub id: Uuid,
     pub kind: String,
     pub status: GqlContentStatus,
+    pub effective_locale: String,
     pub title: Option<String>,
     pub slug: Option<String>,
     pub excerpt: Option<String>,
@@ -141,11 +148,59 @@ pub struct NodesFilter {
 
 impl From<dto::NodeResponse> for GqlNode {
     fn from(node: dto::NodeResponse) -> Self {
+        Self::from_node_with_locale(node, None, None)
+    }
+}
+
+impl GqlNode {
+    pub fn from_node_with_locale(
+        node: dto::NodeResponse,
+        requested_locale: Option<&str>,
+        fallback_locale: Option<&str>,
+    ) -> Self {
+        let selected_translation = requested_locale.and_then(|locale| {
+            resolve_by_locale_with_fallback(&node.translations, locale, fallback_locale, |tr| {
+                &tr.locale
+            })
+            .item
+            .cloned()
+            .map(Into::into)
+        });
+
+        let selected_body = requested_locale.and_then(|locale| {
+            resolve_by_locale_with_fallback(&node.bodies, locale, fallback_locale, |body| {
+                &body.locale
+            })
+            .item
+            .cloned()
+            .map(Into::into)
+        });
+
+        let effective_locale = requested_locale.map(|locale| {
+            let resolved_translation = resolve_by_locale_with_fallback(
+                &node.translations,
+                locale,
+                fallback_locale,
+                |tr| &tr.locale,
+            );
+            if resolved_translation.item.is_some() {
+                return resolved_translation.effective_locale;
+            }
+
+            resolve_by_locale_with_fallback(&node.bodies, locale, fallback_locale, |body| {
+                &body.locale
+            })
+            .effective_locale
+        });
+
         Self {
             id: node.id,
             tenant_id: node.tenant_id,
             kind: node.kind,
             status: node.status.into(),
+            requested_locale: requested_locale.map(str::to_string),
+            effective_locale,
+            available_locales: available_locales_from(&node.translations, |tr| &tr.locale),
             parent_id: node.parent_id,
             author_id: node.author_id,
             category_id: node.category_id,
@@ -155,6 +210,8 @@ impl From<dto::NodeResponse> for GqlNode {
             created_at: node.created_at,
             updated_at: node.updated_at,
             published_at: node.published_at,
+            translation: selected_translation,
+            body: selected_body,
             translations: node.translations.into_iter().map(Into::into).collect(),
             bodies: node.bodies.into_iter().map(Into::into).collect(),
         }
@@ -189,6 +246,7 @@ impl From<dto::NodeListItem> for GqlNodeListItem {
             id: item.id,
             kind: item.kind,
             status: item.status.into(),
+            effective_locale: item.effective_locale,
             title: item.title,
             slug: item.slug,
             excerpt: item.excerpt,

@@ -25,7 +25,7 @@ The `TransactionalEventBus` provides atomic event publishing that is guaranteed 
 
 ```rust
 use rustok_outbox::TransactionalEventBus;
-use rustok_core::DomainEvent;
+use rustok_events::DomainEvent;
 use uuid::Uuid;
 
 async fn create_node_with_events(
@@ -125,7 +125,7 @@ Memory transport provides weaker guarantees:
 All events are automatically versioned with schema versioning:
 
 ```rust
-use rustok_core::events::DomainEvent;
+use rustok_events::DomainEvent;
 
 // Each DomainEvent has schema_version() method
 assert_eq!(
@@ -133,6 +133,9 @@ assert_eq!(
     1
 );
 ```
+
+Prefer `rustok_events::DomainEvent` as the canonical import path. `rustok_core::events`
+re-exports the same types only as a compatibility layer for older callers.
 
 Events are persisted with:
 - `event_type`: String identifier (e.g., "node.created", "build.requested")

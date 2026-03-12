@@ -8,13 +8,15 @@ use rustok_forum::{
     CreateReplyInput, ListRepliesFilter, ReplyListItem, ReplyResponse, ReplyService,
     UpdateReplyInput,
 };
+use rustok_telemetry::metrics;
+use std::time::Instant;
 use uuid::Uuid;
 
-use crate::context::TenantContext;
 use crate::extractors::rbac::{
     RequireForumRepliesCreate, RequireForumRepliesRead, RequireForumTopicsModerate,
 };
 use crate::services::event_bus::transactional_event_bus_from_context;
+use crate::{common::RequestContext, context::TenantContext};
 
 #[utoipa::path(
     get,
@@ -34,14 +36,41 @@ pub async fn list_replies(
     State(ctx): State<AppContext>,
     tenant: TenantContext,
     RequireForumRepliesRead(user): RequireForumRepliesRead,
+    request_context: RequestContext,
     Path(topic_id): Path<Uuid>,
-    Query(filter): Query<ListRepliesFilter>,
+    Query(mut filter): Query<ListRepliesFilter>,
 ) -> Result<Json<Vec<ReplyListItem>>> {
+    filter.locale = filter.locale.or(Some(request_context.locale.clone()));
+    let requested_limit = Some(filter.per_page);
+    let effective_limit = filter.per_page.min(100);
     let service = ReplyService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
+    let list_started_at = Instant::now();
     let (replies, _) = service
-        .list_for_topic(tenant.id, user.security_context(), topic_id, filter)
+        .list_for_topic_with_locale_fallback(
+            tenant.id,
+            user.security_context(),
+            topic_id,
+            filter,
+            Some(tenant.default_locale.as_str()),
+        )
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
+    metrics::record_read_path_query(
+        "http",
+        "forum.list_replies",
+        "service_list",
+        list_started_at.elapsed().as_secs_f64(),
+        replies.len() as u64,
+    );
+
+    metrics::record_read_path_budget(
+        "http",
+        "forum.list_replies",
+        requested_limit,
+        effective_limit,
+        replies.len(),
+    );
+
     Ok(Json(replies))
 }
 
@@ -64,13 +93,16 @@ pub async fn get_reply(
     State(ctx): State<AppContext>,
     tenant: TenantContext,
     _user: RequireForumRepliesRead,
+    request_context: RequestContext,
     Path(id): Path<Uuid>,
     Query(filter): Query<ListRepliesFilter>,
 ) -> Result<Json<ReplyResponse>> {
-    let locale = filter.locale.unwrap_or_else(|| "en".to_string());
+    let locale = filter
+        .locale
+        .unwrap_or_else(|| request_context.locale.clone());
     let service = ReplyService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let reply = service
-        .get(tenant.id, id, &locale)
+        .get_with_locale_fallback(tenant.id, id, &locale, Some(tenant.default_locale.as_str()))
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(Json(reply))

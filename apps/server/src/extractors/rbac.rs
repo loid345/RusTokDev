@@ -344,6 +344,9 @@ mod tests {
             user,
             session_id: rustok_core::generate_id(),
             permissions,
+            client_id: None,
+            scopes: vec![],
+            grant_type: "direct".to_string(),
         }
     }
 

@@ -6,11 +6,14 @@ logger:
 
 server:
   binding: 0.0.0.0
+  host: http://localhost
   port: 5150
 
 database:
   uri: postgres://rustok:rustok@localhost:5432/rustok_dev
   enable_logging: true
+  connect_timeout: 500
+  idle_timeout: 500
   min_connections: 1
   max_connections: 10
   auto_migrate: true
@@ -47,10 +50,13 @@ settings:
       enabled: true
       backend: memory
       redis_key_prefix: rate-limit:v1
+      trusted_auth_dimensions: true
       requests_per_minute: 60
       burst: 10
       auth_requests_per_minute: 20
       auth_burst: 5
+      oauth_requests_per_minute: 30
+      oauth_burst: 5
     events:
       transport: memory
       relay_target: memory

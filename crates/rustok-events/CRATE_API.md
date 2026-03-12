@@ -4,19 +4,21 @@
 - Отдельные модули не экспонирует; crate делает re-export событий.
 
 ## Основные публичные типы и сигнатуры
-- `pub use rustok_core::events::{DomainEvent, EventEnvelope}`
-- `pub use rustok_core::{DomainEvent as RootDomainEvent, EventEnvelope as RootEventEnvelope}`
+- `pub use crate::{DomainEvent, EventEnvelope, EventSchema, FieldSchema}`
+- `pub use crate::{EventValidationError, ValidateEvent, event_schema, EVENT_SCHEMAS}`
+- `pub use crate::{RootDomainEvent, RootEventEnvelope}`
 
 ## События
 - Публикует: N/A (только контракты событий).
 - Потребляет: N/A.
 
 ## Зависимости от других rustok-крейтов
-- `rustok-core`
+- `rustok-telemetry`
 
 ## Частые ошибки ИИ
-- Добавляет новые типы событий прямо в `rustok-events`; source-of-truth остаётся в `rustok-core`.
-- Использует одновременно alias и base-export без необходимости.
+- Меняет payload/event-type без обновления contract tests и migration note.
+- Продолжает импортировать event-контракты из `rustok-core` вместо `rustok-events`.
+- Добавляет новые compatibility alias без архитектурной причины.
 
 ## Минимальный набор контрактов
 

@@ -147,6 +147,7 @@ pub struct NodeListItem {
     pub id: Uuid,
     pub kind: String,
     pub status: ContentStatus,
+    pub effective_locale: String,
     pub title: Option<String>,
     pub slug: Option<String>,
     pub excerpt: Option<String>,

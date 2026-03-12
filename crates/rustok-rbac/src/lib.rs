@@ -27,7 +27,13 @@ pub use services::permission_policy::{
 pub use services::casbin_model::default_casbin_model;
 pub use services::casbin_shadow_evaluator::{
     compare_casbin_shadow_decision, evaluate_casbin_shadow, evaluate_casbin_shadow_comparison,
-    permissions_for_shadow_check, CasbinShadowComparison, CasbinShadowDecision,
+    evaluate_casbin_shadow_for_mode, evaluate_casbin_shadow_result, permissions_for_shadow_check,
+    CasbinShadowComparison, CasbinShadowDecision, CasbinShadowEvaluation,
+    CasbinShadowMismatchRecord, CasbinShadowSkipReason, CasbinShadowTelemetry,
+};
+pub use services::legacy_role_resolver::{
+    invalidate_cached_legacy_role, resolve_legacy_role_with_cache, LegacyRoleCache,
+    LegacyRoleResolution, LegacyRoleStore,
 };
 pub use services::permission_resolver::{PermissionResolution, PermissionResolver};
 pub use services::relation_permission_resolver::{
@@ -39,7 +45,16 @@ pub use services::shadow_decision::{
     compare_all_permissions, compare_any_permissions, compare_shadow_decision,
     compare_single_permission, ShadowCheck, ShadowDecision,
 };
-pub use services::shadow_dual_read::{evaluate_dual_read, DualReadOutcome};
+pub use services::shadow_dual_read::{
+    evaluate_dual_read, evaluate_dual_read_for_mode, evaluate_dual_read_result, DualReadComparison,
+    DualReadEvaluation, DualReadMismatchRecord, DualReadOutcome, DualReadSkipReason,
+    DualReadTelemetry,
+};
+pub use services::shadow_runtime::{
+    evaluate_shadow_runtime_for_mode, observe_shadow_runtime, shadow_runtime_needs_legacy_role,
+    shadow_runtime_runs_casbin, ShadowRuntimeContext, ShadowRuntimeEvaluation, ShadowRuntimeInput,
+    ShadowRuntimeObserver, ShadowRuntimeTelemetry,
+};
 
 use async_trait::async_trait;
 use rustok_core::module::{HealthStatus, MigrationSource, ModuleKind, RusToKModule};
@@ -79,7 +94,6 @@ impl RusToKModule for RbacModule {
         HealthStatus::Healthy
     }
 }
-
 
 #[cfg(test)]
 mod contract_tests;

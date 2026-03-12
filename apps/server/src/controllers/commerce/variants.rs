@@ -1,20 +1,30 @@
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::StatusCode,
     Json,
 };
 use loco_rs::prelude::*;
+use rustok_telemetry::metrics;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 use rustok_commerce::dto::{CreateVariantInput, PriceInput, UpdateVariantInput, VariantResponse};
 use rustok_commerce::{entities, PricingService};
-use rustok_core::{generate_id, DomainEvent};
+use rustok_core::generate_id;
+use rustok_events::DomainEvent;
 
+use crate::common::PaginationParams;
 use crate::context::TenantContext;
 use crate::extractors::rbac::{
     RequireProductsCreate, RequireProductsDelete, RequireProductsRead, RequireProductsUpdate,
 };
 use crate::services::event_bus::transactional_event_bus_from_context;
+
+#[derive(Debug, serde::Deserialize, IntoParams, ToSchema)]
+pub struct ListVariantsParams {
+    #[serde(flatten)]
+    pub pagination: Option<PaginationParams>,
+}
 
 /// List product variants
 #[utoipa::path(
@@ -22,7 +32,8 @@ use crate::services::event_bus::transactional_event_bus_from_context;
     path = "/api/commerce/products/{product_id}/variants",
     tag = "commerce",
     params(
-        ("product_id" = Uuid, Path, description = "Product ID")
+        ("product_id" = Uuid, Path, description = "Product ID"),
+        ListVariantsParams
     ),
     responses(
         (status = 200, description = "List of variants", body = Vec<VariantResponse>),
@@ -36,9 +47,16 @@ pub(super) async fn list_variants(
     tenant: TenantContext,
     _user: RequireProductsRead,
     Path(product_id): Path<Uuid>,
+    Query(params): Query<ListVariantsParams>,
 ) -> Result<Json<Vec<VariantResponse>>> {
     use rustok_commerce::entities::{price, product_variant};
-    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder};
+    use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect};
+
+    let requested_limit = params
+        .pagination
+        .as_ref()
+        .map(|pagination| pagination.per_page);
+    let pagination = params.pagination.unwrap_or_default();
 
     let product = entities::product::Entity::find_by_id(product_id)
         .filter(entities::product::Column::TenantId.eq(tenant.id))
@@ -50,16 +68,22 @@ pub(super) async fn list_variants(
     let variants = product_variant::Entity::find()
         .filter(product_variant::Column::ProductId.eq(product.id))
         .order_by_asc(product_variant::Column::Position)
+        .offset(pagination.offset())
+        .limit(pagination.limit())
         .all(&ctx.db)
         .await
         .map_err(|err| Error::BadRequest(err.to_string()))?;
 
     let variant_ids: Vec<Uuid> = variants.iter().map(|variant| variant.id).collect();
-    let prices = price::Entity::find()
-        .filter(price::Column::VariantId.is_in(variant_ids))
-        .all(&ctx.db)
-        .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+    let prices = if variant_ids.is_empty() {
+        Vec::new()
+    } else {
+        price::Entity::find()
+            .filter(price::Column::VariantId.is_in(variant_ids))
+            .all(&ctx.db)
+            .await
+            .map_err(|err| Error::BadRequest(err.to_string()))?
+    };
 
     let mut prices_map: std::collections::HashMap<Uuid, Vec<_>> = std::collections::HashMap::new();
     for price in prices {
@@ -72,7 +96,15 @@ pub(super) async fn list_variants(
             let variant_prices = prices_map.get(&variant.id).cloned().unwrap_or_default();
             build_variant_response(variant, variant_prices)
         })
-        .collect();
+        .collect::<Vec<_>>();
+
+    metrics::record_read_path_budget(
+        "http",
+        "commerce.list_variants",
+        requested_limit,
+        pagination.limit(),
+        response.len(),
+    );
 
     Ok(Json(response))
 }

@@ -8,7 +8,8 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use rustok_core::events::ValidateEvent;
-use rustok_core::{generate_id, DomainEvent};
+use rustok_core::generate_id;
+use rustok_events::DomainEvent;
 use rustok_outbox::TransactionalEventBus;
 
 use crate::dto::PriceInput;

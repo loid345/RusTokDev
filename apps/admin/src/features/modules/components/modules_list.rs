@@ -397,7 +397,8 @@ pub fn ModulesList(
                             module.enabled = result.enabled;
                         }
                     });
-                    enabled_modules_for_toggle_async.set_module_enabled(&slug_clone, result.enabled);
+                    enabled_modules_for_toggle_async
+                        .set_module_enabled(&slug_clone, result.enabled);
                     let status = if result.enabled {
                         t_string!(i18n, modules.toast.enabled)
                     } else {

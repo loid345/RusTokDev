@@ -1,5 +1,5 @@
-use rustok_core::events::EventEnvelope;
 use rustok_core::Result;
+use rustok_events::EventEnvelope;
 
 use crate::config::SerializationFormat;
 

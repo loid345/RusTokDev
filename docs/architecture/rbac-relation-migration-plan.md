@@ -113,17 +113,29 @@
   - Для rollout-совместимости `RbacAuthzMode` поддерживает legacy toggle `RUSTOK_RBAC_RELATION_DUAL_READ_ENABLED` (aliases: `RBAC_RELATION_DUAL_READ_ENABLED`, `rbac_relation_dual_read_enabled`) (если `RUSTOK_RBAC_AUTHZ_MODE` не задан), чтобы staged cutover можно было выполнять без одномоментного переезда всех окружений на новый env-ключ.
   - Зафиксированы дополнительные migration-флаги совместимости в `RbacAuthzMode::from_env`: relation enforcement (`RUSTOK_RBAC_RELATION_ENFORCEMENT_ENABLED`, `RBAC_RELATION_ENFORCEMENT_ENABLED`, `rbac_relation_enforcement_enabled`) и временный legacy fallback (`RUSTOK_RBAC_LEGACY_ROLE_FALLBACK_ENABLED`, `RBAC_LEGACY_ROLE_FALLBACK_ENABLED`, `rbac_legacy_role_fallback_enabled`); в alias-only конфигурации enforcement имеет приоритет над fallback.
   - Legacy-vs-relation shadow decision semantics вынесены в модульный `rustok-rbac::shadow_decision`; `apps/server` оставляет только загрузку legacy-ролей, метрики и logging/feature-flag orchestration.
+  - Legacy dual-read mismatch outcome нормализован в `crates/rustok-rbac`: server-слой больше не разбирает `ShadowCheck` вручную для `rbac_decision_mismatch`, а использует модульный structured comparison/result payload.
   - Для server-adapter слоя shadow orchestration унифицирован через `ShadowCheck` + `compare_shadow_decision` (single/any/all без дублирования policy-веток в `AuthService`).
   - В `rustok-rbac` добавлен модульный dual-read orchestrator `evaluate_dual_read` (`DualReadOutcome`), поэтому `apps/server` больше не держит локальную decision-ветвистость для `skip/compare` и использует модульный исход dual-read-решения.
+  - Shadow helper-API поднят ещё на уровень выше: `apps/server` использует модульные `evaluate_dual_read_result` / `evaluate_casbin_shadow_result`, а не работает напрямую с comparison-объектами и их внутренней структурой.
+  - Shadow runtime metadata для observability также выведена в `crates/rustok-rbac`: evaluation-объекты возвращают telemetry deltas для mismatch/engine-decision counters, а server применяет их как adapter, не определяя локально правила инкрементов.
+  - Mode-aware skip semantics для shadow-path теперь также описаны модулем: `rustok-rbac` различает `mode disabled` и `user not found`, а server использует этот результат без локальной реконструкции причин skip.
+  - Shadow orchestration для dual-read и Casbin теперь сведён в единый module-first runtime helper `evaluate_shadow_runtime_for_mode`: `AuthService` вызывает одну модульную точку входа, а в server остаются только infra-dependent шаги (`legacy role` lookup, latency measurement, metrics/log adapter).
+  - Применение shadow observability также поднято на модульный уровень через `observe_shadow_runtime` + `ShadowRuntimeObserver`: `AuthService` больше не знает shape telemetry/mismatch dispatch и реализует только тонкий adapter для server-specific metrics и structured logs.
+  - Legacy role lookup для dual-read тоже перенесён на модульный контракт `resolve_legacy_role_with_cache` (`LegacyRoleStore` + `LegacyRoleCache`): в server остались только SeaORM/Moka adapters, а локальная cache/load orchestration из `AuthService` удалена.
+  - Оставшийся server-only wiring вынесен из `AuthService` в `apps/server::services::rbac_runtime`: там теперь живут Moka/SeaORM adapters, `RuntimePermissionResolver` assembly и server observer для shadow runtime, а `AuthService` использует этот слой как thin runtime boundary.
+  - Хранилище RBAC runtime-метрик (`RbacResolverMetricsSnapshot` + counters) также перенесено в `apps/server::services::rbac_runtime`; `AuthService` сохраняет только стабильный facade API (`metrics_snapshot`, `record_*`) для controllers/extractors/tests.
+  - Shadow compare orchestration server-side тоже переведён в `apps/server::services::rbac_runtime::compare_shadow_runtime`: `AuthService` больше не собирает local shadow pipeline и лишь делегирует runtime boundary.
+  - Public server-side RBAC facade вынесен в `apps/server::services::rbac_service`, а store-oriented relation write-path (`assign/replace/remove role assignments`, `get_or_create role/permission`) — в `apps/server::services::rbac_persistence`; `apps/server::services::auth` сведён к compatibility alias на `RbacService` и больше не владеет ни runtime-, ни persistence-оркестрацией.
   - В warning-логе `rbac_decision_mismatch` добавлен стабильный тег `shadow_check` (`single|any|all`) для более точной сегментации dual-read mismatch в observability.
   - При расхождении relation-vs-legacy-role увеличивается `rustok_rbac_decision_mismatch_total` и пишется warning-лог `rbac_decision_mismatch`; ошибки самого shadow-path отдельно учитываются в `rustok_rbac_shadow_compare_failures_total`.
-  - Для снижения накладных расходов dual-read legacy role lookup покрыт in-memory TTL-кэшем в `AuthService`.
+  - Для снижения накладных расходов dual-read legacy role lookup покрыт in-memory TTL-кэшем в `apps/server::services::rbac_runtime`.
   - Shadow-сравнение выполняется fail-open: ошибки shadow path логируются и не влияют на авторитативное relation-based allow/deny решение.
   - Добавлен cutover baseline helper `scripts/rbac_cutover_baseline.sh`: скрипт снимает серию `/metrics` snapshot'ов, считает deltas по `rustok_rbac_decision_mismatch_total`/`rustok_rbac_shadow_compare_failures_total`/`rustok_rbac_permission_checks_{allowed,denied}`, формирует markdown+json отчёт в `artifacts/rbac-cutover` и по умолчанию включает strict gate (`mismatch_delta == 0`) для dual-read окна наблюдения.
   - В baseline helper добавлены дополнительные stop-the-line guardrails: обязательный минимальный объём decision-трафика в окне (`--min-decision-delta`, default `1`) и fail-fast при обнаружении reset-а счётчиков (уменьшение counter-метрик между последовательными samples). Для аудита и post-mortem helper по умолчанию сохраняет raw `/metrics` snapshots по всем sample-точкам (`rbac_cutover_samples_*`), с опциональным отключением через `--no-save-samples`.
   - Для более строгого dual-read gate baseline helper теперь также по умолчанию требует `shadow_compare_failures_delta == 0`; для controlled troubleshooting-окон доступен явный override-флаг `--allow-shadow-failures`.
   - Добавлены тесты helper'а (`scripts/tests/rbac_cutover_baseline_test.sh` + smoke `scripts/test_rbac_cutover_baseline.sh`) с mocked curl-path (`RUSTOK_CURL_BIN`) для проверки mismatch-gate и генерации baseline артефактов.
   - Добавлен gate helper `scripts/rbac_cutover_gate.sh` для финальной проверки обязательных артефактов (timestamp-consistent staging bundle: pre/dry-run/apply/rollback/post-rollback + timestamp-consistent cutover baseline md/json + auth release gate report; helper поддерживает pinning конкретного bundle через `--stage-ts`/`--cutover-ts` (формат: `YYYYMMDDTHHMMSSZ`) и fail-fast в случае `gate_status != pass`, ненулевых `mismatch_delta/shadow_compare_failures_delta` или ненулевых post-rollback инвариантов (`users_without_roles_total`, `orphan_user_roles_total`, `orphan_role_permissions_total`); helper покрыт тестами (`scripts/tests/rbac_cutover_gate_test.sh` + smoke `scripts/test_rbac_cutover_gate.sh`).
+  - Casbin shadow mismatch payload нормализован в `crates/rustok-rbac`: server-слой больше не собирает вручную checked-permission records для `rbac_engine_mismatch`, а использует модульный structured outcome поверх уже резолвленных relation permissions.
   - Принят ADR финального relation-only cutover с обязательным rollback-gate и привязкой к auth parity release-gate: `DECISIONS/2026-03-05-rbac-relation-only-final-cutover-gate.md`.
 - [ ] **Фаза 6 — Cleanup legacy-модели:** не начато.
 
@@ -154,7 +166,7 @@
 
 - Фазы 1–3 считаются завершёнными при текущем состоянии runtime:
   - user lifecycle-потоки и dev seed назначают relation RBAC (`user_roles`/`role_permissions`) при создании/обновлении пользователя;
-  - централизованные permission checks идут через `AuthService` resolver (tenant-aware, wildcard, cache + metrics);
+  - централизованные permission checks идут через `RbacService` facade (tenant-aware, wildcard, cache + metrics), а `services::auth` при необходимости остаётся только compatibility alias;
   - `CurrentUser.permissions` и `AuthContext.permissions` резолвятся из relation-модели;
   - claim role mismatch учитывается только как observability/shadow-сигнал и не определяет access decision.
 
@@ -569,12 +581,14 @@
 
 ### 12.3 Post-cutover окно наблюдения
 
-- Рекомендуемое окно: 7–14 дней.
-- Ежедневная сверка:
-  - `rbac_decision_mismatch_total`
-  - denied/error rate
-  - latency p95/p99
-  - tenant-specific anomalies
+- Для relation-only cutover: рекомендуемое окно 7–14 дней.
+- Для Casbin active switch: используем более строгий operational flow из разделов 27–29 (день переключения, stabilization window, closeout).
+- Ежедневная сверка в любом режиме:
+  - `rbac_decision_mismatch_total` или `rbac_engine_mismatch_total` для активного сценария миграции,
+  - denied/error rate,
+  - latency p95/p99,
+  - tenant-specific anomalies,
+  - открытые incident/RCA, связанные с authorization path.
 
 ---
 
@@ -806,64 +820,35 @@
 2. `engine_mode`: `relation-active/casbin-shadow` или `casbin-active/relation-fallback`.
 3. `parity`: mismatch summary + ссылка на артефакт (`artifacts/rbac-cutover/*`).
 4. `gate_decision`: `go/no-go/n-a` и краткая причина.
+5. `closeout_status`: `in-progress/blocked/ready-to-close/closed`.
 
 Рекомендуемый формат записи в PR:
 
-`RBAC-CASBIN-UPDATE: phase=<C0..C5>; engine_mode=<...>; parity=<artifact>; gate=<go|no-go|n-a>`
+`RBAC-CASBIN-UPDATE: phase=<C0..C5>; engine_mode=<...>; parity=<artifact>; gate=<go|no-go|n-a>; closeout=<in-progress|blocked|ready-to-close|closed>`
+
+Если этап = `C4` или `C5`, запись обязана ссылаться на operational evidence:
+
+- `switch-log.md` / `smoke-check.md` для C4,
+- `closeout-summary.md` / `rollback-retirement.md` для C5 или финального закрытия.
 
 ---
 
 ## 17. Продолжение реализации: ближайшие deliverables (next PR queue)
 
-Чтобы «продолжить реализацию» без расползания scope, фиксируем очередь следующих PR с чётким DoD.
+Этот раздел больше не ведёт отдельную очередь PR, чтобы не дублировать sections 23 и 24.
+Канонический operational backlog:
 
-### 17.1 PR-1 (C0): Casbin ADR + модель
+- архитектурная и фазовая модель Casbin-track: section 15.4,
+- обязательный PR-порядок и артефакты: section 23,
+- пошаговый execution checklist на ближайшую неделю: section 24.
 
-**Что делаем:**
-- оформить ADR для Casbin-track (engine role, adapter choice, rollback, SLO-gates),
-- зафиксировать `model.conf` (или кодовый эквивалент) для tenant-aware matcher,
-- добавить ссылку на ADR в раздел 11.1 (MVP execution board) и в раздел 15.2.
+Назначение section 17 теперь только навигационное:
 
-**DoD PR-1:**
-- ADR принят,
-- matcher покрывает wildcard + tenant domain,
-- rollback-путь явно описан и совместим с текущим runbook.
+1. Если нужен **следующий PR по смыслу**, смотреть section 23.
+2. Если нужен **конкретный порядок действий по дням**, смотреть section 24.
+3. Если нужен **DoD конкретного Casbin-этапа**, смотреть sections 15.4 и 15.6.
 
-### 17.2 PR-2 (C1): Shadow wiring в `crates/rustok-rbac`
-
-**Что делаем:**
-- подключить Casbin-resolver за feature flag без изменения active decision path,
-- добавить structured-логи mismatch (с tenant/user/resource/action),
-- добавить метрики из раздела 15.4 (C1).
-
-**DoD PR-2:**
-- active engine в production остаётся relation,
-- shadow path не ломает fail-closed semantics,
-- метрики/логи доступны на dashboard и в алертах.
-
-### 17.3 PR-3 (C2): Staging parity report
-
-**Что делаем:**
-- прогоняем regression matrix + policy-fixtures,
-- собираем parity/perf отчёты в `artifacts/rbac-cutover/<date>/...`,
-- фиксируем go/no-go запись по этапу C2.
-
-**DoD PR-3:**
-- `engine_mismatch == 0` в окне наблюдения staging,
-- p95/p99 укладываются в согласованный порог,
-- отчёт приложен и ссылается на конкретные артефакты.
-
-### 17.4 PR-4 (C3/C4): Production dual-engine -> switch
-
-**Что делаем:**
-- открываем production dual-engine окно (Casbin shadow),
-- при соблюдении gate переводим Casbin в active mode,
-- relation оставляем только как rollback fallback на stabilization window.
-
-**DoD PR-4:**
-- формально закрыты gate из разделов 12.1 и 15.6,
-- on-call подтверждает отсутствие SLO-регрессии,
-- запись `RBAC-CASBIN-UPDATE` заполнена полностью.
+Правило консистентности: при любом расхождении между старым описанием deliverables и section 23/24 источником истины считается section 23/24.
 
 ---
 
@@ -882,45 +867,29 @@
 
 ## 19. Детализация ближайшего цикла (execution slice на 2 недели)
 
-Чтобы зафиксировать конкретный «следующий шаг», без расширения scope beyond MVP, вводим короткий execution slice.
+Этот раздел переведён в режим краткого executive-summary, чтобы не дублировать section 23.
 
-### 19.1 Цель цикла
+### 19.1 Цель текущего цикла
 
-Закрыть подготовку к C1/C2 без переключения active engine:
+Закрыть только подготовку C0 → C2:
 
-- завершить PR-1 (Casbin ADR + финальная модель),
-- поднять shadow wiring в `crates/rustok-rbac` (PR-2),
-- собрать staging parity baseline для go/no-go по C2 (PR-3 prep).
+- ADR и freeze policy contract,
+- shadow wiring без смены active engine,
+- staging parity baseline и формальный gate.
 
-### 19.2 Scope в цикле (что делаем)
-
-1. Оформляем и принимаем Casbin ADR с точным описанием:
-   - matcher semantics,
-   - rollout/rollback режимов,
-   - SLO-гейтов для switch decision.
-2. Подключаем `CasbinPermissionResolver` в shadow-mode:
-   - relation остаётся active decision path,
-   - mismatch и latency пишутся в метрики,
-   - fail-closed поведение не меняется.
-3. Готовим staging parity прогон:
-   - policy-fixtures для системных ролей,
-   - negative/tenant-isolation сценарии,
-   - экспорт отчётов в `artifacts/rbac-cutover/<date>/`.
-
-### 19.3 Scope вне цикла (что не делаем)
+### 19.2 Что считаем границей scope
 
 - Не включаем `casbin_only` в production.
 - Не удаляем relation fallback.
-- Не расширяем матрицу прав beyond уже согласованных системных ролей.
+- Не расширяем permission matrix вне уже согласованных системных ролей.
 
-### 19.4 DoD цикла
+### 19.3 Где лежит исполнимый план
 
-Цикл считается завершённым только если одновременно выполнено всё:
+- PR-последовательность и выходные артефакты: section 23.
+- Понедельный/подневный operational checklist: section 24.
+- Gate и пороги приёмки: section 22.
 
-1. Принят ADR Casbin-track и добавлена cross-ссылка в этот план.
-2. В staging есть mismatch/latency артефакты shadow-режима (минимум за 24ч окно).
-3. `engine_mismatch_total` документирован в отчёте (ожидаемо: `0`, либо явный список расхождений с RCA).
-4. Выпущено go/no-go решение по переходу к C3 (production dual-engine).
+Если section 19 начинает расходиться с этими разделами, section 19 сокращается или удаляется, а не становится ещё одним источником истины.
 
 ---
 
@@ -953,10 +922,12 @@ RBAC-WEEKLY-STATUS:
 - data_health: <users_without_roles=...; orphan_user_roles=...; orphan_role_permissions=...>
 - decision_health: <mismatch=...; deny_rate=...; latency_p95=...; latency_p99=...>
 - gate_decision: <go|no-go|n-a>
+- closeout_status: <in-progress|blocked|ready-to-close|closed>
 - links:
   - artifacts: <path>
   - report: <path>
   - incident_or_rca: <path|n-a>
+  - closeout_bundle: <path|n-a>
 ```
 
 ### 21.1 Минимальные требования к weekly-апдейту
@@ -964,6 +935,7 @@ RBAC-WEEKLY-STATUS:
 1. Числовые поля (`data_health`, `decision_health`) должны быть фактическими, не `TBD`.
 2. Любой `no-go` обязан иметь причину + corrective action owner.
 3. Любой `go` обязан ссылаться на артефакты из раздела 13.5.
+4. Статус `ready-to-close` или `closed` допустим только при наличии closeout-артефактов из раздела 29.
 
 ### 21.2 Правило консистентности документа
 
@@ -971,7 +943,8 @@ RBAC-WEEKLY-STATUS:
 
 - section 0 (progress tracker),
 - section 11.1 (MVP execution board),
-- section 16 (Casbin migration status).
+- section 16 (Casbin migration status),
+- при closeout-фазе: section 29 и section 30.
 
 Это предотвращает рассинхрон между «оперативным» и «архитектурным» статусом.
 
@@ -1185,3 +1158,179 @@ C3 можно открывать только если одновременно 
 ```
 
 Этот шаблон обязателен для C2/C3/C4, чтобы исключить несопоставимые форматы решений между релизными окнами.
+
+---
+
+## 27. Операционный чеклист дня переключения (C4)
+
+Этот раздел нужен, чтобы переключение active engine не оставалось «устным знанием» между platform, on-call и release manager.
+
+### 27.1 Перед переключением (T-30 → T-0)
+
+1. Подтвердить, что выполнены все пункты раздела 25 (`Definition of Ready`).
+2. Заморозить изменения policy semantics на время релизного окна:
+   - не мержить изменения permission naming,
+   - не мержить новые системные роли,
+   - не менять matcher и feature-flags вне согласованного diff.
+3. Снять pre-switch snapshot:
+   - активный `engine_mode`,
+   - текущие значения `engine_mismatch_total`, `401/403_rate`, `latency_p95/p99`,
+   - ссылка на актуальный `gate-decision.md`.
+4. Проверить rollback-readiness:
+   - relation fallback включаемым флагом доступен,
+   - on-call знает порядок отката,
+   - incident commander назначен и присутствует в окне.
+
+### 27.2 Момент переключения (T0)
+
+1. Перевести active engine на Casbin только через согласованный feature-flag (`rbac_casbin_enforcement_enabled` или его финальный alias из ADR).
+2. Зафиксировать в релизной записи:
+   - точное время переключения,
+   - кто выполнил действие,
+   - какой commit / deploy revision активен,
+   - какой fallback-флаг остаётся доступным.
+3. Немедленно проверить smoke-path:
+   - admin/superadmin access,
+   - один tenant-scoped allow сценарий,
+   - один deny-by-default сценарий,
+   - один cross-tenant denial сценарий.
+
+### 27.3 После переключения (T+15 → T+120)
+
+1. Каждые 15 минут в первые 2 часа сверять:
+   - `401/403_rate_delta`,
+   - `latency_p95_delta`,
+   - `latency_p99_delta`,
+   - аномалии `deny_reason`.
+2. Любой новый mismatch или всплеск deny-rate фиксировать как incident candidate, а не как «позже разберём».
+3. Если выполняется любое stop-the-line условие из раздела 12.2, переключение автоматически считается неуспешным и запускается rollback.
+
+### 27.4 Обязательные артефакты C4
+
+- `artifacts/rbac-cutover/<date>/switch-log.md`
+- `artifacts/rbac-cutover/<date>/metrics-pre-switch.json`
+- `artifacts/rbac-cutover/<date>/metrics-post-switch.json`
+- `artifacts/rbac-cutover/<date>/smoke-check.md`
+
+Без этого пакета C4 нельзя считать завершённым даже при визуально «тихом» релизе.
+
+---
+
+## 28. Окно стабилизации и снятие fallback (C4 → C5)
+
+После production switch работа не заканчивается: до удаления relation fallback требуется отдельное окно стабилизации.
+
+### 28.1 Минимальная длительность окна
+
+1. Первые 24 часа: усиленный мониторинг и запрет на несвязанные RBAC-изменения.
+2. Первые 72 часа: сравнение SLO с pre-switch baseline по разделу 22.3.
+3. Полное закрытие окна стабилизации: не ранее чем через 7 календарных дней без P0/P1-инцидентов, связанных с authorization path.
+
+### 28.2 Что считаем успешной стабилизацией
+
+- `engine_mismatch_total == 0` в согласованном post-switch окне,
+- нет необъяснённого роста `401/403_rate_delta`,
+- нет деградации `latency_p95/p99` сверх порогов раздела 22.3,
+- on-call не держит открытых incident/RCA по active Casbin path,
+- fallback включается только как проверенный emergency path, но ни разу не потребовался в проде.
+
+### 28.3 Когда можно удалять relation fallback
+
+Удаление fallback разрешено только если одновременно:
+
+1. C4 закрыт с артефактами из раздела 27.4.
+2. Окно стабилизации прошло без stop-the-line событий.
+3. Подготовлен cleanup PR с явным списком удаляемых feature-flags, code paths и dashboard panels.
+4. Обновлены `docs/architecture/rbac.md`, runbook и onboarding-материалы под steady-state режим.
+
+Если хотя бы один пункт не выполнен, статус C5 остаётся `blocked`, даже если Casbin уже active.
+
+---
+
+## 29. Финальные артефакты и синхронизация документации
+
+Чтобы завершение плана было проверяемым, а не «по ощущению», фиксируем обязательный пакет closeout-артефактов.
+
+### 29.1 Минимальный пакет closeout-артефактов
+
+- `artifacts/rbac-cutover/<date>/closeout-summary.md`
+- `artifacts/rbac-cutover/<date>/final-metrics.json`
+- `artifacts/rbac-cutover/<date>/final-gate-decision.md`
+- `artifacts/rbac-cutover/<date>/rollback-retirement.md`
+
+### 29.2 Обязательная синхронизация документов
+
+После завершения relation-only или Casbin closeout необходимо синхронно обновить:
+
+1. section 0 (`progress tracker`) — статус фаз 4/5/6 и, если релевантно, C0–C5.
+2. section 11.1 (`MVP execution board`) — все блокеры закрыты либо переведены в отдельный backlog.
+3. section 16 (`RBAC-CASBIN-UPDATE`) — финальный `phase`, `engine_mode`, `gate`.
+4. `docs/architecture/rbac.md` — steady-state enforcement flow без временных переходных оговорок.
+5. ADR/решение о судьбе `users.role` — удаление, derived-only режим или явная legacy-совместимость.
+
+### 29.3 Правило на финальный PR
+
+Финальный PR закрытия плана не должен одновременно:
+
+- менять policy semantics,
+- вводить новые роли/permissions,
+- выполнять cleanup legacy-path,
+- переписывать observability-схему.
+
+Closeout PR должен быть «узким»: только закрытие перехода и синхронизация steady-state документации.
+
+---
+
+## 30. Когда этот план считается формально закрытым
+
+У этого документа два допустимых финальных состояния. Это сделано специально, чтобы relation-migration не оставалась заложником Casbin-track, если platform-команда примет решение отложить engine switch отдельным ADR.
+
+### 30.1 Вариант A — relation-only steady-state
+
+План можно закрыть без C4/C5 Casbin-track, если одновременно:
+
+1. Фазы 4, 5 и 6 relation-migration завершены.
+2. `users.role` исключён из runtime authorization path.
+3. Все MVP-блокеры из section 11.1 закрыты.
+4. В ADR или weekly status явно зафиксировано, что Casbin вынесен в post-MVP / отдельный roadmap.
+5. `docs/architecture/rbac.md` и runbook описывают relation-only steady-state как актуальную продовую модель.
+
+### 30.2 Вариант B — Casbin steady-state
+
+План можно закрыть с полным завершением Casbin-track, если одновременно:
+
+1. Выполнены C0–C5.
+2. Casbin является единственным active engine.
+3. Relation fallback удалён из production path.
+4. Все временные feature-flags shadow/fallback удалены или переведены в deprecated state с датой удаления.
+5. Финальные артефакты из раздела 29 сохранены и доступны для аудита.
+
+### 30.3 Обязательная запись о закрытии
+
+При любом варианте закрытия в документе должна появиться финальная запись формата:
+
+```text
+RBAC-PLAN-CLOSEOUT:
+- date: <YYYY-MM-DD>
+- final_state: <relation-only-steady-state|casbin-steady-state>
+- decision_ref: <ADR|gate-decision|weekly-status>
+- owner: <team/role>
+- rollback_status: <retired|kept-for-emergency-window|n-a>
+```
+
+Без этой записи документ остаётся в статусе `In progress`, даже если код уже выглядит завершённым.
+
+---
+
+## 31. Режим сопровождения после закрытия
+
+После закрытия этот документ больше не используется как weekly execution board. Дальше действуют простые правила:
+
+1. Операционные статусы переезжают в runbook/release-notes, а не продолжают накапливаться здесь.
+2. Новые engine-изменения фиксируются новым ADR или отдельным implementation plan, а не «дописываются сбоку» в закрытый migration-план.
+3. Изменения в этом файле после closeout допустимы только для:
+   - ссылок на финальные артефакты,
+   - пометки `archived`/`deprecated`,
+   - исправления фактических неточностей.
+
+Это ограничение защищает документ от повторного разрастания и сохраняет его как проверяемую историю migration-решения.

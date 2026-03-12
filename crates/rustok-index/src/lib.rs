@@ -13,7 +13,7 @@ pub mod search;
 pub mod traits;
 
 pub use error::{IndexError, IndexResult};
-pub use traits::{Indexer, IndexerContext, LocaleIndexer};
+pub use traits::{Indexer, IndexerContext, IndexerRuntimeConfig, LocaleIndexer};
 
 pub struct IndexModule;
 
@@ -45,7 +45,6 @@ impl MigrationSource for IndexModule {
         Vec::new()
     }
 }
-
 
 #[cfg(test)]
 mod contract_tests;

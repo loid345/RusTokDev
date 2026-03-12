@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::context::AuthContext;
 use crate::graphql::errors::GraphQLError;
-use crate::services::auth::AuthService;
+use crate::services::rbac_service::RbacService;
 use rustok_blog::{PostService, UpdatePostInput as DomainUpdatePostInput};
 use rustok_core::Permission;
 use rustok_outbox::TransactionalEventBus;
@@ -28,7 +28,7 @@ impl BlogMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
 
-        let has_perm = AuthService::has_any_permission(
+        let has_perm = RbacService::has_any_permission(
             db,
             &tenant_id,
             &auth.user_id,
@@ -65,7 +65,7 @@ impl BlogMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
 
-        let has_perm = AuthService::has_any_permission(
+        let has_perm = RbacService::has_any_permission(
             db,
             &tenant_id,
             &auth.user_id,
@@ -114,7 +114,7 @@ impl BlogMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
 
-        let has_perm = AuthService::has_any_permission(
+        let has_perm = RbacService::has_any_permission(
             db,
             &tenant_id,
             &auth.user_id,
@@ -143,7 +143,7 @@ impl BlogMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
 
-        let has_perm = AuthService::has_any_permission(
+        let has_perm = RbacService::has_any_permission(
             db,
             &tenant_id,
             &auth.user_id,
@@ -175,7 +175,7 @@ impl BlogMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
 
-        let has_perm = AuthService::has_any_permission(
+        let has_perm = RbacService::has_any_permission(
             db,
             &tenant_id,
             &auth.user_id,
@@ -213,7 +213,7 @@ impl BlogMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
 
-        let has_perm = AuthService::has_any_permission(
+        let has_perm = RbacService::has_any_permission(
             db,
             &tenant_id,
             &auth.user_id,

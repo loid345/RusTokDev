@@ -7,7 +7,7 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use rustok_core::events::ValidateEvent;
-use rustok_core::DomainEvent;
+use rustok_events::DomainEvent;
 use rustok_outbox::TransactionalEventBus;
 
 use crate::dto::AdjustInventoryInput;

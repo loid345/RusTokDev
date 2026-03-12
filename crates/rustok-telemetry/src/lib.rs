@@ -244,6 +244,5 @@ pub fn current_trace_id() -> Option<String> {
     span.id().map(|id| id.into_u64().to_string())
 }
 
-
 #[cfg(test)]
 mod contract_tests;

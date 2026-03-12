@@ -1,9 +1,15 @@
 use async_graphql::{Context, Object, Result};
-use sea_orm::{ColumnTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect};
+use rustok_telemetry::metrics;
+use sea_orm::{
+    ColumnTrait, ConnectionTrait, EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect,
+};
 use uuid::Uuid;
 
 use rustok_commerce::CatalogService;
 use rustok_outbox::TransactionalEventBus;
+
+use crate::graphql::common::resolve_graphql_locale;
+use crate::services::product_search::product_translation_title_search_condition;
 
 use super::types::*;
 
@@ -21,7 +27,7 @@ impl CommerceQuery {
     ) -> Result<Option<GqlProduct>> {
         let db = ctx.data::<sea_orm::DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
-        let locale = locale.unwrap_or_else(|| "en".to_string());
+        let locale = resolve_graphql_locale(ctx, locale.as_deref());
 
         let service = CatalogService::new(db.clone(), event_bus.clone());
         let product = match service.get_product(tenant_id, id).await {
@@ -52,7 +58,7 @@ impl CommerceQuery {
         filter: Option<ProductsFilter>,
     ) -> Result<GqlProductList> {
         let db = ctx.data::<sea_orm::DatabaseConnection>()?;
-        let locale = locale.unwrap_or_else(|| "en".to_string());
+        let locale = resolve_graphql_locale(ctx, locale.as_deref());
         let filter = filter.unwrap_or(ProductsFilter {
             status: None,
             vendor: None,
@@ -60,6 +66,7 @@ impl CommerceQuery {
             page: Some(1),
             per_page: Some(20),
         });
+        let requested_limit = filter.per_page.map(|value| value.max(0) as u64);
 
         use rustok_commerce::entities::{product, product_translation};
 
@@ -78,26 +85,11 @@ impl CommerceQuery {
         }
 
         if let Some(search) = &filter.search {
-            let search_ids: Vec<Uuid> = product_translation::Entity::find()
-                .filter(product_translation::Column::Locale.eq(&locale))
-                .filter(product_translation::Column::Title.contains(search))
-                .all(db)
-                .await?
-                .into_iter()
-                .map(|translation| translation.product_id)
-                .collect();
-
-            if search_ids.is_empty() {
-                return Ok(GqlProductList {
-                    items: Vec::new(),
-                    total: 0,
-                    page,
-                    per_page,
-                    has_next: false,
-                });
-            }
-
-            query = query.filter(product::Column::Id.is_in(search_ids));
+            query = query.filter(product_translation_title_search_condition(
+                db.get_database_backend(),
+                &locale,
+                search,
+            ));
         }
 
         let total = query.clone().count(db).await?;
@@ -137,7 +129,15 @@ impl CommerceQuery {
                     created_at: product.created_at.to_rfc3339(),
                 }
             })
-            .collect();
+            .collect::<Vec<_>>();
+
+        metrics::record_read_path_budget(
+            "graphql",
+            "commerce.products",
+            requested_limit,
+            per_page,
+            items.len(),
+        );
 
         Ok(GqlProductList {
             items,

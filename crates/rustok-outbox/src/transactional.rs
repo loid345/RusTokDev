@@ -1,6 +1,7 @@
 use crate::transport::OutboxTransport;
-use rustok_core::events::{DomainEvent, EventEnvelope, EventTransport, ValidateEvent};
+use rustok_core::events::EventTransport;
 use rustok_core::Result;
+use rustok_events::{DomainEvent, EventEnvelope, ValidateEvent};
 use sea_orm::ConnectionTrait;
 use std::sync::Arc;
 use uuid::Uuid;

@@ -8,4 +8,10 @@ description = "Shared event contracts for RusToK"
 repository.workspace = true
 
 [dependencies]
-rustok-core = { workspace = true }
+chrono.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+ulid.workspace = true
+uuid.workspace = true
+rustok-telemetry.workspace = true

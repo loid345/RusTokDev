@@ -7,10 +7,12 @@ use loco_rs::task::Tasks;
 
 mod cleanup;
 mod create_oauth_app;
+mod db_baseline;
 
 /// Register all available tasks
 pub fn register(tasks: &mut Tasks) {
     // Maintenance tasks
     tasks.register(cleanup::CleanupTask);
     tasks.register(create_oauth_app::CreateOAuthAppTask);
+    tasks.register(db_baseline::DbBaselineTask);
 }

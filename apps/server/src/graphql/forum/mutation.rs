@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::context::AuthContext;
 use crate::graphql::errors::GraphQLError;
-use crate::services::auth::AuthService;
+use crate::services::rbac_service::RbacService;
 use rustok_core::{Permission, CONTENT_FORMAT_MARKDOWN};
 use rustok_forum::{CategoryService, ReplyService, TopicService};
 use rustok_outbox::TransactionalEventBus;
@@ -28,7 +28,7 @@ impl ForumMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
 
-        let has_perm = AuthService::has_any_permission(
+        let has_perm = RbacService::has_any_permission(
             db,
             &tenant_id,
             &auth.user_id,
@@ -65,6 +65,7 @@ impl ForumMutation {
 
         Ok(GqlForumTopic {
             id: topic.id,
+            requested_locale: topic.requested_locale,
             locale: topic.locale,
             effective_locale: topic.effective_locale,
             category_id: topic.category_id,
@@ -95,7 +96,7 @@ impl ForumMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
 
-        let has_perm = AuthService::has_any_permission(
+        let has_perm = RbacService::has_any_permission(
             db,
             &tenant_id,
             &auth.user_id,
@@ -130,6 +131,7 @@ impl ForumMutation {
 
         Ok(GqlForumTopic {
             id: topic.id,
+            requested_locale: topic.requested_locale,
             locale: topic.locale,
             effective_locale: topic.effective_locale,
             category_id: topic.category_id,
@@ -159,7 +161,7 @@ impl ForumMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
 
-        let has_perm = AuthService::has_any_permission(
+        let has_perm = RbacService::has_any_permission(
             db,
             &tenant_id,
             &auth.user_id,
@@ -197,7 +199,7 @@ impl ForumMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
 
-        let has_perm = AuthService::has_any_permission(
+        let has_perm = RbacService::has_any_permission(
             db,
             &tenant_id,
             &auth.user_id,
@@ -233,6 +235,7 @@ impl ForumMutation {
 
         Ok(GqlForumReply {
             id: reply.id,
+            requested_locale: reply.requested_locale,
             locale: reply.locale,
             effective_locale: reply.effective_locale,
             topic_id: reply.topic_id,
@@ -257,7 +260,7 @@ impl ForumMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
 
-        let has_perm = AuthService::has_any_permission(
+        let has_perm = RbacService::has_any_permission(
             db,
             &tenant_id,
             &auth.user_id,
@@ -293,6 +296,7 @@ impl ForumMutation {
 
         Ok(GqlForumCategory {
             id: category.id,
+            requested_locale: category.requested_locale,
             locale: category.locale,
             effective_locale: category.effective_locale,
             name: category.name,

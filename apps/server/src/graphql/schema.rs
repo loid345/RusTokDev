@@ -53,6 +53,9 @@ pub struct Subscription(BuildSubscription);
 
 pub type AppSchema = Schema<Query, Mutation, Subscription>;
 
+#[derive(Clone)]
+pub struct SharedGraphqlSchema(pub Arc<AppSchema>);
+
 pub fn build_schema(
     db: DatabaseConnection,
     event_bus: EventBus,

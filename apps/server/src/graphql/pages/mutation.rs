@@ -10,7 +10,7 @@ use rustok_pages::{
 
 use crate::context::AuthContext;
 use crate::graphql::errors::GraphQLError;
-use crate::services::auth::AuthService;
+use crate::services::rbac_service::RbacService;
 use rustok_core::Permission;
 
 use super::types::*;
@@ -32,7 +32,7 @@ impl PagesMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
 
-        let has_perm = AuthService::has_any_permission(
+        let has_perm = RbacService::has_any_permission(
             db,
             &tenant_id,
             &auth.user_id,
@@ -103,7 +103,7 @@ impl PagesMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
 
-        let has_perm = AuthService::has_any_permission(
+        let has_perm = RbacService::has_any_permission(
             db,
             &tenant_id,
             &auth.user_id,
@@ -161,7 +161,7 @@ impl PagesMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
 
-        let has_perm = AuthService::has_any_permission(
+        let has_perm = RbacService::has_any_permission(
             db,
             &tenant_id,
             &auth.user_id,
@@ -198,7 +198,7 @@ impl PagesMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
 
-        let has_perm = AuthService::has_any_permission(
+        let has_perm = RbacService::has_any_permission(
             db,
             &tenant_id,
             &auth.user_id,
@@ -230,7 +230,7 @@ impl PagesMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
 
-        let has_perm = AuthService::has_any_permission(
+        let has_perm = RbacService::has_any_permission(
             db,
             &tenant_id,
             &auth.user_id,
@@ -371,7 +371,7 @@ async fn ensure_pages_permission(
     user_id: &Uuid,
     permission: Permission,
 ) -> Result<()> {
-    let has_perm = AuthService::has_any_permission(
+    let has_perm = RbacService::has_any_permission(
         db,
         tenant_id,
         user_id,

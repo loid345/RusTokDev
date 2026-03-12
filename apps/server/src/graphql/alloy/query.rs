@@ -1,4 +1,5 @@
 use async_graphql::{Context, Object, Result};
+use rustok_telemetry::metrics;
 use uuid::Uuid;
 
 use alloy_scripting::storage::ScriptQuery;
@@ -22,6 +23,7 @@ impl AlloyQuery {
     ) -> Result<GqlScriptConnection> {
         require_admin(ctx).await?;
         let state = ctx.data::<AlloyState>()?;
+        let requested_limit = pagination.requested_limit();
         let query = match status {
             Some(status) => ScriptQuery::ByStatus(status.into()),
             None => ScriptQuery::All,
@@ -34,7 +36,19 @@ impl AlloyQuery {
             .await
             .map_err(|err| async_graphql::Error::new(err.to_string()))?;
 
-        let items = page.items.into_iter().map(GqlScript::from).collect();
+        let items = page
+            .items
+            .into_iter()
+            .map(GqlScript::from)
+            .collect::<Vec<_>>();
+
+        metrics::record_read_path_budget(
+            "graphql",
+            "alloy.scripts",
+            Some(requested_limit),
+            limit as u64,
+            items.len(),
+        );
 
         Ok(GqlScriptConnection {
             items,
@@ -65,18 +79,38 @@ impl AlloyQuery {
         ctx: &Context<'_>,
         entity_type: String,
         event: GqlEventType,
+        limit: Option<i32>,
     ) -> Result<Vec<GqlScript>> {
         require_admin(ctx).await?;
         let state = ctx.data::<AlloyState>()?;
-        let scripts = state
+        let requested_limit = limit.map(|value| value.max(0) as u64);
+        let limit = limit.unwrap_or(50).clamp(1, 100) as u64;
+        let page = state
             .storage
-            .find(ScriptQuery::ByEvent {
-                entity_type,
-                event: event.into(),
-            })
+            .find_paginated(
+                ScriptQuery::ByEvent {
+                    entity_type,
+                    event: event.into(),
+                },
+                0,
+                limit,
+            )
             .await
             .map_err(|err| async_graphql::Error::new(err.to_string()))?;
 
-        Ok(scripts.into_iter().map(GqlScript::from).collect())
+        let scripts = page
+            .items
+            .into_iter()
+            .map(GqlScript::from)
+            .collect::<Vec<_>>();
+        metrics::record_read_path_budget(
+            "graphql",
+            "alloy.scripts_for_event",
+            requested_limit,
+            limit,
+            scripts.len(),
+        );
+
+        Ok(scripts)
     }
 }

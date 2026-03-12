@@ -285,6 +285,20 @@ fn module_package_manifest_path(spec: &ManifestModuleSpec) -> Option<PathBuf> {
     )
 }
 
+fn module_root_path(spec: &ManifestModuleSpec) -> Option<PathBuf> {
+    if spec.source != "path" {
+        return None;
+    }
+
+    let module_path = spec.path.as_ref()?;
+    Some(
+        default_manifest_path()
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join(module_path),
+    )
+}
+
 fn merge_module_package_metadata(
     mut spec: ManifestModuleSpec,
     metadata: ModulePackageMetadata,
@@ -698,11 +712,15 @@ impl ManifestManager {
             .into_iter()
             .map(|(slug, spec)| {
                 let path = module_package_manifest_path(&spec);
+                let module_root_exists = match module_root_path(&spec).as_ref() {
+                    Some(path) => path.exists(),
+                    None => false,
+                };
                 let manifest_exists = match path.as_ref() {
                     Some(path) => path.exists(),
                     None => false,
                 };
-                if spec.source == "path" && !manifest_exists {
+                if spec.source == "path" && module_root_exists && !manifest_exists {
                     return Err(ManifestError::MissingModulePackageManifest {
                         slug: slug.clone(),
                         path: path
@@ -1026,6 +1044,7 @@ pub fn validate_registry_vs_manifest(registry: &ModuleRegistry) -> loco_rs::Resu
 mod tests {
     use super::{builtin_module_catalog, ManifestError, ManifestManager, ModulesManifest};
     use crate::modules::build_registry;
+    use serial_test::serial;
     use std::collections::HashMap;
     use tempfile::tempdir;
 
@@ -1094,6 +1113,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn catalog_modules_overlay_metadata_from_rustok_module_manifest() {
         let temp = tempdir().unwrap();
         let manifest_path = temp.path().join("modules.toml");
@@ -1144,6 +1164,7 @@ showcase_admin_surfaces = ["next-admin", "storybook"]
     }
 
     #[test]
+    #[serial]
     fn catalog_modules_require_rustok_module_manifest_for_path_modules() {
         let temp = tempdir().unwrap();
         let manifest_path = temp.path().join("modules.toml");
@@ -1177,6 +1198,7 @@ showcase_admin_surfaces = ["next-admin", "storybook"]
     }
 
     #[test]
+    #[serial]
     fn catalog_modules_reject_conflicting_admin_surface_metadata() {
         let temp = tempdir().unwrap();
         let manifest_path = temp.path().join("modules.toml");

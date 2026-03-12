@@ -1,14 +1,17 @@
 use async_trait::async_trait;
 use chrono::Utc;
-use rustok_core::events::{DomainEvent, EventEnvelope, EventHandler, HandlerResult};
+use rustok_core::events::{EventHandler, HandlerResult};
+use rustok_events::{DomainEvent, EventEnvelope};
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, FromQueryResult, Statement};
 use serde_json::Value as JsonValue;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info, instrument};
 use uuid::Uuid;
 
 use crate::content::model::IndexContentModel;
 use crate::error::IndexResult;
-use crate::traits::{Indexer, IndexerContext, LocaleIndexer};
+use crate::traits::{
+    run_bounded_reindex, Indexer, IndexerContext, IndexerRuntimeConfig, LocaleIndexer,
+};
 
 /// Raw DB row for building index_content
 #[derive(Debug, FromQueryResult)]
@@ -38,13 +41,19 @@ struct NodeRow {
 }
 
 /// Content indexer - listens to events and updates index_content table
+#[derive(Clone)]
 pub struct ContentIndexer {
     db: DatabaseConnection,
+    runtime: IndexerRuntimeConfig,
 }
 
 impl ContentIndexer {
     pub fn new(db: DatabaseConnection) -> Self {
-        Self { db }
+        Self::with_runtime(db, IndexerRuntimeConfig::load())
+    }
+
+    pub fn with_runtime(db: DatabaseConnection, runtime: IndexerRuntimeConfig) -> Self {
+        Self { db, runtime }
     }
 
     fn backend(&self) -> DatabaseBackend {
@@ -392,14 +401,9 @@ impl Indexer for ContentIndexer {
             .await
             .unwrap_or_default();
 
-        let count = rows.len() as u64;
-        for row in rows {
-            if let Err(err) = self.index_one(ctx, row.id).await {
-                warn!(node_id = %row.id, error = %err, "Failed to reindex node");
-            }
-        }
-
-        Ok(count)
+        let ids = rows.into_iter().map(|row| row.id).collect();
+        let stats = run_bounded_reindex(self.clone(), ctx, ids, "reindex_all").await;
+        Ok(stats.scheduled)
     }
 }
 
@@ -463,7 +467,11 @@ impl EventHandler for ContentIndexer {
     }
 
     async fn handle(&self, envelope: &EventEnvelope) -> HandlerResult {
-        let ctx = IndexerContext::new(self.db.clone(), envelope.tenant_id);
+        let ctx = IndexerContext::new_with_runtime(
+            self.db.clone(),
+            envelope.tenant_id,
+            self.runtime.clone(),
+        );
 
         match &envelope.event {
             DomainEvent::NodeCreated { node_id, .. }
@@ -531,11 +539,8 @@ impl ContentIndexer {
             .await
             .unwrap_or_default();
 
-        for row in rows {
-            if let Err(err) = self.index_one(ctx, row.id).await {
-                warn!(node_id = %row.id, error = %err, "Failed to reindex node after category update");
-            }
-        }
+        let ids = rows.into_iter().map(|row| row.id).collect();
+        let _stats = run_bounded_reindex(self.clone(), ctx, ids, "reindex_category_nodes").await;
 
         Ok(())
     }

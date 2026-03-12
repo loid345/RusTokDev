@@ -7,6 +7,8 @@ license.workspace = true
 
 [dependencies]
 rustok-core.workspace = true
+rustok-events.workspace = true
+rustok-telemetry.workspace = true
 
 # Database
 sea-orm.workspace = true

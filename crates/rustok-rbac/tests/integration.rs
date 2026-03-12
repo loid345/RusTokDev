@@ -1,6 +1,6 @@
-use rustok_core::events::{DomainEvent, EventEnvelope};
 use rustok_core::permissions::{Action, Resource};
 use rustok_core::{EventBus, SecurityContext};
+use rustok_events::{DomainEvent, EventEnvelope};
 use tokio::sync::broadcast;
 use uuid::Uuid;
 

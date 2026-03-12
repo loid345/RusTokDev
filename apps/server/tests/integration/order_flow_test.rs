@@ -6,7 +6,7 @@
 
 use rust_decimal::Decimal;
 use rustok_commerce::{Order, OrderError};
-use rustok_core::DomainEvent;
+use rustok_events::DomainEvent;
 use uuid::Uuid;
 
 #[test]

@@ -8,14 +8,16 @@ use rustok_forum::{
     CreateTopicInput, ListTopicsFilter, TopicListItem, TopicResponse, TopicService,
     UpdateTopicInput,
 };
+use rustok_telemetry::metrics;
+use std::time::Instant;
 use uuid::Uuid;
 
-use crate::context::TenantContext;
 use crate::extractors::rbac::{
     RequireForumTopicsCreate, RequireForumTopicsDelete, RequireForumTopicsList,
     RequireForumTopicsRead, RequireForumTopicsUpdate,
 };
 use crate::services::event_bus::transactional_event_bus_from_context;
+use crate::{common::RequestContext, context::TenantContext};
 
 #[utoipa::path(
     get,
@@ -32,13 +34,39 @@ pub async fn list_topics(
     State(ctx): State<AppContext>,
     tenant: TenantContext,
     RequireForumTopicsList(user): RequireForumTopicsList,
-    Query(filter): Query<ListTopicsFilter>,
+    request_context: RequestContext,
+    Query(mut filter): Query<ListTopicsFilter>,
 ) -> Result<Json<Vec<TopicListItem>>> {
+    filter.locale = filter.locale.or(Some(request_context.locale.clone()));
+    let requested_limit = Some(filter.per_page);
+    let effective_limit = filter.per_page.min(100);
     let service = TopicService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
+    let list_started_at = Instant::now();
     let (topics, _) = service
-        .list(tenant.id, user.security_context(), filter)
+        .list_with_locale_fallback(
+            tenant.id,
+            user.security_context(),
+            filter,
+            Some(tenant.default_locale.as_str()),
+        )
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
+    metrics::record_read_path_query(
+        "http",
+        "forum.list_topics",
+        "service_list",
+        list_started_at.elapsed().as_secs_f64(),
+        topics.len() as u64,
+    );
+
+    metrics::record_read_path_budget(
+        "http",
+        "forum.list_topics",
+        requested_limit,
+        effective_limit,
+        topics.len(),
+    );
+
     Ok(Json(topics))
 }
 
@@ -61,13 +89,16 @@ pub async fn get_topic(
     State(ctx): State<AppContext>,
     tenant: TenantContext,
     _user: RequireForumTopicsRead,
+    request_context: RequestContext,
     Path(id): Path<Uuid>,
     Query(filter): Query<ListTopicsFilter>,
 ) -> Result<Json<TopicResponse>> {
-    let locale = filter.locale.unwrap_or_else(|| "en".to_string());
+    let locale = filter
+        .locale
+        .unwrap_or_else(|| request_context.locale.clone());
     let service = TopicService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let topic = service
-        .get(tenant.id, id, &locale)
+        .get_with_locale_fallback(tenant.id, id, &locale, Some(tenant.default_locale.as_str()))
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(Json(topic))

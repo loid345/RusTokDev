@@ -22,6 +22,5 @@ pub use tools::{
     TOOL_PAGES_MODULE, TOOL_QUERY_MODULES,
 };
 
-
 #[cfg(test)]
 mod contract_tests;

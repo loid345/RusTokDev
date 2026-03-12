@@ -3,12 +3,15 @@ use serde_json::Value;
 use uuid::Uuid;
 
 use crate::graphql::content::GqlContentStatus;
-use rustok_blog::CreatePostInput as DomainCreatePostInput;
-use rustok_content::dto::{NodeListItem, NodeResponse};
+use rustok_blog::{BlogPostStatus, CreatePostInput as DomainCreatePostInput, PostResponse};
+use rustok_content::dto::NodeListItem;
 
 #[derive(SimpleObject)]
 pub struct GqlPost {
     pub id: Uuid,
+    pub requested_locale: String,
+    pub effective_locale: String,
+    pub available_locales: Vec<String>,
     pub title: String,
     pub slug: Option<String>,
     pub excerpt: Option<String>,
@@ -27,6 +30,7 @@ pub struct GqlPost {
 pub struct GqlPostListItem {
     pub id: Uuid,
     pub title: String,
+    pub effective_locale: String,
     pub slug: Option<String>,
     pub excerpt: Option<String>,
     pub status: GqlContentStatus,
@@ -84,53 +88,29 @@ pub struct PostsFilter {
     pub per_page: Option<u64>,
 }
 
-impl From<NodeResponse> for GqlPost {
-    fn from(node: NodeResponse) -> Self {
-        let translation = node.translations.first();
-        let body = node.bodies.first();
-
-        let tags = if let serde_json::Value::Object(map) = &node.metadata {
-            map.get("tags")
-                .and_then(|v| serde_json::from_value(v.clone()).ok())
-                .unwrap_or_default()
-        } else {
-            vec![]
-        };
-
-        let featured_image_url = node
-            .metadata
-            .get("featured_image_url")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-
-        let seo_title = node
-            .metadata
-            .get("seo_title")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-
-        let seo_description = node
-            .metadata
-            .get("seo_description")
-            .and_then(|v| v.as_str())
-            .map(String::from);
-
+impl From<PostResponse> for GqlPost {
+    fn from(post: PostResponse) -> Self {
         Self {
-            id: node.id,
-            title: translation
-                .and_then(|t| t.title.clone())
-                .unwrap_or_default(),
-            slug: translation.and_then(|t| t.slug.clone()),
-            excerpt: translation.and_then(|t| t.excerpt.clone()),
-            body: body.and_then(|b| b.body.clone()),
-            status: node.status.into(),
-            author_id: node.author_id,
-            created_at: node.created_at,
-            published_at: node.published_at,
-            tags,
-            featured_image_url,
-            seo_title,
-            seo_description,
+            id: post.id,
+            requested_locale: post.requested_locale,
+            effective_locale: post.effective_locale,
+            available_locales: post.available_locales,
+            title: post.title,
+            slug: Some(post.slug),
+            excerpt: post.excerpt,
+            body: Some(post.body),
+            status: match post.status {
+                BlogPostStatus::Draft => GqlContentStatus::Draft,
+                BlogPostStatus::Published => GqlContentStatus::Published,
+                BlogPostStatus::Archived => GqlContentStatus::Archived,
+            },
+            author_id: Some(post.author_id),
+            created_at: post.created_at.to_rfc3339(),
+            published_at: post.published_at.map(|value| value.to_rfc3339()),
+            tags: post.tags,
+            featured_image_url: post.featured_image_url,
+            seo_title: post.seo_title,
+            seo_description: post.seo_description,
         }
     }
 }
@@ -140,6 +120,7 @@ impl From<NodeListItem> for GqlPostListItem {
         Self {
             id: item.id,
             title: item.title.unwrap_or_default(),
+            effective_locale: item.effective_locale,
             slug: item.slug,
             excerpt: item.excerpt,
             status: item.status.into(),

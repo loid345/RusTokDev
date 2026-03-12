@@ -75,7 +75,9 @@ pub fn Profile() -> impl IntoView {
         let token_value = token.get();
         let tenant_value = tenant.get();
         if token_value.is_none() {
-            set_form_state.set(FormState::with_form_error(t_string!(i18n, errors.auth.unauthorized).to_string()));
+            set_form_state.set(FormState::with_form_error(
+                t_string!(i18n, errors.auth.unauthorized).to_string(),
+            ));
             return;
         }
 

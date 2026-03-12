@@ -11,7 +11,7 @@ use rustok_outbox::TransactionalEventBus;
 use crate::constants::KIND_CATEGORY;
 use crate::dto::{CategoryListItem, CategoryResponse, CreateCategoryInput, UpdateCategoryInput};
 use crate::error::{ForumError, ForumResult};
-use crate::locale::{available_locales, resolve_translation};
+use crate::locale::available_locales;
 
 pub struct CategoryService {
     nodes: NodeService,
@@ -86,13 +86,29 @@ impl CategoryService {
         category_id: Uuid,
         locale: &str,
     ) -> ForumResult<CategoryResponse> {
+        self.get_with_locale_fallback(tenant_id, category_id, locale, None)
+            .await
+    }
+
+    #[instrument(skip(self))]
+    pub async fn get_with_locale_fallback(
+        &self,
+        tenant_id: Uuid,
+        category_id: Uuid,
+        locale: &str,
+        fallback_locale: Option<&str>,
+    ) -> ForumResult<CategoryResponse> {
         let node = self.nodes.get_node(tenant_id, category_id).await?;
 
         if node.kind != KIND_CATEGORY {
             return Err(ForumError::CategoryNotFound(category_id));
         }
 
-        Ok(Self::node_to_category(node, locale))
+        Ok(Self::node_to_category_with_fallback(
+            node,
+            locale,
+            fallback_locale,
+        ))
     }
 
     #[instrument(skip(self, security, input))]
@@ -163,9 +179,45 @@ impl CategoryService {
         security: SecurityContext,
         locale: &str,
     ) -> ForumResult<Vec<CategoryListItem>> {
+        self.list_with_locale_fallback(tenant_id, security, locale, None)
+            .await
+    }
+
+    #[instrument(skip(self, security))]
+    pub async fn list_with_locale_fallback(
+        &self,
+        tenant_id: Uuid,
+        security: SecurityContext,
+        locale: &str,
+        fallback_locale: Option<&str>,
+    ) -> ForumResult<Vec<CategoryListItem>> {
         let (items, _) = self
+            .list_paginated_with_locale_fallback(
+                tenant_id,
+                security,
+                locale,
+                1,
+                1000,
+                fallback_locale,
+            )
+            .await?;
+
+        Ok(items)
+    }
+
+    #[instrument(skip(self, security))]
+    pub async fn list_paginated_with_locale_fallback(
+        &self,
+        tenant_id: Uuid,
+        security: SecurityContext,
+        locale: &str,
+        page: u64,
+        per_page: u64,
+        fallback_locale: Option<&str>,
+    ) -> ForumResult<(Vec<CategoryListItem>, u64)> {
+        let (items, total) = self
             .nodes
-            .list_nodes(
+            .list_nodes_with_locale_fallback(
                 tenant_id,
                 security,
                 ListNodesFilter {
@@ -174,11 +226,12 @@ impl CategoryService {
                     parent_id: None,
                     author_id: None,
                     locale: Some(locale.to_string()),
-                    page: 1,
-                    per_page: 1000,
+                    page,
+                    per_page,
                     include_deleted: false,
                     category_id: None,
                 },
+                fallback_locale,
             )
             .await?;
 
@@ -189,7 +242,7 @@ impl CategoryService {
                 CategoryListItem {
                     id: item.id,
                     locale: locale.to_string(),
-                    effective_locale: locale.to_string(),
+                    effective_locale: item.effective_locale,
                     name: item.title.unwrap_or_default(),
                     slug: item.slug.unwrap_or_default(),
                     description: item.excerpt,
@@ -213,16 +266,29 @@ impl CategoryService {
             })
             .collect();
 
-        Ok(list)
+        Ok((list, total))
     }
 
     fn node_to_category(node: rustok_content::NodeResponse, locale: &str) -> CategoryResponse {
-        let resolved = resolve_translation(&node.translations, locale);
+        Self::node_to_category_with_fallback(node, locale, None)
+    }
+
+    fn node_to_category_with_fallback(
+        node: rustok_content::NodeResponse,
+        locale: &str,
+        fallback_locale: Option<&str>,
+    ) -> CategoryResponse {
+        let resolved = crate::locale::resolve_translation_with_fallback(
+            &node.translations,
+            locale,
+            fallback_locale,
+        );
         let locales = available_locales(&node.translations);
         let metadata = node.metadata;
 
         CategoryResponse {
             id: node.id,
+            requested_locale: locale.to_string(),
             locale: locale.to_string(),
             effective_locale: resolved.effective_locale,
             available_locales: locales,

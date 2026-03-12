@@ -111,12 +111,22 @@ impl MigrationTrait for Migration {
 
         // Partial index for looking up unused codes during exchange
         manager
-            .get_connection()
-            .execute_unprepared(
-                "CREATE UNIQUE INDEX idx_oauth_codes_hash ON oauth_authorization_codes (code_hash) WHERE used_at IS NULL",
+            .create_index(
+                Index::create()
+                    .name("idx_oauth_codes_hash")
+                    .table(OAuthAuthorizationCodes::Table)
+                    .col(OAuthAuthorizationCodes::CodeHash)
+                    .unique()
+                    .and_where(
+                        Expr::col((
+                            OAuthAuthorizationCodes::Table,
+                            OAuthAuthorizationCodes::UsedAt,
+                        ))
+                        .is_null(),
+                    )
+                    .to_owned(),
             )
             .await
-            .map(|_| ())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {

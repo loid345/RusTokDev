@@ -17,18 +17,21 @@ use std::path::Path;
 
 use sea_orm::EntityTrait;
 
+use crate::auth::AuthConfig;
 use crate::common::settings::RustokSettings;
 use crate::controllers;
 use crate::initializers;
 use crate::middleware;
 use crate::middleware::rate_limit::{
-    cleanup_task, rate_limit_for_paths, RateLimitConfig, RateLimiter,
+    cleanup_task, rate_limit_for_paths, PathRateLimitMiddlewareState, RateLimitConfig, RateLimiter,
+    SharedApiRateLimiter, SharedAuthRateLimiter, SharedOAuthRateLimiter,
 };
 use crate::modules;
 use crate::seeds;
 use crate::services::event_transport_factory::{
     build_event_runtime, spawn_outbox_relay_worker, EventRuntime,
 };
+use crate::services::graphql_schema::init_graphql_schema;
 use crate::services::index_dispatcher::spawn_index_dispatcher;
 use crate::services::marketplace_catalog::{
     MarketplaceCatalogService, SharedMarketplaceCatalogService,
@@ -144,7 +147,7 @@ impl Hooks for App {
             })?;
         let event_runtime = build_event_runtime(ctx).await?;
         ctx.shared_store.insert(event_runtime.transport.clone());
-        spawn_index_dispatcher(ctx);
+        spawn_index_dispatcher(ctx, &rustok_settings);
         ctx.shared_store.insert(Arc::new(event_runtime));
         let marketplace_catalog = Arc::new(MarketplaceCatalogService::evolutionary_defaults());
         tracing::info!(
@@ -185,6 +188,7 @@ impl Hooks for App {
             engine,
         });
         let alloy_rest_router = controllers::alloy::router(alloy_app_state);
+        let graphql_schema = init_graphql_schema(ctx, alloy_state.clone());
 
         let api_rate_limit_config = if rustok_settings.rate_limit.enabled {
             RateLimitConfig::per_minute(
@@ -203,6 +207,8 @@ impl Hooks for App {
             )
             .map_err(loco_rs::Error::BadRequest)?,
         );
+        ctx.shared_store
+            .insert(SharedApiRateLimiter(api_limiter.clone()));
         if rustok_settings.rate_limit.enabled {
             let api_limiter_for_cleanup = api_limiter.clone();
             tokio::spawn(async move {
@@ -210,6 +216,7 @@ impl Hooks for App {
             });
         }
         let api_prefixes = Arc::new(vec!["/api/"]);
+        let rate_limit_auth_config = AuthConfig::from_ctx(ctx).ok();
 
         let auth_rate_limit_config = if rustok_settings.rate_limit.enabled {
             RateLimitConfig::per_minute(
@@ -228,6 +235,8 @@ impl Hooks for App {
             )
             .map_err(loco_rs::Error::BadRequest)?,
         );
+        ctx.shared_store
+            .insert(SharedAuthRateLimiter(auth_limiter.clone()));
         if rustok_settings.rate_limit.enabled {
             let auth_limiter_for_cleanup = auth_limiter.clone();
             tokio::spawn(async move {
@@ -241,6 +250,37 @@ impl Hooks for App {
             "/api/auth/reset",
         ]);
 
+        let oauth_rate_limit_config = if rustok_settings.rate_limit.enabled {
+            RateLimitConfig::per_minute(
+                rustok_settings.rate_limit.oauth_requests_per_minute,
+                rustok_settings.rate_limit.oauth_burst,
+            )
+        } else {
+            RateLimitConfig::disabled()
+        };
+        let oauth_limiter = Arc::new(
+            RateLimiter::build_for_backend(
+                oauth_rate_limit_config,
+                rustok_settings.rate_limit.backend,
+                &rustok_settings.rate_limit.redis_key_prefix,
+                "oauth",
+            )
+            .map_err(loco_rs::Error::BadRequest)?,
+        );
+        ctx.shared_store
+            .insert(SharedOAuthRateLimiter(oauth_limiter.clone()));
+        if rustok_settings.rate_limit.enabled {
+            let oauth_limiter_for_cleanup = oauth_limiter.clone();
+            tokio::spawn(async move {
+                cleanup_task(oauth_limiter_for_cleanup).await;
+            });
+        }
+        let oauth_prefixes = Arc::new(vec![
+            "/api/oauth/token",
+            "/api/oauth/revoke",
+            "/api/oauth/authorize",
+        ]);
+
         let admin_router = admin_router();
 
         let storefront_router = rustok_storefront::router();
@@ -250,13 +290,32 @@ impl Hooks for App {
             .nest("/admin", admin_router)
             .nest("/", storefront_router)
             .layer(Extension(registry))
-            .layer(Extension(alloy_state))
+            .layer(Extension(graphql_schema))
             .layer(axum_middleware::from_fn_with_state(
-                (auth_limiter, auth_prefixes),
+                PathRateLimitMiddlewareState {
+                    limiter: oauth_limiter,
+                    prefixes: oauth_prefixes,
+                    auth_config: rate_limit_auth_config.clone(),
+                    trusted_auth_dimensions: rustok_settings.rate_limit.trusted_auth_dimensions,
+                },
                 rate_limit_for_paths,
             ))
             .layer(axum_middleware::from_fn_with_state(
-                (api_limiter, api_prefixes),
+                PathRateLimitMiddlewareState {
+                    limiter: auth_limiter,
+                    prefixes: auth_prefixes,
+                    auth_config: rate_limit_auth_config.clone(),
+                    trusted_auth_dimensions: rustok_settings.rate_limit.trusted_auth_dimensions,
+                },
+                rate_limit_for_paths,
+            ))
+            .layer(axum_middleware::from_fn_with_state(
+                PathRateLimitMiddlewareState {
+                    limiter: api_limiter,
+                    prefixes: api_prefixes,
+                    auth_config: rate_limit_auth_config,
+                    trusted_auth_dimensions: rustok_settings.rate_limit.trusted_auth_dimensions,
+                },
                 rate_limit_for_paths,
             ))
             .layer(axum_middleware::from_fn_with_state(

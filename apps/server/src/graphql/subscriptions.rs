@@ -4,8 +4,8 @@ use futures_util::stream;
 use crate::context::{AuthContext, TenantContext};
 use crate::graphql::errors::GraphQLError;
 use crate::graphql::types::BuildProgressEvent;
-use crate::services::auth::AuthService;
 use crate::services::build_event_hub::BuildEventHub;
+use crate::services::rbac_service::RbacService;
 use rustok_core::{Action, EventConsumerRuntime, Permission, Resource};
 
 #[derive(Default)]
@@ -18,7 +18,7 @@ async fn ensure_modules_read_permission(ctx: &Context<'_>) -> Result<()> {
     let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
     let tenant = ctx.data::<TenantContext>()?;
 
-    let can_read_modules = AuthService::has_any_permission(
+    let can_read_modules = RbacService::has_any_permission(
         &app_ctx.db,
         &tenant.id,
         &auth.user_id,

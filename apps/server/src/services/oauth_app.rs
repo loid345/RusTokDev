@@ -83,7 +83,7 @@ impl OAuthAppService {
         }
         .insert(db)
         .await
-        .map_err(|e| Error::InternalServerError)?;
+        .map_err(|_| Error::InternalServerError)?;
 
         Ok(CreateOAuthAppResult {
             app,
@@ -805,7 +805,13 @@ async fn upsert_first_party_app(
 
 /// Generate a client secret with `sk_live_` prefix
 fn generate_client_secret() -> String {
-    let token = auth::generate_refresh_token();
+    // Keep the prefix stable while using more than 256 bits of entropy so
+    // the resulting secret comfortably exceeds bcrypt/Argon guidance tests.
+    let token = format!(
+        "{}{}",
+        auth::generate_refresh_token(),
+        auth::generate_refresh_token()
+    );
     format!("sk_live_{token}")
 }
 
@@ -937,7 +943,7 @@ mod tests {
         ];
 
         // Our implementation uses these codes:
-        let our_codes = [
+        let _our_codes = [
             "invalid_client",
             "invalid_grant",
             "unsupported_grant_type",

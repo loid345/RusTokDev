@@ -1,10 +1,12 @@
 use std::sync::Arc;
 
 use loco_rs::app::AppContext;
-use rustok_core::events::EventTransport;
+use rustok_core::events::{BackpressureConfig, BackpressureController, EventTransport};
 use rustok_core::{EventBus, EventConsumerRuntime};
 use rustok_outbox::TransactionalEventBus;
 use tokio::task::JoinHandle;
+
+use crate::common::settings::RustokSettings;
 
 #[derive(Clone)]
 pub struct SharedEventBus(pub Arc<EventBus>);
@@ -21,12 +23,8 @@ pub fn event_bus_from_context(ctx: &AppContext) -> EventBus {
         return (*shared.0).clone();
     }
 
-    let bus = Arc::new(
-        ctx.shared_store
-            .get::<Arc<crate::services::event_transport_factory::EventRuntime>>()
-            .map(|runtime| EventBus::with_capacity(runtime.channel_capacity))
-            .unwrap_or_default(),
-    );
+    let settings = RustokSettings::from_settings(&ctx.config.settings).ok();
+    let bus = Arc::new(build_event_bus(ctx, settings.as_ref()));
 
     if let Some(transport) = ctx.shared_store.get::<Arc<dyn EventTransport>>() {
         let mut receiver = bus.subscribe();
@@ -60,6 +58,36 @@ pub fn event_bus_from_context(ctx: &AppContext) -> EventBus {
 
     ctx.shared_store.insert(SharedEventBus(bus.clone()));
     (*bus).clone()
+}
+
+fn build_event_bus(ctx: &AppContext, settings: Option<&RustokSettings>) -> EventBus {
+    let Some(runtime) = ctx
+        .shared_store
+        .get::<Arc<crate::services::event_transport_factory::EventRuntime>>()
+    else {
+        return EventBus::default();
+    };
+
+    let Some(settings) = settings else {
+        tracing::warn!(
+            "Rustok settings unavailable while creating EventBus; backpressure disabled"
+        );
+        return EventBus::with_capacity(runtime.channel_capacity);
+    };
+
+    if settings.events.backpressure.enabled {
+        let config = &settings.events.backpressure;
+        return EventBus::with_backpressure(
+            runtime.channel_capacity,
+            BackpressureController::new(BackpressureConfig::new(
+                config.max_queue_depth,
+                config.warning_threshold,
+                config.critical_threshold,
+            )),
+        );
+    }
+
+    EventBus::with_capacity(runtime.channel_capacity)
 }
 
 pub fn transactional_event_bus_from_context(ctx: &AppContext) -> TransactionalEventBus {

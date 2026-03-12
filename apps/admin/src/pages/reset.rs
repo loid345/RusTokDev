@@ -19,7 +19,9 @@ pub fn ResetPassword() -> impl IntoView {
 
     let on_request = move |_| {
         if tenant.get().is_empty() || email.get().is_empty() {
-            set_form_state.set(FormState::with_form_error(t_string!(i18n, reset.errorRequired).to_string()));
+            set_form_state.set(FormState::with_form_error(
+                t_string!(i18n, reset.errorRequired).to_string(),
+            ));
             return;
         }
 

@@ -1,10 +1,13 @@
 use axum::{
     extract::FromRequestParts,
-    http::{request::Parts, HeaderMap, StatusCode},
+    http::{header, request::Parts, HeaderMap, StatusCode},
 };
+use rustok_content::PLATFORM_FALLBACK_LOCALE;
 use uuid::Uuid;
 
 use crate::context::TenantContextExtension;
+
+const ADMIN_LOCALE_COOKIE: &str = "rustok-admin-locale";
 
 #[derive(Debug, Clone)]
 pub struct RequestContext {
@@ -49,11 +52,11 @@ where
             .and_then(|value| value.to_str().ok())
             .and_then(|value| Uuid::parse_str(value).ok());
 
-        let locale = extract_requested_locale(&parts.headers)
+        let locale = extract_requested_locale(parts)
             .or_else(|| {
                 tenant_context.and_then(|tenant| normalize_locale_tag(&tenant.default_locale))
             })
-            .unwrap_or_else(|| "en".to_string());
+            .unwrap_or_else(|| PLATFORM_FALLBACK_LOCALE.to_string());
 
         Ok(RequestContext {
             tenant_id,
@@ -63,9 +66,44 @@ where
     }
 }
 
-fn extract_requested_locale(headers: &HeaderMap) -> Option<String> {
+fn extract_requested_locale(parts: &Parts) -> Option<String> {
+    extract_locale_from_query(parts)
+        .or_else(|| extract_locale_from_cookie(&parts.headers))
+        .or_else(|| extract_locale_from_accept_language(&parts.headers))
+}
+
+fn extract_locale_from_query(parts: &Parts) -> Option<String> {
+    parts.uri.query().and_then(|query| {
+        query.split('&').find_map(|segment| {
+            let (key, value) = segment.split_once('=')?;
+            if key != "locale" {
+                return None;
+            }
+
+            normalize_locale_tag(value)
+        })
+    })
+}
+
+fn extract_locale_from_cookie(headers: &HeaderMap) -> Option<String> {
     headers
-        .get("Accept-Language")
+        .get(header::COOKIE)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|raw| {
+            raw.split(';').find_map(|entry| {
+                let (name, value) = entry.trim().split_once('=')?;
+                if name != ADMIN_LOCALE_COOKIE {
+                    return None;
+                }
+
+                normalize_locale_tag(value)
+            })
+        })
+}
+
+fn extract_locale_from_accept_language(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get(header::ACCEPT_LANGUAGE)
         .and_then(|value| value.to_str().ok())
         .and_then(parse_accept_language)
 }
@@ -162,5 +200,42 @@ mod tests {
 
         assert_eq!(context.locale, "ru");
         assert_eq!(context.tenant_id, Uuid::nil());
+    }
+
+    #[test]
+    fn prefers_query_locale_over_cookie_and_headers() {
+        let request = Request::builder()
+            .uri("/api/blog/posts?locale=ru")
+            .header("X-Tenant-ID", Uuid::nil().to_string())
+            .header("Cookie", "rustok-admin-locale=en")
+            .header("Accept-Language", "de-DE,de;q=0.9")
+            .body(())
+            .expect("request");
+        let (mut parts, _) = request.into_parts();
+
+        let runtime = Runtime::new().expect("tokio runtime");
+        let context = runtime
+            .block_on(RequestContext::from_request_parts(&mut parts, &()))
+            .expect("request context");
+
+        assert_eq!(context.locale, "ru");
+    }
+
+    #[test]
+    fn falls_back_to_admin_locale_cookie_before_accept_language() {
+        let request = Request::builder()
+            .header("X-Tenant-ID", Uuid::nil().to_string())
+            .header("Cookie", "rustok-admin-locale=ru")
+            .header("Accept-Language", "en-US,en;q=0.9")
+            .body(())
+            .expect("request");
+        let (mut parts, _) = request.into_parts();
+
+        let runtime = Runtime::new().expect("tokio runtime");
+        let context = runtime
+            .block_on(RequestContext::from_request_parts(&mut parts, &()))
+            .expect("request context");
+
+        assert_eq!(context.locale, "ru");
     }
 }

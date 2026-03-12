@@ -1,12 +1,15 @@
 use async_trait::async_trait;
-use rustok_core::events::{DomainEvent, EventEnvelope, EventHandler, HandlerResult};
+use rustok_core::events::{EventHandler, HandlerResult};
+use rustok_events::{DomainEvent, EventEnvelope};
 use sea_orm::{ConnectionTrait, DatabaseBackend, DatabaseConnection, FromQueryResult, Statement};
 use serde_json::Value as JsonValue;
-use tracing::{debug, info, instrument, warn};
+use tracing::{debug, info, instrument};
 use uuid::Uuid;
 
 use crate::error::IndexResult;
-use crate::traits::{Indexer, IndexerContext, LocaleIndexer};
+use crate::traits::{
+    run_bounded_reindex, Indexer, IndexerContext, IndexerRuntimeConfig, LocaleIndexer,
+};
 
 #[derive(Debug, FromQueryResult)]
 struct ProductRow {
@@ -35,13 +38,19 @@ struct VariantAgg {
     price_max: Option<i64>,
 }
 
+#[derive(Clone)]
 pub struct ProductIndexer {
     db: DatabaseConnection,
+    runtime: IndexerRuntimeConfig,
 }
 
 impl ProductIndexer {
     pub fn new(db: DatabaseConnection) -> Self {
-        Self { db }
+        Self::with_runtime(db, IndexerRuntimeConfig::load())
+    }
+
+    pub fn with_runtime(db: DatabaseConnection, runtime: IndexerRuntimeConfig) -> Self {
+        Self { db, runtime }
     }
 
     fn backend(&self) -> DatabaseBackend {
@@ -378,14 +387,9 @@ impl Indexer for ProductIndexer {
             .await
             .unwrap_or_default();
 
-        let count = rows.len() as u64;
-        for row in rows {
-            if let Err(err) = self.index_one(ctx, row.id).await {
-                warn!(product_id = %row.id, error = %err, "Failed to reindex product");
-            }
-        }
-
-        Ok(count)
+        let ids = rows.into_iter().map(|row| row.id).collect();
+        let stats = run_bounded_reindex(self.clone(), ctx, ids, "reindex_all").await;
+        Ok(stats.scheduled)
     }
 }
 
@@ -448,7 +452,11 @@ impl EventHandler for ProductIndexer {
     }
 
     async fn handle(&self, envelope: &EventEnvelope) -> HandlerResult {
-        let ctx = IndexerContext::new(self.db.clone(), envelope.tenant_id);
+        let ctx = IndexerContext::new_with_runtime(
+            self.db.clone(),
+            envelope.tenant_id,
+            self.runtime.clone(),
+        );
 
         match &envelope.event {
             DomainEvent::ProductCreated { product_id }

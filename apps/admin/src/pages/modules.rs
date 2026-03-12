@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
 use leptos::prelude::*;
 use leptos_auth::hooks::{use_tenant, use_token};
+use serde::{Deserialize, Serialize};
 
 use crate::entities::module::{
     BuildJob, InstalledModule, MarketplaceModule, ModuleInfo, ReleaseInfo,

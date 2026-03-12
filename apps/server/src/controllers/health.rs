@@ -14,8 +14,14 @@ use tokio::sync::Mutex;
 use utoipa::ToSchema;
 
 use crate::common::settings::RustokSettings;
+use crate::middleware::rate_limit::{
+    SharedApiRateLimiter, SharedAuthRateLimiter, SharedOAuthRateLimiter,
+};
 use crate::middleware::tenant::{
     tenant_cache_stats, tenant_invalidation_listener_snapshot, TenantInvalidationListenerStatus,
+};
+use crate::services::runtime_guardrails::{
+    collect_runtime_guardrail_snapshot, RuntimeGuardrailSnapshot, RuntimeGuardrailStatus,
 };
 
 const HEALTH_CHECK_TIMEOUT: Duration = Duration::from_secs(2);
@@ -138,6 +144,7 @@ pub async fn ready(
             rate_limit: Default::default(),
             events: Default::default(),
             email: Default::default(),
+            runtime: Default::default(),
         });
 
     let mut checks = vec![
@@ -171,6 +178,37 @@ pub async fn ready(
         .await,
     ];
 
+    if settings.rate_limit.enabled {
+        checks.push(
+            run_guarded_check(
+                "rate_limit:api",
+                DependencyCriticality::Critical,
+                "dependency",
+                || check_rate_limit_backend(&ctx, "api"),
+            )
+            .await,
+        );
+        checks.push(
+            run_guarded_check(
+                "rate_limit:auth",
+                DependencyCriticality::Critical,
+                "dependency",
+                || check_rate_limit_backend(&ctx, "auth"),
+            )
+            .await,
+        );
+        checks.push(
+            run_guarded_check(
+                "rate_limit:oauth",
+                DependencyCriticality::Critical,
+                "dependency",
+                || check_rate_limit_backend(&ctx, "oauth"),
+            )
+            .await,
+        );
+    }
+
+    checks.push(check_runtime_guardrails(&ctx).await);
     checks.push(check_search_backend(&settings.search).await);
 
     let mut module_checks = Vec::new();
@@ -203,6 +241,21 @@ pub async fn ready(
         modules: module_checks,
         degraded_reasons,
     })
+}
+
+/// GET /health/runtime - Runtime guardrail snapshot for operators
+/// Returns the current rollout-aware guardrail state plus component-level details.
+#[utoipa::path(
+    get,
+    path = "/health/runtime",
+    tag = "health",
+    responses(
+        (status = 200, description = "Runtime guardrail snapshot", body = RuntimeGuardrailSnapshot)
+    )
+)]
+pub async fn runtime(State(ctx): State<AppContext>) -> Result<Response> {
+    let snapshot = collect_runtime_guardrail_snapshot(&ctx).await;
+    format::json(snapshot)
 }
 
 /// GET /health/modules - Module health aggregation
@@ -297,6 +350,39 @@ async fn check_event_transport(ctx: &AppContext) -> std::result::Result<(), Stri
         .ok_or_else(|| "event transport not initialized in shared_store".to_string())
 }
 
+async fn check_rate_limit_backend(
+    ctx: &AppContext,
+    namespace: &'static str,
+) -> std::result::Result<(), String> {
+    match namespace {
+        "api" => ctx
+            .shared_store
+            .get::<SharedApiRateLimiter>()
+            .ok_or_else(|| "API rate limiter not initialized in shared_store".to_string())?
+            .0
+            .check_backend_health()
+            .await
+            .map_err(|error| format!("api rate-limit backend check failed: {error}")),
+        "auth" => ctx
+            .shared_store
+            .get::<SharedAuthRateLimiter>()
+            .ok_or_else(|| "auth rate limiter not initialized in shared_store".to_string())?
+            .0
+            .check_backend_health()
+            .await
+            .map_err(|error| format!("auth rate-limit backend check failed: {error}")),
+        "oauth" => ctx
+            .shared_store
+            .get::<SharedOAuthRateLimiter>()
+            .ok_or_else(|| "oauth rate limiter not initialized in shared_store".to_string())?
+            .0
+            .check_backend_health()
+            .await
+            .map_err(|error| format!("oauth rate-limit backend check failed: {error}")),
+        _ => Err(format!("unknown rate-limit namespace: {namespace}")),
+    }
+}
+
 async fn check_search_backend(search: &crate::common::settings::SearchSettings) -> ReadinessCheck {
     if !search.enabled {
         return ReadinessCheck {
@@ -322,6 +408,37 @@ async fn check_search_backend(search: &crate::common::settings::SearchSettings) 
         },
     )
     .await
+}
+
+async fn check_runtime_guardrails(ctx: &AppContext) -> ReadinessCheck {
+    let started_at = Instant::now();
+    let snapshot = collect_runtime_guardrail_snapshot(ctx).await;
+    let (criticality, status) = match snapshot.status {
+        RuntimeGuardrailStatus::Ok => (DependencyCriticality::NonCritical, ReadinessStatus::Ok),
+        RuntimeGuardrailStatus::Degraded => (
+            DependencyCriticality::NonCritical,
+            ReadinessStatus::Degraded,
+        ),
+        RuntimeGuardrailStatus::Critical => {
+            (DependencyCriticality::Critical, ReadinessStatus::Unhealthy)
+        }
+    };
+
+    ReadinessCheck {
+        name: "runtime_guardrails".to_string(),
+        kind: "guardrail",
+        criticality,
+        status,
+        latency_ms: started_at.elapsed().as_millis(),
+        reason: (!snapshot.reasons.is_empty()).then(|| {
+            format!(
+                "rollout={:?}; observed={:?}; {}",
+                snapshot.rollout,
+                snapshot.observed_status,
+                snapshot.reasons.join("; ")
+            )
+        }),
+    }
 }
 
 async fn run_guarded_check<F, Fut>(
@@ -480,6 +597,7 @@ pub fn routes() -> Routes {
         .add("/", get(health))
         .add("/live", get(live))
         .add("/ready", get(ready))
+        .add("/runtime", get(runtime))
         .add("/modules", get(modules))
 }
 

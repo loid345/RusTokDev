@@ -1,5 +1,5 @@
-use rustok_core::events::EventEnvelope;
-use rustok_core::{DomainEvent, SecurityContext};
+use rustok_core::SecurityContext;
+use rustok_events::{DomainEvent, EventEnvelope};
 use rustok_forum::dto::CreateTopicInput;
 use rustok_forum::services::TopicService;
 use tokio::sync::broadcast;

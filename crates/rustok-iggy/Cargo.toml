@@ -16,6 +16,7 @@ thiserror.workspace = true
 uuid.workspace = true
 
 rustok-core.workspace = true
+rustok-events.workspace = true
 rustok-iggy-connector.workspace = true
 
 [features]

@@ -1,69 +1,56 @@
-# Rate Limiting в RusToK
+# Rate Limiting in RusToK
 
-## Обзор
+## Overview
 
-RusToK использует sliding-window rate limiter в `apps/server` для защиты HTTP API от brute force, abuse и кратковременных всплесков трафика. Этот limiter является именно HTTP-слоем и не заменяет `rustok-core::security::RateLimiter`, который остаётся внутренним security primitive.
+RusToK uses a sliding-window HTTP rate limiter in `apps/server` to protect API paths from brute force, abuse, and short traffic spikes.
 
-## Актуальный контракт
+This limiter is an HTTP-layer control. It does not replace `rustok-core::security::RateLimiter`, which remains an internal security primitive.
 
-- идентификация клиента идёт по IP;
-- приоритет источников IP: `X-Forwarded-For` -> `X-Real-IP` -> `ip:unknown`;
-- `X-User-ID` сознательно игнорируется;
-- при превышении лимита сервер возвращает `429 Too Many Requests`;
-- в ответе используются `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`;
-- `X-RateLimit-Reset` и `Retry-After` сейчас имеют одинаковую семантику: число секунд до сброса активного окна.
+## Current Contract
 
-## Почему `X-User-ID` не используется
+- client identity starts from IP address;
+- IP priority is `X-Forwarded-For` -> `X-Real-IP` -> `ip:unknown`;
+- spoofable headers such as `X-User-ID` are ignored;
+- rate-limit violations return `429 Too Many Requests`;
+- responses expose `Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`.
 
-HTTP middleware не должен доверять identity headers, которые клиент может подменить. Иначе атакующий сможет:
+## Trusted Dimensions
 
-- тратить чужой bucket;
-- обходить собственный лимит;
-- ломать соответствие между rate limiting и реально подтверждённой auth-сессией.
+When `rustok.rate_limit.trusted_auth_dimensions=true`, the limiter keeps the base IP bucket and extends it only from verified bearer-token claims:
 
-Если later понадобится user-aware throttling, его нужно добавлять только после доверенной аутентификации и на основе проверенных claims.
+- direct bearer token -> `ip + tenant`
+- OAuth bearer token -> `ip + tenant + oauth_app`
 
-## Конфигурация
+Requests without a valid bearer token stay on the plain IP bucket. This is especially important for `/api/oauth/token` and `/api/oauth/revoke`, where client input is not trusted before verification.
 
-```rust
-use rustok_server::middleware::rate_limit::RateLimitConfig;
+## Namespaces
 
-let default_config = RateLimitConfig::default();
-let strict_config = RateLimitConfig::new(20, 60);
-let disabled_config = RateLimitConfig::disabled();
-```
+Current wiring in `apps/server/src/app.rs` uses separate limiter namespaces:
 
-Текущий wiring в `apps/server/src/app.rs`:
+- `/api/*` -> `api`
+- `/api/auth/login`, `/api/auth/register`, `/api/auth/reset*` -> `auth`
+- `/api/oauth/token`, `/api/oauth/revoke`, `/api/oauth/authorize` -> `oauth`
 
-- `/api/*` -> 300 запросов в 60 секунд на IP;
-- `/api/auth/login`, `/api/auth/register`, `/api/auth/reset*` -> 20 запросов в 60 секунд на IP.
+This lets runtime guardrails, metrics, and backend health be tracked separately per limiter policy.
 
-## Подключение middleware
+## Configuration
 
-```rust
-use axum::middleware as axum_middleware;
-use rustok_server::middleware::rate_limit::{
-    cleanup_task, rate_limit_for_paths, RateLimitConfig, RateLimiter,
-};
-use std::sync::Arc;
+Relevant settings live under `rustok.rate_limit`:
 
-let limiter = Arc::new(RateLimiter::new(RateLimitConfig::new(300, 60)));
-let prefixes = Arc::new(vec!["/api/"]);
+- `enabled`
+- `backend`
+- `redis_key_prefix`
+- `requests_per_minute`
+- `burst`
+- `auth_requests_per_minute`
+- `auth_burst`
+- `oauth_requests_per_minute`
+- `oauth_burst`
+- `trusted_auth_dimensions`
 
-let limiter_for_cleanup = limiter.clone();
-tokio::spawn(async move {
-    cleanup_task(limiter_for_cleanup).await;
-});
+## Response Contract
 
-let app = router.layer(axum_middleware::from_fn_with_state(
-    (limiter, prefixes),
-    rate_limit_for_paths,
-));
-```
-
-## Формат ответов
-
-Успешный ответ:
+Successful response:
 
 ```http
 HTTP/1.1 200 OK
@@ -72,7 +59,7 @@ X-RateLimit-Remaining: 299
 X-RateLimit-Reset: 60
 ```
 
-Ответ при превышении лимита:
+Rate-limited response:
 
 ```http
 HTTP/1.1 429 Too Many Requests
@@ -85,13 +72,14 @@ Content-Type: text/plain
 Rate limit exceeded
 ```
 
-## Перепроверка
+## Verification
 
 ```bash
 cargo test -p rustok-server rate_limit
 cargo check -p rustok-server --bin rustok-server
 ```
 
-## Что дальше
+## Related Docs
 
-Перед переходом на `governor` или `tower-governor` нужно сохранить этот HTTP-контракт без регрессий. Любая библиотечная замена должна сначала подтвердить совместимость по headers, `retry-after`, cleanup semantics и path-aware behavior.
+- [`runtime-guardrails.md`](/C:/проекты/RusTok/docs/guides/runtime-guardrails.md)
+- [`improvement-recommendations.md`](/C:/проекты/RusTok/docs/architecture/improvement-recommendations.md)

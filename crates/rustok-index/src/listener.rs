@@ -1,7 +1,8 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use rustok_core::events::{DomainEvent, EventEnvelope, EventHandler, HandlerResult};
+use rustok_core::events::{EventHandler, HandlerResult};
+use rustok_events::{DomainEvent, EventEnvelope};
 use rustok_core::Error;
 use sea_orm::DatabaseConnection;
 

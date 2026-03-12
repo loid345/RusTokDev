@@ -5,12 +5,15 @@
 use axum::{
     body::Body,
     extract::{Request, State},
-    http::{HeaderMap, StatusCode},
+    http::{header, HeaderMap, StatusCode},
     middleware::Next,
     response::{IntoResponse, Response},
 };
 use once_cell::sync::Lazy;
 use redis::Script;
+use rustok_telemetry::metrics::{
+    record_rate_limit_backend_unavailable, record_rate_limit_exceeded, update_rate_limit_runtime,
+};
 use std::collections::HashMap;
 use std::net::IpAddr;
 use std::str::FromStr;
@@ -19,6 +22,7 @@ use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 use tracing::{debug, warn};
 
+use crate::auth::{decode_access_token, AuthConfig};
 use crate::common::settings::RateLimitBackendKind;
 use crate::services::redis_runtime::resolve_redis_client;
 
@@ -90,22 +94,38 @@ enum RateLimiterBackend {
 pub struct RateLimiter {
     backend: RateLimiterBackend,
     config: RateLimitConfig,
+    namespace: String,
 }
 
 impl RateLimiter {
     pub fn new(config: RateLimitConfig) -> Self {
+        Self::new_with_namespace(config, "default")
+    }
+
+    pub fn new_with_namespace(config: RateLimitConfig, namespace: impl Into<String>) -> Self {
         Self {
             backend: RateLimiterBackend::Memory {
                 requests: Arc::new(RwLock::new(HashMap::new())),
             },
             config,
+            namespace: namespace.into(),
         }
     }
 
     pub fn with_redis(config: RateLimitConfig, client: redis::Client, key_prefix: String) -> Self {
+        Self::with_redis_in_namespace(config, client, key_prefix, "default")
+    }
+
+    pub fn with_redis_in_namespace(
+        config: RateLimitConfig,
+        client: redis::Client,
+        key_prefix: String,
+        namespace: impl Into<String>,
+    ) -> Self {
         Self {
             backend: RateLimiterBackend::Redis { client, key_prefix },
             config,
+            namespace: namespace.into(),
         }
     }
 
@@ -115,6 +135,17 @@ impl RateLimiter {
 
     pub fn is_distributed(&self) -> bool {
         matches!(self.backend, RateLimiterBackend::Redis { .. })
+    }
+
+    pub fn namespace(&self) -> &str {
+        &self.namespace
+    }
+
+    pub fn backend_kind(&self) -> &'static str {
+        match self.backend {
+            RateLimiterBackend::Memory { .. } => "memory",
+            RateLimiterBackend::Redis { .. } => "redis",
+        }
     }
 
     pub async fn check_rate_limit(&self, key: &str) -> Result<RateLimitInfo, RateLimitCheckError> {
@@ -293,6 +324,34 @@ return {current, ttl}
         );
     }
 
+    pub async fn check_backend_health(&self) -> Result<(), String> {
+        match &self.backend {
+            RateLimiterBackend::Memory { .. } => Ok(()),
+            RateLimiterBackend::Redis { client, .. } => {
+                let mut connection =
+                    client
+                        .get_multiplexed_async_connection()
+                        .await
+                        .map_err(|error| {
+                            format!("failed to connect to redis rate-limit backend: {error}")
+                        })?;
+
+                let response: String = redis::cmd("PING")
+                    .query_async(&mut connection)
+                    .await
+                    .map_err(|error| format!("failed to ping redis rate-limit backend: {error}"))?;
+
+                if response.eq_ignore_ascii_case("PONG") {
+                    Ok(())
+                } else {
+                    Err(format!(
+                        "unexpected redis rate-limit ping response: {response}"
+                    ))
+                }
+            }
+        }
+    }
+
     pub async fn get_stats(&self) -> RateLimitStats {
         match &self.backend {
             RateLimiterBackend::Memory { requests } => {
@@ -311,6 +370,37 @@ return {current, ttl}
         }
     }
 
+    pub async fn sync_runtime_metrics(&self) -> Result<(), String> {
+        let stats = self.get_stats().await;
+        let backend = self.backend_kind();
+        let namespace = self.namespace();
+
+        match self.check_backend_health().await {
+            Ok(()) => {
+                update_rate_limit_runtime(
+                    namespace,
+                    backend,
+                    stats.distributed,
+                    stats.active_clients,
+                    stats.total_entries,
+                    true,
+                );
+                Ok(())
+            }
+            Err(error) => {
+                update_rate_limit_runtime(
+                    namespace,
+                    backend,
+                    stats.distributed,
+                    stats.active_clients,
+                    stats.total_entries,
+                    false,
+                );
+                Err(error)
+            }
+        }
+    }
+
     pub fn build_for_backend(
         config: RateLimitConfig,
         backend: RateLimitBackendKind,
@@ -318,19 +408,44 @@ return {current, ttl}
         namespace: &str,
     ) -> Result<Self, String> {
         match backend {
-            RateLimitBackendKind::Memory => Ok(Self::new(config)),
+            RateLimitBackendKind::Memory => Ok(Self::new_with_namespace(config, namespace)),
             RateLimitBackendKind::Redis => {
                 let client = resolve_redis_client().ok_or_else(|| {
                     "rate_limit.backend=redis requires a configured Redis runtime".to_string()
                 })?;
-                Ok(Self::with_redis(
+                Ok(Self::with_redis_in_namespace(
                     config,
                     client,
                     format!("{redis_key_prefix}:{namespace}"),
+                    namespace,
                 ))
             }
         }
     }
+}
+
+#[derive(Clone)]
+pub struct SharedApiRateLimiter(pub Arc<RateLimiter>);
+
+#[derive(Clone)]
+pub struct SharedAuthRateLimiter(pub Arc<RateLimiter>);
+
+#[derive(Clone)]
+pub struct SharedOAuthRateLimiter(pub Arc<RateLimiter>);
+
+#[derive(Clone)]
+pub struct RateLimitMiddlewareState {
+    pub limiter: Arc<RateLimiter>,
+    pub auth_config: Option<AuthConfig>,
+    pub trusted_auth_dimensions: bool,
+}
+
+#[derive(Clone)]
+pub struct PathRateLimitMiddlewareState {
+    pub limiter: Arc<RateLimiter>,
+    pub prefixes: Arc<Vec<&'static str>>,
+    pub auth_config: Option<AuthConfig>,
+    pub trusted_auth_dimensions: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -375,6 +490,12 @@ pub enum RateLimitCheckError {
     BackendUnavailable(String),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct TrustedRateLimitClaims {
+    tenant_id: uuid::Uuid,
+    oauth_app_id: Option<uuid::Uuid>,
+}
+
 /// Extract client identifier from the request.
 ///
 /// Priority:
@@ -412,6 +533,55 @@ fn extract_client_id(headers: &HeaderMap) -> String {
 
 pub fn extract_client_id_pub(headers: &HeaderMap) -> String {
     extract_client_id(headers)
+}
+
+fn extract_bearer_token(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| {
+            value
+                .strip_prefix("Bearer ")
+                .or_else(|| value.strip_prefix("bearer "))
+        })
+}
+
+fn extract_trusted_rate_limit_claims(
+    headers: &HeaderMap,
+    auth_config: Option<&AuthConfig>,
+) -> Option<TrustedRateLimitClaims> {
+    let auth_config = auth_config?;
+    let token = extract_bearer_token(headers)?;
+    let claims = decode_access_token(auth_config, token).ok()?;
+
+    Some(TrustedRateLimitClaims {
+        tenant_id: claims.tenant_id,
+        oauth_app_id: claims.client_id,
+    })
+}
+
+fn build_rate_limit_key(
+    headers: &HeaderMap,
+    auth_config: Option<&AuthConfig>,
+    trusted_auth_dimensions: bool,
+) -> String {
+    let mut key = extract_client_id(headers);
+
+    if !trusted_auth_dimensions {
+        return key;
+    }
+
+    if let Some(claims) = extract_trusted_rate_limit_claims(headers, auth_config) {
+        key.push_str("|tenant:");
+        key.push_str(&claims.tenant_id.to_string());
+
+        if let Some(oauth_app_id) = claims.oauth_app_id {
+            key.push_str("|oauth_app:");
+            key.push_str(&oauth_app_id.to_string());
+        }
+    }
+
+    key
 }
 
 fn insert_header_if_valid(headers: &mut axum::http::HeaderMap, key: &'static str, value: String) {
@@ -457,24 +627,32 @@ fn rate_limit_backend_unavailable_response(reason: &str) -> Response {
 }
 
 pub async fn rate_limit_middleware(
-    State(limiter): State<Arc<RateLimiter>>,
+    State(state): State<RateLimitMiddlewareState>,
     headers: HeaderMap,
     request: Request,
     next: Next,
 ) -> Result<Response, impl IntoResponse> {
-    let client_id = extract_client_id(&headers);
+    let rate_limit_key = build_rate_limit_key(
+        &headers,
+        state.auth_config.as_ref(),
+        state.trusted_auth_dimensions,
+    );
 
-    debug!(client_id = %client_id, "Checking rate limit");
+    debug!(rate_limit_key = %rate_limit_key, "Checking rate limit");
 
-    match limiter.check_rate_limit(&client_id).await {
+    match state.limiter.check_rate_limit(&rate_limit_key).await {
         Ok(info) => {
             let mut response = next.run(request).await;
             apply_rate_limit_headers(response.headers_mut(), &info);
 
             Ok(response)
         }
-        Err(RateLimitCheckError::Exceeded(exceeded)) => Err(rate_limited_response(&exceeded)),
+        Err(RateLimitCheckError::Exceeded(exceeded)) => {
+            record_rate_limit_exceeded(state.limiter.namespace());
+            Err(rate_limited_response(&exceeded))
+        }
         Err(RateLimitCheckError::BackendUnavailable(reason)) => {
+            record_rate_limit_backend_unavailable(state.limiter.namespace());
             Err(rate_limit_backend_unavailable_response(&reason))
         }
     }
@@ -488,31 +666,39 @@ pub async fn rate_limit_middleware(
 /// This is useful to protect specific endpoint groups (e.g. `/api/auth`) without
 /// creating separate Axum sub-routers for each group.
 pub async fn rate_limit_for_paths(
-    State((limiter, prefixes)): State<(Arc<RateLimiter>, Arc<Vec<&'static str>>)>,
+    State(state): State<PathRateLimitMiddlewareState>,
     headers: HeaderMap,
     request: Request,
     next: Next,
 ) -> Result<Response, impl IntoResponse> {
     let path = request.uri().path().to_owned();
-    let should_limit = prefixes.iter().any(|prefix| path.starts_with(prefix));
+    let should_limit = state.prefixes.iter().any(|prefix| path.starts_with(prefix));
 
     if !should_limit {
         return Ok(next.run(request).await);
     }
 
-    let client_id = extract_client_id(&headers);
+    let rate_limit_key = build_rate_limit_key(
+        &headers,
+        state.auth_config.as_ref(),
+        state.trusted_auth_dimensions,
+    );
 
-    debug!(client_id = %client_id, path = %path, "Checking rate limit for auth path");
+    debug!(rate_limit_key = %rate_limit_key, path = %path, "Checking rate limit for auth path");
 
-    match limiter.check_rate_limit(&client_id).await {
+    match state.limiter.check_rate_limit(&rate_limit_key).await {
         Ok(info) => {
             let mut response = next.run(request).await;
             apply_rate_limit_headers(response.headers_mut(), &info);
 
             Ok(response)
         }
-        Err(RateLimitCheckError::Exceeded(exceeded)) => Err(rate_limited_response(&exceeded)),
+        Err(RateLimitCheckError::Exceeded(exceeded)) => {
+            record_rate_limit_exceeded(state.limiter.namespace());
+            Err(rate_limited_response(&exceeded))
+        }
         Err(RateLimitCheckError::BackendUnavailable(reason)) => {
+            record_rate_limit_backend_unavailable(state.limiter.namespace());
             Err(rate_limit_backend_unavailable_response(&reason))
         }
     }
@@ -530,6 +716,19 @@ pub async fn cleanup_task(limiter: Arc<RateLimiter>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::{encode_access_token, encode_oauth_access_token, AuthConfig};
+    use rustok_core::UserRole;
+    use uuid::Uuid;
+
+    fn test_auth_config() -> AuthConfig {
+        AuthConfig {
+            secret: "rate-limit-test-secret-with-sufficient-length".to_string(),
+            access_expiration: 3600,
+            refresh_expiration: 3600,
+            issuer: "rustok".to_string(),
+            audience: "rustok-admin".to_string(),
+        }
+    }
 
     #[tokio::test]
     async fn test_rate_limit_allows_requests_within_limit() {
@@ -667,6 +866,79 @@ mod tests {
         let headers = HeaderMap::new();
         let id = extract_client_id(&headers);
         assert_eq!(id, "ip:unknown");
+    }
+
+    #[test]
+    fn build_rate_limit_key_uses_ip_only_without_trusted_dimensions() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "1.2.3.4".parse().unwrap());
+
+        let key = build_rate_limit_key(&headers, Some(&test_auth_config()), false);
+        assert_eq!(key, "ip:1.2.3.4");
+    }
+
+    #[test]
+    fn build_rate_limit_key_ignores_invalid_bearer_token() {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "1.2.3.4".parse().unwrap());
+        headers.insert(header::AUTHORIZATION, "Bearer broken".parse().unwrap());
+
+        let key = build_rate_limit_key(&headers, Some(&test_auth_config()), true);
+        assert_eq!(key, "ip:1.2.3.4");
+    }
+
+    #[test]
+    fn build_rate_limit_key_adds_trusted_tenant_dimension_for_direct_token() {
+        let config = test_auth_config();
+        let tenant_id = Uuid::new_v4();
+        let token = encode_access_token(
+            &config,
+            Uuid::new_v4(),
+            tenant_id,
+            UserRole::Admin,
+            Uuid::new_v4(),
+        )
+        .expect("token");
+
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "1.2.3.4".parse().unwrap());
+        headers.insert(
+            header::AUTHORIZATION,
+            format!("Bearer {token}").parse().unwrap(),
+        );
+
+        let key = build_rate_limit_key(&headers, Some(&config), true);
+        assert_eq!(key, format!("ip:1.2.3.4|tenant:{tenant_id}"));
+    }
+
+    #[test]
+    fn build_rate_limit_key_adds_oauth_app_dimension_for_oauth_token() {
+        let config = test_auth_config();
+        let tenant_id = Uuid::new_v4();
+        let client_id = Uuid::new_v4();
+        let token = encode_oauth_access_token(
+            &config,
+            Uuid::new_v4(),
+            tenant_id,
+            client_id,
+            &["catalog:read".to_string()],
+            "client_credentials",
+            3600,
+        )
+        .expect("token");
+
+        let mut headers = HeaderMap::new();
+        headers.insert("x-forwarded-for", "1.2.3.4".parse().unwrap());
+        headers.insert(
+            header::AUTHORIZATION,
+            format!("Bearer {token}").parse().unwrap(),
+        );
+
+        let key = build_rate_limit_key(&headers, Some(&config), true);
+        assert_eq!(
+            key,
+            format!("ip:1.2.3.4|tenant:{tenant_id}|oauth_app:{client_id}")
+        );
     }
 
     #[test]

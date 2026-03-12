@@ -6,6 +6,8 @@ use axum::{
 use loco_rs::prelude::*;
 use rustok_content::dto::{NodeListItem, NodeResponse};
 use rustok_content::{CreateNodeInput, ListNodesFilter, NodeService, UpdateNodeInput};
+use rustok_telemetry::metrics;
+use std::time::Instant;
 use uuid::Uuid;
 
 use crate::context::TenantContext;
@@ -34,11 +36,30 @@ pub async fn list_nodes(
     RequireNodesList(user): RequireNodesList,
     Query(filter): Query<ListNodesFilter>,
 ) -> Result<Json<Vec<NodeListItem>>> {
+    let requested_limit = Some(filter.per_page);
+    let effective_limit = filter.per_page.min(100);
     let service = NodeService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
+    let list_started_at = Instant::now();
     let (items, _) = service
         .list_nodes(tenant.id, user.security_context(), filter)
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
+    metrics::record_read_path_query(
+        "http",
+        "content.list_nodes",
+        "service_list",
+        list_started_at.elapsed().as_secs_f64(),
+        items.len() as u64,
+    );
+
+    metrics::record_read_path_budget(
+        "http",
+        "content.list_nodes",
+        requested_limit,
+        effective_limit,
+        items.len(),
+    );
+
     Ok(Json(items))
 }
 

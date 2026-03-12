@@ -45,6 +45,5 @@ impl MigrationSource for ForumModule {
     }
 }
 
-
 #[cfg(test)]
 mod contract_tests;

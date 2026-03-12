@@ -159,11 +159,20 @@ impl OAuthMutation {
 
 #[cfg(test)]
 mod tests {
-    use async_graphql::{EmptyQuery, EmptySubscription, Request, Schema};
+    use async_graphql::{EmptySubscription, Object, Request, Schema, Value};
     use sea_orm::Database;
 
     use super::OAuthMutation;
     use crate::context::AuthContext;
+
+    struct TestQueryRoot;
+
+    #[Object]
+    impl TestQueryRoot {
+        async fn health(&self) -> &str {
+            "ok"
+        }
+    }
 
     fn auth_context() -> AuthContext {
         AuthContext {
@@ -177,10 +186,23 @@ mod tests {
         }
     }
 
+    fn error_code(response: &async_graphql::Response) -> Option<&str> {
+        response.errors.first().and_then(|error| {
+            error
+                .extensions
+                .as_ref()
+                .and_then(|ext| ext.get("code"))
+                .and_then(|value| match value {
+                    Value::String(code) => Some(code.as_str()),
+                    _ => None,
+                })
+        })
+    }
+
     #[tokio::test]
     async fn revoke_app_consent_requires_auth_context() {
         let schema =
-            Schema::build(EmptyQuery, OAuthMutation::default(), EmptySubscription).finish();
+            Schema::build(TestQueryRoot, OAuthMutation::default(), EmptySubscription).finish();
 
         let response = schema
             .execute(Request::new(
@@ -188,19 +210,13 @@ mod tests {
             ))
             .await;
 
-        let code = response.errors[0]
-            .extensions
-            .as_ref()
-            .and_then(|ext| ext.get("code"))
-            .and_then(|value| value.as_str());
-
-        assert_eq!(code, Some("UNAUTHENTICATED"));
+        assert_eq!(error_code(&response), Some("UNAUTHENTICATED"));
     }
 
     #[tokio::test]
     async fn revoke_app_consent_with_auth_context_is_not_unauthenticated() {
         let db = Database::connect("sqlite::memory:").await.unwrap();
-        let schema = Schema::build(EmptyQuery, OAuthMutation::default(), EmptySubscription)
+        let schema = Schema::build(TestQueryRoot, OAuthMutation::default(), EmptySubscription)
             .data(db)
             .finish();
 
@@ -214,11 +230,6 @@ mod tests {
             .await;
 
         assert!(!response.errors.is_empty());
-        let code = response.errors[0]
-            .extensions
-            .as_ref()
-            .and_then(|ext| ext.get("code"))
-            .and_then(|value| value.as_str());
-        assert_ne!(code, Some("UNAUTHENTICATED"));
+        assert_ne!(error_code(&response), Some("UNAUTHENTICATED"));
     }
 }

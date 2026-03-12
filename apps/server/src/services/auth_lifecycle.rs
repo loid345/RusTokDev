@@ -12,7 +12,7 @@ use crate::auth::{
 use crate::models::{sessions, users};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::auth::AuthService;
+use super::rbac_service::RbacService;
 
 pub struct AuthTokens {
     pub access_token: String,
@@ -162,7 +162,7 @@ impl AuthLifecycleService {
             }
         };
 
-        AuthService::replace_user_role(&tx, &user.id, &tenant_id, role)
+        RbacService::replace_user_role(&tx, &user.id, &tenant_id, role)
             .await
             .map_err(AuthLifecycleError::from)?;
 
@@ -528,7 +528,7 @@ mod tests {
     use crate::auth::{hash_password, hash_refresh_token, verify_password, AuthConfig};
     use crate::models::_entities::user_roles;
     use crate::models::{sessions, tenants, users};
-    use crate::services::auth::AuthService;
+    use crate::services::rbac_service::RbacService;
     use chrono::{Duration, Utc};
     use migration::Migrator;
     use rustok_core::UserStatus;
@@ -538,6 +538,7 @@ mod tests {
     use std::sync::atomic::Ordering;
 
     #[test]
+    #[serial]
     fn metrics_snapshot_reads_current_auth_lifecycle_counters() {
         AuthLifecycleService::reset_metrics_for_tests();
         let before = AuthLifecycleService::metrics_snapshot();
@@ -566,6 +567,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn flow_inconsistency_counter_can_be_incremented() {
         AuthLifecycleService::reset_metrics_for_tests();
         let before = AuthLifecycleService::metrics_snapshot();
@@ -578,6 +580,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn auth_lifecycle_metrics_snapshot_default_is_zeroed() {
         AuthLifecycleService::reset_metrics_for_tests();
         let snapshot = AuthLifecycleMetricsSnapshot::default();
@@ -740,7 +743,7 @@ mod tests {
             "expected user_roles relation to be created"
         );
 
-        let resolved_permissions = AuthService::get_user_permissions(&db, &tenant.id, &user.id)
+        let resolved_permissions = RbacService::get_user_permissions(&db, &tenant.id, &user.id)
             .await
             .expect("failed to resolve user permissions from rustok-rbac");
 
@@ -861,7 +864,7 @@ mod tests {
             .await
             .expect("legacy user insert should succeed");
 
-        AuthService::replace_user_role(
+        RbacService::replace_user_role(
             &db,
             &legacy_user.id,
             &tenant.id,
@@ -871,11 +874,11 @@ mod tests {
         .expect("legacy path should assign manager relations");
 
         let lifecycle_permissions =
-            AuthService::get_user_permissions(&db, &tenant.id, &lifecycle_user.id)
+            RbacService::get_user_permissions(&db, &tenant.id, &lifecycle_user.id)
                 .await
                 .expect("failed to fetch permissions for lifecycle user");
         let legacy_permissions =
-            AuthService::get_user_permissions(&db, &tenant.id, &legacy_user.id)
+            RbacService::get_user_permissions(&db, &tenant.id, &legacy_user.id)
                 .await
                 .expect("failed to fetch permissions for legacy user");
 
@@ -930,6 +933,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn create_user_rejects_duplicate_email_with_stable_error_contract() {
         let db = setup_test_db_with_migrations::<Migrator>().await;
         let tenant = tenants::ActiveModel::new("Duplicate Email Tenant", "duplicate-email-tenant")
@@ -1296,6 +1300,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn revoke_user_sessions_is_strictly_scoped_by_tenant_and_user() {
         let db = setup_test_db_with_migrations::<Migrator>().await;
         let tenant_a = tenants::ActiveModel::new("Tenant A", "tenant-a-revoke")
@@ -1503,6 +1508,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[serial]
     async fn reset_password_revoke_sessions_repeat_call_on_already_revoked_sessions_is_idempotent()
     {
         AuthLifecycleService::reset_metrics_for_tests();

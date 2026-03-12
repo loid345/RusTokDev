@@ -2,7 +2,7 @@
 
 - Дата: 2026-02-19
 - Статус: Живой документ
-- Последнее обновление: 2026-03-11
+- Последнее обновление: 2026-03-12
 - Основание обновления: учтены изменения по состоянию кода, ADR от 2026-03-07 и code audit от 2026-03-11 по foundation/runtime/frontends
 - Автор: Архитектурное ревью платформы
 
@@ -62,6 +62,15 @@
 - i18n-contract расходится между слоями: backend по умолчанию часто выбирает `en`, Leptos storefront работает через `?lang=`, Next storefront — через locale path и default `ru`, Next admin — через cookie и default `en`; при этом миграции уже содержат `tenants.default_locale` и `tenant_locales`, а runtime entity/`TenantContext` ещё нет.
 - Runtime guardrails для horizontal scale не завершены: server использует in-memory rate limiters с hardcoded значениями, `RustokSettings.rate_limit` не подключён к фактическому middleware path, а transport policy для event relay в production всё ещё допускает soft fallback в `memory`.
 - Модульная UI-модель пока частичная: `next-admin` и `next-frontend` реально self-register'ят только blog UI packages, тогда как `content/commerce/forum/pages/alloy` ещё не имеют такого же контрактного пути.
+
+#### 2026-03-12: locale/runtime contract закрыт как отдельный текущий фокус, `apps/server` переходит к thin composition root
+
+За 2026-03-12 в кодовой базе уже зафиксированы два практических результата:
+
+- backend/runtime locale-policy больше не живёт как набор локальных `en`-fallback'ов: `RequestContext`, HTTP/GraphQL read-path'ы и доменные DTO теперь различают `requested_locale` / `effective_locale`, учитывают `tenant.default_locale` и используют единый fallback contract;
+- GraphQL schema в `apps/server` больше не создаётся на каждый HTTP-запрос: boot-time wiring теперь поднимает shared `AppSchema`, а request handler добавляет только per-request data (`tenant`, `auth`, `request context`).
+
+Следствие для backlog: locale/runtime track больше не держим как отдельный активный engineering-фокус этой итерации, а следующую работу смещаем на `2.7` и `2.10`.
 
 ---
 
@@ -241,22 +250,19 @@
 
 ### 2.6 Единая политика локалей
 
-**Статус на 2026-03-11:** `В работе`
+**Статус на 2026-03-12:** `Закрыто как текущий backend/runtime track`
 
-**Почему задача всё ещё открыта:**
-- admin UI уже выровнен, но backend и storefront до сих пор не живут по одному negotiation contract;
-- runtime-модель tenant'а не экспонирует `default_locale`, хотя миграции и часть тестов уже опираются на это поле;
-- backend, Leptos storefront, Next storefront и Next admin сейчас используют разные default/fallback semantics (`en`, `ru`, cookie, query param, locale path);
-- `RequestContext` по-прежнему использует упрощённый `Accept-Language` parsing, а blog/forum/content дублируют hardcoded fallback helpers с `en`;
-- документ `docs/architecture/i18n.md` отстаёт от новой реальности с несколькими UI-стеками и composable deployment model.
+**Что закрыто в рамках текущего трека:**
+- backend и GraphQL больше не расходятся по locale negotiation/fallback contract;
+- `tenant.default_locale` и `tenant_locales` реально участвуют в runtime resolution;
+- локальные hardcoded fallback helpers в blog/forum/content/pages сведены к общему policy слою;
+- API явно различает `requested_locale` и `effective_locale` в locale-aware read-path'ах;
+- документ `docs/architecture/i18n.md` синхронизирован с фактическим runtime contract.
 
-**Ближайший scope:**
-- закрепить единую policy: `URL locale -> cookie -> Accept-Language -> tenant default`;
-- формализовать fallback цепочку контента: `requested -> tenant.fallback -> tenant.default -> en`;
-- вытянуть `default_locale` и enabled locales в runtime contract (`TenantContext`, entities, tests, API-layer);
-- вынести locale negotiation/fallback helpers из модулей в общий policy слой и различать `requested_locale` / `effective_locale`;
-- расширить допустимую длину `locale` как минимум до 16 символов для BCP47-подобных тегов;
-- синхронизировать `docs/architecture/i18n.md` с фактическим runtime contract.
+**Остаточный scope, если вернёмся к теме позже:**
+- довести ту же policy до полного storefront/UI parity там, где отдельные стеки всё ещё живут через собственные routing conventions;
+- при необходимости усилить `Accept-Language` parsing до более строгого BCP47-aware negotiation;
+- отдельно проверить ограничения длины и хранения locale-тегов для более широкого набора BCP47-подобных значений.
 
 **Критерии готовности:**
 - backend, admin и storefront используют одинаковую семантику locale negotiation;
@@ -267,11 +273,11 @@
 
 ### 2.7 Тонкий `apps/server` как композиционный корень
 
-**Статус на 2026-03-11:** `Запланировано`
+**Статус на 2026-03-12:** `В работе`
 
 **Почему задача всё ещё открыта:**
 - `after_routes()` по-прежнему смешивает routing, lifecycle, background workers, event runtime, rate limiting, Alloy и UI wiring;
-- GraphQL schema по-прежнему собирается внутри request handler, а не инициализируется как boot-time dependency;
+- shared GraphQL schema уже вынесена из request handler в boot-time dependency, но остальная инициализация всё ещё остаётся в `app.rs`;
 - limiter'ы и часть long-lived runtime'ов создаются inline в `app.rs`, а не через отдельные bootstrap/initializer компоненты;
 - любое изменение старта приложения повышает риск регрессий и мешает следующему шагу — 2.4.
 
@@ -331,12 +337,12 @@
 
 ### 2.10 Bounded read-path'ы и агрегированные read models для highload
 
-**Статус на 2026-03-11:** `Запланировано`
+**Статус на 2026-03-12:** `В работе`
 
 **Почему задача открыта:**
-- часть hot admin/API path'ов остаётся небюджетной: `dashboard_stats` делает серию `count()` и читает историю `order.placed` из `sys_events` в память для агрегации;
+- часть hot admin/API path'ов уже переведена на bounded contract (`dashboard_stats`, HTTP/GraphQL `forum_categories`, commerce product search, commerce variants list, DLQ tenant filtering, auth sessions/history limits, OAuth GraphQL list limits, Alloy `scriptsForEvent` limit), а ключевые bounded read-path'ы уже начали писать budget telemetry по requested/effective limit и query-step latency/rows, но соседние admin/read path'ы всё ещё не имеют такого же контракта;
 - request-layer пока не формализует budget по query count / data volume и допускает in-memory pagination/aggregation на read-path'е;
-- reindex/rebuild loops для read-моделей остаются последовательными и без явных tenant budgets.
+- reindex/rebuild loops уже получили bounded runtime contract, server-side settings rollout и базовые operator-facing signals (`parallelism` / `entity_budget` / `yield_every` в runtime telemetry), но всё ещё требуют richer throughput dashboards и явных административных controls для ручного override.
 
 **Ближайший scope:**
 - вынести dashboard KPI, recent activity и похожие admin-срезы в агрегированные read models или bounded SQL/materialized queries;
@@ -675,9 +681,9 @@
 
 #### Фаза 2 — bounded read-path'ы и highload read models
 
-**Статус:** `Запланировано`
+**Статус:** `В работе`
 
-- [ ] `2.10` Убрать полную загрузку `sys_events` и аналогичные unbounded read-path'ы из hot admin/API endpoints.
+- [x] `2.10` Убрать полную загрузку `sys_events` и аналогичные unbounded read-path'ы из hot admin/API endpoints.
 - [ ] `2.10` Вынести dashboard KPI, recent activity и похожие срезы в bounded SQL или агрегированные read models.
 - [ ] `2.10` Перевести pagination/filter logic forum/admin на обязательный DB-side contract.
 - [ ] `2.10` Ввести bounded parallelism и tenant budgets для reindex/rebuild workers.
@@ -688,9 +694,9 @@
 
 #### Фаза 3 — тонкий composition root и реальный build contract
 
-**Статус:** `Запланировано`
+**Статус:** `В работе`
 
-- [ ] `2.7` Вынести GraphQL schema/runtime factories из request path в boot-time/shared handles.
+- [x] `2.7` Вынести GraphQL schema/runtime factories из request path в boot-time/shared handles.
 - [ ] `2.7` Разгрузить `apps/server/src/app.rs` до уровня wiring + orchestration.
 - [ ] `2.9` Реализовать реальные `embed-admin` / `embed-storefront` feature flags и сборку из `modules.toml`.
 - [ ] `2.9` Встроить smoke-validation для `monolith`, `server+admin`, `headless-api`.

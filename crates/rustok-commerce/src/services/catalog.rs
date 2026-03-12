@@ -8,7 +8,8 @@ use tracing::{debug, info, instrument, warn};
 use uuid::Uuid;
 use validator::Validate;
 
-use rustok_core::{generate_id, DomainEvent};
+use rustok_core::generate_id;
+use rustok_events::DomainEvent;
 use rustok_outbox::TransactionalEventBus;
 
 use crate::dto::*;

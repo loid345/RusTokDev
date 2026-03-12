@@ -1,5 +1,5 @@
-use rustok_core::events::EventEnvelope;
 use rustok_core::Result;
+use rustok_events::EventEnvelope;
 use rustok_iggy_connector::PublishRequest;
 
 use crate::config::IggyConfig;
@@ -42,7 +42,7 @@ fn is_system_event(event_type: &str) -> bool {
 mod tests {
     use super::*;
     use crate::serialization::JsonSerializer;
-    use rustok_core::events::{DomainEvent, EventEnvelope};
+    use rustok_events::{DomainEvent, EventEnvelope};
     use uuid::Uuid;
 
     fn create_test_envelope(event_type: &str) -> EventEnvelope {

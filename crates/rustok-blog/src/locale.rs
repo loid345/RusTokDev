@@ -1,4 +1,5 @@
 use rustok_content::dto::{BodyResponse, NodeTranslationResponse};
+use rustok_content::{available_locales_from, resolve_by_locale_with_fallback};
 
 pub struct ResolvedTranslation<'a> {
     pub translation: Option<&'a NodeTranslationResponse>,
@@ -14,57 +15,43 @@ pub fn resolve_translation<'a>(
     translations: &'a [NodeTranslationResponse],
     requested: &str,
 ) -> ResolvedTranslation<'a> {
-    if let Some(t) = translations.iter().find(|t| t.locale == requested) {
-        return ResolvedTranslation {
-            translation: Some(t),
-            effective_locale: requested.to_string(),
-        };
-    }
-    if let Some(t) = translations.iter().find(|t| t.locale == "en") {
-        return ResolvedTranslation {
-            translation: Some(t),
-            effective_locale: "en".to_string(),
-        };
-    }
-    if let Some(t) = translations.first() {
-        return ResolvedTranslation {
-            translation: Some(t),
-            effective_locale: t.locale.clone(),
-        };
-    }
+    resolve_translation_with_fallback(translations, requested, None)
+}
+
+pub fn resolve_translation_with_fallback<'a>(
+    translations: &'a [NodeTranslationResponse],
+    requested: &str,
+    fallback_locale: Option<&str>,
+) -> ResolvedTranslation<'a> {
+    let resolved =
+        resolve_by_locale_with_fallback(translations, requested, fallback_locale, |translation| {
+            &translation.locale
+        });
     ResolvedTranslation {
-        translation: None,
-        effective_locale: requested.to_string(),
+        translation: resolved.item,
+        effective_locale: resolved.effective_locale,
     }
 }
 
 pub fn resolve_body<'a>(bodies: &'a [BodyResponse], requested: &str) -> ResolvedBody<'a> {
-    if let Some(b) = bodies.iter().find(|b| b.locale == requested) {
-        return ResolvedBody {
-            body: Some(b),
-            effective_locale: requested.to_string(),
-        };
-    }
-    if let Some(b) = bodies.iter().find(|b| b.locale == "en") {
-        return ResolvedBody {
-            body: Some(b),
-            effective_locale: "en".to_string(),
-        };
-    }
-    if let Some(b) = bodies.first() {
-        return ResolvedBody {
-            body: Some(b),
-            effective_locale: b.locale.clone(),
-        };
-    }
+    resolve_body_with_fallback(bodies, requested, None)
+}
+
+pub fn resolve_body_with_fallback<'a>(
+    bodies: &'a [BodyResponse],
+    requested: &str,
+    fallback_locale: Option<&str>,
+) -> ResolvedBody<'a> {
+    let resolved =
+        resolve_by_locale_with_fallback(bodies, requested, fallback_locale, |body| &body.locale);
     ResolvedBody {
-        body: None,
-        effective_locale: requested.to_string(),
+        body: resolved.item,
+        effective_locale: resolved.effective_locale,
     }
 }
 
 pub fn available_locales(translations: &[NodeTranslationResponse]) -> Vec<String> {
-    translations.iter().map(|t| t.locale.clone()).collect()
+    available_locales_from(translations, |translation| &translation.locale)
 }
 
 #[cfg(test)]

@@ -76,6 +76,5 @@ impl MigrationSource for CommerceModule {
     }
 }
 
-
 #[cfg(test)]
 mod contract_tests;

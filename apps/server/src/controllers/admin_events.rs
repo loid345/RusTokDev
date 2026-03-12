@@ -5,10 +5,14 @@ use axum::{
 use chrono::{DateTime, Utc};
 use loco_rs::prelude::*;
 use rustok_outbox::entity::{self, SysEventStatus};
+use rustok_telemetry::metrics;
 use sea_orm::{
-    ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder, QuerySelect, Set,
+    sea_query::{Expr, SimpleExpr},
+    ActiveModelTrait, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter,
+    QueryOrder, QuerySelect, Set, Value,
 };
 use serde::{Deserialize, Serialize};
+use std::time::Instant;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -66,6 +70,7 @@ pub async fn list_dlq(
     _user: RequireLogsRead,
     Query(query): Query<DlqQuery>,
 ) -> Result<Json<DlqListResponse>> {
+    let requested_limit = Some(query.limit);
     let limit = query.limit.clamp(1, 200);
 
     let mut db_query = entity::Entity::find()
@@ -81,36 +86,45 @@ pub async fn list_dlq(
         db_query = db_query.filter(entity::Column::CreatedAt.gte(created_after));
     }
 
+    if let Some(tenant_id) = query.tenant_id {
+        db_query = db_query.filter(sys_event_tenant_condition(
+            ctx.db.get_database_backend(),
+            tenant_id,
+        ));
+    }
+
+    let query_started_at = Instant::now();
     let models = db_query
         .all(&ctx.db)
         .await
         .map_err(|e| Error::BadRequest(format!("Failed to load DLQ events: {e}")))?;
+    metrics::record_read_path_query(
+        "http",
+        "admin.list_dlq",
+        "dlq_page",
+        query_started_at.elapsed().as_secs_f64(),
+        models.len() as u64,
+    );
 
     let items = models
         .into_iter()
-        .filter_map(|model| {
-            if let Some(tenant_id) = query.tenant_id {
-                let payload_tenant = model
-                    .payload
-                    .get("tenant_id")
-                    .or_else(|| model.payload.get("event").and_then(|e| e.get("tenant_id")))
-                    .and_then(|v| v.as_str())
-                    .and_then(|raw| Uuid::parse_str(raw).ok());
-                if payload_tenant != Some(tenant_id) {
-                    return None;
-                }
-            }
-
-            Some(DlqEventItem {
-                id: model.id,
-                event_type: model.event_type,
-                schema_version: model.schema_version,
-                retry_count: model.retry_count,
-                last_error: model.last_error,
-                created_at: model.created_at,
-            })
+        .map(|model| DlqEventItem {
+            id: model.id,
+            event_type: model.event_type,
+            schema_version: model.schema_version,
+            retry_count: model.retry_count,
+            last_error: model.last_error,
+            created_at: model.created_at,
         })
         .collect::<Vec<_>>();
+
+    metrics::record_read_path_budget(
+        "http",
+        "admin.list_dlq",
+        requested_limit,
+        limit,
+        items.len(),
+    );
 
     Ok(Json(DlqListResponse {
         total: items.len(),
@@ -180,4 +194,16 @@ pub fn routes() -> Routes {
 
 fn default_limit() -> u64 {
     100
+}
+
+fn sys_event_tenant_condition(backend: DbBackend, tenant_id: Uuid) -> SimpleExpr {
+    let tenant_id = tenant_id.to_string();
+    let sql = match backend {
+        DbBackend::Sqlite => {
+            "json_extract(payload, '$.tenant_id') = ?1 OR json_extract(payload, '$.event.tenant_id') = ?1"
+        }
+        _ => "payload->>'tenant_id' = $1 OR payload->'event'->>'tenant_id' = $1",
+    };
+
+    Expr::cust_with_values(sql, vec![Value::from(tenant_id)])
 }

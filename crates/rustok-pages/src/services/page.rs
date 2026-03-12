@@ -3,7 +3,8 @@ use tracing::instrument;
 use uuid::Uuid;
 
 use rustok_content::{
-    BodyInput, CreateNodeInput, ListNodesFilter, NodeService, NodeTranslationInput, UpdateNodeInput,
+    available_locales_from, resolve_by_locale_with_fallback, BodyInput, CreateNodeInput,
+    ListNodesFilter, NodeService, NodeTranslationInput, UpdateNodeInput,
 };
 use rustok_core::{
     normalize_content_format, prepare_content_payload, SecurityContext, CONTENT_FORMAT_RT_JSON_V1,
@@ -140,12 +141,48 @@ impl PageService {
     }
 
     #[instrument(skip(self))]
+    pub async fn get_with_locale_fallback(
+        &self,
+        tenant_id: Uuid,
+        security: SecurityContext,
+        page_id: Uuid,
+        locale: &str,
+        fallback_locale: Option<&str>,
+    ) -> PagesResult<PageResponse> {
+        let node = self.ensure_page_kind(tenant_id, page_id).await?;
+
+        let blocks = self
+            .blocks
+            .list_for_page(tenant_id, security, page_id)
+            .await?;
+        Ok(node_to_page_with_locale(
+            node,
+            blocks,
+            locale,
+            fallback_locale,
+        ))
+    }
+
+    #[instrument(skip(self))]
     pub async fn get_by_slug(
         &self,
         tenant_id: Uuid,
         security: SecurityContext,
         locale: &str,
         slug: &str,
+    ) -> PagesResult<Option<PageResponse>> {
+        self.get_by_slug_with_locale_fallback(tenant_id, security, locale, slug, None)
+            .await
+    }
+
+    #[instrument(skip(self))]
+    pub async fn get_by_slug_with_locale_fallback(
+        &self,
+        tenant_id: Uuid,
+        security: SecurityContext,
+        locale: &str,
+        slug: &str,
+        fallback_locale: Option<&str>,
     ) -> PagesResult<Option<PageResponse>> {
         let node = self
             .nodes
@@ -160,7 +197,12 @@ impl PageService {
                     .blocks
                     .list_for_page(tenant_id, security, node.id)
                     .await?;
-                Ok(Some(node_to_page(node, blocks)))
+                Ok(Some(node_to_page_with_locale(
+                    node,
+                    blocks,
+                    locale,
+                    fallback_locale,
+                )))
             }
             _ => Ok(None),
         }
@@ -408,6 +450,24 @@ fn node_to_page(
     node: rustok_content::dto::NodeResponse,
     blocks: Vec<BlockResponse>,
 ) -> PageResponse {
+    node_to_page_internal(node, blocks, None, None)
+}
+
+fn node_to_page_with_locale(
+    node: rustok_content::dto::NodeResponse,
+    blocks: Vec<BlockResponse>,
+    requested_locale: &str,
+    fallback_locale: Option<&str>,
+) -> PageResponse {
+    node_to_page_internal(node, blocks, Some(requested_locale), fallback_locale)
+}
+
+fn node_to_page_internal(
+    node: rustok_content::dto::NodeResponse,
+    blocks: Vec<BlockResponse>,
+    requested_locale: Option<&str>,
+    fallback_locale: Option<&str>,
+) -> PageResponse {
     let template = node
         .metadata
         .get("template")
@@ -417,58 +477,204 @@ fn node_to_page(
 
     let seo = node.metadata.get("seo").and_then(|value| value.as_object());
 
+    let available_locales =
+        available_locales_from(&node.translations, |translation| &translation.locale);
+
+    let selected_translation = requested_locale.and_then(|locale| {
+        resolve_by_locale_with_fallback(
+            &node.translations,
+            locale,
+            fallback_locale,
+            |translation| &translation.locale,
+        )
+        .item
+        .map(|translation| page_translation_response(translation, seo))
+    });
+
+    let effective_locale = requested_locale.map(|locale| {
+        let resolved_translation = resolve_by_locale_with_fallback(
+            &node.translations,
+            locale,
+            fallback_locale,
+            |translation| &translation.locale,
+        );
+        if resolved_translation.item.is_some() {
+            return resolved_translation.effective_locale;
+        }
+
+        let resolved_body =
+            resolve_by_locale_with_fallback(&node.bodies, locale, fallback_locale, |body| {
+                &body.locale
+            });
+        resolved_body.effective_locale
+    });
+
     let translations = node
         .translations
         .into_iter()
-        .map(|translation| {
-            let meta = seo
-                .and_then(|map| map.get(&translation.locale))
-                .and_then(|value| value.as_object());
-
-            PageTranslationResponse {
-                locale: translation.locale,
-                title: translation.title,
-                slug: translation.slug,
-                meta_title: meta
-                    .and_then(|value| value.get("meta_title"))
-                    .and_then(|value| value.as_str())
-                    .map(String::from),
-                meta_description: meta
-                    .and_then(|value| value.get("meta_description"))
-                    .and_then(|value| value.as_str())
-                    .map(String::from),
-            }
-        })
+        .map(|translation| page_translation_response(&translation, seo))
         .collect();
 
-    let body = node.bodies.into_iter().next().map(|body| {
-        let content = body.body.unwrap_or_default();
-        let format = body.format;
-        let content_json = if format == "rt_json_v1" {
-            serde_json::from_str(&content).ok()
-        } else {
-            None
-        };
-
-        PageBodyResponse {
-            locale: body.locale,
-            content,
-            format,
-            content_json,
-            updated_at: body.updated_at,
-        }
-    });
+    let body = if let Some(locale) = requested_locale {
+        resolve_by_locale_with_fallback(&node.bodies, locale, fallback_locale, |body| &body.locale)
+            .item
+            .map(page_body_response)
+    } else {
+        node.bodies.first().map(page_body_response)
+    };
 
     PageResponse {
         id: node.id,
         status: node.status,
+        requested_locale: requested_locale.map(str::to_string),
+        effective_locale,
+        available_locales,
         template,
         created_at: node.created_at,
         updated_at: node.updated_at,
         published_at: node.published_at,
+        translation: selected_translation,
         translations,
         body,
         blocks,
         metadata: node.metadata,
+    }
+}
+
+fn page_translation_response(
+    translation: &rustok_content::dto::NodeTranslationResponse,
+    seo: Option<&serde_json::Map<String, serde_json::Value>>,
+) -> PageTranslationResponse {
+    let meta = seo
+        .and_then(|map| map.get(&translation.locale))
+        .and_then(|value| value.as_object());
+
+    PageTranslationResponse {
+        locale: translation.locale.clone(),
+        title: translation.title.clone(),
+        slug: translation.slug.clone(),
+        meta_title: meta
+            .and_then(|value| value.get("meta_title"))
+            .and_then(|value| value.as_str())
+            .map(String::from),
+        meta_description: meta
+            .and_then(|value| value.get("meta_description"))
+            .and_then(|value| value.as_str())
+            .map(String::from),
+    }
+}
+
+fn page_body_response(body: &rustok_content::dto::BodyResponse) -> PageBodyResponse {
+    let content = body.body.clone().unwrap_or_default();
+    let format = body.format.clone();
+    let content_json = if format == "rt_json_v1" {
+        serde_json::from_str(&content).ok()
+    } else {
+        None
+    };
+
+    PageBodyResponse {
+        locale: body.locale.clone(),
+        content,
+        format,
+        content_json,
+        updated_at: body.updated_at.clone(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use rustok_content::dto::{BodyResponse, NodeResponse, NodeTranslationResponse};
+    use rustok_content::entities::node::ContentStatus;
+
+    fn make_page_node(
+        translations: Vec<NodeTranslationResponse>,
+        bodies: Vec<BodyResponse>,
+    ) -> NodeResponse {
+        NodeResponse {
+            id: Uuid::new_v4(),
+            tenant_id: Uuid::new_v4(),
+            kind: PAGE_KIND.to_string(),
+            status: ContentStatus::Published,
+            parent_id: None,
+            author_id: None,
+            category_id: None,
+            position: 0,
+            depth: 0,
+            reply_count: 0,
+            metadata: serde_json::json!({ "template": "landing" }),
+            created_at: "2024-01-01T00:00:00Z".to_string(),
+            updated_at: "2024-01-01T00:00:00Z".to_string(),
+            published_at: None,
+            deleted_at: None,
+            version: 1,
+            translations,
+            bodies,
+        }
+    }
+
+    fn translation(locale: &str, title: &str, slug: &str) -> NodeTranslationResponse {
+        NodeTranslationResponse {
+            locale: locale.to_string(),
+            title: Some(title.to_string()),
+            slug: Some(slug.to_string()),
+            excerpt: None,
+        }
+    }
+
+    fn body(locale: &str, content: &str) -> BodyResponse {
+        BodyResponse {
+            locale: locale.to_string(),
+            body: Some(content.to_string()),
+            format: "markdown".to_string(),
+            updated_at: "2024-01-01T00:00:00Z".to_string(),
+        }
+    }
+
+    #[test]
+    fn node_to_page_with_locale_tracks_requested_and_effective_locale() {
+        let node = make_page_node(
+            vec![
+                translation("en", "About", "about"),
+                translation("ru", "О нас", "o-nas"),
+            ],
+            vec![body("en", "English body")],
+        );
+
+        let page = node_to_page_with_locale(node, vec![], "ru", Some("en"));
+
+        assert_eq!(page.requested_locale.as_deref(), Some("ru"));
+        assert_eq!(page.effective_locale.as_deref(), Some("ru"));
+        assert_eq!(
+            page.translation.and_then(|translation| translation.title),
+            Some("О нас".to_string())
+        );
+        assert_eq!(
+            page.body.and_then(|body| Some(body.locale)),
+            Some("en".to_string())
+        );
+    }
+
+    #[test]
+    fn node_to_page_with_locale_falls_back_for_translation_and_body() {
+        let node = make_page_node(
+            vec![translation("en", "About", "about")],
+            vec![body("en", "English body")],
+        );
+
+        let page = node_to_page_with_locale(node, vec![], "ru", Some("en"));
+
+        assert_eq!(page.requested_locale.as_deref(), Some("ru"));
+        assert_eq!(page.effective_locale.as_deref(), Some("en"));
+        assert_eq!(
+            page.translation.and_then(|translation| translation.title),
+            Some("About".to_string())
+        );
+        assert_eq!(
+            page.body
+                .and_then(|selected_body| Some(selected_body.locale)),
+            Some("en".to_string())
+        );
     }
 }

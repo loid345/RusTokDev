@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 const DEFAULT_TENANT_ID: Uuid = Uuid::from_u128(1);
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct RustokSettings {
     #[serde(default)]
     pub tenant: TenantSettings,
@@ -18,9 +18,11 @@ pub struct RustokSettings {
     pub events: EventSettings,
     #[serde(default)]
     pub email: EmailSettings,
+    #[serde(default)]
+    pub runtime: RuntimeSettings,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct EmailSettings {
     #[serde(default)]
     pub enabled: bool,
@@ -55,7 +57,18 @@ impl Default for SmtpSettings {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+impl Default for EmailSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            smtp: SmtpSettings::default(),
+            from: default_email_from(),
+            reset_base_url: default_reset_base_url(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct EventSettings {
     #[serde(default)]
     pub transport: EventTransportKind,
@@ -192,6 +205,18 @@ pub struct SearchSettings {
     pub api_key: Option<String>,
     #[serde(default = "default_index_prefix")]
     pub index_prefix: String,
+    #[serde(default)]
+    pub reindex: SearchReindexSettings,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SearchReindexSettings {
+    #[serde(default = "default_search_reindex_parallelism")]
+    pub parallelism: usize,
+    #[serde(default = "default_search_reindex_entity_budget")]
+    pub entity_budget: usize,
+    #[serde(default = "default_search_reindex_yield_every")]
+    pub yield_every: u64,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -210,6 +235,42 @@ pub struct RateLimitSettings {
     pub auth_requests_per_minute: u32,
     #[serde(default = "default_auth_burst")]
     pub auth_burst: u32,
+    #[serde(default = "default_oauth_requests_per_minute")]
+    pub oauth_requests_per_minute: u32,
+    #[serde(default = "default_oauth_burst")]
+    pub oauth_burst: u32,
+    #[serde(default = "default_trusted_auth_dimensions")]
+    pub trusted_auth_dimensions: bool,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RuntimeSettings {
+    #[serde(default)]
+    pub guardrails: RuntimeGuardrailSettings,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RuntimeGuardrailSettings {
+    #[serde(default)]
+    pub rollout: GuardrailRolloutMode,
+    #[serde(default)]
+    pub rate_limit_memory_thresholds: RateLimitMemoryGuardrailSettings,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct RateLimitMemoryGuardrailSettings {
+    #[serde(default = "default_runtime_guardrail_api_warning_entries")]
+    pub api_warning_entries: usize,
+    #[serde(default = "default_runtime_guardrail_api_critical_entries")]
+    pub api_critical_entries: usize,
+    #[serde(default = "default_runtime_guardrail_auth_warning_entries")]
+    pub auth_warning_entries: usize,
+    #[serde(default = "default_runtime_guardrail_auth_critical_entries")]
+    pub auth_critical_entries: usize,
+    #[serde(default = "default_runtime_guardrail_oauth_warning_entries")]
+    pub oauth_warning_entries: usize,
+    #[serde(default = "default_runtime_guardrail_oauth_critical_entries")]
+    pub oauth_critical_entries: usize,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, Default, Eq, PartialEq)]
@@ -218,6 +279,14 @@ pub enum RateLimitBackendKind {
     #[default]
     Memory,
     Redis,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, Default, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum GuardrailRolloutMode {
+    Observe,
+    #[default]
+    Enforce,
 }
 
 impl Default for TenantSettings {
@@ -251,6 +320,33 @@ impl Default for SearchSettings {
             url: String::new(),
             api_key: None,
             index_prefix: default_index_prefix(),
+            reindex: SearchReindexSettings::default(),
+        }
+    }
+}
+
+impl Default for EventSettings {
+    fn default() -> Self {
+        Self {
+            transport: EventTransportKind::default(),
+            relay_target: RelayTargetKind::default(),
+            allow_relay_target_fallback: false,
+            relay_interval_ms: default_relay_interval_ms(),
+            channel_capacity: default_event_channel_capacity(),
+            relay_retry_policy: RelayRetryPolicy::default(),
+            dlq: DlqSettings::default(),
+            backpressure: EventBackpressureSettings::default(),
+            iggy: IggyConfig::default(),
+        }
+    }
+}
+
+impl Default for SearchReindexSettings {
+    fn default() -> Self {
+        Self {
+            parallelism: default_search_reindex_parallelism(),
+            entity_budget: default_search_reindex_entity_budget(),
+            yield_every: default_search_reindex_yield_every(),
         }
     }
 }
@@ -265,6 +361,39 @@ impl Default for RateLimitSettings {
             burst: default_burst(),
             auth_requests_per_minute: default_auth_requests_per_minute(),
             auth_burst: default_auth_burst(),
+            oauth_requests_per_minute: default_oauth_requests_per_minute(),
+            oauth_burst: default_oauth_burst(),
+            trusted_auth_dimensions: default_trusted_auth_dimensions(),
+        }
+    }
+}
+
+impl Default for RuntimeSettings {
+    fn default() -> Self {
+        Self {
+            guardrails: RuntimeGuardrailSettings::default(),
+        }
+    }
+}
+
+impl Default for RuntimeGuardrailSettings {
+    fn default() -> Self {
+        Self {
+            rollout: GuardrailRolloutMode::Enforce,
+            rate_limit_memory_thresholds: RateLimitMemoryGuardrailSettings::default(),
+        }
+    }
+}
+
+impl Default for RateLimitMemoryGuardrailSettings {
+    fn default() -> Self {
+        Self {
+            api_warning_entries: default_runtime_guardrail_api_warning_entries(),
+            api_critical_entries: default_runtime_guardrail_api_critical_entries(),
+            auth_warning_entries: default_runtime_guardrail_auth_warning_entries(),
+            auth_critical_entries: default_runtime_guardrail_auth_critical_entries(),
+            oauth_warning_entries: default_runtime_guardrail_oauth_warning_entries(),
+            oauth_critical_entries: default_runtime_guardrail_oauth_critical_entries(),
         }
     }
 }
@@ -329,6 +458,67 @@ impl RustokSettings {
             }
         }
 
+        if parsed.search.reindex.parallelism == 0 {
+            return Err(serde_json::Error::io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "rustok.search.reindex.parallelism must be > 0",
+            )));
+        }
+
+        if parsed.search.reindex.entity_budget == 0 {
+            return Err(serde_json::Error::io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "rustok.search.reindex.entity_budget must be > 0",
+            )));
+        }
+
+        if parsed.search.reindex.yield_every == 0 {
+            return Err(serde_json::Error::io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "rustok.search.reindex.yield_every must be > 0",
+            )));
+        }
+
+        validate_guardrail_threshold(
+            "rustok.runtime.guardrails.rate_limit_memory_thresholds.api",
+            parsed
+                .runtime
+                .guardrails
+                .rate_limit_memory_thresholds
+                .api_warning_entries,
+            parsed
+                .runtime
+                .guardrails
+                .rate_limit_memory_thresholds
+                .api_critical_entries,
+        )?;
+        validate_guardrail_threshold(
+            "rustok.runtime.guardrails.rate_limit_memory_thresholds.auth",
+            parsed
+                .runtime
+                .guardrails
+                .rate_limit_memory_thresholds
+                .auth_warning_entries,
+            parsed
+                .runtime
+                .guardrails
+                .rate_limit_memory_thresholds
+                .auth_critical_entries,
+        )?;
+        validate_guardrail_threshold(
+            "rustok.runtime.guardrails.rate_limit_memory_thresholds.oauth",
+            parsed
+                .runtime
+                .guardrails
+                .rate_limit_memory_thresholds
+                .oauth_warning_entries,
+            parsed
+                .runtime
+                .guardrails
+                .rate_limit_memory_thresholds
+                .oauth_critical_entries,
+        )?;
+
         Ok(parsed)
     }
 }
@@ -371,6 +561,18 @@ fn default_index_prefix() -> String {
     "rustok_".to_string()
 }
 
+fn default_search_reindex_parallelism() -> usize {
+    4
+}
+
+fn default_search_reindex_entity_budget() -> usize {
+    500
+}
+
+fn default_search_reindex_yield_every() -> u64 {
+    50
+}
+
 fn default_requests_per_minute() -> u32 {
     60
 }
@@ -389,6 +591,18 @@ fn default_auth_requests_per_minute() -> u32 {
 
 fn default_auth_burst() -> u32 {
     0
+}
+
+fn default_oauth_requests_per_minute() -> u32 {
+    30
+}
+
+fn default_oauth_burst() -> u32 {
+    5
+}
+
+fn default_trusted_auth_dimensions() -> bool {
+    true
 }
 
 fn default_relay_interval_ms() -> u64 {
@@ -435,8 +649,54 @@ fn default_email_from() -> String {
     "no-reply@rustok.local".to_string()
 }
 
+fn default_runtime_guardrail_api_warning_entries() -> usize {
+    5_000
+}
+
+fn default_runtime_guardrail_api_critical_entries() -> usize {
+    20_000
+}
+
+fn default_runtime_guardrail_auth_warning_entries() -> usize {
+    1_000
+}
+
+fn default_runtime_guardrail_auth_critical_entries() -> usize {
+    5_000
+}
+
+fn default_runtime_guardrail_oauth_warning_entries() -> usize {
+    1_000
+}
+
+fn default_runtime_guardrail_oauth_critical_entries() -> usize {
+    5_000
+}
+
 fn default_reset_base_url() -> String {
     "http://localhost:3000/reset-password".to_string()
+}
+
+fn validate_guardrail_threshold(
+    namespace: &str,
+    warning_entries: usize,
+    critical_entries: usize,
+) -> Result<(), serde_json::Error> {
+    if warning_entries == 0 {
+        return Err(serde_json::Error::io(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("{namespace}.warning_entries must be > 0"),
+        )));
+    }
+
+    if critical_entries <= warning_entries {
+        return Err(serde_json::Error::io(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!("{namespace}.critical_entries must be > warning_entries"),
+        )));
+    }
+
+    Ok(())
 }
 
 fn default_smtp_host() -> String {
@@ -449,7 +709,10 @@ fn default_smtp_port() -> u16 {
 
 #[cfg(test)]
 mod tests {
-    use super::{EventTransportKind, RateLimitBackendKind, RelayTargetKind, RustokSettings};
+    use super::{
+        EventTransportKind, GuardrailRolloutMode, RateLimitBackendKind, RelayTargetKind,
+        RustokSettings,
+    };
     use std::sync::{Mutex, OnceLock};
 
     const EVENT_TRANSPORT_ENV: &str = "RUSTOK_EVENT_TRANSPORT";
@@ -609,5 +872,116 @@ mod tests {
 
         assert_eq!(settings.rate_limit.backend, RateLimitBackendKind::Memory);
         assert_eq!(settings.rate_limit.redis_key_prefix, "rate-limit:v1");
+        assert_eq!(settings.rate_limit.oauth_requests_per_minute, 30);
+        assert_eq!(settings.rate_limit.oauth_burst, 5);
+        assert!(settings.rate_limit.trusted_auth_dimensions);
+        assert_eq!(settings.events.channel_capacity, 128);
+        assert_eq!(settings.events.relay_interval_ms, 1_000);
+        assert_eq!(settings.email.from, "no-reply@rustok.local");
+        assert_eq!(
+            settings.email.reset_base_url,
+            "http://localhost:3000/reset-password"
+        );
+        assert_eq!(
+            settings.runtime.guardrails.rollout,
+            GuardrailRolloutMode::Enforce
+        );
+        assert_eq!(
+            settings
+                .runtime
+                .guardrails
+                .rate_limit_memory_thresholds
+                .api_warning_entries,
+            5_000
+        );
+        assert_eq!(
+            settings
+                .runtime
+                .guardrails
+                .rate_limit_memory_thresholds
+                .api_critical_entries,
+            20_000
+        );
+        assert_eq!(
+            settings
+                .runtime
+                .guardrails
+                .rate_limit_memory_thresholds
+                .auth_warning_entries,
+            1_000
+        );
+        assert_eq!(
+            settings
+                .runtime
+                .guardrails
+                .rate_limit_memory_thresholds
+                .auth_critical_entries,
+            5_000
+        );
+        assert_eq!(
+            settings
+                .runtime
+                .guardrails
+                .rate_limit_memory_thresholds
+                .oauth_warning_entries,
+            1_000
+        );
+        assert_eq!(
+            settings
+                .runtime
+                .guardrails
+                .rate_limit_memory_thresholds
+                .oauth_critical_entries,
+            5_000
+        );
+        assert_eq!(settings.search.reindex.parallelism, 4);
+        assert_eq!(settings.search.reindex.entity_budget, 500);
+        assert_eq!(settings.search.reindex.yield_every, 50);
+    }
+
+    #[test]
+    fn rejects_zero_search_reindex_budget_values() {
+        let _guard = env_lock().lock().expect("env lock poisoned");
+        let _env_guard = EnvVarGuard::clear(EVENT_TRANSPORT_ENV);
+
+        let raw = serde_json::json!({
+            "rustok": {
+                "search": {
+                    "reindex": {
+                        "parallelism": 0
+                    }
+                }
+            }
+        });
+
+        let err = RustokSettings::from_settings(&Some(raw)).expect_err("search reindex validation");
+        assert!(err
+            .to_string()
+            .contains("rustok.search.reindex.parallelism must be > 0"));
+    }
+
+    #[test]
+    fn rejects_invalid_runtime_guardrail_thresholds() {
+        let _guard = env_lock().lock().expect("env lock poisoned");
+        let _env_guard = EnvVarGuard::clear(EVENT_TRANSPORT_ENV);
+
+        let raw = serde_json::json!({
+            "rustok": {
+                "runtime": {
+                    "guardrails": {
+                        "rate_limit_memory_thresholds": {
+                            "auth_warning_entries": 100,
+                            "auth_critical_entries": 100
+                        }
+                    }
+                }
+            }
+        });
+
+        let err =
+            RustokSettings::from_settings(&Some(raw)).expect_err("guardrail validation expected");
+        assert!(err.to_string().contains(
+            "rustok.runtime.guardrails.rate_limit_memory_thresholds.auth.critical_entries must be > warning_entries"
+        ));
     }
 }

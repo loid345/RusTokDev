@@ -371,6 +371,172 @@ lazy_static! {
         "Active HTTP connections"
     )
     .expect("Failed to create http_active_connections");
+
+    /// Requested read-path limits before clamping
+    pub static ref READ_PATH_REQUESTED_LIMIT: HistogramVec = HistogramVec::new(
+        HistogramOpts::new(
+            "rustok_read_path_requested_limit",
+            "Requested read-path limits before clamp/default handling"
+        )
+        .buckets(vec![1.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0]),
+        &["surface", "path"]
+    )
+    .expect("Failed to create read_path_requested_limit");
+
+    /// Effective read-path limits after clamping/default handling
+    pub static ref READ_PATH_EFFECTIVE_LIMIT: HistogramVec = HistogramVec::new(
+        HistogramOpts::new(
+            "rustok_read_path_effective_limit",
+            "Effective read-path limits after clamp/default handling"
+        )
+        .buckets(vec![1.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0]),
+        &["surface", "path"]
+    )
+    .expect("Failed to create read_path_effective_limit");
+
+    /// Number of items returned by bounded read paths
+    pub static ref READ_PATH_RETURNED_ITEMS: HistogramVec = HistogramVec::new(
+        HistogramOpts::new(
+            "rustok_read_path_returned_items",
+            "Items returned by bounded read paths"
+        )
+        .buckets(vec![0.0, 1.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0]),
+        &["surface", "path"]
+    )
+    .expect("Failed to create read_path_returned_items");
+
+    /// Total times a requested limit had to be clamped to fit runtime budget
+    pub static ref READ_PATH_LIMIT_CLAMPED_TOTAL: IntCounterVec = IntCounterVec::new(
+        Opts::new(
+            "rustok_read_path_limit_clamped_total",
+            "Total times a read-path limit was clamped to runtime budget"
+        ),
+        &["surface", "path"]
+    )
+    .expect("Failed to create read_path_limit_clamped_total");
+
+    /// Query latency inside bounded read paths
+    pub static ref READ_PATH_QUERY_DURATION_SECONDS: HistogramVec = HistogramVec::new(
+        HistogramOpts::new(
+            "rustok_read_path_query_duration_seconds",
+            "Database/query step duration for bounded read paths"
+        )
+        .buckets(vec![0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5]),
+        &["surface", "path", "query"]
+    )
+    .expect("Failed to create read_path_query_duration_seconds");
+
+    /// Rows or aggregate volume observed per bounded read-path query step
+    pub static ref READ_PATH_QUERY_ROWS: HistogramVec = HistogramVec::new(
+        HistogramOpts::new(
+            "rustok_read_path_query_rows",
+            "Rows or aggregate volume observed per bounded read-path query step"
+        )
+        .buckets(vec![0.0, 1.0, 5.0, 10.0, 20.0, 50.0, 100.0, 200.0, 500.0, 1000.0, 5000.0]),
+        &["surface", "path", "query"]
+    )
+    .expect("Failed to create read_path_query_rows");
+
+    /// Reindex run lifecycle transitions
+    pub static ref INDEX_REINDEX_RUNS_TOTAL: IntCounterVec = IntCounterVec::new(
+        Opts::new(
+            "rustok_index_reindex_runs_total",
+            "Total reindex runs by indexer, operation, and status"
+        ),
+        &["indexer", "operation", "status"]
+    )
+    .expect("Failed to create index_reindex_runs_total");
+
+    /// Reindex entity totals by outcome
+    pub static ref INDEX_REINDEX_ENTITIES_TOTAL: IntCounterVec = IntCounterVec::new(
+        Opts::new(
+            "rustok_index_reindex_entities_total",
+            "Total entities observed by reindex runs"
+        ),
+        &["indexer", "operation", "outcome"]
+    )
+    .expect("Failed to create index_reindex_entities_total");
+
+    /// Reindex run duration in seconds
+    pub static ref INDEX_REINDEX_DURATION_SECONDS: HistogramVec = HistogramVec::new(
+        HistogramOpts::new(
+            "rustok_index_reindex_duration_seconds",
+            "Duration of reindex runs in seconds"
+        )
+        .buckets(vec![0.001, 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0]),
+        &["indexer", "operation"]
+    )
+    .expect("Failed to create index_reindex_duration_seconds");
+
+    /// Current runtime config values exposed for operators
+    pub static ref INDEX_REINDEX_RUNTIME_CONFIG: IntGaugeVec = IntGaugeVec::new(
+        Opts::new(
+            "rustok_index_reindex_runtime_config",
+            "Current configured runtime values for reindex workers"
+        ),
+        &["indexer", "setting"]
+    )
+    .expect("Failed to create index_reindex_runtime_config");
+
+    /// Current rate-limit backend health by namespace/backend
+    pub static ref RATE_LIMIT_BACKEND_STATUS: IntGaugeVec = IntGaugeVec::new(
+        Opts::new(
+            "rustok_rate_limit_backend_status",
+            "Current rate-limit backend health (1=healthy, 0=unhealthy)"
+        ),
+        &["namespace", "backend"]
+    )
+    .expect("Failed to create rate_limit_backend_status");
+
+    /// Current number of active clients tracked by a limiter
+    pub static ref RATE_LIMIT_ACTIVE_CLIENTS: IntGaugeVec = IntGaugeVec::new(
+        Opts::new(
+            "rustok_rate_limit_active_clients",
+            "Current number of active clients tracked by a limiter"
+        ),
+        &["namespace"]
+    )
+    .expect("Failed to create rate_limit_active_clients");
+
+    /// Current number of internal limiter entries
+    pub static ref RATE_LIMIT_TOTAL_ENTRIES: IntGaugeVec = IntGaugeVec::new(
+        Opts::new(
+            "rustok_rate_limit_total_entries",
+            "Current number of internal rate-limit entries"
+        ),
+        &["namespace"]
+    )
+    .expect("Failed to create rate_limit_total_entries");
+
+    /// Whether the limiter is running in distributed mode
+    pub static ref RATE_LIMIT_DISTRIBUTED_MODE: IntGaugeVec = IntGaugeVec::new(
+        Opts::new(
+            "rustok_rate_limit_distributed_mode",
+            "Whether the limiter is running in distributed mode (1=yes, 0=no)"
+        ),
+        &["namespace"]
+    )
+    .expect("Failed to create rate_limit_distributed_mode");
+
+    /// Total backend-unavailable failures encountered by rate limiting
+    pub static ref RATE_LIMIT_BACKEND_UNAVAILABLE_TOTAL: IntCounterVec = IntCounterVec::new(
+        Opts::new(
+            "rustok_rate_limit_backend_unavailable_total",
+            "Total rate-limit backend unavailable failures"
+        ),
+        &["namespace"]
+    )
+    .expect("Failed to create rate_limit_backend_unavailable_total");
+
+    /// Total rate-limit exceeded outcomes
+    pub static ref RATE_LIMIT_EXCEEDED_TOTAL: IntCounterVec = IntCounterVec::new(
+        Opts::new(
+            "rustok_rate_limit_exceeded_total",
+            "Total rate-limit exceeded outcomes"
+        ),
+        &["namespace"]
+    )
+    .expect("Failed to create rate_limit_exceeded_total");
 }
 
 // ============================================================================
@@ -423,6 +589,22 @@ pub fn register_all(registry: &Registry) -> Result<(), prometheus::Error> {
     registry.register(Box::new(HTTP_REQUEST_SIZE_BYTES.clone()))?;
     registry.register(Box::new(HTTP_RESPONSE_SIZE_BYTES.clone()))?;
     registry.register(Box::new(HTTP_ACTIVE_CONNECTIONS.clone()))?;
+    registry.register(Box::new(READ_PATH_REQUESTED_LIMIT.clone()))?;
+    registry.register(Box::new(READ_PATH_EFFECTIVE_LIMIT.clone()))?;
+    registry.register(Box::new(READ_PATH_RETURNED_ITEMS.clone()))?;
+    registry.register(Box::new(READ_PATH_LIMIT_CLAMPED_TOTAL.clone()))?;
+    registry.register(Box::new(READ_PATH_QUERY_DURATION_SECONDS.clone()))?;
+    registry.register(Box::new(READ_PATH_QUERY_ROWS.clone()))?;
+    registry.register(Box::new(INDEX_REINDEX_RUNS_TOTAL.clone()))?;
+    registry.register(Box::new(INDEX_REINDEX_ENTITIES_TOTAL.clone()))?;
+    registry.register(Box::new(INDEX_REINDEX_DURATION_SECONDS.clone()))?;
+    registry.register(Box::new(INDEX_REINDEX_RUNTIME_CONFIG.clone()))?;
+    registry.register(Box::new(RATE_LIMIT_BACKEND_STATUS.clone()))?;
+    registry.register(Box::new(RATE_LIMIT_ACTIVE_CLIENTS.clone()))?;
+    registry.register(Box::new(RATE_LIMIT_TOTAL_ENTRIES.clone()))?;
+    registry.register(Box::new(RATE_LIMIT_DISTRIBUTED_MODE.clone()))?;
+    registry.register(Box::new(RATE_LIMIT_BACKEND_UNAVAILABLE_TOTAL.clone()))?;
+    registry.register(Box::new(RATE_LIMIT_EXCEEDED_TOTAL.clone()))?;
 
     Ok(())
 }
@@ -599,5 +781,128 @@ pub fn update_db_connections(state: &str, count: i64) {
 pub fn record_db_query_error(query_type: &str, error_type: &str) {
     DATABASE_QUERY_ERRORS_TOTAL
         .with_label_values(&[query_type, error_type])
+        .inc();
+}
+
+/// Record runtime budgets for bounded read-paths.
+pub fn record_read_path_budget(
+    surface: &str,
+    path: &str,
+    requested_limit: Option<u64>,
+    effective_limit: u64,
+    returned_items: usize,
+) {
+    if let Some(requested_limit) = requested_limit {
+        READ_PATH_REQUESTED_LIMIT
+            .with_label_values(&[surface, path])
+            .observe(requested_limit as f64);
+        if requested_limit != effective_limit {
+            READ_PATH_LIMIT_CLAMPED_TOTAL
+                .with_label_values(&[surface, path])
+                .inc();
+        }
+    }
+
+    READ_PATH_EFFECTIVE_LIMIT
+        .with_label_values(&[surface, path])
+        .observe(effective_limit as f64);
+    READ_PATH_RETURNED_ITEMS
+        .with_label_values(&[surface, path])
+        .observe(returned_items as f64);
+}
+
+/// Record latency and row volume for an individual query step inside a read path.
+pub fn record_read_path_query(
+    surface: &str,
+    path: &str,
+    query: &str,
+    duration_secs: f64,
+    rows: u64,
+) {
+    READ_PATH_QUERY_DURATION_SECONDS
+        .with_label_values(&[surface, path, query])
+        .observe(duration_secs);
+    READ_PATH_QUERY_ROWS
+        .with_label_values(&[surface, path, query])
+        .observe(rows as f64);
+}
+
+/// Record operator-visible runtime config for an indexer.
+pub fn record_index_reindex_runtime_config(
+    indexer: &str,
+    parallelism: usize,
+    entity_budget: usize,
+    yield_every: u64,
+) {
+    INDEX_REINDEX_RUNTIME_CONFIG
+        .with_label_values(&[indexer, "parallelism"])
+        .set(parallelism as i64);
+    INDEX_REINDEX_RUNTIME_CONFIG
+        .with_label_values(&[indexer, "entity_budget"])
+        .set(entity_budget as i64);
+    INDEX_REINDEX_RUNTIME_CONFIG
+        .with_label_values(&[indexer, "yield_every"])
+        .set(yield_every as i64);
+}
+
+/// Record a lifecycle transition for a reindex run.
+pub fn record_index_reindex_run(indexer: &str, operation: &str, status: &str) {
+    INDEX_REINDEX_RUNS_TOTAL
+        .with_label_values(&[indexer, operation, status])
+        .inc();
+}
+
+/// Record entity volume for a reindex run.
+pub fn record_index_reindex_entities(indexer: &str, operation: &str, outcome: &str, count: u64) {
+    if count == 0 {
+        return;
+    }
+
+    INDEX_REINDEX_ENTITIES_TOTAL
+        .with_label_values(&[indexer, operation, outcome])
+        .inc_by(count);
+}
+
+/// Record the total duration of a reindex run.
+pub fn record_index_reindex_duration(indexer: &str, operation: &str, duration_secs: f64) {
+    INDEX_REINDEX_DURATION_SECONDS
+        .with_label_values(&[indexer, operation])
+        .observe(duration_secs);
+}
+
+/// Update observable runtime stats for a rate limiter.
+pub fn update_rate_limit_runtime(
+    namespace: &str,
+    backend: &str,
+    distributed: bool,
+    active_clients: usize,
+    total_entries: usize,
+    healthy: bool,
+) {
+    RATE_LIMIT_BACKEND_STATUS
+        .with_label_values(&[namespace, backend])
+        .set(if healthy { 1 } else { 0 });
+    RATE_LIMIT_ACTIVE_CLIENTS
+        .with_label_values(&[namespace])
+        .set(active_clients as i64);
+    RATE_LIMIT_TOTAL_ENTRIES
+        .with_label_values(&[namespace])
+        .set(total_entries as i64);
+    RATE_LIMIT_DISTRIBUTED_MODE
+        .with_label_values(&[namespace])
+        .set(if distributed { 1 } else { 0 });
+}
+
+/// Record a backend-unavailable rate-limit outcome.
+pub fn record_rate_limit_backend_unavailable(namespace: &str) {
+    RATE_LIMIT_BACKEND_UNAVAILABLE_TOTAL
+        .with_label_values(&[namespace])
+        .inc();
+}
+
+/// Record a rate-limit exceeded outcome.
+pub fn record_rate_limit_exceeded(namespace: &str) {
+    RATE_LIMIT_EXCEEDED_TOTAL
+        .with_label_values(&[namespace])
         .inc();
 }

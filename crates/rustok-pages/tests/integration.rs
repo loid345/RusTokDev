@@ -1,5 +1,5 @@
-use rustok_core::events::EventEnvelope;
-use rustok_core::{DomainEvent, SecurityContext};
+use rustok_core::SecurityContext;
+use rustok_events::{DomainEvent, EventEnvelope};
 use rustok_pages::dto::{CreatePageInput, PageBodyInput, PageTranslationInput, UpdatePageInput};
 use rustok_pages::services::PageService;
 use tokio::sync::broadcast;

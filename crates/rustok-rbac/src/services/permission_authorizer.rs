@@ -9,6 +9,7 @@ pub struct AuthorizationDecision {
     pub allowed: bool,
     pub missing_permissions: Vec<Permission>,
     pub denied_reason: Option<(crate::DeniedReasonKind, String)>,
+    pub resolved_permissions: Vec<Permission>,
     pub permissions_count: usize,
     pub cache_hit: bool,
 }
@@ -26,6 +27,7 @@ pub async fn authorize_permission<R: PermissionResolver>(
         allowed: evaluation.allowed,
         missing_permissions: evaluation.missing_permissions,
         denied_reason: evaluation.denied_reason,
+        resolved_permissions: resolved.permissions.clone(),
         permissions_count: resolved.permissions.len(),
         cache_hit: resolved.cache_hit,
     })
@@ -44,6 +46,7 @@ pub async fn authorize_any_permission<R: PermissionResolver>(
         allowed: evaluation.allowed,
         missing_permissions: evaluation.missing_permissions,
         denied_reason: evaluation.denied_reason,
+        resolved_permissions: resolved.permissions.clone(),
         permissions_count: resolved.permissions.len(),
         cache_hit: resolved.cache_hit,
     })
@@ -62,6 +65,7 @@ pub async fn authorize_all_permissions<R: PermissionResolver>(
         allowed: evaluation.allowed,
         missing_permissions: evaluation.missing_permissions,
         denied_reason: evaluation.denied_reason,
+        resolved_permissions: resolved.permissions.clone(),
         permissions_count: resolved.permissions.len(),
         cache_hit: resolved.cache_hit,
     })
@@ -154,6 +158,7 @@ mod tests {
         assert!(!decision.allowed);
         assert_eq!(decision.permissions_count, 0);
         assert!(decision.denied_reason.is_some());
+        assert!(decision.resolved_permissions.is_empty());
         assert!(decision.cache_hit);
     }
 
@@ -176,6 +181,10 @@ mod tests {
 
         assert!(decision.allowed);
         assert!(decision.missing_permissions.is_empty());
+        assert_eq!(
+            decision.resolved_permissions,
+            vec![Permission::USERS_MANAGE]
+        );
         assert!(!decision.cache_hit);
     }
 
@@ -198,6 +207,7 @@ mod tests {
 
         assert!(!decision.allowed);
         assert_eq!(decision.missing_permissions, vec![Permission::USERS_UPDATE]);
+        assert_eq!(decision.resolved_permissions, vec![Permission::USERS_READ]);
     }
 
     #[tokio::test]
@@ -216,6 +226,7 @@ mod tests {
         assert!(decision.allowed);
         assert!(decision.missing_permissions.is_empty());
         assert!(decision.denied_reason.is_none());
+        assert_eq!(decision.resolved_permissions, vec![Permission::USERS_READ]);
         assert_eq!(decision.permissions_count, 1);
         assert!(decision.cache_hit);
     }
