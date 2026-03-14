@@ -330,23 +330,67 @@ apps/server ── Loco + Axum, оркестрирует всё
 
 **Важно:** Loco RS 0.16 **не имеет встроенного Storage** — нечего расширять. Файловая реализация полностью наша, с нуля.
 
-### 4.3 Архитектурное решение: `rustok-storage` как leaf crate
+### 4.3 Архитектурное решение: платформенное ядро по аналогии с VirtoCommerce
 
-> **Принцип:** Storage и Media — core-модули платформы. Они являются частью ядра, всегда активны, не могут быть отключены.
+> **Принцип:** Ядро платформы = набор контрактов и Core-модулей, которые **всегда активны** и образуют «голую платформу». На неё навешиваются Optional-модули.
 
-**`rustok-storage` — leaf crate**, по аналогии с `rustok-events` и `rustok-telemetry`.
+Архитектура RusTok имеет 4 уровня:
 
-**Почему leaf (без зависимости от core):**
+```
+Уровень 0 — Leaf контракты (НЕ модули, нет RusToKModule)
+  Просто trait + типы. Нельзя «включить/выключить» — они просто есть.
+  Core зависит от них и ре-экспортирует.
+  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
+  │rustok-events │  │rustok-storage│  │rustok-       │
+  │              │  │  (НОВЫЙ)     │  │telemetry     │
+  └──────────────┘  └──────────────┘  └──────────────┘
 
-1. **Паттерн проекта.** `rustok-events` не зависит от core → core зависит от events и ре-экспортирует. Storage — такой же фундаментальный контракт.
+Уровень 1 — Core агрегатор
+  Собирает контракты, добавляет платформенные абстракции.
+  ┌────────────────────────────────────────┐
+  │ rustok-core                            │
+  │ pub use rustok_events / storage / telemetry │
+  │ + CacheBackend, ModuleRegistry, i18n   │
+  └────────────────────────────────────────┘
 
-2. **Минимальные зависимости.** Storage на своём уровне — «положи байты по пути, отдай байты по пути». Ему нужны: `async-trait`, `uuid`, `serde`, `tokio`, `bytes`. Не нужны: ORM, RBAC, events, i18n, cache (12.7K строк и 30+ dependencies от core).
+Уровень 2 — Core модули (ModuleKind::Core, нельзя отключить)
+  Полноценные модули с миграциями, permissions, lifecycle.
+  Часть «голой платформы».
+  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
+  │ tenant   │ │ rbac     │ │ index    │ │ media    │
+  │          │ │          │ │          │ │ (НОВЫЙ)  │
+  └──────────┘ └──────────┘ └──────────┘ └──────────┘
 
-3. **Переиспользуемость.** Leaf crate можно использовать в CLI-утилитах, migration tools, standalone backup скриптах — без подтягивания всего core.
+Уровень 3 — Optional модули (toggle per-tenant)
+  Доменная логика, навешиваемая на платформу.
+  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐
+  │ content  │ │ blog     │ │ forum    │ │ pages    │ │ commerce │
+  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘
+```
 
-4. **Core агрегирует, а не владеет.** Core = агрегатор контрактов. Storage trait определяется в leaf crate, core зависит от него и ре-экспортирует. Все модули получают storage через core.
+**`rustok-storage` — leaf контракт (уровень 0)**, НЕ модуль:
+- Не реализует `RusToKModule` — у него нет миграций, permissions, lifecycle
+- Нельзя «включить/выключить» — он часть инфраструктуры, как `rustok-events`
+- Не зависит от core — чистый trait + backends + policy
+- Core зависит от него и ре-экспортирует
 
-**`rustok-media` — Core модуль** (`ModuleKind::Core`), по аналогии с `rustok-tenant`, `rustok-rbac`, `rustok-index`.
+**`rustok-media` — Core модуль (уровень 2)**, `ModuleKind::Core`:
+- Реализует `RusToKModule`: миграции, permissions, event listeners, health
+- Нельзя отключить — медиа-библиотека нужна всей платформе
+- Зависит от core (→ получает storage), events, outbox
+- Доменные модули (content, commerce) зависят от него
+
+**Почему storage — leaf, а не модуль:**
+
+1. **Нет доменной семантики.** Storage = «положи байты по пути». Не знает про media, thumbnails, quota, permissions. Это уровень `std::fs`, но с S3/GCP.
+
+2. **Нет БД.** Storage не требует миграций — он работает с файловыми системами и object stores.
+
+3. **Нет permissions.** Permissions на файлы — это ответственность `rustok-media` (`Resource::Media`). Storage не знает о RBAC.
+
+4. **Паттерн проекта.** `rustok-events` — leaf, не модуль. Определяет контракт, core агрегирует. Storage — точно такой же случай.
+
+5. **Переиспользуемость.** Leaf crate можно использовать в CLI-утилитах, migration tools, backup скриптах — без core.
 
 ### 4.4 Итоговая архитектура: два новых crate
 
@@ -466,6 +510,14 @@ pub struct InMemoryStorageBackend { ... }
 | `rustok-outbox` | Transactional event publishing |
 | `sea-orm` | Persistence |
 | `image` | Thumbnail generation |
+
+> **Core модули после добавления media:**
+> - `tenant` — tenant resolution, каждый HTTP-запрос проходит через него
+> - `rbac` — RBAC enforcement, все CRUD-хендлеры проверяют permissions
+> - `index` — CQRS read-path, storefront читает из index tables
+> - `media` — **медиа-библиотека, файловое хранилище для всей платформы** ← НОВЫЙ
+>
+> `storage` — не модуль, а leaf-контракт уровня 0 (как `events`, `telemetry`). Нельзя отключить по определению — он не участвует в `ModuleRegistry`.
 
 #### `apps/server` (оркестратор)
 
