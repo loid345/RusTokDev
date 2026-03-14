@@ -2,6 +2,7 @@
 mod manifest;
 
 use rustok_blog::BlogModule;
+use rustok_cache::CacheModule;
 use rustok_commerce::CommerceModule;
 use rustok_content::ContentModule;
 use rustok_core::ModuleRegistry;
@@ -19,7 +20,9 @@ pub use manifest::{
 };
 
 pub fn build_registry() -> ModuleRegistry {
+    let cache_module = CacheModule::new();
     ModuleRegistry::new()
+        .register(cache_module)
         .register(IndexModule)
         .register(TenantModule)
         .register(RbacModule)

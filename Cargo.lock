@@ -8806,6 +8806,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustok-cache"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "moka",
+ "redis 1.0.4",
+ "rustok-core",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "rustok-commerce"
 version = "0.1.0"
 dependencies = [
@@ -9082,6 +9094,7 @@ dependencies = [
  "rust-embed",
  "rust_decimal",
  "rustok-blog",
+ "rustok-cache",
  "rustok-commerce",
  "rustok-content",
  "rustok-core",

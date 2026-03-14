@@ -142,6 +142,7 @@ rustok-blog = { path = "crates/rustok-blog" }
 rustok-content = { path = "crates/rustok-content" }
 rustok-pages = { path = "crates/rustok-pages" }
 rustok-index = { path = "crates/rustok-index" }
+rustok-cache = { path = "crates/rustok-cache" }
 rustok-outbox = { path = "crates/rustok-outbox" }
 rustok-iggy = { path = "crates/rustok-iggy" }
 rustok-iggy-connector = { path = "crates/rustok-iggy-connector" }

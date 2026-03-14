@@ -17,6 +17,8 @@ use std::path::Path;
 
 use sea_orm::EntityTrait;
 
+use rustok_cache::CacheService;
+
 use crate::auth::AuthConfig;
 use crate::common::settings::RustokSettings;
 use crate::controllers;
@@ -156,9 +158,12 @@ impl Hooks for App {
         );
         ctx.shared_store
             .insert(SharedMarketplaceCatalogService(marketplace_catalog));
+        let cache_service = CacheService::from_env();
+        ctx.shared_store.insert(Arc::new(cache_service.clone()));
+
         let registry = modules::build_registry();
         modules::validate_registry_vs_manifest(&registry)?;
-        middleware::tenant::init_tenant_cache_infrastructure(ctx).await;
+        middleware::tenant::init_tenant_cache_infrastructure(ctx, &cache_service).await;
         let engine = Arc::new(alloy_scripting::create_default_engine());
         let storage = Arc::new(alloy_scripting::SeaOrmStorage::new(ctx.db.clone()));
         let orchestrator = Arc::new(alloy_scripting::ScriptOrchestrator::new(
@@ -204,6 +209,7 @@ impl Hooks for App {
                 rustok_settings.rate_limit.backend,
                 &rustok_settings.rate_limit.redis_key_prefix,
                 "api",
+                &cache_service,
             )
             .map_err(loco_rs::Error::BadRequest)?,
         );
@@ -232,6 +238,7 @@ impl Hooks for App {
                 rustok_settings.rate_limit.backend,
                 &rustok_settings.rate_limit.redis_key_prefix,
                 "auth",
+                &cache_service,
             )
             .map_err(loco_rs::Error::BadRequest)?,
         );
@@ -264,6 +271,7 @@ impl Hooks for App {
                 rustok_settings.rate_limit.backend,
                 &rustok_settings.rate_limit.redis_key_prefix,
                 "oauth",
+                &cache_service,
             )
             .map_err(loco_rs::Error::BadRequest)?,
         );
