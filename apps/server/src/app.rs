@@ -19,7 +19,7 @@ use sea_orm::EntityTrait;
 
 use rustok_cache::CacheService;
 
-use crate::auth::AuthConfig;
+use crate::auth::auth_config_from_ctx;
 use crate::common::settings::RustokSettings;
 use crate::controllers;
 use crate::initializers;
@@ -222,7 +222,7 @@ impl Hooks for App {
             });
         }
         let api_prefixes = Arc::new(vec!["/api/"]);
-        let rate_limit_auth_config = AuthConfig::from_ctx(ctx).ok();
+        let rate_limit_auth_config = auth_config_from_ctx(ctx).ok();
 
         let auth_rate_limit_config = if rustok_settings.rate_limit.enabled {
             RateLimitConfig::per_minute(

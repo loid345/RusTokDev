@@ -12,6 +12,7 @@ embed-admin-assets = ["dep:rust-embed"]
 
 [dependencies]
 rustok-core = { workspace = true, features = ["redis-cache"] }
+rustok-auth.workspace = true
 rustok-cache = { workspace = true, features = ["redis-cache"] }
 rustok-events.workspace = true
 rustok-storefront = { path = "../storefront" }

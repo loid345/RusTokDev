@@ -1,6 +1,7 @@
 ﻿mod alloy;
 mod manifest;
 
+use rustok_auth::AuthModule;
 use rustok_blog::BlogModule;
 use rustok_cache::CacheModule;
 use rustok_commerce::CommerceModule;
@@ -22,6 +23,7 @@ pub use manifest::{
 pub fn build_registry() -> ModuleRegistry {
     let cache_module = CacheModule::new();
     ModuleRegistry::new()
+        .register(AuthModule)
         .register(cache_module)
         .register(IndexModule)
         .register(TenantModule)

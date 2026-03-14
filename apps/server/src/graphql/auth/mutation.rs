@@ -1,7 +1,7 @@
 use async_graphql::{Context, FieldError, Object, Result};
 use loco_rs::prelude::*;
 
-use crate::auth::{encode_password_reset_token, AuthConfig};
+use crate::auth::{auth_config_from_ctx, encode_password_reset_token};
 use crate::context::TenantContext;
 use crate::graphql::errors::{ErrorCode, GraphQLError};
 use crate::models::users;
@@ -142,7 +142,7 @@ impl AuthMutation {
     ) -> Result<ForgotPasswordPayload> {
         let app_ctx = ctx.data::<AppContext>()?;
         let tenant = ctx.data::<TenantContext>()?;
-        let config = AuthConfig::from_ctx(app_ctx)
+        let config = auth_config_from_ctx(app_ctx)
             .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
 
         // Check if user exists
