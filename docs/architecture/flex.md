@@ -1,7 +1,8 @@
 # Flex — Implementation Plan
 
-> **Статус:** Draft v3 (2026-03-14)
+> **Статус:** Draft v4 (2026-03-14)
 > **Архитектурное решение:** Flex — библиотека-инструмент, не модуль.
+> **Спецификация:** `docs/modules/flex.md` (v2, синхронизирована)
 
 ---
 
@@ -688,77 +689,390 @@ type SchemaCache = DashMap<(Uuid, &'static str), (Instant, CustomFieldsSchema)>;
 
 ---
 
-## 8. Delivery Phases
+## 8. Prerequisites — Metadata Readiness
+
+Перед подключением Flex к модулю, сущность **должна** иметь `metadata: Json` колонку.
+
+| Entity   | metadata | Миграция | Статус |
+|----------|----------|----------|--------|
+| users    | ✅ Есть  | m20250101_000002 | Готово |
+| products | ✅ Есть  | m20250130_000012 | Готово |
+| product_images | ✅ Есть | m20250130_000012 | Готово |
+| nodes    | ✅ Есть  | m20250130_000005 | Готово |
+| tenants  | ✅ Есть  | m20250101_000006 | Готово |
+| orders   | ❌ Нет   | Таблица orders не найдена | **Нужна миграция** |
+| topics   | ⚠️ ?     | Миграции в crates/rustok-forum/ (децентрализованные) | **Проверить** |
+
+**Действия перед Phase 4:**
+- [ ] Создать миграцию для `orders` таблицы с metadata колонкой (или добавить ALTER TABLE)
+- [ ] Проверить `crates/rustok-forum/` — есть ли metadata в topics
+- [ ] Если нет — добавить миграцию в крейте forum
+
+**Важно:** Forum использует **децентрализованные миграции** (в крейте, не в apps/server).
+Migration helper `create_field_definitions_table()` должен работать и в таком контексте.
+
+---
+
+## 9. Events Integration
+
+Система events в RusToK **зрелая** (DomainEvent, EventBus, EventDispatcher, backpressure).
+Flex CRUD операции **обязаны** эмитить события.
+
+### 9.1 Новые варианты DomainEvent
+
+```rust
+// Добавить в rustok-core/src/events/types.rs (или rustok-events crate):
+
+FieldDefinitionCreated {
+    tenant_id: Uuid,
+    entity_type: String,        // "user", "product", etc.
+    field_key: String,
+    field_type: String,
+},
+FieldDefinitionUpdated {
+    tenant_id: Uuid,
+    entity_type: String,
+    field_key: String,
+},
+FieldDefinitionDeleted {
+    tenant_id: Uuid,
+    entity_type: String,
+    field_key: String,
+},
+```
+
+### 9.2 Event Consumers
+
+```rust
+// 1. Кеш-инвалидация
+FieldDefinitionCreated | FieldDefinitionUpdated | FieldDefinitionDeleted => {
+    schema_cache.invalidate((tenant_id, entity_type));
+}
+
+// 2. Аудит (через существующий AuditLogger)
+FieldDefinition* => {
+    audit_logger.log(AuditEventType::FieldDefinitionChanged, ...);
+}
+```
+
+### 9.3 Cascade Policy
+
+- Удаление entity (user, product) → metadata удаляется вместе (CASCADE на уровне row)
+- Удаление field definition (soft: is_active=false) → **данные в metadata не трогаем**
+- Hard delete field definition → опционально: strip_unknown() при следующем write
+
+---
+
+## 10. Guardrails
+
+| Guardrail | Значение | Где проверяется |
+|-----------|----------|-----------------|
+| Max fields per entity type per tenant | **50** | `create_definition()` — count before insert |
+| Max nesting depth (JSON in metadata) | **2** | `validate_field_value()` для FieldType::Json |
+| Validation on write | **Строгая** | `CustomFieldsSchema::validate()` |
+| Mandatory pagination | **Да** | GraphQL: использовать `PaginationInput` из `graphql/common.rs` |
+| Timeout for JSONB operations | **5s** | Database query timeout |
+| field_key format | **snake_case** | Regex: `^[a-z][a-z0-9_]{0,127}$` |
+| Locale keys in label | **BCP 47** | Validate keys match `^[a-z]{2}(-[A-Z]{2})?$` |
+
+### 10.1 Реализация в коде
+
+```rust
+// В CustomFieldDefinitionService::create():
+const MAX_FIELDS_PER_ENTITY: usize = 50;
+
+let count = Entity::find()
+    .filter(Column::TenantId.eq(tenant_id))
+    .filter(Column::EntityType.eq(entity_type))
+    .count(db)
+    .await?;
+
+if count >= MAX_FIELDS_PER_ENTITY as u64 {
+    return Err(FlexError::TooManyFields {
+        entity_type: entity_type.to_string(),
+        max: MAX_FIELDS_PER_ENTITY,
+    });
+}
+
+// Validate field_key format
+let key_regex = Regex::new(r"^[a-z][a-z0-9_]{0,127}$").unwrap();
+if !key_regex.is_match(&input.field_key) {
+    return Err(FlexError::InvalidFieldKey(input.field_key));
+}
+```
+
+---
+
+## 11. RBAC
+
+### 11.1 Управление определениями
+
+Для field definitions **НЕ добавляем новый `Resource` variant** в permissions.rs.
+Используем прямую проверку роли, т.к. field definitions — настройка тенанта:
+
+```rust
+// В GraphQL resolver:
+fn require_admin(ctx: &Context<'_>) -> Result<()> {
+    let claims = ctx.data::<Claims>()?;
+    if !matches!(claims.role, UserRole::Admin | UserRole::SuperAdmin) {
+        return Err(Error::Forbidden);
+    }
+    Ok(())
+}
+```
+
+| Действие | Роли |
+|----------|------|
+| Просмотр определений | Admin, SuperAdmin |
+| Создание/обновление | Admin, SuperAdmin |
+| Удаление (soft) | SuperAdmin |
+
+### 11.2 Заполнение кастомных полей
+
+По правам на entity: кто может edit user → может edit custom fields этого user.
+Используется существующий RBAC: `Resource::Users` + `Action::Update`.
+
+---
+
+## 12. Entity Type Registry
+
+`ModuleRegistry` НЕ подходит для маршрутизации по entity_type (он про модули, не entity).
+Нужен отдельный registry:
+
+```rust
+/// Trait для репозитория field definitions конкретного entity type.
+#[async_trait]
+pub trait FieldDefinitionRepository: Send + Sync {
+    fn entity_type(&self) -> &'static str;
+
+    async fn list(
+        &self, db: &DatabaseConnection, tenant_id: Uuid,
+    ) -> Result<Vec<FieldDefinitionRow>>;
+
+    async fn create(
+        &self, db: &DatabaseConnection, tenant_id: Uuid,
+        input: CreateFieldDefinitionInput,
+    ) -> Result<FieldDefinitionRow>;
+
+    async fn update(
+        &self, db: &DatabaseConnection, tenant_id: Uuid,
+        id: Uuid, input: UpdateFieldDefinitionInput,
+    ) -> Result<FieldDefinitionRow>;
+
+    async fn deactivate(
+        &self, db: &DatabaseConnection, tenant_id: Uuid, id: Uuid,
+    ) -> Result<()>;
+}
+
+/// Registry: модули регистрируют свои repos при старте приложения.
+pub struct FieldDefRegistry {
+    repos: HashMap<&'static str, Box<dyn FieldDefinitionRepository>>,
+}
+
+impl FieldDefRegistry {
+    pub fn register(&mut self, repo: Box<dyn FieldDefinitionRepository>) {
+        self.repos.insert(repo.entity_type(), repo);
+    }
+
+    pub fn get(&self, entity_type: &str) -> Result<&dyn FieldDefinitionRepository> {
+        self.repos.get(entity_type)
+            .map(|r| r.as_ref())
+            .ok_or(FlexError::UnknownEntityType(entity_type.to_string()))
+    }
+}
+```
+
+Каждый модуль регистрирует свой repo в `after_routes()` или при инициализации:
+
+```rust
+// В apps/server при старте:
+let mut field_registry = FieldDefRegistry::new();
+field_registry.register(Box::new(UserFieldRepo));
+// commerce регистрирует:
+field_registry.register(Box::new(ProductFieldRepo));
+```
+
+---
+
+## 13. Error Handling
+
+Следовать паттерну из `apps/server/src/graphql/` — использовать `ErrorExtensions`:
+
+```rust
+use async_graphql::ErrorExtensions;
+
+#[derive(Debug, thiserror::Error)]
+pub enum FlexError {
+    #[error("Unknown entity type: {0}")]
+    UnknownEntityType(String),
+
+    #[error("Too many field definitions for {entity_type} (max {max})")]
+    TooManyFields { entity_type: String, max: usize },
+
+    #[error("Invalid field key: {0}")]
+    InvalidFieldKey(String),
+
+    #[error("Field key already exists: {0}")]
+    DuplicateFieldKey(String),
+
+    #[error("Field definition not found: {0}")]
+    NotFound(Uuid),
+
+    #[error("Validation failed")]
+    ValidationFailed(Vec<FieldValidationError>),
+
+    #[error("Database error: {0}")]
+    Database(#[from] sea_orm::DbErr),
+}
+
+impl ErrorExtensions for FlexError {
+    fn extend(&self) -> async_graphql::Error {
+        async_graphql::Error::new(self.to_string())
+            .extend_with(|_, e| {
+                match self {
+                    Self::ValidationFailed(errors) => {
+                        e.set("code", "VALIDATION_FAILED");
+                        e.set("fields", serde_json::to_value(errors).unwrap());
+                    }
+                    Self::UnknownEntityType(_) => e.set("code", "UNKNOWN_ENTITY_TYPE"),
+                    Self::TooManyFields { .. } => e.set("code", "TOO_MANY_FIELDS"),
+                    _ => e.set("code", "FLEX_ERROR"),
+                }
+            })
+    }
+}
+```
+
+---
+
+## 14. Caching
+
+```rust
+use dashmap::DashMap;
+use std::time::{Duration, Instant};
+
+const SCHEMA_CACHE_TTL: Duration = Duration::from_secs(300); // 5 min safety net
+
+/// Per (tenant_id, entity_type) schema cache.
+/// Primary invalidation: via FieldDefinition* events.
+/// Secondary: TTL expiry as safety net.
+pub struct SchemaCache {
+    inner: DashMap<(Uuid, String), (Instant, CustomFieldsSchema)>,
+}
+
+impl SchemaCache {
+    pub fn get(&self, tenant_id: Uuid, entity_type: &str) -> Option<CustomFieldsSchema> {
+        let key = (tenant_id, entity_type.to_string());
+        self.inner.get(&key).and_then(|entry| {
+            if entry.0.elapsed() < SCHEMA_CACHE_TTL {
+                Some(entry.1.clone())
+            } else {
+                None
+            }
+        })
+    }
+
+    pub fn invalidate(&self, tenant_id: Uuid, entity_type: &str) {
+        self.inner.remove(&(tenant_id, entity_type.to_string()));
+    }
+}
+```
+
+---
+
+## 15. Delivery Phases
 
 ### Phase 0 — Core types & validation ⭐ START HERE
 - [ ] Создать `rustok-core/src/field_schema.rs`
-- [ ] `FieldType`, `ValidationRule`, `SelectOption`, `FieldDefinition`
+- [ ] `FieldType` enum с helper methods (`requires_options()`, `supports_pattern()`)
+- [ ] `ValidationRule`, `SelectOption`
+- [ ] `FieldDefinition` (portable DTO)
 - [ ] `HasCustomFields` trait
 - [ ] `CustomFieldsSchema` с `validate()`, `apply_defaults()`, `strip_unknown()`
 - [ ] `FieldValidationError`, `FieldErrorCode`
-- [ ] `validate_field_value()` внутренняя функция
-- [ ] Unit-тесты (30+ test cases)
+- [ ] `validate_field_value()` — внутренняя функция, все 14 типов
+- [ ] Guardrails: field_key regex validation, locale key validation
+- [ ] Unit-тесты (30+ test cases, см. §3.11)
 - [ ] Exports в `lib.rs` и `prelude`
 
-### Phase 1 — Migration helper (делает Flex "катаной")
-- [ ] `create_field_definitions_table()` helper
+### Phase 1 — Migration helper + infrastructure
+- [ ] `create_field_definitions_table()` helper (с tenant FK, indexes)
 - [ ] `drop_field_definitions_table()` helper
 - [ ] `define_field_definitions_entity!()` macro (опционально)
-- [ ] JSONB query helpers
+- [ ] JSONB query helpers (`json_field_eq`, `json_field_exists`, `json_field_extract`)
+- [ ] `FlexError` enum с `ErrorExtensions` (§13)
+- [ ] `FieldDefinitionRepository` trait (§12)
+- [ ] `FieldDefRegistry` (§12)
+- [ ] DomainEvent variants: `FieldDefinitionCreated/Updated/Deleted` (§9)
 - [ ] Integration test: создать таблицу, записать definition, провалидировать
 
 ### Phase 2 — Users (первый потребитель)
 - [ ] Миграция `user_field_definitions` (через helper — одна строка!)
 - [ ] SeaORM entity
 - [ ] `impl HasCustomFields for User`
-- [ ] `UserFieldService`
-- [ ] Validation flow в create/update user
-- [ ] GraphQL: `customFields` в User, `fieldDefinitions` resolver
-- [ ] Тесты
+- [ ] `UserFieldService` + регистрация в `FieldDefRegistry`
+- [ ] Guardrail: max 50 fields per tenant (§10)
+- [ ] Validation flow в create/update user мутациях
+- [ ] Event emission: FieldDefinitionCreated/Updated/Deleted
+- [ ] GraphQL: `customFields` в User type, `fieldDefinitions` resolver
+- [ ] Error handling через `ErrorExtensions` (§13)
+- [ ] Тесты: CRUD, validation, guardrails, events
 
 ### Phase 3 — Admin API
-- [ ] GraphQL queries/mutations для управления определениями
-- [ ] Routing по entityType (registry pattern)
-- [ ] RBAC
-- [ ] Schema caching
+- [ ] GraphQL queries/mutations для управления определениями (§7)
+- [ ] Routing по entityType через `FieldDefRegistry` (§12)
+- [ ] RBAC: role check Admin/SuperAdmin (§11)
+- [ ] `SchemaCache` с event-driven invalidation (§14)
+- [ ] Pagination через существующий `PaginationInput` (cursor-based)
+- [ ] Тесты: RBAC, cache invalidation, pagination
 
 ### Phase 4 — Commerce, Content, Forum
+- [ ] **Pre-req:** добавить `metadata` колонку в `orders` таблицу (§8)
+- [ ] **Pre-req:** проверить `topics.metadata` в crates/rustok-forum/ (§8)
 - [ ] `product_field_definitions` (через helper)
+- [ ] `order_field_definitions` (через helper, после миграции)
 - [ ] `node_field_definitions` (через helper)
-- [ ] `topic_field_definitions` (через helper)
-- [ ] Каждый модуль: 5 шагов, ~50 строк
+- [ ] `topic_field_definitions` (через helper, после проверки)
+- [ ] Каждый модуль: 5 шагов, ~50 строк + регистрация в FieldDefRegistry
 
-### Phase 5 — Flex standalone (rustok-flex модуль)
+### Phase 5 — Flex standalone (rustok-flex крейт, future)
 - [ ] `flex_schemas` + `flex_entries` — свои таблицы
-- [ ] Использует `FieldType`, `ValidationRule` из core
-- [ ] Standalone CRUD + attached mode
-- [ ] Events integration
-- [ ] Indexer handler
+- [ ] Использует `FieldType`, `ValidationRule`, `CustomFieldsSchema` из core
+- [ ] Standalone CRUD (лендинги, формы, справочники)
+- [ ] REST + GraphQL APIs
+- [ ] Events: `FlexSchemaCreated/Updated/Deleted`, `FlexEntryCreated/Updated/Deleted`
+- [ ] RBAC permissions: `flex.schemas.*`, `flex.entries.*`
+- [ ] Indexer: `index_flex_entries` denormalized table
+- [ ] Подробная спецификация при старте этой фазы
 
 ### Phase 6 — Advanced (future)
 - [ ] Conditional fields (show B if A = X)
 - [ ] Computed fields
 - [ ] Field groups (UI sections)
 - [ ] Import/export schemas between tenants
-- [ ] Full-text search via rustok-index
-- [ ] Audit events
+- [ ] Full-text search по custom fields через rustok-index
+- [ ] Schema versioning (история изменений определений)
+- [ ] Data migration tool (ретро-валидация существующих metadata)
 
 ---
 
-## 9. Risks and Mitigations
+## 16. Risks and Mitigations
 
 | Risk | Mitigation |
 |------|------------|
 | JSONB performance | GIN index на metadata, лимит 50 полей per entity |
-| Schema-data inconsistency | Validate on write; CLI tool для retro-validation |
+| Schema-data inconsistency | Validate on write; CLI tool для retro-validation (Phase 6) |
 | Too many tables | Convention-based naming, helper ensures consistency |
 | Breaking changes in FieldType | `#[serde(other)]` Unknown variant for forward compat |
 | Macro complexity | Macro is optional — manual entity always works |
-| N+1 schema loads | Cache per (tenant, entity_type) with TTL |
+| N+1 schema loads | SchemaCache per (tenant, entity_type) + event invalidation |
+| orders missing metadata | Миграция в Phase 4 (pre-req) |
+| Forum decentralized migrations | Verify helper works in crate context |
+| Cache stale after definition change | Event-driven invalidation + TTL safety net |
 
 ---
 
-## 10. Tracking and Updates
+## 17. Tracking and Updates
 
 When updating field schema architecture:
 
