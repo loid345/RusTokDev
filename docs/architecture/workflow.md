@@ -9,7 +9,7 @@
 ## 1. Что это
 
 Визуальный конструктор автоматизаций (аналог n8n / Directus Flows), но:
-- Не параллельная система очередей — встраивается в существующую event-инфраструктуру (outbox → iggy)
+- Не параллельная система очередей — встраивается в существующую event-инфраструктуру (outbox → `EventTransport`)
 - Не внешний сервис — часть платформы с tenant isolation и RBAC
 - Не замена Alloy — дополнение: Workflow оркестрирует, Alloy исполняет произвольную логику
 
@@ -20,7 +20,7 @@
 ```
 DomainEvent (blog.published, order.paid, ...)
        ↓
-  EventBus (outbox → iggy)
+  EventBus (outbox → EventTransport)
        ↓
   WorkflowTriggerHandler          ← подписан на события
        ↓
@@ -32,8 +32,9 @@ DomainEvent (blog.published, order.paid, ...)
 ```
 
 **Ключевое:** workflow НЕ запускает свой event loop. Он — потребитель и производитель событий
-через существующий `TransactionalEventBus`. Вся инфраструктура доставки (retry, DLQ, replay)
-уже есть в iggy.
+через существующий `TransactionalEventBus`. Конкретный транспорт (iggy, rabbitmq, базовый outbox)
+workflow не волнует — он работает через абстракции `EventBus` / `EventTransport`.
+Вся инфраструктура доставки (retry, DLQ, replay) обеспечивается транспортным слоем.
 
 ---
 
@@ -127,7 +128,7 @@ workflow_step_executions
 | **action** | Вызывает сервис модуля (через трейт) |
 | **alloy_script** | Запускает Rhai-скрипт через Alloy engine |
 | **condition** | Ветвление: if/else по данным контекста |
-| **delay** | Ожидание (реализуется через delayed message в iggy) |
+| **delay** | Ожидание (реализуется через scheduled event в `EventTransport`) |
 | **emit_event** | Публикует `DomainEvent` в outbox |
 | **http** | Внешний HTTP-вызов (webhook out) |
 | **notify** | Уведомление (email, Telegram, Slack — через интеграции) |
@@ -205,7 +206,7 @@ self.event_bus.publish_in_tx(
 
 - [ ] Шаг `alloy_script` — интеграция с Alloy engine
 - [ ] Шаг `http` — внешние вызовы
-- [ ] Шаг `delay` — отложенное выполнение через iggy
+- [ ] Шаг `delay` — отложенное выполнение через `EventTransport`
 - [ ] Шаг `notify` — уведомления
 - [ ] Cron trigger
 - [ ] Manual trigger
@@ -232,13 +233,13 @@ self.event_bus.publish_in_tx(
 
 | Решение | Выбор | Обоснование |
 |---------|-------|-------------|
-| Очередь | Существующая (outbox → iggy) | Не дублировать инфраструктуру |
+| Очередь | Существующий `EventBus` / `EventTransport` | Не дублировать инфраструктуру. Transport-agnostic: iggy, rabbitmq, базовый outbox |
 | Хранение | SeaORM entities + JSONB config | Единообразно с другими модулями |
 | Шаги | trait `WorkflowStep` | Расширяемость, модули могут регистрировать свои шаги |
 | Execution | Async, каждый шаг — отдельный span | Observability через существующий telemetry |
 | Alloy | Alloy-шаг = вызов `ScriptOrchestrator` | Переиспользование, не дублирование |
 | Визуальный граф | Хранится как ordered steps + conditions | Простота первой версии, DAG — позже |
-| Delayed steps | Message scheduling через iggy | Не таймеры в памяти |
+| Delayed steps | Scheduled events через `EventTransport` | Не таймеры в памяти. Работает с любым транспортом |
 
 ---
 
@@ -246,12 +247,14 @@ self.event_bus.publish_in_tx(
 
 ```
 rustok-workflow
-  ├── зависит от: rustok-core (трейты, registry, events)
+  ├── зависит от: rustok-core (трейты, registry, events, EventBus, EventTransport)
   ├── интегрируется с: alloy-scripting (шаг alloy_script)
-  ├── использует: rustok-outbox (publish_in_tx)
-  ├── использует: rustok-iggy (delayed messages, DLQ)
+  ├── использует: rustok-outbox (publish_in_tx) — через абстракцию EventBus
   ├── использует: rustok-cache (кэш активных workflows)
   └── используется: любым модулем через event triggers
+
+НЕ зависит напрямую от конкретного транспорта (iggy, rabbitmq, etc.)
+— только от абстракций EventBus / EventTransport из rustok-core.
 ```
 
 > Workflow — горизонтальный модуль, как Alloy. Он не привязан к одному домену —
