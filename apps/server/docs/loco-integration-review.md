@@ -368,11 +368,10 @@ apps/server ── Loco + Axum, оркестрирует всё
   └──────────┘ └──────────┘ └──────────┘ └──────────┘ └──────────┘
 ```
 
-**`rustok-storage` — leaf контракт (уровень 0)**, НЕ модуль:
-- Не реализует `RusToKModule` — у него нет миграций, permissions, lifecycle
-- Нельзя «включить/выключить» — он часть инфраструктуры, как `rustok-events`
-- Не зависит от core — чистый trait + backends + policy
-- Core зависит от него и ре-экспортирует
+**`rustok-storage` — модуль-библиотека (уровень 0, leaf)**:
+- Сейчас не реализует `RusToKModule` — чистый trait + backends + policy
+- Часть инфраструктуры, как `rustok-events`
+- Не зависит от core — Core зависит от него и ре-экспортирует
 
 **`rustok-media` — Core модуль (уровень 2)**, `ModuleKind::Core`:
 - Реализует `RusToKModule`: миграции, permissions, event listeners, health
@@ -548,7 +547,7 @@ pub struct InMemoryStorageBackend { ... }
 > - `index` — CQRS read-path, storefront читает из index tables
 > - `media` — **медиа-библиотека, файловое хранилище для всей платформы** ← НОВЫЙ
 >
-> `storage` — не модуль, а leaf-контракт уровня 0 (как `events`, `telemetry`). Нельзя отключить по определению — он не участвует в `ModuleRegistry`.
+> `storage` — модуль-библиотека уровня 0 (как `events`, `telemetry`). Не участвует в `ModuleRegistry`.
 
 #### `apps/server` (оркестратор)
 

@@ -124,43 +124,41 @@ graph TD
 
 ### Core Platform Crates (`crates/`)
 
-#### Leaf контракты (уровень 0 — без зависимости от core)
+#### Модули-библиотеки уровня 0 (leaf — без зависимости от core)
 
-Не реализуют `RusToKModule`. Предоставляют чистые типы и трейты. Core зависит от них и ре-экспортирует.
-
-| Path | Name | Description |
-|------|------|-------------|
-| `crates/rustok-events` | **Events Contracts** | Leaf. Stable import point for `DomainEvent`/`EventEnvelope`. Core re-exports. ([CRATE_API](../../crates/rustok-events/CRATE_API.md)) |
-| `crates/rustok-telemetry` | **Telemetry** | Leaf. Observability setup (OTLP, Tracing, Prometheus metrics). Core re-exports. Not a `RusToKModule`. ([CRATE_API](../../crates/rustok-telemetry/CRATE_API.md)) |
-| `crates/rustok-storage` | **Storage** *(planned)* | Leaf. `StorageBackend` trait + Local/S3/GCP/InMemory backends, `StoragePolicy`. No ORM, no domain logic. Core will re-export. Not a `RusToKModule`. |
-
-#### Core агрегатор (уровень 1)
+Предоставляют чистые типы и трейты. Core зависит от них и ре-экспортирует.
 
 | Path | Name | Description |
 |------|------|-------------|
-| `crates/rustok-core` | **Core (critical)** | Aggregator. Re-exports leaf contracts, provides `CacheBackend`, `ModuleRegistry`, `RusToKModule`, RBAC primitives, i18n, `SecurityContext`, circuit breaker. Содержит **Flex** — библиотеку-инструмент кастомных полей (`field_schema.rs`, `HasCustomFields`, migration helpers). Not a `RusToKModule`. ([CRATE_API](../../crates/rustok-core/CRATE_API.md)) |
+| `crates/rustok-events` | **Events Contracts** | Модуль-библиотека (leaf). Stable import point for `DomainEvent`/`EventEnvelope`. Core re-exports. ([CRATE_API](../../crates/rustok-events/CRATE_API.md)) |
+| `crates/rustok-telemetry` | **Telemetry** | Модуль-библиотека (leaf). Observability setup (OTLP, Tracing, Prometheus metrics). Core re-exports. ([CRATE_API](../../crates/rustok-telemetry/CRATE_API.md)) |
+| `crates/rustok-storage` | **Storage** *(planned)* | Модуль-библиотека (leaf). `StorageBackend` trait + Local/S3/GCP/InMemory backends, `StoragePolicy`. Core will re-export. |
 
-> **Flex** — набор типов, валидаторов и migration-хелперов внутри `rustok-core`.
-> Не является отдельным модулем и не имеет своих таблиц — данные живут внутри модуля-потребителя.
-> Режим **Attached** (кастомные поля для сущностей) — в core. Режим **Standalone** (`rustok-flex` crate) — запланирован.
+#### Модуль-агрегатор (уровень 1)
+
+| Path | Name | Description |
+|------|------|-------------|
+| `crates/rustok-core` | **Core (critical)** | Модуль-библиотека (агрегатор). Re-exports leaf contracts, provides `CacheBackend`, `ModuleRegistry`, `RusToKModule`, RBAC primitives, i18n, `SecurityContext`, circuit breaker. Содержит **Flex** — набор типов, валидаторов и migration-хелперов для кастомных полей (`field_schema.rs`, `HasCustomFields`). ([CRATE_API](../../crates/rustok-core/CRATE_API.md)) |
+
+> **Flex** — часть модуля `rustok-core`. Сейчас — набор типов и хелперов (модуль-библиотека). Данные живут внутри модуля-потребителя.
+> Режим **Attached** (кастомные поля для сущностей) — в core. Режим **Standalone** (`rustok-flex`) — запланирован.
 > План реализации: [`docs/architecture/flex.md`](../architecture/flex.md).
 
-#### Инфраструктурные crates (не модули)
+#### Инфраструктурные модули-библиотеки
 
 | Path | Name | Description |
 |------|------|-------------|
 | `crates/rustok-cache` | **Cache** | Redis connection lifecycle, `CacheModule` + `CacheService`. `CacheBackend` (Moka + Redis + Fallback): circuit breaker, anti-stampede coalescing, negative cache, Redis pub/sub invalidation, metrics. ([docs](../../crates/rustok-cache/docs/README.md)) |
-| `crates/rustok-outbox` | **Outbox (Core, critical)** | Core event delivery (`TransactionalEventBus`). Not a `RusToKModule` — initialized via `build_event_runtime()`. ([CRATE_API](../../crates/rustok-outbox/CRATE_API.md)) |
+| `crates/rustok-outbox` | **Outbox (Core, critical)** | Модуль-библиотека. Core event delivery (`TransactionalEventBus`). Initialized via `build_event_runtime()`. ([CRATE_API](../../crates/rustok-outbox/CRATE_API.md)) |
 | `crates/rustok-iggy` | **Iggy Transport** | L2 streaming `EventTransport` implementation with serialization, topology, DLQ, replay. ([CRATE_API](../../crates/rustok-iggy/CRATE_API.md)) |
 | `crates/rustok-iggy-connector` | **Iggy Connector** | Embedded/Remote mode switching, connection lifecycle, message I/O. ([CRATE_API](../../crates/rustok-iggy-connector/CRATE_API.md)) |
 | `crates/rustok-mcp` | **MCP** | MCP adapter crate with embedded `rustok-mcp-server` binary. Exposes RusToK tools/resources via the MCP protocol using the `rmcp` SDK. ([CRATE_API](../../crates/rustok-mcp/CRATE_API.md)) |
 | `crates/rustok-test-utils` | **Test Utils** | Shared testing helpers and mocks. `[dev-dependencies]` only — never in production binary. ([CRATE_API](../../crates/rustok-test-utils/CRATE_API.md)) |
 
-### Domain Modules (`crates/`)
+### Полноценные модули (`crates/`)
 
-These implement `RusToKModule` and are registered via `ModuleRegistry` in `apps/server`.
-Core modules are mandatory for the platform runtime; optional modules are additive domain capabilities.
-The core baseline includes `ModuleKind::Core` modules and additional mandatory core crates.
+Реализуют `RusToKModule`, регистрируются через `ModuleRegistry` в `apps/server`.
+Имеют таблицы, entities, бизнес-логику.
 
 #### Core-модули (уровень 2 — `ModuleKind::Core`, нельзя отключить)
 
@@ -183,12 +181,14 @@ The core baseline includes `ModuleKind::Core` modules and additional mandatory c
 | `crates/alloy-scripting` | **Alloy Scripting** | `Optional` | `rustok-core` (registered via `AlloyModule` in `apps/server/src/modules/alloy.rs`) |
 
 > **4-уровневая архитектура платформы:**
-> - Уровень 0 (leaf контракты): `rustok-events`, `rustok-telemetry`, `rustok-storage` *(planned)*
-> - Уровень 1 (core агрегатор): `rustok-core` (зависит от leaf, ре-экспортирует их)
-> - Уровень 2 (Core модули, всегда активны): `rustok-tenant`, `rustok-rbac`, `rustok-index`, `rustok-media` *(planned)*
-> - Уровень 3 (Optional модули, toggle per-tenant): `content`, `commerce`, `blog`, `forum`, `pages`, `alloy-scripting`
+> - Уровень 0 (модули-библиотеки, leaf): `rustok-events`, `rustok-telemetry`, `rustok-storage` *(planned)*
+> - Уровень 1 (модуль-агрегатор): `rustok-core` (зависит от leaf, ре-экспортирует их)
+> - Уровень 2 (полноценные Core-модули, всегда активны): `rustok-tenant`, `rustok-rbac`, `rustok-index`, `rustok-media` *(planned)*
+> - Уровень 3 (полноценные Optional-модули, toggle per-tenant): `content`, `commerce`, `blog`, `forum`, `pages`, `alloy-scripting`
 >
-> Обязательный базис платформы: `rustok-core`, `rustok-outbox`, `rustok-telemetry`, `rustok-tenant`, `rustok-rbac`, `rustok-index` + инфраструктурные crates (`rustok-cache`, `rustok-events`).
+> Обязательный базис платформы: `rustok-core`, `rustok-outbox`, `rustok-telemetry`, `rustok-tenant`, `rustok-rbac`, `rustok-index` + инфраструктурные модули (`rustok-cache`, `rustok-events`).
+>
+> **Граница подвижна:** модуль-библиотека может получить таблицы и стать полноценным модулем.
 
 ### Module UI Packages Layer (`crates/*/ui/*`)
 
