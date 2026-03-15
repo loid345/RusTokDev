@@ -54,8 +54,9 @@ pub use error::{
     ValidationErrorBuilder,
 };
 pub use field_schema::{
-    is_valid_field_key, is_valid_locale_key, CustomFieldsSchema, FieldDefinition, FieldErrorCode,
-    FieldType, FieldValidationError, HasCustomFields, SelectOption, ValidationRule,
+    create_field_definitions_table, drop_field_definitions_table, is_valid_field_key,
+    is_valid_locale_key, CustomFieldsSchema, FieldDefinition, FieldErrorCode, FieldType,
+    FieldValidationError, FlexError, HasCustomFields, SelectOption, ValidationRule,
 };
 pub use events::{
     event_schema, DispatcherConfig, DomainEvent, EventBus, EventBusStats, EventConsumerRuntime,

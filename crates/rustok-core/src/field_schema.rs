@@ -793,6 +793,199 @@ pub fn is_valid_locale_key(key: &str) -> bool {
 }
 
 // ---------------------------------------------------------------------------
+// FlexError — service-layer error type
+// ---------------------------------------------------------------------------
+
+/// Top-level error type for Flex operations (field definition CRUD, validation).
+#[derive(Debug)]
+pub enum FlexError {
+    /// Requested entity type is not registered.
+    UnknownEntityType(String),
+    /// Too many field definitions for the entity type in this tenant.
+    TooManyFields { entity_type: String, max: usize },
+    /// The provided field key does not match `^[a-z][a-z0-9_]{0,127}$`.
+    InvalidFieldKey(String),
+    /// A field with this key already exists for the entity type + tenant.
+    DuplicateFieldKey(String),
+    /// Field definition not found.
+    NotFound(uuid::Uuid),
+    /// Metadata validation failed.
+    ValidationFailed(Vec<FieldValidationError>),
+    /// Underlying database error.
+    Database(String),
+}
+
+impl std::fmt::Display for FlexError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::UnknownEntityType(t) => write!(f, "Unknown entity type: {t}"),
+            Self::TooManyFields { entity_type, max } => {
+                write!(f, "Too many field definitions for {entity_type} (max {max})")
+            }
+            Self::InvalidFieldKey(k) => write!(f, "Invalid field key: {k}"),
+            Self::DuplicateFieldKey(k) => write!(f, "Field key already exists: {k}"),
+            Self::NotFound(id) => write!(f, "Field definition not found: {id}"),
+            Self::ValidationFailed(_) => write!(f, "Custom field validation failed"),
+            Self::Database(e) => write!(f, "Database error: {e}"),
+        }
+    }
+}
+
+impl std::error::Error for FlexError {}
+
+// ---------------------------------------------------------------------------
+// Migration helpers — Phase 1
+// ---------------------------------------------------------------------------
+
+/// Creates a `{prefix}_field_definitions` table in any module's migration.
+///
+/// # Column layout
+///
+/// | Column | Type | Notes |
+/// |---|---|---|
+/// | id | UUID PK | |
+/// | tenant_id | UUID NOT NULL | tenant isolation |
+/// | field_key | VARCHAR(128) NOT NULL | snake_case |
+/// | field_type | VARCHAR(32) NOT NULL | FieldType serialised |
+/// | label | JSONB NOT NULL | `{"en": "…"}` |
+/// | description | JSONB | nullable |
+/// | is_required | BOOLEAN NOT NULL DEFAULT false | |
+/// | default_value | JSONB | nullable |
+/// | validation | JSONB | nullable |
+/// | position | INTEGER NOT NULL DEFAULT 0 | |
+/// | is_active | BOOLEAN NOT NULL DEFAULT true | |
+/// | created_at | TIMESTAMPTZ NOT NULL DEFAULT now() | |
+/// | updated_at | TIMESTAMPTZ NOT NULL DEFAULT now() | |
+///
+/// # Indexes created
+///
+/// * `UNIQUE (tenant_id, field_key)` — prevents duplicates per tenant
+/// * `idx_{prefix}_fd_tenant_active (tenant_id, is_active)` — fast active-field queries
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use rustok_core::field_schema::create_field_definitions_table;
+///
+/// async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+///     create_field_definitions_table(manager, "user", "users").await
+/// }
+/// ```
+pub async fn create_field_definitions_table(
+    manager: &sea_orm_migration::prelude::SchemaManager<'_>,
+    prefix: &str,
+    _parent_table: &str,
+) -> Result<(), sea_orm_migration::prelude::DbErr> {
+    use sea_orm_migration::prelude::*;
+
+    let table_name = format!("{prefix}_field_definitions");
+
+    manager
+        .create_table(
+            Table::create()
+                .table(Alias::new(&table_name))
+                .if_not_exists()
+                .col(
+                    ColumnDef::new(Alias::new("id"))
+                        .uuid()
+                        .not_null()
+                        .primary_key(),
+                )
+                .col(ColumnDef::new(Alias::new("tenant_id")).uuid().not_null())
+                .col(
+                    ColumnDef::new(Alias::new("field_key"))
+                        .string_len(128)
+                        .not_null(),
+                )
+                .col(
+                    ColumnDef::new(Alias::new("field_type"))
+                        .string_len(32)
+                        .not_null(),
+                )
+                .col(
+                    ColumnDef::new(Alias::new("label"))
+                        .json_binary()
+                        .not_null(),
+                )
+                .col(ColumnDef::new(Alias::new("description")).json_binary())
+                .col(
+                    ColumnDef::new(Alias::new("is_required"))
+                        .boolean()
+                        .not_null()
+                        .default(false),
+                )
+                .col(ColumnDef::new(Alias::new("default_value")).json_binary())
+                .col(ColumnDef::new(Alias::new("validation")).json_binary())
+                .col(
+                    ColumnDef::new(Alias::new("position"))
+                        .integer()
+                        .not_null()
+                        .default(0),
+                )
+                .col(
+                    ColumnDef::new(Alias::new("is_active"))
+                        .boolean()
+                        .not_null()
+                        .default(true),
+                )
+                .col(
+                    ColumnDef::new(Alias::new("created_at"))
+                        .timestamp_with_time_zone()
+                        .not_null()
+                        .default(Expr::current_timestamp()),
+                )
+                .col(
+                    ColumnDef::new(Alias::new("updated_at"))
+                        .timestamp_with_time_zone()
+                        .not_null()
+                        .default(Expr::current_timestamp()),
+                )
+                .to_owned(),
+        )
+        .await?;
+
+    // UNIQUE (tenant_id, field_key) — prevents duplicates per tenant
+    manager
+        .create_index(
+            Index::create()
+                .name(&format!("uq_{prefix}_fd_tenant_key"))
+                .table(Alias::new(&table_name))
+                .col(Alias::new("tenant_id"))
+                .col(Alias::new("field_key"))
+                .unique()
+                .to_owned(),
+        )
+        .await?;
+
+    // idx_{prefix}_fd_tenant_active — fast active-field queries
+    manager
+        .create_index(
+            Index::create()
+                .name(&format!("idx_{prefix}_fd_tenant_active"))
+                .table(Alias::new(&table_name))
+                .col(Alias::new("tenant_id"))
+                .col(Alias::new("is_active"))
+                .to_owned(),
+        )
+        .await
+}
+
+/// Drops the `{prefix}_field_definitions` table created by
+/// [`create_field_definitions_table`].
+pub async fn drop_field_definitions_table(
+    manager: &sea_orm_migration::prelude::SchemaManager<'_>,
+    prefix: &str,
+) -> Result<(), sea_orm_migration::prelude::DbErr> {
+    use sea_orm_migration::prelude::*;
+
+    let table_name = format!("{prefix}_field_definitions");
+
+    manager
+        .drop_table(Table::drop().table(Alias::new(&table_name)).to_owned())
+        .await
+}
+
+// ---------------------------------------------------------------------------
 // Unit tests
 // ---------------------------------------------------------------------------
 
