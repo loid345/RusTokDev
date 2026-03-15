@@ -9,5 +9,5 @@ pub mod user;
 pub use error::AuthError;
 pub use migration::UsersMigration;
 pub use repository::UserRepository;
-pub use service::{AuthService, AuthTokens, RegisterInput};
+pub use service::{IdentityService, IdentityTokens, RegistrationInput};
 pub use user::Model as User;

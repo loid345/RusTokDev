@@ -1,6 +1,6 @@
 use sea_orm::prelude::*;
 
-use rustok_core::{generate_id, UserRole, UserStatus};
+use rustok_core::{generate_id, UserStatus};
 
 use super::_entities::users::{self};
 pub use super::_entities::users::{ActiveModel, Column, Entity, Model};
@@ -8,10 +8,6 @@ pub use super::_entities::users::{ActiveModel, Column, Entity, Model};
 impl Model {
     pub fn is_active(&self) -> bool {
         self.status == UserStatus::Active
-    }
-
-    pub fn is_admin(&self) -> bool {
-        matches!(self.role, UserRole::Admin | UserRole::SuperAdmin)
     }
 
     pub fn is_email_verified(&self) -> bool {
@@ -27,7 +23,6 @@ impl Model {
             email: format!("service+{}@oauth.internal", app_id),
             password_hash: String::new(),
             name: Some("OAuth Service".to_string()),
-            role: UserRole::Customer,
             status: UserStatus::Active,
             email_verified_at: None,
             last_login_at: None,
@@ -46,7 +41,6 @@ impl ActiveModel {
             email: sea_orm::ActiveValue::Set(email.to_lowercase()),
             password_hash: sea_orm::ActiveValue::Set(password_hash.to_string()),
             name: sea_orm::ActiveValue::NotSet,
-            role: sea_orm::ActiveValue::Set(UserRole::Customer),
             status: sea_orm::ActiveValue::Set(UserStatus::Active),
             email_verified_at: sea_orm::ActiveValue::NotSet,
             last_login_at: sea_orm::ActiveValue::NotSet,
@@ -54,12 +48,6 @@ impl ActiveModel {
             created_at: sea_orm::ActiveValue::NotSet,
             updated_at: sea_orm::ActiveValue::NotSet,
         }
-    }
-
-    pub fn new_admin(tenant_id: Uuid, email: &str, password_hash: &str) -> Self {
-        let mut model = Self::new(tenant_id, email, password_hash);
-        model.role = sea_orm::ActiveValue::Set(UserRole::Admin);
-        model
     }
 }
 
@@ -73,20 +61,6 @@ impl Entity {
             .filter(users::Column::TenantId.eq(tenant_id))
             .filter(users::Column::Email.eq(email.to_lowercase()))
             .one(db)
-            .await
-    }
-
-    pub async fn find_admins(
-        db: &DatabaseConnection,
-        tenant_id: Uuid,
-    ) -> Result<Vec<Model>, DbErr> {
-        Self::find()
-            .filter(users::Column::TenantId.eq(tenant_id))
-            .filter(users::Column::Role.is_in([
-                UserRole::Admin.to_string(),
-                UserRole::SuperAdmin.to_string(),
-            ]))
-            .all(db)
             .await
     }
 }

@@ -120,6 +120,8 @@ fn create_topic_input_fields() {
         title: "Hello".to_string(),
         slug: None,
         body: "World".to_string(),
+        body_format: "markdown".to_string(),
+        content_json: None,
         tags: vec!["tag1".to_string()],
     };
     assert_eq!(input.locale, "en");
@@ -151,6 +153,8 @@ fn create_reply_input_fields() {
     let input = CreateReplyInput {
         locale: "en".to_string(),
         content: "Nice post!".to_string(),
+        content_format: "markdown".to_string(),
+        content_json: None,
         parent_reply_id: None,
     };
     assert_eq!(input.content, "Nice post!");

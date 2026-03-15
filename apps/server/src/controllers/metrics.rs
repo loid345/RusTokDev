@@ -18,7 +18,9 @@ use crate::middleware::tenant::tenant_cache_stats;
 use crate::services::auth_lifecycle::AuthLifecycleService;
 use crate::services::rbac_consistency::{load_rbac_consistency_stats, RbacConsistencyStats};
 use crate::services::rbac_service::{RbacResolverMetricsSnapshot, RbacService};
-use crate::services::runtime_guardrails::collect_runtime_guardrail_snapshot;
+use crate::services::runtime_guardrails::{
+    collect_runtime_guardrail_snapshot, RuntimeGuardrailSnapshot,
+};
 use rustok_telemetry::metrics::update_queue_depth;
 use tracing::warn;
 
@@ -111,6 +113,10 @@ rustok_tenant_invalidation_listener_status {invalidation_listener_status}\n",
 
 async fn render_runtime_guardrail_metrics(ctx: &AppContext) -> String {
     let snapshot = collect_runtime_guardrail_snapshot(ctx).await;
+    format_runtime_guardrail_metrics(&snapshot)
+}
+
+fn format_runtime_guardrail_metrics(snapshot: &RuntimeGuardrailSnapshot) -> String {
     let queue_depth = snapshot.event_bus.current_depth as i64;
     update_queue_depth("server_event_bus", queue_depth);
     let mut rate_limit_lines = String::new();
@@ -119,13 +125,29 @@ async fn render_runtime_guardrail_metrics(ctx: &AppContext) -> String {
             "rustok_runtime_guardrail_rate_limit_backend_healthy{{namespace=\"{namespace}\",backend=\"{backend}\"}} {healthy}\n\
 rustok_runtime_guardrail_rate_limit_state{{namespace=\"{namespace}\"}} {state}\n\
 rustok_runtime_guardrail_rate_limit_total_entries{{namespace=\"{namespace}\"}} {total_entries}\n\
-rustok_runtime_guardrail_rate_limit_active_clients{{namespace=\"{namespace}\"}} {active_clients}\n",
+rustok_runtime_guardrail_rate_limit_active_clients{{namespace=\"{namespace}\"}} {active_clients}\n\
+rustok_runtime_guardrail_rate_limit_config{{namespace=\"{namespace}\",setting=\"enabled\"}} {enabled}\n\
+rustok_runtime_guardrail_rate_limit_config{{namespace=\"{namespace}\",setting=\"max_requests\"}} {max_requests}\n\
+rustok_runtime_guardrail_rate_limit_config{{namespace=\"{namespace}\",setting=\"window_seconds\"}} {window_seconds}\n\
+rustok_runtime_guardrail_rate_limit_config{{namespace=\"{namespace}\",setting=\"trusted_auth_dimensions\"}} {trusted_auth_dimensions}\n\
+rustok_runtime_guardrail_rate_limit_config{{namespace=\"{namespace}\",setting=\"memory_warning_entries\"}} {memory_warning_entries}\n\
+rustok_runtime_guardrail_rate_limit_config{{namespace=\"{namespace}\",setting=\"memory_critical_entries\"}} {memory_critical_entries}\n",
             namespace = limiter.namespace,
             backend = limiter.backend,
             healthy = if limiter.healthy { 1 } else { 0 },
             state = limiter.state.metric_value(),
             total_entries = limiter.total_entries,
             active_clients = limiter.active_clients,
+            enabled = if limiter.policy.enabled { 1 } else { 0 },
+            max_requests = limiter.policy.max_requests,
+            window_seconds = limiter.policy.window_seconds,
+            trusted_auth_dimensions = if limiter.policy.trusted_auth_dimensions {
+                1
+            } else {
+                0
+            },
+            memory_warning_entries = limiter.policy.memory_warning_entries,
+            memory_critical_entries = limiter.policy.memory_critical_entries,
         ));
     }
 
@@ -263,7 +285,6 @@ fn format_rbac_metrics(
             "rustok_rbac_permission_denied_reason_missing_permissions {denied_missing_permissions}\n",
             "rustok_rbac_permission_denied_reason_unknown {denied_unknown}\n",
             "rustok_rbac_claim_role_mismatch_total {claim_role_mismatch_total}\n",
-            "rustok_rbac_decision_mismatch_total {decision_mismatch_total}\n",
             "rustok_rbac_shadow_compare_failures_total {shadow_compare_failures_total}\n",
             "rbac_engine_decisions_total {engine_decisions_total}\n",
             "rustok_rbac_engine_decisions_relation_total {engine_decisions_relation_total}\n",
@@ -294,7 +315,6 @@ fn format_rbac_metrics(
         denied_missing_permissions = stats.denied_missing_permissions,
         denied_unknown = stats.denied_unknown,
         claim_role_mismatch_total = stats.claim_role_mismatch_total,
-        decision_mismatch_total = stats.decision_mismatch_total,
         shadow_compare_failures_total = stats.shadow_compare_failures_total,
         engine_decisions_total = engine_decisions_total,
         engine_decisions_relation_total = stats.engine_decisions_relation_total,
@@ -313,9 +333,16 @@ fn format_rbac_metrics(
 
 #[cfg(test)]
 mod tests {
-    use super::{format_rbac_metrics, render_auth_lifecycle_metrics};
+    use super::{
+        format_rbac_metrics, format_runtime_guardrail_metrics, render_auth_lifecycle_metrics,
+    };
     use crate::services::auth_lifecycle::AuthLifecycleService;
     use crate::services::rbac_service::RbacService;
+    use crate::services::runtime_guardrails::{
+        EventBusGuardrailSnapshot, EventTransportGuardrailSnapshot, RateLimitGuardrailSnapshot,
+        RateLimitPolicySnapshot, RuntimeGuardrailRollout, RuntimeGuardrailSnapshot,
+        RuntimeGuardrailStatus,
+    };
 
     fn assert_metric_line(payload: &str, metric_name: &str) {
         let has_exact_line = payload.lines().any(|line| {
@@ -342,12 +369,6 @@ mod tests {
     fn rbac_metrics_include_claim_role_mismatch_counter() {
         let payload = format_rbac_metrics(RbacService::metrics_snapshot(), 0, 0, 0);
         assert!(payload.contains("rustok_rbac_claim_role_mismatch_total"));
-    }
-
-    #[test]
-    fn rbac_metrics_include_decision_mismatch_counter() {
-        let payload = format_rbac_metrics(RbacService::metrics_snapshot(), 0, 0, 0);
-        assert!(payload.contains("rustok_rbac_decision_mismatch_total"));
     }
 
     #[test]
@@ -434,5 +455,66 @@ mod tests {
         assert!(payload.contains("auth_change_password_sessions_revoked_total"));
         assert!(payload.contains("auth_flow_inconsistency_total"));
         assert!(payload.contains("auth_login_inactive_user_attempt_total"));
+    }
+
+    #[test]
+    fn runtime_guardrail_metrics_include_rate_limit_policy_config() {
+        let payload = format_runtime_guardrail_metrics(&RuntimeGuardrailSnapshot {
+            status: RuntimeGuardrailStatus::Ok,
+            observed_status: RuntimeGuardrailStatus::Ok,
+            rollout: RuntimeGuardrailRollout::Observe,
+            reasons: Vec::new(),
+            rate_limits: vec![RateLimitGuardrailSnapshot {
+                namespace: "oauth",
+                backend: "redis",
+                distributed: true,
+                policy: RateLimitPolicySnapshot {
+                    enabled: true,
+                    max_requests: 35,
+                    window_seconds: 60,
+                    trusted_auth_dimensions: true,
+                    memory_warning_entries: 1_000,
+                    memory_critical_entries: 5_000,
+                },
+                active_clients: 7,
+                total_entries: 11,
+                healthy: true,
+                state: RuntimeGuardrailStatus::Ok,
+            }],
+            event_bus: EventBusGuardrailSnapshot {
+                backpressure_enabled: false,
+                current_depth: 0,
+                max_depth: 0,
+                state: RuntimeGuardrailStatus::Ok,
+                events_rejected: 0,
+                warning_count: 0,
+                critical_count: 0,
+            },
+            event_transport: EventTransportGuardrailSnapshot {
+                relay_fallback_active: false,
+                channel_capacity: 128,
+            },
+        });
+
+        assert_metric_labeled_line(
+            &payload,
+            "rustok_runtime_guardrail_rate_limit_config",
+            "{namespace=\"oauth\",setting=\"enabled\"}",
+        );
+        assert_metric_labeled_line(
+            &payload,
+            "rustok_runtime_guardrail_rate_limit_config",
+            "{namespace=\"oauth\",setting=\"max_requests\"}",
+        );
+        assert_metric_labeled_line(
+            &payload,
+            "rustok_runtime_guardrail_rate_limit_config",
+            "{namespace=\"oauth\",setting=\"trusted_auth_dimensions\"}",
+        );
+        assert_metric_labeled_line(
+            &payload,
+            "rustok_runtime_guardrail_rate_limit_config",
+            "{namespace=\"oauth\",setting=\"memory_critical_entries\"}",
+        );
     }
 }

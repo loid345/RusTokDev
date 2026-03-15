@@ -1,16 +1,4 @@
-use rustok_core::{Permission, Rbac, UserRole};
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ShadowDecision {
-    pub legacy_allowed: bool,
-    pub relation_allowed: bool,
-}
-
-impl ShadowDecision {
-    pub fn mismatch(self) -> bool {
-        self.legacy_allowed != self.relation_allowed
-    }
-}
+use rustok_core::Permission;
 
 #[derive(Debug, Clone, Copy)]
 pub enum ShadowCheck<'a> {
@@ -40,105 +28,13 @@ impl ShadowCheck<'_> {
     }
 }
 
-pub fn compare_single_permission(
-    legacy_role: &UserRole,
-    required_permission: &Permission,
-    relation_allowed: bool,
-) -> ShadowDecision {
-    ShadowDecision {
-        legacy_allowed: Rbac::has_permission(legacy_role, required_permission),
-        relation_allowed,
-    }
-}
-
-pub fn compare_any_permissions(
-    legacy_role: &UserRole,
-    required_permissions: &[Permission],
-    relation_allowed: bool,
-) -> ShadowDecision {
-    ShadowDecision {
-        legacy_allowed: Rbac::has_any_permission(legacy_role, required_permissions),
-        relation_allowed,
-    }
-}
-
-pub fn compare_all_permissions(
-    legacy_role: &UserRole,
-    required_permissions: &[Permission],
-    relation_allowed: bool,
-) -> ShadowDecision {
-    ShadowDecision {
-        legacy_allowed: Rbac::has_all_permissions(legacy_role, required_permissions),
-        relation_allowed,
-    }
-}
-
-pub fn compare_shadow_decision(
-    legacy_role: &UserRole,
-    check: ShadowCheck<'_>,
-    relation_allowed: bool,
-) -> ShadowDecision {
-    match check {
-        ShadowCheck::Single(permission) => {
-            compare_single_permission(legacy_role, permission, relation_allowed)
-        }
-        ShadowCheck::Any(permissions) => {
-            compare_any_permissions(legacy_role, permissions, relation_allowed)
-        }
-        ShadowCheck::All(permissions) => {
-            compare_all_permissions(legacy_role, permissions, relation_allowed)
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{
-        compare_any_permissions, compare_shadow_decision, compare_single_permission, ShadowCheck,
-    };
-    use rustok_core::{Action, Permission, Resource, UserRole};
+    use super::ShadowCheck;
+    use rustok_core::{Action, Permission, Resource};
 
     fn permission(resource: Resource, action: Action) -> Permission {
         Permission::new(resource, action)
-    }
-
-    #[test]
-    fn detects_single_permission_mismatch() {
-        let required = permission(Resource::Users, Action::Delete);
-        let decision = compare_single_permission(&UserRole::Manager, &required, true);
-
-        assert!(!decision.legacy_allowed);
-        assert!(decision.mismatch());
-    }
-
-    #[test]
-    fn any_permissions_match_when_legacy_allows_one() {
-        let required = vec![
-            permission(Resource::BlogPosts, Action::Read),
-            permission(Resource::Users, Action::Delete),
-        ];
-
-        let decision = compare_any_permissions(&UserRole::Manager, &required, true);
-
-        assert!(decision.legacy_allowed);
-        assert!(!decision.mismatch());
-    }
-
-    #[test]
-    fn unified_shadow_check_supports_all_modes() {
-        let required = vec![
-            permission(Resource::BlogPosts, Action::Read),
-            permission(Resource::Users, Action::Delete),
-        ];
-
-        let single =
-            compare_shadow_decision(&UserRole::Manager, ShadowCheck::Single(&required[0]), true);
-        let any = compare_shadow_decision(&UserRole::Manager, ShadowCheck::Any(&required), true);
-        let all = compare_shadow_decision(&UserRole::Manager, ShadowCheck::All(&required), true);
-
-        assert!(!single.mismatch());
-        assert!(!any.mismatch());
-        assert!(all.mismatch());
     }
 
     #[test]

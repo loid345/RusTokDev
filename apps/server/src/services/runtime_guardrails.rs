@@ -60,10 +60,21 @@ pub struct RateLimitGuardrailSnapshot {
     pub namespace: &'static str,
     pub backend: &'static str,
     pub distributed: bool,
+    pub policy: RateLimitPolicySnapshot,
     pub active_clients: usize,
     pub total_entries: usize,
     pub healthy: bool,
     pub state: RuntimeGuardrailStatus,
+}
+
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct RateLimitPolicySnapshot {
+    pub enabled: bool,
+    pub max_requests: usize,
+    pub window_seconds: u64,
+    pub trusted_auth_dimensions: bool,
+    pub memory_warning_entries: usize,
+    pub memory_critical_entries: usize,
 }
 
 #[derive(Debug, Clone, Serialize, ToSchema)]
@@ -303,10 +314,12 @@ async fn collect_rate_limit_snapshot(
 ) -> RateLimitGuardrailSnapshot {
     let stats = limiter.get_stats().await;
     let healthy = limiter.check_backend_health().await.is_ok();
-    let thresholds = policy.thresholds_for(namespace);
-    let state = if !stats.distributed && stats.total_entries >= thresholds.critical_entries {
+    let namespace_policy = policy.namespace_policy(namespace);
+    let state = if !stats.distributed
+        && stats.total_entries >= namespace_policy.memory_critical_entries
+    {
         RuntimeGuardrailStatus::Critical
-    } else if !stats.distributed && stats.total_entries >= thresholds.warning_entries {
+    } else if !stats.distributed && stats.total_entries >= namespace_policy.memory_warning_entries {
         RuntimeGuardrailStatus::Degraded
     } else {
         RuntimeGuardrailStatus::Ok
@@ -316,6 +329,14 @@ async fn collect_rate_limit_snapshot(
         namespace,
         backend: limiter.backend_kind(),
         distributed: stats.distributed,
+        policy: RateLimitPolicySnapshot {
+            enabled: limiter.enabled(),
+            max_requests: limiter.max_requests(),
+            window_seconds: limiter.window_secs(),
+            trusted_auth_dimensions: namespace_policy.trusted_auth_dimensions,
+            memory_warning_entries: namespace_policy.memory_warning_entries,
+            memory_critical_entries: namespace_policy.memory_critical_entries,
+        },
         active_clients: stats.active_clients,
         total_entries: stats.total_entries,
         healthy,
@@ -326,23 +347,24 @@ async fn collect_rate_limit_snapshot(
 #[derive(Debug, Clone, Copy)]
 struct RuntimeGuardrailPolicy {
     rollout: RuntimeGuardrailRollout,
-    api_thresholds: RateLimitThresholds,
-    auth_thresholds: RateLimitThresholds,
-    oauth_thresholds: RateLimitThresholds,
+    api_policy: RateLimitNamespacePolicy,
+    auth_policy: RateLimitNamespacePolicy,
+    oauth_policy: RateLimitNamespacePolicy,
 }
 
 #[derive(Debug, Clone, Copy)]
-struct RateLimitThresholds {
-    warning_entries: usize,
-    critical_entries: usize,
+struct RateLimitNamespacePolicy {
+    trusted_auth_dimensions: bool,
+    memory_warning_entries: usize,
+    memory_critical_entries: usize,
 }
 
 impl RuntimeGuardrailPolicy {
-    fn thresholds_for(&self, namespace: &str) -> RateLimitThresholds {
+    fn namespace_policy(&self, namespace: &str) -> RateLimitNamespacePolicy {
         match namespace {
-            "auth" => self.auth_thresholds,
-            "oauth" => self.oauth_thresholds,
-            _ => self.api_thresholds,
+            "auth" => self.auth_policy,
+            "oauth" => self.oauth_policy,
+            _ => self.api_policy,
         }
     }
 }
@@ -351,6 +373,7 @@ fn load_runtime_guardrail_policy(ctx: &AppContext) -> RuntimeGuardrailPolicy {
     let settings =
         RustokSettings::from_settings(&ctx.config.settings).unwrap_or_else(|_| RustokSettings {
             tenant: Default::default(),
+            build: Default::default(),
             search: Default::default(),
             features: Default::default(),
             rate_limit: Default::default(),
@@ -366,17 +389,20 @@ fn load_runtime_guardrail_policy(ctx: &AppContext) -> RuntimeGuardrailPolicy {
             GuardrailRolloutMode::Observe => RuntimeGuardrailRollout::Observe,
             GuardrailRolloutMode::Enforce => RuntimeGuardrailRollout::Enforce,
         },
-        api_thresholds: RateLimitThresholds {
-            warning_entries: thresholds.api_warning_entries,
-            critical_entries: thresholds.api_critical_entries,
+        api_policy: RateLimitNamespacePolicy {
+            trusted_auth_dimensions: settings.rate_limit.trusted_auth_dimensions,
+            memory_warning_entries: thresholds.api_warning_entries,
+            memory_critical_entries: thresholds.api_critical_entries,
         },
-        auth_thresholds: RateLimitThresholds {
-            warning_entries: thresholds.auth_warning_entries,
-            critical_entries: thresholds.auth_critical_entries,
+        auth_policy: RateLimitNamespacePolicy {
+            trusted_auth_dimensions: settings.rate_limit.trusted_auth_dimensions,
+            memory_warning_entries: thresholds.auth_warning_entries,
+            memory_critical_entries: thresholds.auth_critical_entries,
         },
-        oauth_thresholds: RateLimitThresholds {
-            warning_entries: thresholds.oauth_warning_entries,
-            critical_entries: thresholds.oauth_critical_entries,
+        oauth_policy: RateLimitNamespacePolicy {
+            trusted_auth_dimensions: settings.rate_limit.trusted_auth_dimensions,
+            memory_warning_entries: thresholds.oauth_warning_entries,
+            memory_critical_entries: thresholds.oauth_critical_entries,
         },
     }
 }

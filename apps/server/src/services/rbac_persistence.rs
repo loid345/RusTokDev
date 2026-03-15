@@ -268,7 +268,6 @@ mod tests {
             email: Set(email.to_string()),
             password_hash: Set("hash".to_string()),
             name: Set(None),
-            role: Set(UserRole::Customer),
             status: Set(UserStatus::Active),
             email_verified_at: Set(None),
             last_login_at: Set(None),

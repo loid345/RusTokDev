@@ -1,7 +1,7 @@
 use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
-use rustok_core::{UserRole, UserStatus};
+use rustok_core::UserStatus;
 
 #[derive(Clone, Debug, PartialEq, Eq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "users")]
@@ -13,7 +13,6 @@ pub struct Model {
     #[serde(skip_serializing)]
     pub password_hash: String,
     pub name: Option<String>,
-    pub role: UserRole,
     pub status: UserStatus,
     pub email_verified_at: Option<DateTimeWithTimeZone>,
     pub last_login_at: Option<DateTimeWithTimeZone>,

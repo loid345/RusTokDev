@@ -18,8 +18,8 @@ enum ModalState {
 #[component]
 pub fn OAuthAppsPage() -> impl IntoView {
     // In a real implementation we would fetch these from the API
-    let (apps, set_apps) = create_signal(Vec::<OAuthApp>::new());
-    let (modal_state, set_modal_state) = create_signal(ModalState::None);
+    let (apps, set_apps) = signal(Vec::<OAuthApp>::new());
+    let (modal_state, set_modal_state) = signal(ModalState::None);
 
     let on_rotate = Callback::new(move |app| set_modal_state.set(ModalState::RotateSecret(app)));
     let on_revoke = Callback::new(move |app| set_modal_state.set(ModalState::RevokeApp(app)));
@@ -27,7 +27,7 @@ pub fn OAuthAppsPage() -> impl IntoView {
     let close_modal = move || set_modal_state.set(ModalState::None);
 
     // MOCK initial fetch
-    create_effect(move |_| {
+    Effect::new(move |_| {
         set_apps.set(vec![]);
     });
 

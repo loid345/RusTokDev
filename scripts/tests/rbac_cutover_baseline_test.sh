@@ -35,21 +35,21 @@ printf '%s' "$count" > "$state_file"
 profile="${MOCK_CURL_PROFILE:-steady}"
 case "$profile" in
   shadow-fail)
-    mismatch="0"
+    engine_mismatch="0"
     shadow_fail="$count"
     ;;
   mismatch)
-    mismatch="$count"
+    engine_mismatch="$count"
     shadow_fail="0"
     ;;
   steady|*)
-    mismatch="0"
+    engine_mismatch="0"
     shadow_fail="0"
     ;;
 esac
 
 cat <<METRICS
-rustok_rbac_decision_mismatch_total ${mismatch}
+rustok_rbac_engine_mismatch_total ${engine_mismatch}
 rustok_rbac_shadow_compare_failures_total ${shadow_fail}
 rustok_rbac_permission_checks_denied $((2 * count))
 rustok_rbac_permission_checks_allowed $((10 * count))
@@ -70,7 +70,7 @@ test_baseline_fails_when_shadow_failures_change() {
   set -e
 
   [[ "$code" -eq 1 ]] || fail "expected non-zero exit when shadow failure delta is non-zero"
-  rg -q "Shadow compare failures delta is" "$tmp/out.log" || fail "expected shadow failures gate message"
+  grep -q "Shadow compare failures delta is" "$tmp/out.log" || fail "expected shadow failures gate message"
   pass "baseline helper enforces zero shadow failures gate"
 }
 
@@ -82,11 +82,11 @@ test_allow_shadow_failures_disables_strict_gate() {
   MOCK_CURL_STATE_FILE="$tmp/state" MOCK_CURL_PROFILE=shadow-fail RUSTOK_CURL_BIN="$tmp/mock-curl" "$SCRIPT" \
     --samples 3 --interval-sec 0 --allow-shadow-failures --artifacts-dir "$tmp/artifacts" >"$tmp/out.log" 2>&1
 
-  rg -q "Done. Report:" "$tmp/out.log" || fail "expected successful output with --allow-shadow-failures"
+  grep -q "Done. Report:" "$tmp/out.log" || fail "expected successful output with --allow-shadow-failures"
   pass "allow-shadow-failures flag bypasses strict shadow gate"
 }
 
-test_baseline_passes_when_mismatch_is_stable() {
+test_baseline_passes_when_engine_mismatch_is_stable() {
   local tmp
   tmp="$(mktemp -d)"
   make_mock_curl "$tmp"
@@ -94,13 +94,13 @@ test_baseline_passes_when_mismatch_is_stable() {
   MOCK_CURL_STATE_FILE="$tmp/state" MOCK_CURL_PROFILE=steady RUSTOK_CURL_BIN="$tmp/mock-curl" "$SCRIPT" \
     --samples 3 --interval-sec 0 --artifacts-dir "$tmp/artifacts" >"$tmp/out.log" 2>&1
 
-  rg -q "Done. Report:" "$tmp/out.log" || fail "expected report output"
-  report="$(rg -o 'Done\. Report: .*' "$tmp/out.log" | sed 's/Done\. Report: //')"
-  rg -q "status: pass" "$report" || fail "expected pass gate in report"
-  pass "baseline report passes with stable mismatch"
+  grep -q "Done. Report:" "$tmp/out.log" || fail "expected report output"
+  report="$(grep -o 'Done\. Report: .*' "$tmp/out.log" | sed 's/Done\. Report: //')"
+  grep -q "status: pass" "$report" || fail "expected pass gate in report"
+  pass "baseline report passes with stable engine mismatch"
 }
 
-test_baseline_fails_when_mismatch_changes() {
+test_baseline_fails_when_engine_mismatch_changes() {
   local tmp
   tmp="$(mktemp -d)"
   make_mock_curl "$tmp"
@@ -111,21 +111,21 @@ test_baseline_fails_when_mismatch_changes() {
   code=$?
   set -e
 
-  [[ "$code" -eq 1 ]] || fail "expected non-zero exit when mismatch delta is non-zero"
-  rg -q "Mismatch delta is" "$tmp/out.log" || fail "expected mismatch gate message"
-  pass "baseline helper enforces zero mismatch gate"
+  [[ "$code" -eq 1 ]] || fail "expected non-zero exit when engine mismatch delta is non-zero"
+  grep -q "Engine mismatch delta is" "$tmp/out.log" || fail "expected engine mismatch gate message"
+  pass "baseline helper enforces zero engine mismatch gate"
 }
 
-test_allow_mismatch_disables_strict_gate() {
+test_allow_engine_mismatch_disables_strict_gate() {
   local tmp
   tmp="$(mktemp -d)"
   make_mock_curl "$tmp"
 
   MOCK_CURL_STATE_FILE="$tmp/state" MOCK_CURL_PROFILE=mismatch RUSTOK_CURL_BIN="$tmp/mock-curl" "$SCRIPT" \
-    --samples 2 --interval-sec 0 --allow-mismatch --artifacts-dir "$tmp/artifacts" >"$tmp/out.log" 2>&1
+    --samples 2 --interval-sec 0 --allow-engine-mismatch --artifacts-dir "$tmp/artifacts" >"$tmp/out.log" 2>&1
 
-  rg -q "Done. Report:" "$tmp/out.log" || fail "expected successful output with --allow-mismatch"
-  pass "allow-mismatch flag bypasses strict gate"
+  grep -q "Done. Report:" "$tmp/out.log" || fail "expected successful output with --allow-engine-mismatch"
+  pass "allow-engine-mismatch flag bypasses strict gate"
 }
 
 test_baseline_fails_when_decision_volume_is_too_low() {
@@ -136,7 +136,7 @@ test_baseline_fails_when_decision_volume_is_too_low() {
 #!/usr/bin/env bash
 set -euo pipefail
 cat <<METRICS
-rustok_rbac_decision_mismatch_total 0
+rustok_rbac_engine_mismatch_total 0
 rustok_rbac_shadow_compare_failures_total 0
 rustok_rbac_permission_checks_denied 0
 rustok_rbac_permission_checks_allowed 0
@@ -151,7 +151,7 @@ MOCK
   set -e
 
   [[ "$code" -eq 1 ]] || fail "expected non-zero exit when decision volume is too low"
-  rg -q "Decision delta is" "$tmp/out.log" || fail "expected low-decision gate message"
+  grep -q "Decision delta is" "$tmp/out.log" || fail "expected low-decision gate message"
   pass "baseline helper enforces minimum decision volume"
 }
 
@@ -163,7 +163,7 @@ test_min_decision_delta_zero_allows_idle_windows() {
 #!/usr/bin/env bash
 set -euo pipefail
 cat <<METRICS
-rustok_rbac_decision_mismatch_total 0
+rustok_rbac_engine_mismatch_total 0
 rustok_rbac_shadow_compare_failures_total 0
 rustok_rbac_permission_checks_denied 0
 rustok_rbac_permission_checks_allowed 0
@@ -174,7 +174,7 @@ MOCK
   RUSTOK_CURL_BIN="$tmp/mock-curl" "$SCRIPT" \
     --samples 2 --interval-sec 0 --min-decision-delta 0 --artifacts-dir "$tmp/artifacts" >"$tmp/out.log" 2>&1
 
-  rg -q "Done. Report:" "$tmp/out.log" || fail "expected successful output when min decision delta is zero"
+  grep -q "Done. Report:" "$tmp/out.log" || fail "expected successful output when min decision delta is zero"
   pass "min-decision-delta=0 allows idle windows"
 }
 
@@ -201,7 +201,7 @@ else
 fi
 
 cat <<METRICS
-rustok_rbac_decision_mismatch_total 0
+rustok_rbac_engine_mismatch_total 0
 rustok_rbac_shadow_compare_failures_total 0
 rustok_rbac_permission_checks_denied 0
 rustok_rbac_permission_checks_allowed ${allowed}
@@ -216,7 +216,7 @@ MOCK
   set -e
 
   [[ "$code" -eq 1 ]] || fail "expected non-zero exit when a counter reset is detected"
-  rg -q "Counter reset detected" "$tmp/out.log" || fail "expected counter reset gate message"
+  grep -q "Counter reset detected" "$tmp/out.log" || fail "expected counter reset gate message"
   pass "baseline helper fails fast on counter reset"
 }
 
@@ -230,17 +230,14 @@ test_json_report_includes_timestamps() {
 
   json_report="$(find "$tmp/artifacts" -maxdepth 1 -name 'rbac_cutover_baseline_*.json' | head -n 1)"
   [[ -n "$json_report" ]] || fail "expected json report artifact"
-  rg -q '"timestamp"' "$json_report" || fail "expected per-sample timestamps in json report"
-  rg -q '"permission_checks_total_delta"' "$json_report" || fail "expected permission_checks_total_delta in json report"
-  rg -q '"total_decisions_delta"' "$json_report" || fail "expected total_decisions_delta alias in json report"
-  python - "$json_report" <<'PY' || fail "expected decision delta aliases to match"
-import json
-import sys
-with open(sys.argv[1], 'r', encoding='utf-8') as fh:
-    payload = json.load(fh)
-if payload.get('permission_checks_total_delta') != payload.get('total_decisions_delta'):
-    raise SystemExit('decision delta aliases must match')
-PY
+  grep -q '"timestamp"' "$json_report" || fail "expected per-sample timestamps in json report"
+  grep -q '"permission_checks_total_delta"' "$json_report" || fail "expected permission_checks_total_delta in json report"
+  grep -q '"total_decisions_delta"' "$json_report" || fail "expected total_decisions_delta alias in json report"
+  local permission_checks_total_delta
+  local total_decisions_delta
+  permission_checks_total_delta="$(grep -o '"permission_checks_total_delta": [0-9]\+' "$json_report" | head -n 1 | grep -o '[0-9]\+$')"
+  total_decisions_delta="$(grep -o '"total_decisions_delta": [0-9]\+' "$json_report" | head -n 1 | grep -o '[0-9]\+$')"
+  [[ "$permission_checks_total_delta" == "$total_decisions_delta" ]] || fail "expected decision delta aliases to match"
   pass "json report includes timestamp and compatible decision delta aliases"
 }
 
@@ -268,16 +265,16 @@ test_no_save_samples_disables_raw_snapshot_artifacts() {
 
   MOCK_CURL_STATE_FILE="$tmp/state" MOCK_CURL_PROFILE=steady RUSTOK_CURL_BIN="$tmp/mock-curl" "$SCRIPT"     --samples 2 --interval-sec 0 --no-save-samples --artifacts-dir "$tmp/artifacts" >"$tmp/out.log" 2>&1
 
-  if find "$tmp/artifacts" -maxdepth 1 -type d -name 'rbac_cutover_samples_*' | rg -q .; then
+  if find "$tmp/artifacts" -maxdepth 1 -type d -name 'rbac_cutover_samples_*' | grep -q .; then
     fail "did not expect samples directory when --no-save-samples is set"
   fi
   pass "no-save-samples disables raw sample artifacts"
 }
 
-test_baseline_passes_when_mismatch_is_stable
-test_baseline_fails_when_mismatch_changes
+test_baseline_passes_when_engine_mismatch_is_stable
+test_baseline_fails_when_engine_mismatch_changes
 test_baseline_fails_when_shadow_failures_change
-test_allow_mismatch_disables_strict_gate
+test_allow_engine_mismatch_disables_strict_gate
 test_allow_shadow_failures_disables_strict_gate
 test_baseline_fails_when_decision_volume_is_too_low
 test_min_decision_delta_zero_allows_idle_windows

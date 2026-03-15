@@ -24,6 +24,8 @@ async fn test_topic_lifecycle() -> TestResult<()> {
         title: "Test Topic".to_string(),
         slug: None,
         body: "Hello, Forum!".to_string(),
+        body_format: "markdown".to_string(),
+        content_json: None,
         tags: vec!["rust".to_string()],
     };
 

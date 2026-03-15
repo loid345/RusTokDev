@@ -140,13 +140,13 @@ pub struct UserResponse {
     pub role: String,
 }
 
-impl From<users::Model> for UserResponse {
-    fn from(m: users::Model) -> Self {
+impl UserResponse {
+    fn from_user_and_role(m: users::Model, role: rustok_core::UserRole) -> Self {
         Self {
             id: m.id,
             email: m.email,
             name: m.name,
-            role: m.role.to_string(),
+            role: role.to_string(),
         }
     }
 }
@@ -174,6 +174,16 @@ pub struct LogoutResponse {
     pub status: &'static str,
 }
 
+fn user_info_from_model(user: users::Model, role: rustok_core::UserRole) -> UserInfo {
+    UserInfo {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        role,
+        status: user.status,
+    }
+}
+
 #[utoipa::path(post, path = "/api/auth/register", tag = "auth", request_body = RegisterParams,
     responses((status = 200, description = "Registration successful", body = AuthResponse),(status = 400, description = "Email already exists")))]
 async fn register(
@@ -191,19 +201,13 @@ async fn register(
     .await
     .map_err(|e: AuthLifecycleError| Error::from(e))?;
 
-    let user_role = user.role.clone();
+    let user_role = tokens.effective_role.clone();
     format::json(AuthResponse {
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
         token_type: "Bearer",
         expires_in: tokens.expires_in,
-        user: UserInfo {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user_role,
-            status: user.status,
-        },
+        user: user_info_from_model(user, user_role),
     })
 }
 
@@ -232,19 +236,13 @@ async fn login(
     .await
     .map_err(|e: AuthLifecycleError| Error::from(e))?;
 
-    let user_role = user.role.clone();
+    let user_role = tokens.effective_role.clone();
     format::json(AuthResponse {
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
         token_type: "Bearer",
         expires_in: tokens.expires_in,
-        user: UserInfo {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user_role,
-            status: user.status,
-        },
+        user: user_info_from_model(user, user_role),
     })
 }
 
@@ -259,19 +257,13 @@ async fn refresh(
         .await
         .map_err(|e: AuthLifecycleError| Error::from(e))?;
 
-    let user_role = user.role.clone();
+    let user_role = tokens.effective_role.clone();
     format::json(AuthResponse {
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
         token_type: "Bearer",
         expires_in: tokens.expires_in,
-        user: UserInfo {
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user_role,
-            status: user.status,
-        },
+        user: user_info_from_model(user, user_role),
     })
 }
 
@@ -298,8 +290,14 @@ async fn logout(
 
 #[utoipa::path(get, path = "/api/auth/me", tag = "auth", security(("bearer_auth" = [])),
     responses((status = 200, description = "Current user info", body = UserResponse),(status = 401, description = "Unauthorized")))]
-async fn me(CurrentUser { user, .. }: CurrentUser) -> Result<Response> {
-    format::json(UserResponse::from(user))
+async fn me(
+    CurrentUser {
+        user,
+        inferred_role,
+        ..
+    }: CurrentUser,
+) -> Result<Response> {
+    format::json(UserResponse::from_user_and_role(user, inferred_role))
 }
 
 #[utoipa::path(post, path = "/api/auth/invite/accept", tag = "auth", request_body = AcceptInviteParams,
@@ -563,7 +561,10 @@ async fn update_profile(
         .await
         .map_err(|e: AuthLifecycleError| Error::from(e))?;
 
-    format::json(UserResponse::from(user))
+    format::json(UserResponse::from_user_and_role(
+        user,
+        current.inferred_role,
+    ))
 }
 
 #[utoipa::path(get, path = "/api/auth/history", tag = "auth", security(("bearer_auth" = [])),

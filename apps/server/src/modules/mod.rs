@@ -1,4 +1,4 @@
-﻿mod alloy;
+mod alloy;
 mod manifest;
 
 use rustok_auth::AuthModule;
@@ -16,9 +16,9 @@ use rustok_tenant::TenantModule;
 
 pub use alloy::AlloyModule;
 pub use manifest::{
-    validate_registry_vs_manifest, CatalogManifestModule, CatalogModuleVersion,
-    InstalledManifestModule, ManifestDiff, ManifestError, ManifestManager, ManifestModuleSpec,
-    ModulesManifest,
+    validate_registry_vs_manifest, BuildExecutionPlan, CatalogManifestModule, CatalogModuleVersion,
+    DeploymentSurfaceContract, InstalledManifestModule, ManifestDiff, ManifestError,
+    ManifestManager, ManifestModuleSpec, ModulesManifest,
 };
 
 pub fn build_registry() -> ModuleRegistry {

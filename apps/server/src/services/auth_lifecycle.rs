@@ -9,6 +9,7 @@ use crate::auth::{auth_config_from_ctx,
     decode_password_reset_token, encode_access_token, generate_refresh_token, hash_password,
     hash_refresh_token, verify_password, AuthConfig,
 };
+use crate::context::infer_user_role_from_permissions;
 use crate::models::{sessions, users};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -18,6 +19,7 @@ pub struct AuthTokens {
     pub access_token: String,
     pub refresh_token: String,
     pub expires_in: u64,
+    pub effective_role: rustok_core::UserRole,
 }
 
 #[derive(Debug)]
@@ -148,7 +150,6 @@ impl AuthLifecycleService {
 
         let mut user = users::ActiveModel::new(tenant_id, email, &password_hash);
         user.name = Set(name);
-        user.role = Set(role.clone());
         if let Some(status) = status {
             user.status = Set(status);
         }
@@ -346,9 +347,15 @@ impl AuthLifecycleService {
             .await
             .map_err(AuthLifecycleError::from)?;
 
-        let access_token =
-            encode_access_token(config, user.id, tenant_id, user.role.clone(), session_id)
-                .map_err(AuthLifecycleError::from)?;
+        let effective_role = Self::resolve_effective_role(db, tenant_id, user.id).await?;
+        let access_token = encode_access_token(
+            config,
+            user.id,
+            tenant_id,
+            effective_role.clone(),
+            session_id,
+        )
+        .map_err(AuthLifecycleError::from)?;
 
         Ok((
             user,
@@ -356,6 +363,7 @@ impl AuthLifecycleService {
                 access_token,
                 refresh_token: new_refresh_token,
                 expires_in: config.access_expiration,
+                effective_role,
             },
         ))
     }
@@ -483,15 +491,33 @@ impl AuthLifecycleService {
         .await
         .map_err(AuthLifecycleError::from)?;
 
-        let access_token =
-            encode_access_token(config, user.id, tenant_id, user.role.clone(), session.id)
-                .map_err(AuthLifecycleError::from)?;
+        let effective_role = Self::resolve_effective_role(db, tenant_id, user.id).await?;
+        let access_token = encode_access_token(
+            config,
+            user.id,
+            tenant_id,
+            effective_role.clone(),
+            session.id,
+        )
+        .map_err(AuthLifecycleError::from)?;
 
         Ok(AuthTokens {
             access_token,
             refresh_token,
             expires_in: config.access_expiration,
+            effective_role,
         })
+    }
+
+    async fn resolve_effective_role(
+        db: &DatabaseConnection,
+        tenant_id: uuid::Uuid,
+        user_id: uuid::Uuid,
+    ) -> std::result::Result<rustok_core::UserRole, AuthLifecycleError> {
+        let permissions = RbacService::get_user_permissions(db, &tenant_id, &user_id)
+            .await
+            .map_err(AuthLifecycleError::from)?;
+        Ok(infer_user_role_from_permissions(&permissions))
     }
 
     async fn revoke_user_sessions(
@@ -531,7 +557,9 @@ mod tests {
         AUTH_CHANGE_PASSWORD_SESSIONS_REVOKED_TOTAL, AUTH_FLOW_INCONSISTENCY_TOTAL,
         AUTH_LOGIN_INACTIVE_USER_ATTEMPT_TOTAL, AUTH_PASSWORD_RESET_SESSIONS_REVOKED_TOTAL,
     };
-    use crate::auth::{hash_password, hash_refresh_token, verify_password, AuthConfig};
+    use crate::auth::{
+        decode_access_token, hash_password, hash_refresh_token, verify_password, AuthConfig,
+    };
     use crate::models::_entities::user_roles;
     use crate::models::{sessions, tenants, users};
     use crate::services::rbac_service::RbacService;
@@ -862,9 +890,7 @@ mod tests {
         .expect("create_user via lifecycle path should succeed");
 
         let password_hash = hash_password("Password123!").expect("failed to hash password");
-        let mut legacy_user =
-            users::ActiveModel::new(tenant.id, "legacy@example.com", &password_hash);
-        legacy_user.role = Set(rustok_core::UserRole::Manager);
+        let legacy_user = users::ActiveModel::new(tenant.id, "legacy@example.com", &password_hash);
         let legacy_user = legacy_user
             .insert(&db)
             .await
@@ -896,6 +922,43 @@ mod tests {
             lifecycle_permissions.contains(&rustok_core::Permission::PRODUCTS_CREATE),
             "manager permission baseline should include PRODUCTS_CREATE"
         );
+    }
+
+    #[tokio::test]
+    async fn access_token_role_is_derived_from_relations() {
+        let db = setup_test_db_with_migrations::<Migrator>().await;
+        let tenant = tenants::ActiveModel::new("Relation Role Tenant", "relation-role-tenant")
+            .insert(&db)
+            .await
+            .expect("failed to create tenant");
+
+        let password_hash = hash_password("Password123!").expect("failed to hash password");
+        let user = users::ActiveModel::new(tenant.id, "relation-role@example.com", &password_hash);
+        let user = user.insert(&db).await.expect("user insert should succeed");
+
+        RbacService::replace_user_role(&db, &user.id, &tenant.id, rustok_core::UserRole::Manager)
+            .await
+            .expect("manager relation assignment should succeed");
+
+        let config = AuthConfig {
+            secret: "relation-role-secret".to_string(),
+            access_expiration: 600,
+            refresh_expiration: 3600,
+            issuer: "rustok-test".to_string(),
+            audience: "rustok-test".to_string(),
+        };
+
+        let tokens = AuthLifecycleService::create_session_and_tokens_db(
+            &db, &config, tenant.id, &user, None, None,
+        )
+        .await
+        .expect("token issuance should succeed");
+
+        let claims =
+            decode_access_token(&config, &tokens.access_token).expect("access token should decode");
+
+        assert_eq!(tokens.effective_role, rustok_core::UserRole::Manager);
+        assert_eq!(claims.role, rustok_core::UserRole::Manager);
     }
 
     #[tokio::test]

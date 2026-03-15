@@ -1,5 +1,4 @@
 use loco_rs::{app::AppContext, Error, Result};
-use rustok_core::UserRole;
 use sea_orm::{ConnectionTrait, DbBackend, Statement};
 use serde::{Deserialize, Serialize};
 
@@ -8,13 +7,6 @@ pub struct RbacConsistencyStats {
     pub users_without_roles_total: i64,
     pub orphan_user_roles_total: i64,
     pub orphan_role_permissions_total: i64,
-}
-
-#[derive(Debug, Clone)]
-pub struct UserBackfillCandidate {
-    pub id: uuid::Uuid,
-    pub tenant_id: uuid::Uuid,
-    pub role: UserRole,
 }
 
 pub async fn load_rbac_consistency_stats(ctx: &AppContext) -> Result<RbacConsistencyStats> {
@@ -45,44 +37,6 @@ pub async fn load_rbac_consistency_stats(ctx: &AppContext) -> Result<RbacConsist
         orphan_user_roles_total: read_metric(&row, "orphan_user_roles_total")?,
         orphan_role_permissions_total: read_metric(&row, "orphan_role_permissions_total")?,
     })
-}
-
-pub async fn load_users_without_tenant_roles(
-    ctx: &AppContext,
-) -> Result<Vec<UserBackfillCandidate>> {
-    let rows = ctx
-        .db
-        .query_all(Statement::from_string(
-            DbBackend::Postgres,
-            "SELECT u.id, u.tenant_id, u.role
-             FROM users u
-             WHERE NOT EXISTS (
-                 SELECT 1
-                 FROM user_roles ur
-                 JOIN roles r ON r.id = ur.role_id
-                 WHERE ur.user_id = u.id AND r.tenant_id = u.tenant_id
-             )"
-            .to_string(),
-        ))
-        .await?;
-
-    let mut result = Vec::with_capacity(rows.len());
-    for row in rows {
-        let role_raw = row.try_get::<String>("", "role")?;
-        let role = role_raw.parse::<UserRole>().map_err(|error| {
-            Error::string(&format!(
-                "invalid user role '{role_raw}' for backfill: {error}"
-            ))
-        })?;
-
-        result.push(UserBackfillCandidate {
-            id: row.try_get("", "id")?,
-            tenant_id: row.try_get("", "tenant_id")?,
-            role,
-        });
-    }
-
-    Ok(result)
 }
 
 fn read_metric(row: &sea_orm::QueryResult, column: &str) -> Result<i64> {

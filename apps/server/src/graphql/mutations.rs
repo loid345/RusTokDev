@@ -126,6 +126,7 @@ async fn request_build_for_manifest(
             modules_delta: manifest_diff.summary(),
             modules: ManifestManager::build_modules(manifest),
             profile: ManifestManager::deployment_profile(manifest),
+            execution_plan: ManifestManager::build_execution_plan(manifest),
         })
         .await
         .map_err(|err| <FieldError as GraphQLError>::internal_error(&err.to_string()))?;
@@ -278,10 +279,6 @@ impl RootMutation {
         }
 
         let requested_role = input.role.map(rustok_core::UserRole::from);
-
-        if let Some(role) = requested_role.clone() {
-            model.role = Set(role);
-        }
 
         if let Some(status) = input.status {
             let status: rustok_core::UserStatus = status.into();

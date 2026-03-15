@@ -1,6 +1,9 @@
-pub mod auth;
+pub mod app_lifecycle;
+pub mod app_router;
+pub mod app_runtime;
 pub mod auth_lifecycle;
 pub mod build_event_hub;
+pub mod build_executor;
 pub mod email;
 pub mod event_bus;
 pub mod graphql_schema;
@@ -16,4 +19,6 @@ pub mod rbac_consistency;
 pub mod rbac_persistence;
 pub mod rbac_runtime;
 pub mod rbac_service;
+pub mod redis_runtime;
+pub mod release_backend;
 pub mod runtime_guardrails;

@@ -6,9 +6,11 @@ license.workspace = true
 description.workspace = true
 
 [features]
-default = ["redis-cache"]
+default = ["redis-cache", "embed-admin", "embed-storefront"]
 redis-cache = []
+embed-admin = ["embed-admin-assets"]
 embed-admin-assets = ["dep:rust-embed"]
+embed-storefront = ["dep:rustok-storefront"]
 
 [dependencies]
 rustok-core = { workspace = true, features = ["redis-cache"] }
@@ -16,7 +18,7 @@ rustok-auth.workspace = true
 rustok-cache = { workspace = true, features = ["redis-cache"] }
 rustok-email.workspace = true
 rustok-events.workspace = true
-rustok-storefront = { path = "../storefront" }
+rustok-storefront = { path = "../storefront", optional = true }
 rustok-commerce.workspace = true
 rustok-blog.workspace = true
 rustok-content.workspace = true
@@ -63,7 +65,7 @@ futures-util = "0.3"
 rust-embed = { version = "8.0", features = ["interpolate-folder-path"], optional = true }
 tower-http = { workspace = true, features = ["fs"] }
 mime_guess = "2.0"
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "multipart", "rustls-tls"] }
 semver = "1.0"
 rand.workspace = true
 subtle = "2"
@@ -77,6 +79,7 @@ loco-rs = { workspace = true, features = ["testing"] }
 serial_test = "3.4"
 rustok-test-utils.workspace = true
 tempfile = "3.26"
+tower.workspace = true
 
 [package.metadata.cargo-udeps.ignore]
 development = ["serial_test"]

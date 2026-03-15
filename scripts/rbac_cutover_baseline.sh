@@ -14,8 +14,9 @@ Options:
   --min-decision-delta <N>    Minimum total permission decision delta required for a valid baseline (default: 1)
   --save-samples              Persist raw /metrics snapshots per sample (default: enabled)
   --no-save-samples           Do not persist raw /metrics snapshots in artifacts
-  --require-zero-mismatch     Exit non-zero if mismatch counter delta is not zero (default: enabled)
-  --allow-mismatch            Disable strict mismatch gate
+  --require-zero-engine-mismatch
+                              Exit non-zero if engine mismatch counter delta is not zero (default: enabled)
+  --allow-engine-mismatch     Disable strict engine-mismatch gate
   --allow-shadow-failures     Disable strict shadow-failures gate
   --help                      Show this message
 
@@ -34,7 +35,7 @@ INTERVAL_SEC=60
 ARTIFACTS_DIR="artifacts/rbac-cutover"
 MIN_DECISION_DELTA=1
 SAVE_SAMPLES="true"
-REQUIRE_ZERO_MISMATCH="true"
+REQUIRE_ZERO_ENGINE_MISMATCH="true"
 ALLOW_SHADOW_FAILURES="false"
 REQUIRE_ZERO_SHADOW_FAILURES="true"
 CURL_BIN="${RUSTOK_CURL_BIN:-curl}"
@@ -55,10 +56,10 @@ while [[ $# -gt 0 ]]; do
       SAVE_SAMPLES="true"; shift ;;
     --no-save-samples)
       SAVE_SAMPLES="false"; shift ;;
-    --require-zero-mismatch)
-      REQUIRE_ZERO_MISMATCH="true"; shift ;;
-    --allow-mismatch)
-      REQUIRE_ZERO_MISMATCH="false"; shift ;;
+    --require-zero-engine-mismatch)
+      REQUIRE_ZERO_ENGINE_MISMATCH="true"; shift ;;
+    --allow-engine-mismatch)
+      REQUIRE_ZERO_ENGINE_MISMATCH="false"; shift ;;
     --allow-shadow-failures)
       ALLOW_SHADOW_FAILURES="true"; REQUIRE_ZERO_SHADOW_FAILURES="false"; shift ;;
     --help)
@@ -111,20 +112,18 @@ metric_value() {
 }
 
 to_int() {
-  python - "$1" <<'PY'
-import sys
-raw = sys.argv[1].strip()
-try:
-    value = float(raw)
-except Exception as exc:
-    raise SystemExit(f"invalid numeric metric value '{raw}': {exc}")
-print(int(value))
-PY
+  local raw="$1"
+  if ! awk -v raw="$raw" 'BEGIN { exit(raw ~ /^-?[0-9]+([.][0-9]+)?$/ ? 0 : 1) }'; then
+    echo "invalid numeric metric value '$raw'" >&2
+    exit 1
+  fi
+
+  awk -v raw="$raw" 'BEGIN { print int(raw + 0) }'
 }
 
 sample_json_lines=()
-first_mismatch=""
-last_mismatch=""
+first_engine_mismatch=""
+last_engine_mismatch=""
 first_shadow_fail=""
 last_shadow_fail=""
 first_denied=""
@@ -144,58 +143,58 @@ for ((i = 1; i <= SAMPLES; i++)); do
     cp "$sample_file" "$sample_artifact"
   fi
 
-  mismatch_raw="$(metric_value "$sample_file" "rustok_rbac_decision_mismatch_total")"
+  engine_mismatch_raw="$(metric_value "$sample_file" "rustok_rbac_engine_mismatch_total")"
   shadow_fail_raw="$(metric_value "$sample_file" "rustok_rbac_shadow_compare_failures_total")"
   denied_raw="$(metric_value "$sample_file" "rustok_rbac_permission_checks_denied")"
   allowed_raw="$(metric_value "$sample_file" "rustok_rbac_permission_checks_allowed")"
 
-  mismatch="$(to_int "$mismatch_raw")"
+  engine_mismatch="$(to_int "$engine_mismatch_raw")"
   shadow_fail="$(to_int "$shadow_fail_raw")"
   denied="$(to_int "$denied_raw")"
   allowed="$(to_int "$allowed_raw")"
 
-  if [[ -z "$first_mismatch" ]]; then
-    first_mismatch="$mismatch"
+  if [[ -z "$first_engine_mismatch" ]]; then
+    first_engine_mismatch="$engine_mismatch"
     first_shadow_fail="$shadow_fail"
     first_denied="$denied"
     first_allowed="$allowed"
   fi
 
-  last_mismatch="$mismatch"
+  last_engine_mismatch="$engine_mismatch"
   last_shadow_fail="$shadow_fail"
   last_denied="$denied"
   last_allowed="$allowed"
 
   if [[ "$i" -gt 1 ]]; then
-    if [[ "$mismatch" -lt "$prev_mismatch" || "$shadow_fail" -lt "$prev_shadow_fail" || "$denied" -lt "$prev_denied" || "$allowed" -lt "$prev_allowed" ]]; then
+    if [[ "$engine_mismatch" -lt "$prev_engine_mismatch" || "$shadow_fail" -lt "$prev_shadow_fail" || "$denied" -lt "$prev_denied" || "$allowed" -lt "$prev_allowed" ]]; then
       counter_reset_detected="true"
       counter_reset_reason="one or more counters decreased between samples"
     fi
   fi
 
-  prev_mismatch="$mismatch"
+  prev_engine_mismatch="$engine_mismatch"
   prev_shadow_fail="$shadow_fail"
   prev_denied="$denied"
   prev_allowed="$allowed"
 
-  sample_json_lines+=("{\"sample\":${i},\"timestamp\":\"${sample_ts}\",\"mismatch_total\":${mismatch},\"shadow_compare_failures_total\":${shadow_fail},\"permission_checks_denied\":${denied},\"permission_checks_allowed\":${allowed}}")
+  sample_json_lines+=("{\"sample\":${i},\"timestamp\":\"${sample_ts}\",\"engine_mismatch_total\":${engine_mismatch},\"shadow_compare_failures_total\":${shadow_fail},\"permission_checks_denied\":${denied},\"permission_checks_allowed\":${allowed}}")
 
   if [[ "$i" -lt "$SAMPLES" && "$INTERVAL_SEC" -gt 0 ]]; then
     sleep "$INTERVAL_SEC"
   fi
 done
 
-mismatch_delta="$((last_mismatch - first_mismatch))"
+engine_mismatch_delta="$((last_engine_mismatch - first_engine_mismatch))"
 shadow_fail_delta="$((last_shadow_fail - first_shadow_fail))"
 denied_delta="$((last_denied - first_denied))"
 allowed_delta="$((last_allowed - first_allowed))"
 total_decisions_delta="$((denied_delta + allowed_delta))"
 
 gate_status="pass"
-gate_message="Mismatch delta is zero in observed window."
-if [[ "$REQUIRE_ZERO_MISMATCH" == "true" && "$mismatch_delta" -ne 0 ]]; then
+gate_message="Engine mismatch delta is zero in observed window."
+if [[ "$REQUIRE_ZERO_ENGINE_MISMATCH" == "true" && "$engine_mismatch_delta" -ne 0 ]]; then
   gate_status="fail"
-  gate_message="Mismatch delta is ${mismatch_delta}; investigate before relation-only cutover."
+  gate_message="Engine mismatch delta is ${engine_mismatch_delta}; investigate before relation-only cutover."
 fi
 
 if [[ "$gate_status" == "pass" && "$ALLOW_SHADOW_FAILURES" != "true" && "$shadow_fail_delta" -ne 0 ]]; then
@@ -218,9 +217,9 @@ fi
   echo "  \"metrics_url\": \"${METRICS_URL}\"," 
   echo "  \"samples\": ${SAMPLES},"
   echo "  \"interval_sec\": ${INTERVAL_SEC},"
-  echo "  \"mismatch_total_start\": ${first_mismatch},"
-  echo "  \"mismatch_total_end\": ${last_mismatch},"
-  echo "  \"mismatch_delta\": ${mismatch_delta},"
+  echo "  \"engine_mismatch_total_start\": ${first_engine_mismatch}," 
+  echo "  \"engine_mismatch_total_end\": ${last_engine_mismatch}," 
+  echo "  \"engine_mismatch_delta\": ${engine_mismatch_delta}," 
   echo "  \"shadow_compare_failures_total_start\": ${first_shadow_fail},"
   echo "  \"shadow_compare_failures_total_end\": ${last_shadow_fail},"
   echo "  \"shadow_compare_failures_delta\": ${shadow_fail_delta},"
@@ -230,7 +229,7 @@ fi
   echo "  \"total_decisions_delta\": ${total_decisions_delta},"
   echo "  \"counter_reset_detected\": ${counter_reset_detected},"
   echo "  \"min_decision_delta\": ${MIN_DECISION_DELTA},"
-  echo "  \"require_zero_mismatch\": ${REQUIRE_ZERO_MISMATCH},"
+  echo "  \"require_zero_engine_mismatch\": ${REQUIRE_ZERO_ENGINE_MISMATCH}," 
   echo "  \"save_samples\": ${SAVE_SAMPLES},"
   echo "  \"samples_dir\": \"${SAMPLES_DIR}\","
   echo "  \"gate_status\": \"${gate_status}\","
@@ -254,10 +253,10 @@ fi
   echo "- samples: ${SAMPLES}"
   echo "- interval_sec: ${INTERVAL_SEC}"
   echo "- min_decision_delta: ${MIN_DECISION_DELTA}"
-  echo "- require_zero_mismatch: ${REQUIRE_ZERO_MISMATCH}"
+  echo "- require_zero_engine_mismatch: ${REQUIRE_ZERO_ENGINE_MISMATCH}"
   echo "- require_zero_shadow_failures: ${REQUIRE_ZERO_SHADOW_FAILURES}"
   echo "- save_samples: ${SAVE_SAMPLES}"
-  echo "- mismatch_total: ${first_mismatch} -> ${last_mismatch} (delta ${mismatch_delta})"
+  echo "- engine_mismatch_total: ${first_engine_mismatch} -> ${last_engine_mismatch} (delta ${engine_mismatch_delta})"
   echo "- shadow_compare_failures_total: ${first_shadow_fail} -> ${last_shadow_fail} (delta ${shadow_fail_delta})"
   echo "- permission_checks_denied delta: ${denied_delta}"
   echo "- permission_checks_allowed delta: ${allowed_delta}"

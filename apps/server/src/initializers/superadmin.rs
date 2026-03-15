@@ -80,7 +80,6 @@ impl Initializer for SuperAdminInitializer {
 
         let password_hash = hash_password(&password)?;
         let mut user = users::ActiveModel::new(tenant.id, &email, &password_hash);
-        user.role = Set(rustok_core::UserRole::SuperAdmin);
         user.name = Set(Some("Super Admin".to_string()));
         let user = user.insert(&ctx.db).await?;
 

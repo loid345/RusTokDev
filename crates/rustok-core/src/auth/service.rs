@@ -16,12 +16,12 @@ use crate::scripting::ScriptingContext;
 use crate::types::{UserRole, UserStatus};
 
 #[derive(Debug)]
-pub struct AuthTokens {
+pub struct IdentityTokens {
     pub access_token: String,
 }
 
 #[derive(Debug)]
-pub struct RegisterInput {
+pub struct RegistrationInput {
     pub tenant_id: Uuid,
     pub email: String,
     pub password: String,
@@ -30,13 +30,13 @@ pub struct RegisterInput {
 }
 
 #[derive(Clone)]
-pub struct AuthService {
+pub struct IdentityService {
     repo: UserRepository,
     jwt_config: JwtConfig,
     scripting: Option<Arc<ScriptingContext>>,
 }
 
-impl AuthService {
+impl IdentityService {
     pub fn new(repo: UserRepository, jwt_config: JwtConfig) -> Self {
         Self {
             repo,
@@ -50,7 +50,7 @@ impl AuthService {
         self
     }
 
-    pub async fn register(&self, input: RegisterInput) -> Result<User, AuthError> {
+    pub async fn register(&self, input: RegistrationInput) -> Result<User, AuthError> {
         if self
             .repo
             .find_by_email_and_tenant(&input.email, input.tenant_id)
@@ -134,7 +134,7 @@ impl AuthService {
         tenant_id: Uuid,
         email: &str,
         password: &str,
-    ) -> Result<AuthTokens, AuthError> {
+    ) -> Result<IdentityTokens, AuthError> {
         let user = self
             .repo
             .find_by_email_and_tenant(email, tenant_id)
@@ -159,7 +159,7 @@ impl AuthService {
         )
         .map_err(|err| AuthError::Token(err.to_string()))?;
 
-        Ok(AuthTokens {
+        Ok(IdentityTokens {
             access_token: token,
         })
     }

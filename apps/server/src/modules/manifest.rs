@@ -56,6 +56,22 @@ pub struct StorefrontBuildConfig {
     pub stack: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DeploymentSurfaceContract {
+    pub profile: DeploymentProfile,
+    pub embed_admin: bool,
+    pub embed_storefront: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BuildExecutionPlan {
+    pub cargo_package: String,
+    pub cargo_profile: String,
+    pub cargo_target: Option<String>,
+    pub cargo_features: Vec<String>,
+    pub cargo_command: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SettingsManifest {
     #[serde(default)]
@@ -793,6 +809,68 @@ impl ManifestManager {
         }
     }
 
+    pub fn deployment_surface_contract(manifest: &ModulesManifest) -> DeploymentSurfaceContract {
+        DeploymentSurfaceContract {
+            profile: Self::deployment_profile(manifest),
+            embed_admin: manifest.build.server.embed_admin,
+            embed_storefront: manifest.build.server.embed_storefront,
+        }
+    }
+
+    pub fn build_execution_plan(manifest: &ModulesManifest) -> BuildExecutionPlan {
+        let cargo_package = if manifest.app.trim().is_empty() {
+            "rustok-server".to_string()
+        } else {
+            manifest.app.trim().to_string()
+        };
+
+        let cargo_profile = if manifest.build.profile.trim().is_empty() {
+            "release".to_string()
+        } else {
+            manifest.build.profile.trim().to_string()
+        };
+
+        let cargo_target = (!manifest.build.target.trim().is_empty())
+            .then(|| manifest.build.target.trim().to_string());
+
+        let mut cargo_features = Vec::new();
+        if manifest.build.server.embed_admin {
+            cargo_features.push("embed-admin".to_string());
+        }
+        if manifest.build.server.embed_storefront {
+            cargo_features.push("embed-storefront".to_string());
+        }
+
+        let mut command_parts = vec![
+            "cargo".to_string(),
+            "build".to_string(),
+            "-p".to_string(),
+            cargo_package.clone(),
+        ];
+        if cargo_profile == "release" {
+            command_parts.push("--release".to_string());
+        } else {
+            command_parts.push("--profile".to_string());
+            command_parts.push(cargo_profile.clone());
+        }
+        if let Some(target) = &cargo_target {
+            command_parts.push("--target".to_string());
+            command_parts.push(target.clone());
+        }
+        if !cargo_features.is_empty() {
+            command_parts.push("--features".to_string());
+            command_parts.push(cargo_features.join(","));
+        }
+
+        BuildExecutionPlan {
+            cargo_package,
+            cargo_profile,
+            cargo_target,
+            cargo_features,
+            cargo_command: command_parts.join(" "),
+        }
+    }
+
     pub fn install_builtin_module(
         manifest: &mut ModulesManifest,
         slug: &str,
@@ -1043,6 +1121,7 @@ pub fn validate_registry_vs_manifest(registry: &ModuleRegistry) -> loco_rs::Resu
 #[cfg(test)]
 mod tests {
     use super::{builtin_module_catalog, ManifestError, ManifestManager, ModulesManifest};
+    use crate::models::build::DeploymentProfile;
     use crate::modules::build_registry;
     use serial_test::serial;
     use std::collections::HashMap;
@@ -1061,6 +1140,67 @@ mod tests {
             modules,
             ..Default::default()
         }
+    }
+
+    #[test]
+    fn derives_deployment_surface_contract_from_build_server_flags() {
+        let mut manifest = ModulesManifest::default();
+
+        let headless = ManifestManager::deployment_surface_contract(&manifest);
+        assert_eq!(headless.profile, DeploymentProfile::HeadlessApi);
+        assert!(!headless.embed_admin);
+        assert!(!headless.embed_storefront);
+
+        manifest.build.server.embed_admin = true;
+        let server_with_admin = ManifestManager::deployment_surface_contract(&manifest);
+        assert_eq!(
+            server_with_admin.profile,
+            DeploymentProfile::ServerWithAdmin
+        );
+        assert!(server_with_admin.embed_admin);
+        assert!(!server_with_admin.embed_storefront);
+
+        manifest.build.server.embed_storefront = true;
+        let monolith = ManifestManager::deployment_surface_contract(&manifest);
+        assert_eq!(monolith.profile, DeploymentProfile::Monolith);
+        assert!(monolith.embed_admin);
+        assert!(monolith.embed_storefront);
+
+        manifest.build.server.embed_admin = false;
+        let server_with_storefront = ManifestManager::deployment_surface_contract(&manifest);
+        assert_eq!(
+            server_with_storefront.profile,
+            DeploymentProfile::ServerWithStorefront
+        );
+        assert!(!server_with_storefront.embed_admin);
+        assert!(server_with_storefront.embed_storefront);
+    }
+
+    #[test]
+    fn derives_build_execution_plan_from_manifest() {
+        let mut manifest = ModulesManifest::default();
+        manifest.app = "rustok-server".to_string();
+        manifest.build.profile = "release".to_string();
+        manifest.build.target = "x86_64-unknown-linux-gnu".to_string();
+        manifest.build.server.embed_admin = true;
+        manifest.build.server.embed_storefront = true;
+
+        let plan = ManifestManager::build_execution_plan(&manifest);
+
+        assert_eq!(plan.cargo_package, "rustok-server");
+        assert_eq!(plan.cargo_profile, "release");
+        assert_eq!(
+            plan.cargo_target.as_deref(),
+            Some("x86_64-unknown-linux-gnu")
+        );
+        assert_eq!(
+            plan.cargo_features,
+            vec!["embed-admin".to_string(), "embed-storefront".to_string()]
+        );
+        assert_eq!(
+            plan.cargo_command,
+            "cargo build -p rustok-server --release --target x86_64-unknown-linux-gnu --features embed-admin,embed-storefront"
+        );
     }
 
     #[test]

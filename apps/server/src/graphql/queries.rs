@@ -916,7 +916,12 @@ impl RootQuery {
         if let Some(filter) = filter {
             if let Some(role) = filter.role {
                 let role: rustok_core::UserRole = role.into();
-                query = query.filter(UsersColumn::Role.eq(role.to_string()));
+                let user_ids = RbacService::get_user_ids_for_role(&app_ctx.db, &tenant.id, role)
+                    .await
+                    .map_err(|err| {
+                        <FieldError as GraphQLError>::internal_error(&err.to_string())
+                    })?;
+                query = query.filter(UsersColumn::Id.is_in(user_ids));
             }
 
             if let Some(status) = filter.status {

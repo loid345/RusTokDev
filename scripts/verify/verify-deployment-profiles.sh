@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+# RusTok - deployment profile smoke validation
+# Verifies the supported server build surfaces:
+# - monolith
+# - server+admin
+# - headless-api
+set -uo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$ROOT_DIR"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m'
+BOLD='\033[1m'
+
+ERRORS=0
+
+header() { echo -e "\n${BOLD}=== $1 ===${NC}"; }
+pass()   { echo -e "  ${GREEN}PASS${NC} $1"; }
+fail()   { echo -e "  ${RED}FAIL${NC} $1"; ERRORS=$((ERRORS + 1)); }
+run_cmd() {
+    local label="$1"
+    shift
+    if "$@"; then
+        pass "$label"
+    else
+        fail "$label"
+    fi
+}
+
+header "Deployment profile smoke validation"
+
+run_cmd \
+  "monolith cargo check" \
+  cargo check --manifest-path "$ROOT_DIR/Cargo.toml" -p rustok-server --lib --bins
+
+run_cmd \
+  "monolith startup smoke" \
+  cargo test --manifest-path "$ROOT_DIR/Cargo.toml" -p rustok-server \
+    app::tests::startup_smoke_builds_router_and_runtime_shared_state --lib
+
+run_cmd \
+  "server+admin cargo check" \
+  cargo check --manifest-path "$ROOT_DIR/Cargo.toml" -p rustok-server --lib --bins \
+    --no-default-features --features redis-cache,embed-admin
+
+run_cmd \
+  "server+admin router smoke" \
+  cargo test --manifest-path "$ROOT_DIR/Cargo.toml" -p rustok-server \
+    services::app_router::tests::mount_application_shell_supports_server_with_admin_profile --lib \
+    --no-default-features --features redis-cache,embed-admin
+
+run_cmd \
+  "headless-api cargo check" \
+  cargo check --manifest-path "$ROOT_DIR/Cargo.toml" -p rustok-server --lib --bins \
+    --no-default-features --features redis-cache
+
+run_cmd \
+  "headless-api router smoke" \
+  cargo test --manifest-path "$ROOT_DIR/Cargo.toml" -p rustok-server \
+    services::app_router::tests::mount_application_shell_skips_admin_and_storefront_for_headless_profile --lib \
+    --no-default-features --features redis-cache
+
+echo ""
+if [[ $ERRORS -eq 0 ]]; then
+    echo -e "${GREEN}${BOLD}All deployment profile smoke checks passed.${NC}"
+    exit 0
+fi
+
+echo -e "${RED}${BOLD}$ERRORS deployment profile check(s) failed.${NC}"
+exit 1

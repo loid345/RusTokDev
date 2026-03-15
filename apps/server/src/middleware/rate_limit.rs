@@ -134,6 +134,14 @@ impl RateLimiter {
         self.config.window.as_secs()
     }
 
+    pub fn enabled(&self) -> bool {
+        self.config.enabled
+    }
+
+    pub fn max_requests(&self) -> usize {
+        self.config.max_requests
+    }
+
     pub fn is_distributed(&self) -> bool {
         matches!(self.backend, RateLimiterBackend::Redis { .. })
     }
@@ -409,6 +417,10 @@ return {current, ttl}
         namespace: &str,
         cache_service: &CacheService,
     ) -> Result<Self, String> {
+        if !config.enabled {
+            return Ok(Self::new_with_namespace(config, namespace));
+        }
+
         match backend {
             RateLimitBackendKind::Memory => Ok(Self::new_with_namespace(config, namespace)),
             RateLimitBackendKind::Redis => {

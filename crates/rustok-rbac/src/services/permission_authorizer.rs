@@ -1,11 +1,13 @@
 use crate::{
-    evaluate_all_permissions, evaluate_any_permission, evaluate_single_permission,
-    PermissionResolver,
+    denied_reason_for_denial, evaluate_all_permissions, evaluate_any_permission,
+    evaluate_casbin_shadow, evaluate_single_permission, missing_permissions, AuthzEngine,
+    PermissionResolver, RbacAuthzMode, ShadowCheck,
 };
 use rustok_core::Permission;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuthorizationDecision {
+    pub engine: AuthzEngine,
     pub allowed: bool,
     pub missing_permissions: Vec<Permission>,
     pub denied_reason: Option<(crate::DeniedReasonKind, String)>,
@@ -20,13 +22,46 @@ pub async fn authorize_permission<R: PermissionResolver>(
     user_id: &uuid::Uuid,
     required_permission: &Permission,
 ) -> Result<AuthorizationDecision, R::Error> {
+    authorize_permission_for_mode(
+        resolver,
+        RbacAuthzMode::RelationOnly,
+        tenant_id,
+        user_id,
+        required_permission,
+    )
+    .await
+}
+
+pub async fn authorize_permission_for_mode<R: PermissionResolver>(
+    resolver: &R,
+    authz_mode: RbacAuthzMode,
+    tenant_id: &uuid::Uuid,
+    user_id: &uuid::Uuid,
+    required_permission: &Permission,
+) -> Result<AuthorizationDecision, R::Error> {
     let resolved = resolver.resolve_permissions(tenant_id, user_id).await?;
-    let evaluation = evaluate_single_permission(&resolved.permissions, required_permission);
+    let engine = authz_mode.active_engine();
+    let (allowed, missing_permissions, denied_reason) = match engine {
+        AuthzEngine::Relation => {
+            let evaluation = evaluate_single_permission(&resolved.permissions, required_permission);
+            (
+                evaluation.allowed,
+                evaluation.missing_permissions,
+                evaluation.denied_reason,
+            )
+        }
+        AuthzEngine::Casbin => decision_from_casbin_check(
+            &resolved.permissions,
+            tenant_id,
+            ShadowCheck::Single(required_permission),
+        ),
+    };
 
     Ok(AuthorizationDecision {
-        allowed: evaluation.allowed,
-        missing_permissions: evaluation.missing_permissions,
-        denied_reason: evaluation.denied_reason,
+        engine,
+        allowed,
+        missing_permissions,
+        denied_reason,
         resolved_permissions: resolved.permissions.clone(),
         permissions_count: resolved.permissions.len(),
         cache_hit: resolved.cache_hit,
@@ -39,13 +74,46 @@ pub async fn authorize_any_permission<R: PermissionResolver>(
     user_id: &uuid::Uuid,
     required_permissions: &[Permission],
 ) -> Result<AuthorizationDecision, R::Error> {
+    authorize_any_permission_for_mode(
+        resolver,
+        RbacAuthzMode::RelationOnly,
+        tenant_id,
+        user_id,
+        required_permissions,
+    )
+    .await
+}
+
+pub async fn authorize_any_permission_for_mode<R: PermissionResolver>(
+    resolver: &R,
+    authz_mode: RbacAuthzMode,
+    tenant_id: &uuid::Uuid,
+    user_id: &uuid::Uuid,
+    required_permissions: &[Permission],
+) -> Result<AuthorizationDecision, R::Error> {
     let resolved = resolver.resolve_permissions(tenant_id, user_id).await?;
-    let evaluation = evaluate_any_permission(&resolved.permissions, required_permissions);
+    let engine = authz_mode.active_engine();
+    let (allowed, missing_permissions, denied_reason) = match engine {
+        AuthzEngine::Relation => {
+            let evaluation = evaluate_any_permission(&resolved.permissions, required_permissions);
+            (
+                evaluation.allowed,
+                evaluation.missing_permissions,
+                evaluation.denied_reason,
+            )
+        }
+        AuthzEngine::Casbin => decision_from_casbin_check(
+            &resolved.permissions,
+            tenant_id,
+            ShadowCheck::Any(required_permissions),
+        ),
+    };
 
     Ok(AuthorizationDecision {
-        allowed: evaluation.allowed,
-        missing_permissions: evaluation.missing_permissions,
-        denied_reason: evaluation.denied_reason,
+        engine,
+        allowed,
+        missing_permissions,
+        denied_reason,
         resolved_permissions: resolved.permissions.clone(),
         permissions_count: resolved.permissions.len(),
         cache_hit: resolved.cache_hit,
@@ -58,23 +126,94 @@ pub async fn authorize_all_permissions<R: PermissionResolver>(
     user_id: &uuid::Uuid,
     required_permissions: &[Permission],
 ) -> Result<AuthorizationDecision, R::Error> {
+    authorize_all_permissions_for_mode(
+        resolver,
+        RbacAuthzMode::RelationOnly,
+        tenant_id,
+        user_id,
+        required_permissions,
+    )
+    .await
+}
+
+pub async fn authorize_all_permissions_for_mode<R: PermissionResolver>(
+    resolver: &R,
+    authz_mode: RbacAuthzMode,
+    tenant_id: &uuid::Uuid,
+    user_id: &uuid::Uuid,
+    required_permissions: &[Permission],
+) -> Result<AuthorizationDecision, R::Error> {
     let resolved = resolver.resolve_permissions(tenant_id, user_id).await?;
-    let evaluation = evaluate_all_permissions(&resolved.permissions, required_permissions);
+    let engine = authz_mode.active_engine();
+    let (allowed, missing_permissions, denied_reason) = match engine {
+        AuthzEngine::Relation => {
+            let evaluation = evaluate_all_permissions(&resolved.permissions, required_permissions);
+            (
+                evaluation.allowed,
+                evaluation.missing_permissions,
+                evaluation.denied_reason,
+            )
+        }
+        AuthzEngine::Casbin => decision_from_casbin_check(
+            &resolved.permissions,
+            tenant_id,
+            ShadowCheck::All(required_permissions),
+        ),
+    };
 
     Ok(AuthorizationDecision {
-        allowed: evaluation.allowed,
-        missing_permissions: evaluation.missing_permissions,
-        denied_reason: evaluation.denied_reason,
+        engine,
+        allowed,
+        missing_permissions,
+        denied_reason,
         resolved_permissions: resolved.permissions.clone(),
         permissions_count: resolved.permissions.len(),
         cache_hit: resolved.cache_hit,
     })
 }
 
+fn decision_from_casbin_check(
+    resolved_permissions: &[Permission],
+    tenant_id: &uuid::Uuid,
+    check: ShadowCheck<'_>,
+) -> (
+    bool,
+    Vec<Permission>,
+    Option<(crate::DeniedReasonKind, String)>,
+) {
+    let required_permissions = required_permissions_for_check(check);
+    let allowed = evaluate_casbin_shadow(tenant_id, resolved_permissions, check);
+    let missing_permissions = if allowed {
+        Vec::new()
+    } else {
+        missing_permissions(resolved_permissions, &required_permissions)
+    };
+    let denied_reason = if allowed {
+        None
+    } else {
+        Some(denied_reason_for_denial(
+            resolved_permissions,
+            &missing_permissions,
+        ))
+    };
+
+    (allowed, missing_permissions, denied_reason)
+}
+
+fn required_permissions_for_check(check: ShadowCheck<'_>) -> Vec<Permission> {
+    match check {
+        ShadowCheck::Single(permission) => vec![*permission],
+        ShadowCheck::Any(permissions) | ShadowCheck::All(permissions) => permissions.to_vec(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{authorize_all_permissions, authorize_any_permission, authorize_permission};
-    use crate::{PermissionResolution, PermissionResolver};
+    use super::{
+        authorize_all_permissions, authorize_all_permissions_for_mode, authorize_any_permission,
+        authorize_permission, authorize_permission_for_mode,
+    };
+    use crate::{AuthzEngine, PermissionResolution, PermissionResolver, RbacAuthzMode};
     use async_trait::async_trait;
     use rustok_core::{Permission, UserRole};
 
@@ -155,6 +294,7 @@ mod tests {
         .await
         .unwrap();
 
+        assert_eq!(decision.engine, AuthzEngine::Relation);
         assert!(!decision.allowed);
         assert_eq!(decision.permissions_count, 0);
         assert!(decision.denied_reason.is_some());
@@ -179,6 +319,7 @@ mod tests {
         .await
         .unwrap();
 
+        assert_eq!(decision.engine, AuthzEngine::Relation);
         assert!(decision.allowed);
         assert!(decision.missing_permissions.is_empty());
         assert_eq!(
@@ -205,6 +346,7 @@ mod tests {
         .await
         .unwrap();
 
+        assert_eq!(decision.engine, AuthzEngine::Relation);
         assert!(!decision.allowed);
         assert_eq!(decision.missing_permissions, vec![Permission::USERS_UPDATE]);
         assert_eq!(decision.resolved_permissions, vec![Permission::USERS_READ]);
@@ -223,6 +365,7 @@ mod tests {
                 .await
                 .unwrap();
 
+        assert_eq!(decision.engine, AuthzEngine::Relation);
         assert!(decision.allowed);
         assert!(decision.missing_permissions.is_empty());
         assert!(decision.denied_reason.is_none());
@@ -248,5 +391,58 @@ mod tests {
         .await;
 
         assert_eq!(result, Err("resolve failed".to_string()));
+    }
+
+    #[tokio::test]
+    async fn authorize_permission_for_mode_uses_casbin_engine_when_requested() {
+        let resolver = StubResolver {
+            permissions: vec![Permission::USERS_MANAGE],
+            cache_hit: false,
+            fail_resolve: false,
+        };
+
+        let decision = authorize_permission_for_mode(
+            &resolver,
+            RbacAuthzMode::CasbinOnly,
+            &uuid::Uuid::new_v4(),
+            &uuid::Uuid::new_v4(),
+            &Permission::USERS_UPDATE,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(decision.engine, AuthzEngine::Casbin);
+        assert!(decision.allowed);
+        assert!(decision.denied_reason.is_none());
+    }
+
+    #[tokio::test]
+    async fn authorize_all_permissions_for_mode_reports_casbin_missing_permissions() {
+        let resolver = StubResolver {
+            permissions: vec![Permission::USERS_READ],
+            cache_hit: false,
+            fail_resolve: false,
+        };
+
+        let decision = authorize_all_permissions_for_mode(
+            &resolver,
+            RbacAuthzMode::CasbinOnly,
+            &uuid::Uuid::new_v4(),
+            &uuid::Uuid::new_v4(),
+            &[Permission::USERS_READ, Permission::USERS_UPDATE],
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(decision.engine, AuthzEngine::Casbin);
+        assert!(!decision.allowed);
+        assert_eq!(decision.missing_permissions, vec![Permission::USERS_UPDATE]);
+        assert_eq!(
+            decision.denied_reason,
+            Some((
+                crate::DeniedReasonKind::MissingPermissions,
+                "missing_permissions:users:update".to_string(),
+            ))
+        );
     }
 }

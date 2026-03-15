@@ -1,4 +1,4 @@
-# RusToK Server — Loco.rs Feature Support & Anti-Duplication Matrix
+﻿# RusToK Server — Loco.rs Feature Support & Anti-Duplication Matrix
 
 **Date:** 2026-02-18  
 **Loco.rs Version:** `0.16` (workspace dependency)  
@@ -33,7 +33,7 @@
 | Конфигурация приложения (`Config` + `settings.rustok.*`) | `apps/server` | Loco config (`config/*.yaml`) + typed settings in server | `apps/server/docs/loco/README.md`; `docs/architecture/overview.md` | Accepted | 2026-06-01 | `apps/server/src/common/settings.rs`; `apps/server/config/development.yaml`; `apps/server/config/test.yaml` |
 | REST/GraphQL routing | `apps/server` | Loco `AppRoutes` + server controllers/graphql modules | `DECISIONS/2026-02-19-core-server-module-bundles-routing.md`; `docs/architecture/api.md` | Accepted | 2026-06-01 | `apps/server/src/app.rs`; `apps/server/src/controllers/mod.rs`; `apps/server/src/graphql/mod.rs` |
 | ORM/migrations/entities | `apps/server` migration + SeaORM entities | SeaORM stack in server app + migration crate | `docs/architecture/database.md`; `apps/server/docs/README.md` | Accepted | 2026-06-01 | `apps/server/migration/src/lib.rs`; `apps/server/src/models/mod.rs` |
-| Auth framework primitives (JWT/sessions/reset/RBAC wiring) | `apps/server` + `rustok-core` + `rustok-rbac` | Domain auth logic поверх Loco runtime | `DECISIONS/2026-02-26-auth-lifecycle-unification-session-invalidation.md`; `DECISIONS/2026-03-05-rbac-relation-only-final-cutover-gate.md` | Accepted | 2026-05-20 | `apps/server/src/services/auth.rs`; `apps/server/src/graphql/auth/mutation.rs`; `apps/server/src/controllers/auth.rs` |
+| Auth framework primitives (JWT/sessions/reset/RBAC wiring) | `apps/server` + `rustok-core` + `rustok-rbac` | Domain auth logic поверх Loco runtime | `DECISIONS/2026-02-26-auth-lifecycle-unification-session-invalidation.md`; `DECISIONS/2026-03-05-rbac-relation-only-final-cutover-gate.md` | Accepted | 2026-05-20 | `apps/server/src/services/rbac_service.rs`; `apps/server/src/graphql/auth/mutation.rs`; `apps/server/src/controllers/auth.rs` |
 | Tasks (`cargo loco task`) | `apps/server` via Loco task runtime | Loco tasks API with server task registration | `apps/server/docs/README.md`; `docs/guides/quickstart.md` | Accepted | 2026-06-01 | `apps/server/src/tasks/mod.rs`; `apps/server/src/tasks/cleanup.rs`; `apps/server/src/app.rs` |
 | Initializers | `apps/server` via Loco initializer runtime | Loco initializer API + project initializers | `apps/server/docs/README.md`; `docs/guides/observability-quickstart.md` | Accepted | 2026-06-01 | `apps/server/src/initializers/mod.rs`; `apps/server/src/initializers/telemetry.rs`; `apps/server/src/app.rs` |
 | Mailer subsystem | `apps/server` (custom `EmailService` on `lettre`) | **Loco Mailer API** (+ provider config in `settings`) | `apps/server/docs/loco/README.md`; `docs/architecture/api.md` | Proposed | 2026-04-15 | `apps/server/src/services/email.rs`; `apps/server/src/graphql/auth/mutation.rs`; `apps/server/src/common/settings.rs` |
@@ -84,7 +84,7 @@
 - Session management в БД (`sessions`).
 - Password hashing (`argon2`) и verify.
 - Password reset flow (forgot/reset mutations, reset token encoding/decoding, revoke sessions after reset).
-- RBAC permissions/roles assignment через `AuthService` + `rustok-rbac`/domain entities.
+- RBAC permissions/roles assignment через `RbacService` + `rustok-rbac`/domain entities.
 
 ### 2.6 Middleware / tenancy / rate-limit context
 
@@ -258,3 +258,5 @@
 - `crates/rustok-core/src/context.rs`
 - `apps/server/Cargo.toml`
 - `Cargo.toml`
+
+

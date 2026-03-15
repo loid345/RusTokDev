@@ -10,7 +10,7 @@ pub fn RotateSecretDialog(
 ) -> impl IntoView {
     let name = app.name.clone();
 
-    let rotate_action = create_action(move |_: &()| {
+    let rotate_action = Action::new(move |_: &()| {
         let on_success = on_success.clone();
         async move {
             // MOCK: GraphQL rotation logic
