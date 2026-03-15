@@ -325,7 +325,6 @@ mod tests {
             tenant_id: rustok_core::generate_id(),
             email: "test@example.com".to_string(),
             password_hash: "hash".to_string(),
-            role,
             name: None,
             status: rustok_core::UserStatus::Active,
             email_verified_at: None,
@@ -335,7 +334,7 @@ mod tests {
             updated_at: chrono::Utc::now().into(),
         };
 
-        let permissions = rustok_core::Rbac::permissions_for_role(&user.role)
+        let permissions = rustok_core::Rbac::permissions_for_role(&role)
             .iter()
             .cloned()
             .collect();
@@ -344,6 +343,7 @@ mod tests {
             user,
             session_id: rustok_core::generate_id(),
             permissions,
+            inferred_role: role,
             client_id: None,
             scopes: vec![],
             grant_type: "direct".to_string(),

@@ -139,6 +139,7 @@ pub async fn ready(
     let settings =
         RustokSettings::from_settings(&ctx.config.settings).unwrap_or_else(|_| RustokSettings {
             tenant: Default::default(),
+            build: Default::default(),
             search: Default::default(),
             features: Default::default(),
             rate_limit: Default::default(),

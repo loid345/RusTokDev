@@ -14,9 +14,11 @@
 # Запустить одну категорию
 ./scripts/verify/verify-all.sh tenant-isolation
 ./scripts/verify/verify-all.sh api-quality
+./scripts/verify/verify-all.sh deployment-profiles
 
 # Запустить скрипт напрямую (всегда полный вывод)
 ./scripts/verify/verify-tenant-isolation.sh
+./scripts/verify/verify-deployment-profiles.sh
 ```
 
 ## Когда запускать
@@ -32,6 +34,7 @@
 | Добавили миграцию | `./scripts/verify/verify-all.sh tenant-isolation` |
 | Подозрение на дыру в RBAC | `./scripts/verify/verify-all.sh rbac-coverage` |
 | Аудит безопасности | `./scripts/verify/verify-security.sh` |
+| Проверка deployment profile matrix | `./scripts/verify/verify-all.sh deployment-profiles` |
 
 ## Описание скриптов
 
@@ -197,6 +200,19 @@
   - deny nested imports внутренних модулей без явного разрешения
 
 **Severity:** CRITICAL. Модуль вне registry = не проходит health check.
+
+---
+
+### `verify-deployment-profiles.sh`
+Smoke-check поддерживаемых build surfaces:
+
+- `monolith` — default feature set + startup smoke
+- `server+admin` — `--no-default-features --features redis-cache,embed-admin`
+- `headless-api` — `--no-default-features --features redis-cache`
+
+Скрипт запускает по каждой конфигурации `cargo check` и один профильный smoke-test router/startup, чтобы manifest/build contract не расползался между feature sets.
+
+**Severity:** HIGH. Поломка profile matrix = build contract задокументирован, но не воспроизводим.
 
 ---
 

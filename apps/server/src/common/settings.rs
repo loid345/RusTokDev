@@ -2,12 +2,16 @@ use rustok_iggy::IggyConfig;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+use crate::services::redis_runtime::resolve_redis_url;
+
 const DEFAULT_TENANT_ID: Uuid = Uuid::from_u128(1);
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct RustokSettings {
     #[serde(default)]
     pub tenant: TenantSettings,
+    #[serde(default)]
+    pub build: BuildRuntimeSettings,
     #[serde(default)]
     pub search: SearchSettings,
     #[serde(default)]
@@ -220,6 +224,43 @@ pub struct SearchReindexSettings {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct BuildRuntimeSettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_build_poll_interval_ms")]
+    pub poll_interval_ms: u64,
+    #[serde(default)]
+    pub auto_release_environment: Option<String>,
+    #[serde(default)]
+    pub auto_activate_release: bool,
+    #[serde(default)]
+    pub deployment: BuildDeploymentSettings,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct BuildDeploymentSettings {
+    #[serde(default)]
+    pub backend: BuildDeploymentBackendKind,
+    #[serde(default = "default_build_deployment_filesystem_root_dir")]
+    pub filesystem_root_dir: String,
+    #[serde(default)]
+    pub public_base_url: Option<String>,
+    #[serde(default)]
+    pub endpoint_url: Option<String>,
+    #[serde(default)]
+    pub bearer_token: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, Default, Eq, PartialEq)]
+#[serde(rename_all = "snake_case")]
+pub enum BuildDeploymentBackendKind {
+    #[default]
+    RecordOnly,
+    Filesystem,
+    Http,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct RateLimitSettings {
     #[serde(default)]
     pub enabled: bool,
@@ -321,6 +362,30 @@ impl Default for SearchSettings {
             api_key: None,
             index_prefix: default_index_prefix(),
             reindex: SearchReindexSettings::default(),
+        }
+    }
+}
+
+impl Default for BuildRuntimeSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            poll_interval_ms: default_build_poll_interval_ms(),
+            auto_release_environment: None,
+            auto_activate_release: false,
+            deployment: BuildDeploymentSettings::default(),
+        }
+    }
+}
+
+impl Default for BuildDeploymentSettings {
+    fn default() -> Self {
+        Self {
+            backend: BuildDeploymentBackendKind::RecordOnly,
+            filesystem_root_dir: default_build_deployment_filesystem_root_dir(),
+            public_base_url: None,
+            endpoint_url: None,
+            bearer_token: None,
         }
     }
 }
@@ -479,6 +544,110 @@ impl RustokSettings {
             )));
         }
 
+        if parsed.build.poll_interval_ms == 0 {
+            return Err(serde_json::Error::io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "rustok.build.poll_interval_ms must be > 0",
+            )));
+        }
+
+        if let Some(environment) = parsed
+            .build
+            .auto_release_environment
+            .as_ref()
+            .map(|value| value.trim().to_string())
+        {
+            if environment.is_empty() {
+                parsed.build.auto_release_environment = None;
+            } else {
+                parsed.build.auto_release_environment = Some(environment);
+            }
+        }
+
+        if parsed.build.auto_activate_release && parsed.build.auto_release_environment.is_none() {
+            return Err(serde_json::Error::io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "rustok.build.auto_activate_release requires rustok.build.auto_release_environment",
+            )));
+        }
+
+        if parsed.build.deployment.backend == BuildDeploymentBackendKind::Filesystem
+            && parsed
+                .build
+                .deployment
+                .filesystem_root_dir
+                .trim()
+                .is_empty()
+        {
+            return Err(serde_json::Error::io(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "rustok.build.deployment.filesystem_root_dir must not be empty when backend=filesystem",
+            )));
+        }
+
+        if parsed.build.deployment.backend == BuildDeploymentBackendKind::Http {
+            let endpoint_url = parsed
+                .build
+                .deployment
+                .endpoint_url
+                .as_ref()
+                .map(|value| value.trim().to_string())
+                .unwrap_or_default();
+
+            if endpoint_url.is_empty() {
+                return Err(serde_json::Error::io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "rustok.build.deployment.endpoint_url must not be empty when backend=http",
+                )));
+            }
+
+            parsed.build.deployment.endpoint_url = Some(endpoint_url);
+        }
+
+        if let Some(public_base_url) = parsed
+            .build
+            .deployment
+            .public_base_url
+            .as_ref()
+            .map(|value| value.trim().trim_end_matches('/').to_string())
+        {
+            if public_base_url.is_empty() {
+                parsed.build.deployment.public_base_url = None;
+            } else {
+                parsed.build.deployment.public_base_url = Some(public_base_url);
+            }
+        }
+
+        if let Some(bearer_token) = parsed
+            .build
+            .deployment
+            .bearer_token
+            .as_ref()
+            .map(|value| value.trim().to_string())
+        {
+            if bearer_token.is_empty() {
+                parsed.build.deployment.bearer_token = None;
+            } else {
+                parsed.build.deployment.bearer_token = Some(bearer_token);
+            }
+        }
+
+        if parsed.rate_limit.enabled && parsed.rate_limit.backend == RateLimitBackendKind::Redis {
+            if resolve_redis_url().is_none() {
+                return Err(serde_json::Error::io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "rustok.rate_limit.backend=redis requires RUSTOK_REDIS_URL or REDIS_URL",
+                )));
+            }
+
+            if parsed.rate_limit.redis_key_prefix.trim().is_empty() {
+                return Err(serde_json::Error::io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "rustok.rate_limit.redis_key_prefix must not be empty when backend=redis",
+                )));
+            }
+        }
+
         validate_guardrail_threshold(
             "rustok.runtime.guardrails.rate_limit_memory_thresholds.api",
             parsed
@@ -571,6 +740,14 @@ fn default_search_reindex_entity_budget() -> usize {
 
 fn default_search_reindex_yield_every() -> u64 {
     50
+}
+
+fn default_build_poll_interval_ms() -> u64 {
+    5_000
+}
+
+fn default_build_deployment_filesystem_root_dir() -> String {
+    "artifacts/releases".to_string()
 }
 
 fn default_requests_per_minute() -> u32 {
@@ -710,12 +887,14 @@ fn default_smtp_port() -> u16 {
 #[cfg(test)]
 mod tests {
     use super::{
-        EventTransportKind, GuardrailRolloutMode, RateLimitBackendKind, RelayTargetKind,
-        RustokSettings,
+        BuildDeploymentBackendKind, EventTransportKind, GuardrailRolloutMode, RateLimitBackendKind,
+        RelayTargetKind, RustokSettings,
     };
     use std::sync::{Mutex, OnceLock};
 
     const EVENT_TRANSPORT_ENV: &str = "RUSTOK_EVENT_TRANSPORT";
+    const RUSTOK_REDIS_URL_ENV: &str = "RUSTOK_REDIS_URL";
+    const REDIS_URL_ENV: &str = "REDIS_URL";
 
     fn env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
@@ -760,6 +939,8 @@ mod tests {
     fn reads_transport_from_config() {
         let _guard = env_lock().lock().expect("env lock poisoned");
         let _env_guard = EnvVarGuard::clear(EVENT_TRANSPORT_ENV);
+        let _redis_guard = EnvVarGuard::clear(RUSTOK_REDIS_URL_ENV);
+        let _redis_url_guard = EnvVarGuard::clear(REDIS_URL_ENV);
 
         let raw = serde_json::json!({
             "rustok": {
@@ -777,6 +958,8 @@ mod tests {
     fn rejects_invalid_env_transport() {
         let _guard = env_lock().lock().expect("env lock poisoned");
         let _env_guard = EnvVarGuard::set(EVENT_TRANSPORT_ENV, "broken");
+        let _redis_guard = EnvVarGuard::clear(RUSTOK_REDIS_URL_ENV);
+        let _redis_url_guard = EnvVarGuard::clear(REDIS_URL_ENV);
 
         let err = RustokSettings::from_settings(&Some(serde_json::json!({ "rustok": {} })))
             .expect_err("transport should fail");
@@ -789,6 +972,8 @@ mod tests {
     fn reads_relay_defaults_from_config() {
         let _guard = env_lock().lock().expect("env lock poisoned");
         let _env_guard = EnvVarGuard::clear(EVENT_TRANSPORT_ENV);
+        let _redis_guard = EnvVarGuard::clear(RUSTOK_REDIS_URL_ENV);
+        let _redis_url_guard = EnvVarGuard::clear(REDIS_URL_ENV);
 
         let raw = serde_json::json!({
             "rustok": {
@@ -815,6 +1000,8 @@ mod tests {
     fn rejects_non_positive_retry_and_dlq_attempts() {
         let _guard = env_lock().lock().expect("env lock poisoned");
         let _env_guard = EnvVarGuard::clear(EVENT_TRANSPORT_ENV);
+        let _redis_guard = EnvVarGuard::clear(RUSTOK_REDIS_URL_ENV);
+        let _redis_url_guard = EnvVarGuard::clear(REDIS_URL_ENV);
 
         let bad_retry = serde_json::json!({
             "rustok": {
@@ -847,6 +1034,8 @@ mod tests {
     fn rejects_zero_event_channel_capacity() {
         let _guard = env_lock().lock().expect("env lock poisoned");
         let _env_guard = EnvVarGuard::clear(EVENT_TRANSPORT_ENV);
+        let _redis_guard = EnvVarGuard::clear(RUSTOK_REDIS_URL_ENV);
+        let _redis_url_guard = EnvVarGuard::clear(REDIS_URL_ENV);
 
         let raw = serde_json::json!({
             "rustok": {
@@ -866,6 +1055,8 @@ mod tests {
     fn reads_rate_limit_backend_defaults() {
         let _guard = env_lock().lock().expect("env lock poisoned");
         let _env_guard = EnvVarGuard::clear(EVENT_TRANSPORT_ENV);
+        let _redis_guard = EnvVarGuard::clear(RUSTOK_REDIS_URL_ENV);
+        let _redis_url_guard = EnvVarGuard::clear(REDIS_URL_ENV);
 
         let settings =
             RustokSettings::from_settings(&Some(serde_json::json!({ "rustok": {} }))).unwrap();
@@ -943,6 +1134,8 @@ mod tests {
     fn rejects_zero_search_reindex_budget_values() {
         let _guard = env_lock().lock().expect("env lock poisoned");
         let _env_guard = EnvVarGuard::clear(EVENT_TRANSPORT_ENV);
+        let _redis_guard = EnvVarGuard::clear(RUSTOK_REDIS_URL_ENV);
+        let _redis_url_guard = EnvVarGuard::clear(REDIS_URL_ENV);
 
         let raw = serde_json::json!({
             "rustok": {
@@ -961,9 +1154,109 @@ mod tests {
     }
 
     #[test]
+    fn reads_build_runtime_defaults_and_rejects_invalid_activation_policy() {
+        let _guard = env_lock().lock().expect("env lock poisoned");
+        let _env_guard = EnvVarGuard::clear(EVENT_TRANSPORT_ENV);
+        let _redis_guard = EnvVarGuard::clear(RUSTOK_REDIS_URL_ENV);
+        let _redis_url_guard = EnvVarGuard::clear(REDIS_URL_ENV);
+
+        let settings =
+            RustokSettings::from_settings(&Some(serde_json::json!({ "rustok": {} }))).unwrap();
+        assert!(!settings.build.enabled);
+        assert_eq!(settings.build.poll_interval_ms, 5_000);
+        assert!(settings.build.auto_release_environment.is_none());
+        assert!(!settings.build.auto_activate_release);
+        assert_eq!(
+            settings.build.deployment.backend,
+            BuildDeploymentBackendKind::RecordOnly
+        );
+        assert_eq!(
+            settings.build.deployment.filesystem_root_dir,
+            "artifacts/releases"
+        );
+        assert!(settings.build.deployment.public_base_url.is_none());
+        assert!(settings.build.deployment.endpoint_url.is_none());
+        assert!(settings.build.deployment.bearer_token.is_none());
+
+        let raw = serde_json::json!({
+            "rustok": {
+                "build": {
+                    "enabled": true,
+                    "poll_interval_ms": 1000,
+                    "auto_activate_release": true
+                }
+            }
+        });
+        let err =
+            RustokSettings::from_settings(&Some(raw)).expect_err("build activation validation");
+        assert!(err.to_string().contains(
+            "rustok.build.auto_activate_release requires rustok.build.auto_release_environment"
+        ));
+
+        let raw = serde_json::json!({
+            "rustok": {
+                "build": {
+                    "deployment": {
+                        "backend": "filesystem",
+                        "filesystem_root_dir": ""
+                    }
+                }
+            }
+        });
+        let err = RustokSettings::from_settings(&Some(raw))
+            .expect_err("filesystem deployment validation");
+        assert!(err
+            .to_string()
+            .contains("rustok.build.deployment.filesystem_root_dir must not be empty"));
+
+        let raw = serde_json::json!({
+            "rustok": {
+                "build": {
+                    "deployment": {
+                        "backend": "http"
+                    }
+                }
+            }
+        });
+        let err =
+            RustokSettings::from_settings(&Some(raw)).expect_err("http deployment validation");
+        assert!(err
+            .to_string()
+            .contains("rustok.build.deployment.endpoint_url must not be empty"));
+
+        let raw = serde_json::json!({
+            "rustok": {
+                "build": {
+                    "deployment": {
+                        "backend": "http",
+                        "endpoint_url": " https://deploy.example.com/releases ",
+                        "bearer_token": " secret-token "
+                    }
+                }
+            }
+        });
+        let settings =
+            RustokSettings::from_settings(&Some(raw)).expect("http deployment settings parse");
+        assert_eq!(
+            settings.build.deployment.backend,
+            BuildDeploymentBackendKind::Http
+        );
+        assert_eq!(
+            settings.build.deployment.endpoint_url.as_deref(),
+            Some("https://deploy.example.com/releases")
+        );
+        assert_eq!(
+            settings.build.deployment.bearer_token.as_deref(),
+            Some("secret-token")
+        );
+    }
+
+    #[test]
     fn rejects_invalid_runtime_guardrail_thresholds() {
         let _guard = env_lock().lock().expect("env lock poisoned");
         let _env_guard = EnvVarGuard::clear(EVENT_TRANSPORT_ENV);
+        let _redis_guard = EnvVarGuard::clear(RUSTOK_REDIS_URL_ENV);
+        let _redis_url_guard = EnvVarGuard::clear(REDIS_URL_ENV);
 
         let raw = serde_json::json!({
             "rustok": {
@@ -983,5 +1276,49 @@ mod tests {
         assert!(err.to_string().contains(
             "rustok.runtime.guardrails.rate_limit_memory_thresholds.auth.critical_entries must be > warning_entries"
         ));
+    }
+
+    #[test]
+    fn rejects_enabled_redis_rate_limit_without_redis_url() {
+        let _guard = env_lock().lock().expect("env lock poisoned");
+        let _env_guard = EnvVarGuard::clear(EVENT_TRANSPORT_ENV);
+        let _redis_guard = EnvVarGuard::clear(RUSTOK_REDIS_URL_ENV);
+        let _redis_url_guard = EnvVarGuard::clear(REDIS_URL_ENV);
+
+        let raw = serde_json::json!({
+            "rustok": {
+                "rate_limit": {
+                    "enabled": true,
+                    "backend": "redis"
+                }
+            }
+        });
+
+        let err =
+            RustokSettings::from_settings(&Some(raw)).expect_err("redis URL validation expected");
+        assert!(err
+            .to_string()
+            .contains("rustok.rate_limit.backend=redis requires RUSTOK_REDIS_URL or REDIS_URL"));
+    }
+
+    #[test]
+    fn allows_enabled_redis_rate_limit_with_redis_url() {
+        let _guard = env_lock().lock().expect("env lock poisoned");
+        let _env_guard = EnvVarGuard::clear(EVENT_TRANSPORT_ENV);
+        let _redis_guard = EnvVarGuard::set(RUSTOK_REDIS_URL_ENV, "redis://localhost:6379/0");
+        let _redis_url_guard = EnvVarGuard::clear(REDIS_URL_ENV);
+
+        let raw = serde_json::json!({
+            "rustok": {
+                "rate_limit": {
+                    "enabled": true,
+                    "backend": "redis",
+                    "redis_key_prefix": "rate-limit:v1"
+                }
+            }
+        });
+
+        let settings = RustokSettings::from_settings(&Some(raw)).expect("redis settings parse");
+        assert_eq!(settings.rate_limit.backend, RateLimitBackendKind::Redis);
     }
 }

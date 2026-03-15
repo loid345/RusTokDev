@@ -1,7 +1,6 @@
 pub mod authz_mode;
 pub mod casbin_model;
 pub mod casbin_shadow_evaluator;
-pub mod legacy_role_resolver;
 pub mod permission_authorizer;
 pub mod permission_evaluator;
 mod permission_normalization;
@@ -10,5 +9,4 @@ pub mod permission_resolver;
 pub mod relation_permission_resolver;
 pub mod runtime_permission_resolver;
 pub mod shadow_decision;
-pub mod shadow_dual_read;
 pub mod shadow_runtime;

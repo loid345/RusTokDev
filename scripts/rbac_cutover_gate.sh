@@ -7,7 +7,7 @@ Usage:
   scripts/rbac_cutover_gate.sh [options]
 
 Options:
-  --staging-artifacts-dir <dir>   Directory with rbac_relation_staging artifacts (default: artifacts/rbac-staging)
+  --staging-artifacts-dir <dir>   Directory with relation rehearsal artifacts (default: artifacts/rbac-staging)
   --cutover-artifacts-dir <dir>   Directory with rbac_cutover_baseline artifacts (default: artifacts/rbac-cutover)
   --auth-gate-report <file>       Path to auth_release_gate report artifact (required)
   --decision-output <file>        Optional markdown output file for go/no-go gate decision

@@ -5,20 +5,19 @@ use once_cell::sync::Lazy;
 use sea_orm::{ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
-use tracing::{debug, warn};
+use tracing::warn;
 
 use rustok_core::{Action, Permission, Resource, UserRole};
 use rustok_rbac::{
-    authorize_all_permissions, authorize_any_permission, authorize_permission,
-    evaluate_shadow_runtime_for_mode, invalidate_cached_legacy_role, invalidate_cached_permissions,
-    observe_shadow_runtime, resolve_legacy_role_with_cache, shadow_runtime_needs_legacy_role,
-    shadow_runtime_runs_casbin, AuthorizationDecision, CasbinShadowMismatchRecord,
-    DeniedReasonKind, DualReadMismatchRecord, LegacyRoleCache, LegacyRoleStore, PermissionCache,
-    RbacAuthzMode, RelationPermissionStore, RoleAssignmentStore, RuntimePermissionResolver,
-    ShadowCheck, ShadowRuntimeContext, ShadowRuntimeInput, ShadowRuntimeObserver,
+    authorize_all_permissions_for_mode, authorize_any_permission_for_mode,
+    authorize_permission_for_mode, evaluate_shadow_runtime_for_mode, invalidate_cached_permissions,
+    observe_shadow_runtime, shadow_runtime_runs_casbin, AuthorizationDecision,
+    CasbinShadowMismatchRecord, DeniedReasonKind, PermissionCache, RbacAuthzMode,
+    RelationPermissionStore, RoleAssignmentStore, RuntimePermissionResolver, ShadowCheck,
+    ShadowRuntimeContext, ShadowRuntimeInput, ShadowRuntimeObserver,
 };
 
-use crate::models::_entities::{permissions, role_permissions, roles, user_roles, users};
+use crate::models::_entities::{permissions, role_permissions, roles, user_roles};
 
 use super::rbac_persistence::{
     assign_role_permissions_via_store, remove_tenant_role_assignments_via_store,
@@ -68,7 +67,6 @@ pub struct RbacResolverMetricsSnapshot {
     pub denied_missing_permissions: u64,
     pub denied_unknown: u64,
     pub claim_role_mismatch_total: u64,
-    pub decision_mismatch_total: u64,
     pub shadow_compare_failures_total: u64,
     pub engine_decisions_relation_total: u64,
     pub engine_decisions_casbin_total: u64,
@@ -89,7 +87,6 @@ static RBAC_DENIED_NO_PERMISSIONS_RESOLVED: AtomicU64 = AtomicU64::new(0);
 static RBAC_DENIED_MISSING_PERMISSIONS: AtomicU64 = AtomicU64::new(0);
 static RBAC_DENIED_UNKNOWN: AtomicU64 = AtomicU64::new(0);
 static RBAC_CLAIM_ROLE_MISMATCH_TOTAL: AtomicU64 = AtomicU64::new(0);
-static RBAC_DECISION_MISMATCH_TOTAL: AtomicU64 = AtomicU64::new(0);
 static RBAC_SHADOW_COMPARE_FAILURES_TOTAL: AtomicU64 = AtomicU64::new(0);
 static RBAC_ENGINE_DECISIONS_RELATION_TOTAL: AtomicU64 = AtomicU64::new(0);
 static RBAC_ENGINE_DECISIONS_CASBIN_TOTAL: AtomicU64 = AtomicU64::new(0);
@@ -105,20 +102,9 @@ static USER_PERMISSION_CACHE: Lazy<Cache<(uuid::Uuid, uuid::Uuid), Vec<Permissio
             .build()
     });
 
-static USER_LEGACY_ROLE_CACHE: Lazy<Cache<(uuid::Uuid, uuid::Uuid), UserRole>> = Lazy::new(|| {
-    Cache::builder()
-        .max_capacity(20_000)
-        .time_to_live(Duration::from_secs(60))
-        .build()
-});
+pub(crate) struct ServerShadowRuntimeObserver;
 
-pub(crate) struct AuthServiceShadowRuntimeObserver;
-
-impl ShadowRuntimeObserver for AuthServiceShadowRuntimeObserver {
-    fn record_decision_mismatch_delta(&self, delta: u64) {
-        record_decision_mismatch_delta(delta);
-    }
-
+impl ShadowRuntimeObserver for ServerShadowRuntimeObserver {
     fn record_engine_decision_deltas(&self, relation_delta: u64, casbin_delta: u64) {
         record_engine_decision_deltas(relation_delta, casbin_delta);
     }
@@ -129,31 +115,6 @@ impl ShadowRuntimeObserver for AuthServiceShadowRuntimeObserver {
 
     fn record_engine_eval_duration(&self, latency_ms: u64) {
         record_engine_eval_duration(latency_ms);
-    }
-
-    fn on_dual_read_user_not_found(&self, context: ShadowRuntimeContext<'_>) {
-        debug!(
-            tenant_id = %context.tenant_id,
-            user_id = %context.user_id,
-            "rbac dual-read skipped: user not found for legacy role"
-        );
-    }
-
-    fn on_dual_read_mismatch(
-        &self,
-        context: ShadowRuntimeContext<'_>,
-        mismatch: &DualReadMismatchRecord,
-    ) {
-        warn!(
-            tenant_id = %context.tenant_id,
-            user_id = %context.user_id,
-            shadow_check = mismatch.shadow_check,
-            required_permissions = ?mismatch.required_permissions,
-            legacy_role = %mismatch.legacy_role,
-            relation_allowed = mismatch.relation_allowed,
-            legacy_allowed = mismatch.legacy_allowed,
-            "rbac_decision_mismatch"
-        );
     }
 
     fn on_casbin_mismatch(
@@ -175,17 +136,6 @@ impl ShadowRuntimeObserver for AuthServiceShadowRuntimeObserver {
     }
 }
 
-pub(crate) async fn load_legacy_role(
-    db: &DatabaseConnection,
-    tenant_id: &uuid::Uuid,
-    user_id: &uuid::Uuid,
-) -> Result<Option<UserRole>> {
-    let store = SeaOrmLegacyRoleStore { db: db.clone() };
-    let cache = MokaLegacyRoleCache;
-    let resolved = resolve_legacy_role_with_cache(&store, &cache, tenant_id, user_id).await?;
-    Ok(resolved.role)
-}
-
 pub(crate) async fn invalidate_user_permissions_cache(
     tenant_id: &uuid::Uuid,
     user_id: &uuid::Uuid,
@@ -196,9 +146,6 @@ pub(crate) async fn invalidate_user_permissions_cache(
 
 pub(crate) async fn invalidate_user_rbac_caches(tenant_id: &uuid::Uuid, user_id: &uuid::Uuid) {
     invalidate_user_permissions_cache(tenant_id, user_id).await;
-
-    let legacy_role_cache = MokaLegacyRoleCache;
-    invalidate_cached_legacy_role(&legacy_role_cache, tenant_id, user_id).await;
 }
 
 pub(crate) fn authz_mode() -> RbacAuthzMode {
@@ -206,7 +153,7 @@ pub(crate) fn authz_mode() -> RbacAuthzMode {
 }
 
 pub(crate) async fn compare_shadow_runtime(
-    db: &DatabaseConnection,
+    _db: &DatabaseConnection,
     tenant_id: &uuid::Uuid,
     user_id: &uuid::Uuid,
     resolved_permissions: &[Permission],
@@ -214,21 +161,15 @@ pub(crate) async fn compare_shadow_runtime(
     relation_allowed: bool,
 ) -> Result<()> {
     let authz_mode = authz_mode();
-    let legacy_role = if shadow_runtime_needs_legacy_role(authz_mode) {
-        load_legacy_role(db, tenant_id, user_id).await?
-    } else {
-        None
-    };
     let casbin_started_at = shadow_runtime_runs_casbin(authz_mode).then(std::time::Instant::now);
     let evaluation = evaluate_shadow_runtime_for_mode(ShadowRuntimeInput {
         authz_mode,
         tenant_id,
-        legacy_role: legacy_role.as_ref(),
         resolved_permissions,
         shadow_check,
         relation_allowed,
     });
-    let observer = AuthServiceShadowRuntimeObserver;
+    let observer = ServerShadowRuntimeObserver;
     observe_shadow_runtime(
         &observer,
         ShadowRuntimeContext { tenant_id, user_id },
@@ -246,16 +187,32 @@ pub(crate) async fn authorize_request(
     check: AuthorizationCheck<'_>,
 ) -> Result<AuthorizationRuntimeOutcome> {
     let started_at = Instant::now();
+    let authz_mode = authz_mode();
     let resolver = resolver(db);
     let decision = match check {
         AuthorizationCheck::Single(permission) => {
-            authorize_permission(&resolver, tenant_id, user_id, permission).await?
+            authorize_permission_for_mode(&resolver, authz_mode, tenant_id, user_id, permission)
+                .await?
         }
         AuthorizationCheck::Any(permissions) => {
-            authorize_any_permission(&resolver, tenant_id, user_id, permissions).await?
+            authorize_any_permission_for_mode(
+                &resolver,
+                authz_mode,
+                tenant_id,
+                user_id,
+                permissions,
+            )
+            .await?
         }
         AuthorizationCheck::All(permissions) => {
-            authorize_all_permissions(&resolver, tenant_id, user_id, permissions).await?
+            authorize_all_permissions_for_mode(
+                &resolver,
+                authz_mode,
+                tenant_id,
+                user_id,
+                permissions,
+            )
+            .await?
         }
     };
 
@@ -348,12 +305,6 @@ pub(crate) fn record_claim_role_mismatch() {
     RBAC_CLAIM_ROLE_MISMATCH_TOTAL.fetch_add(1, Ordering::Relaxed);
 }
 
-pub(crate) fn record_decision_mismatch_delta(delta: u64) {
-    if delta > 0 {
-        RBAC_DECISION_MISMATCH_TOTAL.fetch_add(delta, Ordering::Relaxed);
-    }
-}
-
 pub(crate) fn record_shadow_compare_failure() {
     RBAC_SHADOW_COMPARE_FAILURES_TOTAL.fetch_add(1, Ordering::Relaxed);
 }
@@ -396,7 +347,6 @@ pub(crate) fn metrics_snapshot() -> RbacResolverMetricsSnapshot {
         denied_missing_permissions: RBAC_DENIED_MISSING_PERMISSIONS.load(Ordering::Relaxed),
         denied_unknown: RBAC_DENIED_UNKNOWN.load(Ordering::Relaxed),
         claim_role_mismatch_total: RBAC_CLAIM_ROLE_MISMATCH_TOTAL.load(Ordering::Relaxed),
-        decision_mismatch_total: RBAC_DECISION_MISMATCH_TOTAL.load(Ordering::Relaxed),
         shadow_compare_failures_total: RBAC_SHADOW_COMPARE_FAILURES_TOTAL.load(Ordering::Relaxed),
         engine_decisions_relation_total: RBAC_ENGINE_DECISIONS_RELATION_TOTAL
             .load(Ordering::Relaxed),
@@ -421,7 +371,6 @@ pub(crate) fn reset_metrics_for_tests() {
     RBAC_DENIED_MISSING_PERMISSIONS.store(0, Ordering::Relaxed);
     RBAC_DENIED_UNKNOWN.store(0, Ordering::Relaxed);
     RBAC_CLAIM_ROLE_MISMATCH_TOTAL.store(0, Ordering::Relaxed);
-    RBAC_DECISION_MISMATCH_TOTAL.store(0, Ordering::Relaxed);
     RBAC_SHADOW_COMPARE_FAILURES_TOTAL.store(0, Ordering::Relaxed);
     RBAC_ENGINE_DECISIONS_RELATION_TOTAL.store(0, Ordering::Relaxed);
     RBAC_ENGINE_DECISIONS_CASBIN_TOTAL.store(0, Ordering::Relaxed);
@@ -439,15 +388,7 @@ pub(crate) struct SeaOrmRelationPermissionStore {
 pub(crate) struct MokaPermissionCache;
 
 #[derive(Clone)]
-pub(crate) struct MokaLegacyRoleCache;
-
-#[derive(Clone)]
 pub(crate) struct ServerRoleAssignmentStore {
-    db: DatabaseConnection,
-}
-
-#[derive(Clone)]
-pub(crate) struct SeaOrmLegacyRoleStore {
     db: DatabaseConnection,
 }
 
@@ -470,25 +411,6 @@ impl PermissionCache for MokaPermissionCache {
 
     async fn invalidate(&self, tenant_id: &uuid::Uuid, user_id: &uuid::Uuid) {
         USER_PERMISSION_CACHE
-            .invalidate(&(*tenant_id, *user_id))
-            .await;
-    }
-}
-
-#[async_trait]
-impl LegacyRoleCache for MokaLegacyRoleCache {
-    async fn get(&self, tenant_id: &uuid::Uuid, user_id: &uuid::Uuid) -> Option<UserRole> {
-        USER_LEGACY_ROLE_CACHE.get(&(*tenant_id, *user_id)).await
-    }
-
-    async fn insert(&self, tenant_id: &uuid::Uuid, user_id: &uuid::Uuid, role: UserRole) {
-        USER_LEGACY_ROLE_CACHE
-            .insert((*tenant_id, *user_id), role)
-            .await;
-    }
-
-    async fn invalidate(&self, tenant_id: &uuid::Uuid, user_id: &uuid::Uuid) {
-        USER_LEGACY_ROLE_CACHE
             .invalidate(&(*tenant_id, *user_id))
             .await;
     }
@@ -563,24 +485,6 @@ impl RelationPermissionStore for SeaOrmRelationPermissionStore {
         }
 
         Ok(result)
-    }
-}
-
-#[async_trait]
-impl LegacyRoleStore for SeaOrmLegacyRoleStore {
-    type Error = Error;
-
-    async fn load_legacy_role(
-        &self,
-        tenant_id: &uuid::Uuid,
-        user_id: &uuid::Uuid,
-    ) -> Result<Option<UserRole>> {
-        let user = users::Entity::find_by_id(*user_id)
-            .filter(users::Column::TenantId.eq(*tenant_id))
-            .one(&self.db)
-            .await?;
-
-        Ok(user.map(|user| user.role))
     }
 }
 

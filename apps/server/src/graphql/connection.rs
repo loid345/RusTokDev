@@ -3,6 +3,18 @@ use async_graphql::SimpleObject;
 use crate::graphql::common::PageInfo;
 
 #[derive(SimpleObject, Debug, Clone)]
+#[graphql(concrete(
+    name = "ForumCategoryConnection",
+    params(crate::graphql::forum::GqlForumCategory)
+))]
+#[graphql(concrete(
+    name = "ForumTopicConnection",
+    params(crate::graphql::forum::GqlForumTopic)
+))]
+#[graphql(concrete(
+    name = "ForumReplyConnection",
+    params(crate::graphql::forum::GqlForumReply)
+))]
 pub struct ListConnection<T>
 where
     T: async_graphql::OutputType,

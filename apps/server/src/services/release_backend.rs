@@ -1,0 +1,543 @@
+use std::path::{Path, PathBuf};
+
+use anyhow::{anyhow, bail, Context};
+use chrono::Utc;
+use loco_rs::app::AppContext;
+use reqwest::multipart;
+use serde::Serialize;
+
+use crate::common::settings::{
+    BuildDeploymentBackendKind, BuildDeploymentSettings, BuildRuntimeSettings,
+};
+use crate::models::build::Model as Build;
+use crate::models::release::Model as Release;
+use crate::modules::BuildExecutionPlan;
+use crate::services::build_service::{BuildService, ReleaseArtifactBundle};
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum ReleasePublishState {
+    Deploying,
+    Active,
+    Failed,
+}
+
+#[derive(Debug, Clone)]
+struct ReleasePublishOutcome {
+    artifacts: ReleaseArtifactBundle,
+    state: ReleasePublishState,
+}
+
+pub struct ReleaseDeploymentService {
+    build_service: BuildService,
+    config: BuildRuntimeSettings,
+}
+
+impl ReleaseDeploymentService {
+    pub fn new(ctx: &AppContext, config: BuildRuntimeSettings) -> Self {
+        Self {
+            build_service: BuildService::new(ctx.db.clone()),
+            config,
+        }
+    }
+
+    pub async fn publish_release(
+        &self,
+        release_id: &str,
+        activate: bool,
+    ) -> anyhow::Result<Release> {
+        let release = self
+            .build_service
+            .get_release(release_id)
+            .await?
+            .ok_or_else(|| anyhow!("Release not found"))?;
+        let build = self
+            .build_service
+            .get_build(release.build_id)
+            .await?
+            .ok_or_else(|| anyhow!("Build {} for release is missing", release.build_id))?;
+        let plan = build_execution_plan(&build)?;
+
+        self.build_service
+            .mark_release_deploying(release_id)
+            .await?;
+
+        let outcome =
+            match publish_release_artifacts(&self.config.deployment, &release, &build, &plan).await
+            {
+                Ok(outcome) => outcome,
+                Err(error) => {
+                    let _ = self.build_service.fail_release(release_id).await;
+                    return Err(error);
+                }
+            };
+
+        let release = self
+            .build_service
+            .attach_release_artifacts(release_id, outcome.artifacts)
+            .await?;
+
+        match outcome.state {
+            ReleasePublishState::Deploying => {
+                if activate && self.config.deployment.backend != BuildDeploymentBackendKind::Http {
+                    self.build_service.activate_release(&release.id).await
+                } else {
+                    Ok(release)
+                }
+            }
+            ReleasePublishState::Active => self.build_service.activate_release(&release.id).await,
+            ReleasePublishState::Failed => self.build_service.fail_release(&release.id).await,
+        }
+    }
+}
+
+async fn publish_release_artifacts(
+    config: &BuildDeploymentSettings,
+    release: &Release,
+    build: &Build,
+    plan: &BuildExecutionPlan,
+) -> anyhow::Result<ReleasePublishOutcome> {
+    match config.backend {
+        BuildDeploymentBackendKind::RecordOnly => Ok(ReleasePublishOutcome {
+            artifacts: ReleaseArtifactBundle::default(),
+            state: ReleasePublishState::Deploying,
+        }),
+        BuildDeploymentBackendKind::Filesystem => {
+            publish_release_to_filesystem(config, release, build, plan).await
+        }
+        BuildDeploymentBackendKind::Http => {
+            publish_release_to_http(config, release, build, plan).await
+        }
+    }
+}
+
+async fn publish_release_to_filesystem(
+    config: &BuildDeploymentSettings,
+    release: &Release,
+    build: &Build,
+    plan: &BuildExecutionPlan,
+) -> anyhow::Result<ReleasePublishOutcome> {
+    let root_dir = resolve_artifact_root(&config.filesystem_root_dir);
+    let release_dir = root_dir.join(&release.id);
+    let artifacts_dir = release_dir.join("artifacts");
+
+    tokio::fs::create_dir_all(&artifacts_dir)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to create release artifact dir {}",
+                artifacts_dir.display()
+            )
+        })?;
+
+    let source_binary = compiled_binary_path(plan);
+    if !tokio::fs::try_exists(&source_binary).await.unwrap_or(false) {
+        bail!(
+            "compiled server artifact not found for release {}: {}",
+            release.id,
+            source_binary.display()
+        );
+    }
+
+    let binary_name = source_binary
+        .file_name()
+        .ok_or_else(|| anyhow!("compiled artifact path has no file name"))?
+        .to_owned();
+    let published_binary = artifacts_dir.join(&binary_name);
+    tokio::fs::copy(&source_binary, &published_binary)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to copy server artifact to {}",
+                published_binary.display()
+            )
+        })?;
+
+    let bundle_manifest = ReleaseBundleManifest {
+        release_id: release.id.clone(),
+        build_id: build.id,
+        environment: release.environment.clone(),
+        manifest_hash: release.manifest_hash.clone(),
+        generated_at: Utc::now().to_rfc3339(),
+        cargo_command: plan.cargo_command.clone(),
+        cargo_target: plan.cargo_target.clone(),
+        cargo_profile: plan.cargo_profile.clone(),
+        cargo_features: plan.cargo_features.clone(),
+        modules: serde_json::from_value(release.modules.clone()).unwrap_or_default(),
+        server_artifact_path: published_binary.to_string_lossy().to_string(),
+    };
+    let bundle_path = release_dir.join("release-bundle.json");
+    let bundle_payload = serde_json::to_vec_pretty(&bundle_manifest)
+        .map_err(|error| anyhow!("failed to serialize release bundle manifest: {error}"))?;
+    tokio::fs::write(&bundle_path, bundle_payload)
+        .await
+        .with_context(|| {
+            format!(
+                "failed to write release bundle manifest {}",
+                bundle_path.display()
+            )
+        })?;
+
+    let server_artifact_url =
+        externalized_path(&published_binary, config.public_base_url.as_deref());
+    let admin_artifact_url = plan
+        .cargo_features
+        .iter()
+        .any(|feature| feature == "embed-admin")
+        .then(|| server_artifact_url.clone());
+    let storefront_artifact_url = plan
+        .cargo_features
+        .iter()
+        .any(|feature| feature == "embed-storefront")
+        .then(|| server_artifact_url.clone());
+
+    Ok(ReleasePublishOutcome {
+        artifacts: ReleaseArtifactBundle {
+            container_image: None,
+            server_artifact_url: Some(server_artifact_url),
+            admin_artifact_url,
+            storefront_artifact_url,
+        },
+        state: ReleasePublishState::Deploying,
+    })
+}
+
+#[derive(Debug, Serialize)]
+struct ReleaseBundleManifest {
+    release_id: String,
+    build_id: uuid::Uuid,
+    environment: String,
+    manifest_hash: String,
+    generated_at: String,
+    cargo_command: String,
+    cargo_target: Option<String>,
+    cargo_profile: String,
+    cargo_features: Vec<String>,
+    modules: Vec<String>,
+    server_artifact_path: String,
+}
+
+#[derive(Debug, Serialize)]
+struct RemoteReleasePublishRequest {
+    release_id: String,
+    build_id: uuid::Uuid,
+    environment: String,
+    manifest_hash: String,
+    generated_at: String,
+    cargo_command: String,
+    cargo_target: Option<String>,
+    cargo_profile: String,
+    cargo_features: Vec<String>,
+    modules: Vec<String>,
+    binary_file_name: String,
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct RemoteReleasePublishResponse {
+    #[serde(default)]
+    deployment_status: Option<String>,
+    #[serde(default)]
+    container_image: Option<String>,
+    #[serde(default)]
+    server_artifact_url: Option<String>,
+    #[serde(default)]
+    admin_artifact_url: Option<String>,
+    #[serde(default)]
+    storefront_artifact_url: Option<String>,
+}
+
+fn resolve_artifact_root(raw: &str) -> PathBuf {
+    let path = PathBuf::from(raw);
+    if path.is_absolute() {
+        path
+    } else {
+        workspace_root().join(path)
+    }
+}
+
+fn workspace_root() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(|path| path.parent())
+        .map(PathBuf::from)
+        .expect("workspace root should be resolvable from apps/server")
+}
+
+fn compiled_binary_path(plan: &BuildExecutionPlan) -> PathBuf {
+    let mut path = workspace_root().join("target");
+    if let Some(target) = &plan.cargo_target {
+        path.push(target);
+    }
+    path.push(binary_output_dir_name(&plan.cargo_profile));
+    path.push(binary_file_name(&plan.cargo_package));
+    path
+}
+
+fn binary_output_dir_name(profile: &str) -> &str {
+    if profile == "release" {
+        "release"
+    } else {
+        profile
+    }
+}
+
+fn binary_file_name(package: &str) -> String {
+    let exe_suffix = std::env::consts::EXE_EXTENSION;
+    if exe_suffix.is_empty() {
+        package.to_string()
+    } else {
+        format!("{package}.{exe_suffix}")
+    }
+}
+
+fn externalized_path(path: &Path, public_base_url: Option<&str>) -> String {
+    let file_name = path
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_else(|| path.to_string_lossy().to_string());
+
+    match public_base_url {
+        Some(base) => {
+            let release_id = path
+                .parent()
+                .and_then(Path::parent)
+                .and_then(|dir| dir.file_name())
+                .map(|value| value.to_string_lossy().to_string())
+                .unwrap_or_default();
+            format!("{base}/{release_id}/artifacts/{file_name}")
+        }
+        None => path.to_string_lossy().to_string(),
+    }
+}
+
+fn build_execution_plan(build: &Build) -> anyhow::Result<BuildExecutionPlan> {
+    let value = build
+        .modules_delta
+        .as_ref()
+        .ok_or_else(|| anyhow!("build {} does not contain execution metadata", build.id))?;
+
+    let plan = value
+        .get("execution_plan")
+        .ok_or_else(|| anyhow!("build {} is missing execution_plan metadata", build.id))?;
+
+    serde_json::from_value(plan.clone()).map_err(|error| {
+        anyhow!(
+            "build {} has invalid execution_plan metadata: {error}",
+            build.id
+        )
+    })
+}
+
+async fn publish_release_to_http(
+    config: &BuildDeploymentSettings,
+    release: &Release,
+    _build: &Build,
+    plan: &BuildExecutionPlan,
+) -> anyhow::Result<ReleasePublishOutcome> {
+    let endpoint_url = config
+        .endpoint_url
+        .as_deref()
+        .ok_or_else(|| anyhow!("http deployment backend requires endpoint_url"))?;
+    let binary_path = compiled_binary_path(plan);
+    if !tokio::fs::try_exists(&binary_path).await.unwrap_or(false) {
+        bail!(
+            "compiled server artifact not found for release {}: {}",
+            release.id,
+            binary_path.display()
+        );
+    }
+
+    let binary_name = binary_path
+        .file_name()
+        .ok_or_else(|| anyhow!("compiled artifact path has no file name"))?
+        .to_string_lossy()
+        .to_string();
+    let binary_bytes = tokio::fs::read(&binary_path)
+        .await
+        .with_context(|| format!("failed to read compiled artifact {}", binary_path.display()))?;
+
+    let payload = RemoteReleasePublishRequest {
+        release_id: release.id.clone(),
+        build_id: release.build_id,
+        environment: release.environment.clone(),
+        manifest_hash: release.manifest_hash.clone(),
+        generated_at: Utc::now().to_rfc3339(),
+        cargo_command: plan.cargo_command.clone(),
+        cargo_target: plan.cargo_target.clone(),
+        cargo_profile: plan.cargo_profile.clone(),
+        cargo_features: plan.cargo_features.clone(),
+        modules: serde_json::from_value(release.modules.clone()).unwrap_or_default(),
+        binary_file_name: binary_name.clone(),
+    };
+
+    let metadata_json = serde_json::to_string(&payload)
+        .map_err(|error| anyhow!("failed to serialize remote release metadata: {error}"))?;
+    let binary_part = multipart::Part::bytes(binary_bytes)
+        .file_name(binary_name)
+        .mime_str("application/octet-stream")
+        .map_err(|error| anyhow!("failed to construct remote release artifact part: {error}"))?;
+    let form = multipart::Form::new()
+        .text("metadata", metadata_json)
+        .part("server_artifact", binary_part);
+
+    let client = reqwest::Client::new();
+    let mut request = client.post(endpoint_url).multipart(form);
+    if let Some(token) = config.bearer_token.as_deref() {
+        request = request.bearer_auth(token);
+    }
+
+    let response = request
+        .send()
+        .await
+        .with_context(|| format!("failed to call remote deployment endpoint {endpoint_url}"))?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response
+            .text()
+            .await
+            .unwrap_or_else(|_| "<unreadable body>".to_string());
+        bail!("remote deployment endpoint returned {status}: {body}");
+    }
+
+    let body = response.text().await.with_context(|| {
+        format!("failed to read remote deployment response from {endpoint_url}")
+    })?;
+    if body.trim().is_empty() {
+        return Ok(ReleasePublishOutcome {
+            artifacts: ReleaseArtifactBundle::default(),
+            state: ReleasePublishState::Deploying,
+        });
+    }
+
+    let published: RemoteReleasePublishResponse =
+        serde_json::from_str(&body).with_context(|| {
+            format!("failed to parse remote deployment response from {endpoint_url}")
+        })?;
+
+    Ok(ReleasePublishOutcome {
+        artifacts: ReleaseArtifactBundle {
+            container_image: published.container_image,
+            server_artifact_url: published.server_artifact_url,
+            admin_artifact_url: published.admin_artifact_url,
+            storefront_artifact_url: published.storefront_artifact_url,
+        },
+        state: parse_remote_publish_state(published.deployment_status.as_deref())?,
+    })
+}
+
+fn parse_remote_publish_state(status: Option<&str>) -> anyhow::Result<ReleasePublishState> {
+    let Some(status) = status.map(str::trim).filter(|value| !value.is_empty()) else {
+        return Ok(ReleasePublishState::Deploying);
+    };
+
+    match status.to_ascii_lowercase().as_str() {
+        "pending" | "queued" | "accepted" | "deploying" | "in_progress" => {
+            Ok(ReleasePublishState::Deploying)
+        }
+        "active" | "deployed" | "success" => Ok(ReleasePublishState::Active),
+        "failed" | "error" => Ok(ReleasePublishState::Failed),
+        _ => bail!("unsupported remote deployment_status '{status}'"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{
+        binary_file_name, compiled_binary_path, externalized_path, parse_remote_publish_state,
+        resolve_artifact_root, ReleasePublishState, RemoteReleasePublishRequest,
+    };
+    use crate::modules::BuildExecutionPlan;
+    use std::path::PathBuf;
+
+    #[test]
+    fn resolves_relative_artifact_root_inside_workspace() {
+        let root = resolve_artifact_root("artifacts/releases");
+        assert!(root.ends_with(PathBuf::from("artifacts").join("releases")));
+        assert!(root.is_absolute());
+    }
+
+    #[test]
+    fn derives_binary_path_from_plan() {
+        let plan = BuildExecutionPlan {
+            cargo_package: "rustok-server".to_string(),
+            cargo_profile: "release".to_string(),
+            cargo_target: Some("x86_64-unknown-linux-gnu".to_string()),
+            cargo_features: vec!["embed-admin".to_string()],
+            cargo_command: String::new(),
+        };
+
+        let path = compiled_binary_path(&plan);
+        assert!(
+            path.to_string_lossy()
+                .contains("target\\x86_64-unknown-linux-gnu\\release")
+                || path
+                    .to_string_lossy()
+                    .contains("target/x86_64-unknown-linux-gnu/release")
+        );
+        assert!(path.ends_with(binary_file_name("rustok-server")));
+    }
+
+    #[test]
+    fn externalized_path_uses_public_base_url_when_present() {
+        let path = PathBuf::from("C:/repo/artifacts/releases/rel_1/artifacts/rustok-server.exe");
+        let url = externalized_path(&path, Some("https://artifacts.example.com/releases"));
+        assert_eq!(
+            url,
+            "https://artifacts.example.com/releases/rel_1/artifacts/rustok-server.exe"
+        );
+    }
+
+    #[test]
+    fn remote_publish_request_serializes_expected_fields() {
+        let payload = RemoteReleasePublishRequest {
+            release_id: "rel_1".to_string(),
+            build_id: uuid::Uuid::nil(),
+            environment: "prod".to_string(),
+            manifest_hash: "hash".to_string(),
+            generated_at: "2026-03-14T00:00:00Z".to_string(),
+            cargo_command: "cargo build -p rustok-server --release".to_string(),
+            cargo_target: Some("x86_64-unknown-linux-gnu".to_string()),
+            cargo_profile: "release".to_string(),
+            cargo_features: vec!["embed-admin".to_string()],
+            modules: vec!["blog".to_string(), "pages".to_string()],
+            binary_file_name: "rustok-server.exe".to_string(),
+        };
+
+        let json = serde_json::to_value(payload).unwrap();
+        assert_eq!(json["release_id"], "rel_1");
+        assert_eq!(json["environment"], "prod");
+        assert_eq!(json["binary_file_name"], "rustok-server.exe");
+        assert_eq!(json["cargo_features"][0], "embed-admin");
+    }
+
+    #[test]
+    fn remote_publish_state_defaults_to_deploying() {
+        assert_eq!(
+            parse_remote_publish_state(None).unwrap(),
+            ReleasePublishState::Deploying
+        );
+        assert_eq!(
+            parse_remote_publish_state(Some(" accepted ")).unwrap(),
+            ReleasePublishState::Deploying
+        );
+    }
+
+    #[test]
+    fn remote_publish_state_maps_active_and_failed_statuses() {
+        assert_eq!(
+            parse_remote_publish_state(Some("deployed")).unwrap(),
+            ReleasePublishState::Active
+        );
+        assert_eq!(
+            parse_remote_publish_state(Some("failed")).unwrap(),
+            ReleasePublishState::Failed
+        );
+    }
+
+    #[test]
+    fn remote_publish_state_rejects_unknown_status() {
+        let error = parse_remote_publish_state(Some("mystery")).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("unsupported remote deployment_status 'mystery'"));
+    }
+}

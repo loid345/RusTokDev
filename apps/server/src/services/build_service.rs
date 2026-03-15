@@ -20,6 +20,7 @@ use crate::models::build::{
 use crate::models::release::{
     ActiveModel as ReleaseActiveModel, Entity as ReleaseEntity, Model as Release, ReleaseStatus,
 };
+use crate::modules::BuildExecutionPlan;
 
 #[derive(Debug, Clone)]
 pub struct BuildRequest {
@@ -29,6 +30,15 @@ pub struct BuildRequest {
     pub modules_delta: String,
     pub modules: HashMap<String, ModuleSpec>,
     pub profile: DeploymentProfile,
+    pub execution_plan: BuildExecutionPlan,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ReleaseArtifactBundle {
+    pub container_image: Option<String>,
+    pub server_artifact_url: Option<String>,
+    pub admin_artifact_url: Option<String>,
+    pub storefront_artifact_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -179,6 +189,7 @@ impl BuildService {
         let modules_delta = serde_json::json!({
             "summary": request.modules_delta,
             "modules": request.modules,
+            "execution_plan": request.execution_plan,
         });
 
         let active_model = BuildActiveModel {
@@ -226,6 +237,22 @@ impl BuildService {
                     .is_in([BuildStatus::Queued, BuildStatus::Running]),
             )
             .order_by_desc(crate::models::build::Column::CreatedAt)
+            .one(&self.db)
+            .await?)
+    }
+
+    pub async fn running_build(&self) -> anyhow::Result<Option<Build>> {
+        Ok(BuildEntity::find()
+            .filter(crate::models::build::Column::Status.eq(BuildStatus::Running))
+            .order_by_desc(crate::models::build::Column::CreatedAt)
+            .one(&self.db)
+            .await?)
+    }
+
+    pub async fn next_queued_build(&self) -> anyhow::Result<Option<Build>> {
+        Ok(BuildEntity::find()
+            .filter(crate::models::build::Column::Status.eq(BuildStatus::Queued))
+            .order_by_asc(crate::models::build::Column::CreatedAt)
             .one(&self.db)
             .await?)
     }
@@ -428,6 +455,123 @@ impl BuildService {
 
     pub async fn get_release(&self, release_id: &str) -> anyhow::Result<Option<Release>> {
         Ok(ReleaseEntity::find_by_id(release_id).one(&self.db).await?)
+    }
+
+    pub async fn activate_release(&self, release_id: &str) -> anyhow::Result<Release> {
+        let updated = self
+            .db
+            .transaction::<_, Release, sea_orm::DbErr>(|txn| {
+                let release_id = release_id.to_string();
+                Box::pin(async move {
+                    let target = ReleaseEntity::find_by_id(&release_id)
+                        .one(txn)
+                        .await?
+                        .ok_or_else(|| sea_orm::DbErr::Custom("Release not found".to_string()))?;
+
+                    let now = Utc::now();
+
+                    if let Some(current) = ReleaseEntity::find()
+                        .filter(crate::models::release::Column::Status.eq(ReleaseStatus::Active))
+                        .one(txn)
+                        .await?
+                    {
+                        if current.id != target.id {
+                            let mut current_model: ReleaseActiveModel = current.into();
+                            current_model.status = Set(ReleaseStatus::RolledBack);
+                            current_model.rolled_back_at = Set(Some(now));
+                            current_model.updated_at = Set(now);
+                            current_model.update(txn).await?;
+                        }
+                    }
+
+                    let mut target_model: ReleaseActiveModel = target.into();
+                    target_model.status = Set(ReleaseStatus::Active);
+                    target_model.deployed_at = Set(Some(now));
+                    target_model.updated_at = Set(now);
+                    target_model.update(txn).await
+                })
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!("Failed to activate release: {error}"))?;
+
+        Ok(updated)
+    }
+
+    pub async fn mark_release_deploying(&self, release_id: &str) -> anyhow::Result<Release> {
+        let updated = self
+            .db
+            .transaction::<_, Release, sea_orm::DbErr>(|txn| {
+                let release_id = release_id.to_string();
+                Box::pin(async move {
+                    let release = ReleaseEntity::find_by_id(&release_id)
+                        .one(txn)
+                        .await?
+                        .ok_or_else(|| sea_orm::DbErr::Custom("Release not found".to_string()))?;
+
+                    let mut active_model: ReleaseActiveModel = release.into();
+                    active_model.status = Set(ReleaseStatus::Deploying);
+                    active_model.updated_at = Set(Utc::now());
+                    active_model.update(txn).await
+                })
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!("Failed to mark release deploying: {error}"))?;
+
+        Ok(updated)
+    }
+
+    pub async fn attach_release_artifacts(
+        &self,
+        release_id: &str,
+        artifacts: ReleaseArtifactBundle,
+    ) -> anyhow::Result<Release> {
+        let updated = self
+            .db
+            .transaction::<_, Release, sea_orm::DbErr>(|txn| {
+                let release_id = release_id.to_string();
+                let artifacts = artifacts.clone();
+                Box::pin(async move {
+                    let release = ReleaseEntity::find_by_id(&release_id)
+                        .one(txn)
+                        .await?
+                        .ok_or_else(|| sea_orm::DbErr::Custom("Release not found".to_string()))?;
+
+                    let mut active_model: ReleaseActiveModel = release.into();
+                    active_model.container_image = Set(artifacts.container_image);
+                    active_model.server_artifact_url = Set(artifacts.server_artifact_url);
+                    active_model.admin_artifact_url = Set(artifacts.admin_artifact_url);
+                    active_model.storefront_artifact_url = Set(artifacts.storefront_artifact_url);
+                    active_model.updated_at = Set(Utc::now());
+                    active_model.update(txn).await
+                })
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!("Failed to attach release artifacts: {error}"))?;
+
+        Ok(updated)
+    }
+
+    pub async fn fail_release(&self, release_id: &str) -> anyhow::Result<Release> {
+        let updated = self
+            .db
+            .transaction::<_, Release, sea_orm::DbErr>(|txn| {
+                let release_id = release_id.to_string();
+                Box::pin(async move {
+                    let release = ReleaseEntity::find_by_id(&release_id)
+                        .one(txn)
+                        .await?
+                        .ok_or_else(|| sea_orm::DbErr::Custom("Release not found".to_string()))?;
+
+                    let mut active_model: ReleaseActiveModel = release.into();
+                    active_model.status = Set(ReleaseStatus::Failed);
+                    active_model.updated_at = Set(Utc::now());
+                    active_model.update(txn).await
+                })
+            })
+            .await
+            .map_err(|error| anyhow::anyhow!("Failed to mark release failed: {error}"))?;
+
+        Ok(updated)
     }
 
     async fn get_active_release(&self) -> anyhow::Result<Option<Release>> {

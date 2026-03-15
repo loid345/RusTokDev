@@ -33,7 +33,8 @@ pub use async_utils::{
     TimeoutError,
 };
 pub use auth::{
-    AuthError, AuthService, AuthTokens, RegisterInput, User, UserRepository, UsersMigration,
+    AuthError, IdentityService, IdentityTokens, RegistrationInput, User, UserRepository,
+    UsersMigration,
 };
 #[cfg(feature = "redis-cache")]
 pub use cache::RedisCacheBackend;

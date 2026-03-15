@@ -8,11 +8,11 @@ pub fn routes() -> Routes {
         .add("/health", get(super::health::health))
         .add("/posts", get(posts::list_posts).post(posts::create_post))
         .add(
-            "/posts/:id",
+            "/posts/{id}",
             get(posts::get_post)
                 .put(posts::update_post)
                 .delete(posts::delete_post),
         )
-        .add("/posts/:id/publish", post(posts::publish_post))
-        .add("/posts/:id/unpublish", post(posts::unpublish_post))
+        .add("/posts/{id}/publish", post(posts::publish_post))
+        .add("/posts/{id}/unpublish", post(posts::unpublish_post))
 }

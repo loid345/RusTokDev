@@ -633,6 +633,10 @@ pub async fn resolve(
     mut req: Request<Body>,
     next: Next,
 ) -> Result<Response, StatusCode> {
+    if should_bypass_tenant_resolution(req.uri().path()) {
+        return Ok(next.run(req).await);
+    }
+
     let settings = RustokSettings::from_settings(&ctx.config.settings)
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     let identifier = resolve_identifier(&req, &settings)?;
@@ -691,6 +695,11 @@ pub async fn resolve(
 
     req.extensions_mut().insert(TenantContextExtension(context));
     Ok(next.run(req).await)
+}
+
+fn should_bypass_tenant_resolution(path: &str) -> bool {
+    matches!(path, "/metrics" | "/api/openapi.json" | "/api/openapi.yaml")
+        || path.starts_with("/health")
 }
 
 pub fn resolve_identifier(
@@ -910,8 +919,8 @@ async fn invalidate_cache_keys(ctx: &AppContext, kind: TenantIdentifierKind, val
 #[cfg(test)]
 mod invalidation_tests {
     use super::{
-        parse_invalidation_payload, TenantInvalidationListenerState,
-        TenantInvalidationListenerStatus,
+        parse_invalidation_payload, should_bypass_tenant_resolution,
+        TenantInvalidationListenerState, TenantInvalidationListenerStatus,
     };
 
     #[test]
@@ -944,5 +953,14 @@ mod invalidation_tests {
 
         assert_eq!(snapshot.status, TenantInvalidationListenerStatus::Degraded);
         assert_eq!(snapshot.last_error.as_deref(), Some("redis unavailable"));
+    }
+
+    #[test]
+    fn bypasses_operator_endpoints_from_tenant_resolution() {
+        assert!(should_bypass_tenant_resolution("/health/live"));
+        assert!(should_bypass_tenant_resolution("/health/runtime"));
+        assert!(should_bypass_tenant_resolution("/metrics"));
+        assert!(should_bypass_tenant_resolution("/api/openapi.json"));
+        assert!(!should_bypass_tenant_resolution("/api/content/nodes"));
     }
 }

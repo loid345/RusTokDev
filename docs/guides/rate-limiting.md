@@ -48,6 +48,62 @@ Relevant settings live under `rustok.rate_limit`:
 - `oauth_burst`
 - `trusted_auth_dimensions`
 
+## Recommended Profiles
+
+Single-instance / dev profile:
+
+```yaml
+settings:
+  rustok:
+    rate_limit:
+      enabled: true
+      backend: memory
+      requests_per_minute: 60
+      burst: 10
+      auth_requests_per_minute: 20
+      auth_burst: 5
+      oauth_requests_per_minute: 30
+      oauth_burst: 5
+      trusted_auth_dimensions: true
+```
+
+Multi-instance / Redis-backed profile:
+
+```yaml
+settings:
+  rustok:
+    rate_limit:
+      enabled: true
+      backend: redis
+      redis_key_prefix: rate-limit:v1
+      requests_per_minute: 60
+      burst: 10
+      auth_requests_per_minute: 20
+      auth_burst: 5
+      oauth_requests_per_minute: 30
+      oauth_burst: 5
+      trusted_auth_dimensions: true
+    runtime:
+      guardrails:
+        rollout: observe
+```
+
+Recommended rollout:
+
+1. switch only the backend to `redis`;
+2. keep guardrails in `observe`;
+3. verify `/health/runtime` and `/metrics`;
+4. switch to `enforce` after backend stability is confirmed.
+
+Repository preset:
+
+- [`production.redis.example.yaml`](/C:/проекты/RusTok/apps/server/config/production.redis.example.yaml)
+
+Startup validation:
+
+- if `rustok.rate_limit.enabled=true` and `backend=redis`, server now fails fast unless `RUSTOK_REDIS_URL` or `REDIS_URL` is set;
+- if rate limiting is disabled, server no longer requires Redis just because `backend=redis` is configured for a future rollout.
+
 ## Response Contract
 
 Successful response:

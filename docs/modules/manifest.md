@@ -237,7 +237,19 @@ UI шаги:
 
 1. **Checkout + deps**: забрать repo + загрузить зависимости.
 2. **Render manifest**: зафиксировать `modules.toml` в workspace.
-3. **Cargo build**: `cargo build -p rustok-server --release`.
+3. **Cargo build**: команда выводится из `modules.toml`:
+   `cargo build -p rustok-server --release --target <build.target> --features <derived-from-build.server>`.
+   Для текущих server surfaces это `embed-admin` и `embed-storefront`.
+   Текущий operator path: `cargo loco task --name rebuild` или `target/debug/rustok-server.exe task rebuild`.
+   Можно указать `build_id=<uuid>` для конкретной записи или `dry_run=true`, чтобы только распечатать derived command без запуска.
+   Для runtime automation можно включить `settings.rustok.build.enabled=true`; тогда server поднимет background worker,
+   который будет забирать queued builds и выполнять тот же manifest-derived plan.
+   Дополнительно доступны `auto_release_environment` и `auto_activate_release` для локального release/deploy flow.
+   В `settings.rustok.build.deployment` можно выбрать backend:
+   `record_only` (только release record), `filesystem` (копирование server artifact в release bundle directory) или `http` (multipart publish в удалённый deployment endpoint).
+   Для filesystem backend используются `filesystem_root_dir` и опциональный `public_base_url`; для HTTP backend используются `endpoint_url` и опциональный `bearer_token`; release API после publish начинает отдавать artifact URLs.
+   HTTP endpoint может дополнительно вернуть `deployment_status` (`accepted|deploying|deployed|failed`), и тогда сервер синхронизирует локальный release state с фактическим outcome вместо преждевременной auto-activation.
+   Отдельная smoke-проверка profile matrix теперь живёт в `scripts/verify/verify-deployment-profiles.sh`.
 4. **Docker image**: собрать образ с готовым бинарником.
 5. **Push**: загрузить в registry.
 6. **Deploy**: обновить deployment (K8s) или контейнер (docker-compose).

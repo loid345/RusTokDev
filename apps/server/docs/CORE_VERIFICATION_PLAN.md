@@ -1,4 +1,4 @@
-# Периодический план верификации ядра RusToK
+﻿# Периодический план верификации ядра RusToK
 
 **Дата создания:** 2026-03-12
 **Частота проверки:** при каждом существенном PR / по расписанию
@@ -204,10 +204,10 @@ grep -rn "fn translations" crates/rustok-*/src/ --include="*.rs"
 ### 7.1 RBAC engine из rustok-rbac
 
 ```bash
-grep -rn "AuthService::has_permission\|AuthService::has_any_permission" apps/server/src/ --include="*.rs"
+grep -rn "RbacService::has_permission\|RbacService::has_any_permission" apps/server/src/ --include="*.rs"
 ```
 
-**Ожидаемый результат:** Все проверки через `AuthService`, не custom middleware.
+**Ожидаемый результат:** Все проверки через `RbacService`, не custom middleware.
 
 ### 7.2 Нет дублирующих auth middleware
 
@@ -215,7 +215,7 @@ grep -rn "AuthService::has_permission\|AuthService::has_any_permission" apps/ser
 grep -rn "fn check_permission\|fn verify_role" apps/server/src/ --include="*.rs"
 ```
 
-**Ожидаемый результат:** Нет adhoc проверок мимо `AuthService`.
+**Ожидаемый результат:** Нет adhoc проверок мимо `RbacService`.
 
 ---
 
@@ -371,7 +371,7 @@ curl -s http://localhost:5150/api/_metrics | head -20
 | Static globals мимо AppContext | `grep "lazy_static\|OnceCell"` | 🟡 Высокая |
 | Inline SQL вместо SeaORM | `grep "raw_sql\|execute_unprepared"` в новом коде | 🟡 Высокая |
 | Новый HTTP client вместо Loco fetch | `grep "reqwest::Client::new()"` в ядре | 🟢 Средняя |
-| Custom auth middleware мимо AuthService | Ручной `fn check_role` | 🟡 Высокая |
+| Custom auth middleware мимо RbacService | Ручной `fn check_role` | 🟡 Высокая |
 | Hard-coded tenant ID в бизнес-логике | `grep "00000000-0000-0000-0000"` в не-config файлах | 🟡 Высокая |
 
 ---
@@ -385,3 +385,5 @@ curl -s http://localhost:5150/api/_metrics | head -20
 > **Правило для агентов:** Если вы собираетесь добавить новую зависимость, middleware, или
 > инфраструктурный сервис в `apps/server/` — **сначала** проверьте по этому документу,
 > не дублирует ли это уже существующее решение.
+
+

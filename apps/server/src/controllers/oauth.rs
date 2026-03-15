@@ -627,6 +627,7 @@ async fn userinfo_handler(
     // returning the user profile here is generally safe for authenticated apps.
 
     let user = current_user.user;
+    let inferred_role = current_user.inferred_role;
 
     // standard OIDC claims
     let userinfo = serde_json::json!({
@@ -634,7 +635,7 @@ async fn userinfo_handler(
         "name": user.name.unwrap_or_default(),
         "email": user.email,
         "email_verified": true, // We assume true for simplicity here, adjust if rustok tracks verification
-        "role": user.role.to_string(),
+        "role": inferred_role.to_string(),
         "tenant_id": user.tenant_id.to_string(),
     });
 

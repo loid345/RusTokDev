@@ -39,6 +39,8 @@ async fn test_post_lifecycle() -> TestResult<()> {
         locale: "en".to_string(),
         title: "Test Post".to_string(),
         body: "Hello, Blog!".to_string(),
+        body_format: "markdown".to_string(),
+        content_json: None,
         excerpt: Some("Short excerpt".to_string()),
         slug: None,
         publish: false,
@@ -65,6 +67,8 @@ async fn test_create_and_publish_post() -> TestResult<()> {
         locale: "en".to_string(),
         title: "Draft Post".to_string(),
         body: "Content".to_string(),
+        body_format: "markdown".to_string(),
+        content_json: None,
         excerpt: None,
         slug: Some("draft-post".to_string()),
         publish: false,
@@ -246,6 +250,8 @@ async fn test_create_comment_succeeds_with_required_translation() -> TestResult<
                 locale: "en".to_string(),
                 title: "Post for comments".to_string(),
                 body: "Post body".to_string(),
+                body_format: "markdown".to_string(),
+                content_json: None,
                 excerpt: None,
                 slug: None,
                 publish: false,
@@ -268,6 +274,8 @@ async fn test_create_comment_succeeds_with_required_translation() -> TestResult<
             CreateCommentInput {
                 locale: "en".to_string(),
                 content: "This comment should be persisted".to_string(),
+                content_format: "markdown".to_string(),
+                content_json: None,
                 parent_comment_id: None,
             },
         )
@@ -321,6 +329,8 @@ async fn test_comment_threaded_locale_fallback_update_delete_and_list() -> TestR
                 locale: "en".to_string(),
                 title: "Post with comments".to_string(),
                 body: "Body".to_string(),
+                body_format: "markdown".to_string(),
+                content_json: None,
                 excerpt: None,
                 slug: None,
                 publish: false,
@@ -342,6 +352,8 @@ async fn test_comment_threaded_locale_fallback_update_delete_and_list() -> TestR
             CreateCommentInput {
                 locale: "en".to_string(),
                 content: "Parent comment".to_string(),
+                content_format: "markdown".to_string(),
+                content_json: None,
                 parent_comment_id: None,
             },
         )
@@ -355,6 +367,8 @@ async fn test_comment_threaded_locale_fallback_update_delete_and_list() -> TestR
             CreateCommentInput {
                 locale: "fr".to_string(),
                 content: "Réponse imbriquée".to_string(),
+                content_format: "markdown".to_string(),
+                content_json: None,
                 parent_comment_id: Some(parent.id),
             },
         )
@@ -426,6 +440,8 @@ async fn test_comment_threaded_locale_fallback_update_delete_and_list() -> TestR
             UpdateCommentInput {
                 locale: "en".to_string(),
                 content: Some("Parent updated".to_string()),
+                content_format: None,
+                content_json: None,
             },
         )
         .await?;
@@ -439,6 +455,8 @@ async fn test_comment_threaded_locale_fallback_update_delete_and_list() -> TestR
             UpdateCommentInput {
                 locale: "en".to_string(),
                 content: Some("Should fail".to_string()),
+                content_format: None,
+                content_json: None,
             },
         )
         .await
@@ -456,6 +474,8 @@ async fn test_comment_threaded_locale_fallback_update_delete_and_list() -> TestR
             UpdateCommentInput {
                 locale: "en".to_string(),
                 content: Some("missing".to_string()),
+                content_format: None,
+                content_json: None,
             },
         )
         .await
@@ -676,6 +696,8 @@ mod unit_tests {
             locale: "ru".to_string(),
             title: "Заголовок".to_string(),
             body: "Тело поста".to_string(),
+            body_format: "markdown".to_string(),
+            content_json: None,
             excerpt: Some("Краткое содержание".to_string()),
             slug: Some("zagolovok".to_string()),
             publish: false,

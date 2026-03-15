@@ -16,13 +16,13 @@ pub fn CreateAppForm(
     on_success: impl Fn(CreateOAuthAppResult) + Send + Sync + 'static + Clone,
     on_cancel: impl Fn() + 'static + Clone,
 ) -> impl IntoView {
-    let (name, set_name) = create_signal("".to_string());
-    let (slug, set_slug) = create_signal("".to_string());
-    let (description, set_description) = create_signal("".to_string());
-    let (app_type, set_app_type) = create_signal("ThirdParty".to_string());
+    let (name, set_name) = signal("".to_string());
+    let (slug, set_slug) = signal("".to_string());
+    let (description, set_description) = signal("".to_string());
+    let (app_type, set_app_type) = signal("ThirdParty".to_string());
 
     // In a real app with leptos-graphql, this would be a use_mutation Call
-    let create_action = create_action(move |_: &()| {
+    let create_action = Action::new(move |_: &()| {
         let name_val = name.get();
         let slug_val = slug.get();
         let desc_val = description.get();

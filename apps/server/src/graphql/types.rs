@@ -10,7 +10,7 @@ use crate::graphql::loaders::TenantNameLoader;
 use crate::models::build::{BuildStage, BuildStatus, DeploymentProfile, Model as BuildModel};
 use crate::models::release::{Model as ReleaseModel, ReleaseStatus};
 use crate::models::users;
-use crate::modules::InstalledManifestModule;
+use crate::modules::{BuildExecutionPlan, InstalledManifestModule};
 use crate::services::build_service::BuildEvent;
 use crate::services::rbac_service::RbacService;
 
@@ -27,7 +27,6 @@ pub struct User {
     pub id: Uuid,
     pub email: String,
     pub name: Option<String>,
-    pub role: String,
     pub status: String,
     pub created_at: String,
     #[graphql(skip)]
@@ -102,6 +101,14 @@ impl User {
         self.name.clone().unwrap_or_else(|| self.email.clone())
     }
 
+    async fn role(&self, ctx: &Context<'_>) -> Result<String> {
+        let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
+        let role = RbacService::get_user_role(&app_ctx.db, &self.tenant_id, &self.id)
+            .await
+            .map_err(|err| err.to_string())?;
+        Ok(role.to_string())
+    }
+
     async fn can(&self, ctx: &Context<'_>, action: String) -> Result<bool> {
         let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
         let permission = Permission::from_str(&action).map_err(|err| err.to_string())?;
@@ -123,7 +130,6 @@ impl From<&users::Model> for User {
             id: model.id,
             email: model.email.clone(),
             name: model.name.clone(),
-            role: model.role.to_string(),
             status: model.status.to_string(),
             created_at: model.created_at.to_rfc3339(),
             tenant_id: model.tenant_id,
@@ -302,6 +308,10 @@ pub struct BuildJob {
     pub manifest_ref: String,
     pub manifest_hash: String,
     pub modules_delta: String,
+    pub build_command: Option<String>,
+    pub build_features: Vec<String>,
+    pub build_target: Option<String>,
+    pub build_profile: Option<String>,
     pub requested_by: String,
     pub reason: Option<String>,
     pub release_id: Option<String>,
@@ -311,6 +321,12 @@ pub struct BuildJob {
     pub finished_at: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+fn build_execution_plan(value: Option<&serde_json::Value>) -> Option<BuildExecutionPlan> {
+    value
+        .and_then(|value| value.get("execution_plan"))
+        .and_then(|value| serde_json::from_value(value.clone()).ok())
 }
 
 fn build_modules_delta_summary(value: Option<&serde_json::Value>) -> String {
@@ -337,6 +353,8 @@ fn build_modules_delta_summary(value: Option<&serde_json::Value>) -> String {
 
 impl BuildJob {
     pub fn from_model(model: &BuildModel) -> Self {
+        let execution_plan = build_execution_plan(model.modules_delta.as_ref());
+
         Self {
             id: model.id.to_string(),
             status: model.status.clone().into(),
@@ -346,6 +364,19 @@ impl BuildJob {
             manifest_ref: model.manifest_ref.clone(),
             manifest_hash: model.manifest_hash.clone(),
             modules_delta: build_modules_delta_summary(model.modules_delta.as_ref()),
+            build_command: execution_plan
+                .as_ref()
+                .map(|plan| plan.cargo_command.clone()),
+            build_features: execution_plan
+                .as_ref()
+                .map(|plan| plan.cargo_features.clone())
+                .unwrap_or_default(),
+            build_target: execution_plan
+                .as_ref()
+                .and_then(|plan| plan.cargo_target.clone()),
+            build_profile: execution_plan
+                .as_ref()
+                .map(|plan| plan.cargo_profile.clone()),
             requested_by: model.requested_by.clone(),
             reason: model.reason.clone(),
             release_id: model.release_id.clone(),
@@ -450,6 +481,10 @@ pub struct ReleaseInfo {
     pub build_id: String,
     pub status: GqlReleaseStatus,
     pub environment: String,
+    pub container_image: Option<String>,
+    pub server_artifact_url: Option<String>,
+    pub admin_artifact_url: Option<String>,
+    pub storefront_artifact_url: Option<String>,
     pub manifest_hash: String,
     pub modules: Vec<String>,
     pub previous_release_id: Option<String>,
@@ -466,6 +501,10 @@ impl ReleaseInfo {
             build_id: model.build_id.to_string(),
             status: model.status.clone().into(),
             environment: model.environment.clone(),
+            container_image: model.container_image.clone(),
+            server_artifact_url: model.server_artifact_url.clone(),
+            admin_artifact_url: model.admin_artifact_url.clone(),
+            storefront_artifact_url: model.storefront_artifact_url.clone(),
             manifest_hash: model.manifest_hash.clone(),
             modules: serde_json::from_value(model.modules.clone()).unwrap_or_default(),
             previous_release_id: model.previous_release_id.clone(),

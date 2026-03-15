@@ -2,7 +2,7 @@
 
 - Дата: 2026-02-19
 - Статус: Живой документ
-- Последнее обновление: 2026-03-12
+- Последнее обновление: 2026-03-14
 - Основание обновления: учтены изменения по состоянию кода, ADR от 2026-03-07 и code audit от 2026-03-11 по foundation/runtime/frontends
 - Автор: Архитектурное ревью платформы
 
@@ -294,6 +294,14 @@
 - `app.rs` перестаёт быть местом прямой бизнес-инициализации подсистем;
 - lifecycle ключевых подсистем проверяется smoke-тестами, а не только ручным прогоном.
 
+**Прогресс на 2026-03-14:**
+- boot-time bootstrap для event runtime, marketplace catalog, Alloy runtime и namespaced rate limiter'ов вынесен из `app.rs` в отдельный `services/app_runtime.rs`;
+- `after_routes()` в `apps/server` теперь остаётся преимущественно wiring/orchestration-путём, а не местом детальной runtime-инициализации.
+- shell/deployment router composition вынесен в `services/app_router.rs`, а smoke-style router tests зафиксировали mount contract и сразу поймали скрытую панику на `nest("/")`, после чего storefront path был переведён на безопасный `merge(...)`.
+- boot fallback для локальной SQLite и worker lifecycle glue вынесены в `services/app_lifecycle.rs`; `connect_workers()` стал идемпотентнее и больше не держит inline relay-bootstrap в самом composition root.
+- startup smoke contract расширен unit/integration-style тестами для router shell и worker lifecycle: отдельно зафиксированы безопасный storefront mount и idempotent shared-store bootstrap для outbox relay worker.
+- full startup smoke теперь поднимает `App::after_routes()` на тестовом `AppContext` и уже устранил три реальных boot blockers: legacy `/:param` маршруты в server/alloy API, конфликт GraphQL concrete names для forum connections и tenant middleware bypass для operator endpoints (`/health`, `/metrics`, `/api/openapi.*`).
+
 ### 2.8 Масштабирование БД только по evidence
 
 **Статус на 2026-03-11:** `В работе`
@@ -319,8 +327,13 @@
 
 **Почему задача всё ещё открыта:**
 - manifest contract и `DeploymentProfile` уже вошли в код и документацию;
-- но `apps/server/Cargo.toml` пока не содержит обещанные `embed-admin` / `embed-storefront` features;
-- build-service и `rustok rebuild` ещё не стали полным production path для всех профилей из ADR `2026-03-07-deployment-profiles-and-ui-stack.md`;
+- runtime router surfaces уже начали реально подчиняться `modules.toml`: server wiring выводит `/admin` и storefront из `DeploymentSurfaceContract`, а `headless-api` покрыт smoke-тестом;
+- `apps/server/Cargo.toml` уже получил реальные `embed-admin` / `embed-storefront` features, а runtime теперь fail-fast отклоняет `modules.toml`, который требует встроенные surfaces без соответствующей сборки;
+- build records уже сохраняют manifest-derived cargo plan (`package/profile/target/features`), а operator path `rebuild` уже умеет исполнять queued build прямо из этого плана;
+- server runtime уже умеет opt-in запускать background build worker по этому же плану и создавать release records после успешной сборки;
+- build-service и `rustok rebuild` уже исполняют manifest-derived build plan и умеют публиковать release artifacts через `record_only`, `filesystem` и `http` backend'ы; HTTP publish теперь различает `deploying/active/failed` outcome, но production rollout всё ещё зависит от внешнего deployment control-plane и multi-environment evidence;
+- filesystem-backed и HTTP release publisher уже умеют публиковать собранный server artifact и наполнять `server_artifact_url` / embedded surface URLs, но полноценная интеграция с внешним deploy orchestrator ещё не доведена до operator-grade workflow;
+- для `monolith`, `server+admin`, `headless-api` уже есть verify-script, который прогоняет feature-matrix через `cargo check` и профильные smoke-тесты;
 - Next/Leptos module UI bundles и manual side-effect imports пока не встроены в тот же manifest/build contract.
 
 **Ближайший scope:**
@@ -665,13 +678,15 @@
 - [-] `2.6` Подтянуть `tenant.default_locale` и `tenant_locales` в runtime contract.
 - [-] `2.6` Убрать расхождение между `backend`, `apps/storefront`, `next-frontend`, `next-admin` по locale negotiation.
 - [-] `2.8` Собрать baseline через `pg_stat_statements` и EXPLAIN для подтверждённых hot-path'ов.
-- [-] `2.11` Settings-driven policy и Redis-backed distributed backend уже подключены в runtime; остались rollout/observability и guardrail-политика.
+- [-] `2.11` Settings-driven policy, Redis-backed distributed backend, startup validation и operator-facing runtime snapshot/metrics уже подключены в runtime; остались rollout hardening и multi-instance evidence.
 
 **Текущий прогресс в коде**
 - `relay_target=iggy` больше не деградирует в `memory` без явного opt-in через settings;
 - event bus получил settings-driven channel capacity вместо жёстко зашитого runtime budget;
 - `rate_limit` из server settings теперь реально управляет API/auth limiter'ами;
 - HTTP limiter умеет работать в `memory|redis` режиме и использует общий Redis runtime модуль вместо локального ad-hoc wiring;
+- startup validation fail-fast останавливает server, если `rate_limit.backend=redis` включён без `RUSTOK_REDIS_URL|REDIS_URL`, но не ломает disabled rollout;
+- `/health/runtime` и `/metrics` теперь публикуют не только limiter health, но и effective policy (`enabled`, `max_requests`, `window_seconds`, trusted auth dimensions, namespace thresholds);
 - `tenant.default_locale` протянут в runtime tenant model и используется как fallback в `RequestContext`.
 
 **Критерий завершения фазы**
@@ -697,9 +712,14 @@
 **Статус:** `В работе`
 
 - [x] `2.7` Вынести GraphQL schema/runtime factories из request path в boot-time/shared handles.
-- [ ] `2.7` Разгрузить `apps/server/src/app.rs` до уровня wiring + orchestration.
-- [ ] `2.9` Реализовать реальные `embed-admin` / `embed-storefront` feature flags и сборку из `modules.toml`.
-- [ ] `2.9` Встроить smoke-validation для `monolith`, `server+admin`, `headless-api`.
+- [x] `2.7` Разгрузить `apps/server/src/app.rs` до уровня wiring + orchestration.
+- [x] `2.9` Привязать runtime router surfaces (`/admin`, storefront) к `modules.toml` deployment contract и покрыть `headless-api` smoke-тестом.
+- [x] `2.9` Реализовать реальные `embed-admin` / `embed-storefront` feature flags и fail-fast validation на несовместимый runtime contract.
+- [x] `2.9` Довести operator path `rebuild` до исполнения manifest-derived build plan из `modules.toml`.
+- [x] `2.9` Довести build-service до фонового/очередного исполнения того же плана как opt-in background worker с auto-release policy.
+- [x] `2.9` Добавить filesystem-backed artifact publishing и раскрыть artifact URLs в release contract.
+- [x] `2.9` Встроить smoke-validation для `monolith`, `server+admin`, `headless-api`.
+- [x] `2.9` Довести release/deploy orchestration до внешнего artifact/deployment backend с `filesystem`/`http` publish path поверх локального record/activate flow.
 
 **Критерий завершения фазы**
 - server startup стал предсказуемым и тестируемым;

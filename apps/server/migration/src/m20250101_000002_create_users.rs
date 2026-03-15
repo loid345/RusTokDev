@@ -23,12 +23,6 @@ impl MigrationTrait for Migration {
                     )
                     .col(ColumnDef::new(Users::Name).string_len(255).null())
                     .col(
-                        ColumnDef::new(Users::Role)
-                            .string_len(32)
-                            .not_null()
-                            .default("customer"),
-                    )
-                    .col(
                         ColumnDef::new(Users::Status)
                             .string_len(32)
                             .not_null()
@@ -87,16 +81,7 @@ impl MigrationTrait for Migration {
             )
             .await?;
 
-        manager
-            .create_index(
-                Index::create()
-                    .name("idx_users_role")
-                    .table(Users::Table)
-                    .col(Users::TenantId)
-                    .col(Users::Role)
-                    .to_owned(),
-            )
-            .await
+        Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
@@ -114,7 +99,6 @@ pub enum Users {
     Email,
     PasswordHash,
     Name,
-    Role,
     Status,
     EmailVerifiedAt,
     LastLoginAt,

@@ -13,7 +13,7 @@ use axum_extra::{
     TypedHeader,
 };
 use loco_rs::prelude::*;
-use rustok_core::Permission;
+use rustok_core::{Permission, UserRole};
 use tracing::warn;
 
 use crate::services::rbac_service::RbacService;
@@ -22,6 +22,7 @@ pub struct CurrentUser {
     pub user: users::Model,
     pub session_id: uuid::Uuid,
     pub permissions: Vec<Permission>,
+    pub inferred_role: UserRole,
     // OAuth2 fields from JWT claims
     pub client_id: Option<uuid::Uuid>,
     pub scopes: Vec<String>,
@@ -30,8 +31,7 @@ pub struct CurrentUser {
 
 impl CurrentUser {
     pub fn security_context(&self) -> rustok_core::SecurityContext {
-        let inferred_role = infer_user_role_from_permissions(&self.permissions);
-        rustok_core::SecurityContext::new(inferred_role, Some(self.user.id))
+        rustok_core::SecurityContext::new(self.inferred_role.clone(), Some(self.user.id))
     }
 }
 
@@ -91,7 +91,7 @@ where
         .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Database error"))?;
 
     // For OAuth2 service tokens, user may not exist (sub = app_id)
-    let (user, permissions) = if let Some(user) = user {
+    let (user, permissions, inferred_role) = if let Some(user) = user {
         if !user.is_active() {
             return Err((StatusCode::FORBIDDEN, "User is inactive"));
         }
@@ -111,7 +111,7 @@ where
                 "rbac_claim_role_mismatch"
             );
         }
-        (user, permissions)
+        (user, permissions, inferred_role)
     } else if is_oauth_service_token {
         // Service token without a real user — create a minimal model
         // The sub field is the app_id, not a user_id
@@ -119,6 +119,7 @@ where
             user: users::Model::default_service_user(claims.sub, tenant_id),
             session_id: uuid::Uuid::nil(),
             permissions: Vec::new(),
+            inferred_role: claims.role,
             client_id: claims.client_id,
             scopes: claims.scopes,
             grant_type: claims.grant_type,
@@ -131,6 +132,7 @@ where
         user,
         session_id: claims.session_id,
         permissions,
+        inferred_role,
         client_id: claims.client_id,
         scopes: claims.scopes,
         grant_type: claims.grant_type,

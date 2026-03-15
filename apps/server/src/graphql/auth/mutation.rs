@@ -2,7 +2,7 @@ use async_graphql::{Context, FieldError, Object, Result};
 use loco_rs::prelude::*;
 
 use crate::auth::{encode_password_reset_token, AuthConfig};
-use crate::context::TenantContext;
+use crate::context::{infer_user_role_from_permissions, TenantContext};
 use crate::graphql::errors::{ErrorCode, GraphQLError};
 use crate::models::users;
 use crate::services::auth_lifecycle::{AuthLifecycleError, AuthLifecycleService};
@@ -69,7 +69,7 @@ impl AuthMutation {
                 id: user.id.to_string(),
                 email: user.email,
                 name: user.name,
-                role: user.role.to_string(),
+                role: tokens.effective_role.to_string(),
                 status: user.status.to_string(),
             },
         })
@@ -99,7 +99,7 @@ impl AuthMutation {
                 id: user.id.to_string(),
                 email: user.email,
                 name: user.name,
-                role: user.role.to_string(),
+                role: tokens.effective_role.to_string(),
                 status: user.status.to_string(),
             },
         })
@@ -128,7 +128,7 @@ impl AuthMutation {
                 id: user.id.to_string(),
                 email: user.email,
                 name: user.name,
-                role: user.role.to_string(),
+                role: tokens.effective_role.to_string(),
                 status: user.status.to_string(),
             },
         })
@@ -207,7 +207,7 @@ impl AuthMutation {
             id: updated.id.to_string(),
             email: updated.email,
             name: updated.name,
-            role: updated.role.to_string(),
+            role: infer_user_role_from_permissions(&auth.permissions).to_string(),
             status: updated.status.to_string(),
         })
     }
