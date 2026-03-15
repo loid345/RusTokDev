@@ -24,6 +24,7 @@ graph TD
         RBAC[crates/rustok-rbac]
         TENANT[crates/rustok-tenant]
         ALLOY[crates/alloy-scripting]
+        WORKFLOW[crates/rustok-workflow - planned]
         MEDIA[crates/rustok-media - planned Core]
     end
 
@@ -179,12 +180,13 @@ graph TD
 | `crates/rustok-forum` | **Forum** | `Optional` | `rustok-content` ([CRATE_API](../../crates/rustok-forum/CRATE_API.md)) |
 | `crates/rustok-pages` | **Pages** | `Optional` | `rustok-core` ([CRATE_API](../../crates/rustok-pages/CRATE_API.md)) |
 | `crates/alloy-scripting` | **Alloy Scripting** | `Optional` | `rustok-core` (registered via `AlloyModule` in `apps/server/src/modules/alloy.rs`) |
+| `crates/rustok-workflow` | **Workflow** *(planned)* | `Optional` | `rustok-core`, `alloy-scripting`. Визуальная автоматизация на платформенной очереди (outbox → iggy). Горизонтальный модуль. ([Plan](../architecture/workflow.md)) |
 
 > **4-уровневая архитектура платформы:**
 > - Уровень 0 (модули-библиотеки, leaf): `rustok-events`, `rustok-telemetry`, `rustok-storage` *(planned)*
 > - Уровень 1 (модуль-агрегатор): `rustok-core` (зависит от leaf, ре-экспортирует их)
 > - Уровень 2 (полноценные Core-модули, всегда активны): `rustok-tenant`, `rustok-rbac`, `rustok-index`, `rustok-media` *(planned)*
-> - Уровень 3 (полноценные Optional-модули, toggle per-tenant): `content`, `commerce`, `blog`, `forum`, `pages`, `alloy-scripting`
+> - Уровень 3 (полноценные Optional-модули, toggle per-tenant): `content`, `commerce`, `blog`, `forum`, `pages`, `alloy-scripting`, `workflow` *(planned)*
 >
 > Обязательный базис платформы: `rustok-core`, `rustok-outbox`, `rustok-telemetry`, `rustok-tenant`, `rustok-rbac`, `rustok-index` + инфраструктурные модули (`rustok-cache`, `rustok-events`).
 >
