@@ -138,7 +138,12 @@ graph TD
 
 | Path | Name | Description |
 |------|------|-------------|
-| `crates/rustok-core` | **Core (critical)** | Aggregator. Re-exports leaf contracts, provides `CacheBackend`, `ModuleRegistry`, `RusToKModule`, RBAC primitives, i18n, `SecurityContext`, circuit breaker. Not a `RusToKModule`. ([CRATE_API](../../crates/rustok-core/CRATE_API.md)) |
+| `crates/rustok-core` | **Core (critical)** | Aggregator. Re-exports leaf contracts, provides `CacheBackend`, `ModuleRegistry`, `RusToKModule`, RBAC primitives, i18n, `SecurityContext`, circuit breaker. Содержит **Flex** — библиотеку-инструмент кастомных полей (`field_schema.rs`, `HasCustomFields`, migration helpers). Not a `RusToKModule`. ([CRATE_API](../../crates/rustok-core/CRATE_API.md)) |
+
+> **Flex** — набор типов, валидаторов и migration-хелперов внутри `rustok-core`.
+> Не является отдельным модулем и не имеет своих таблиц — данные живут внутри модуля-потребителя.
+> Режим **Attached** (кастомные поля для сущностей) — в core. Режим **Standalone** (`rustok-flex` crate) — запланирован.
+> Спецификация: [`docs/modules/flex.md`](../modules/flex.md). План реализации: [`docs/architecture/flex.md`](../architecture/flex.md).
 
 #### Инфраструктурные crates (не модули)
 
@@ -234,6 +239,7 @@ They are not published to crates.io. Treat them as first-party code — changes 
 | `crates/rustok-cache` | **Cache** | `apps/server` | Redis/Moka cache backends, `CacheModule`, `CacheService`. Выделен из `rustok-core`. |
 | `crates/rustok-storage` | **Storage** *(planned)* | `rustok-core` → `rustok-media` | Leaf crate: `StorageBackend` trait + Local/S3/GCP/InMemory backends, `StoragePolicy`. |
 | `crates/rustok-media` | **Media** *(planned)* | `apps/server`, `rustok-content`, `rustok-commerce` | Core module: `MediaService`, `ThumbnailService`, `QuotaService`, SeaORM entities. |
+| `crates/rustok-flex` | **Flex Standalone** *(planned, future)* | Optional modules | Отдельный crate для режима Standalone Flex (произвольные схемы, формы, справочники). Режим Attached уже в `rustok-core`. |
 
 ## Maintenance Rule
 

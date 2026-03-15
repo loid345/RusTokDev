@@ -111,8 +111,10 @@ graph TD
 - [Реестр](./modules/registry.md)
 - [Реестр crate-ов RusToK](./modules/crates-registry.md)
 - [Манифест](./modules/manifest.md)
-- [План внедрения Tiptap/Page Builder](./modules/tiptap-page-builder-implementation-plan.md)
+- [Plan внедрения Tiptap/Page Builder](./modules/tiptap-page-builder-implementation-plan.md)
 - [Индекс модульной документации](./modules/_index.md)
+- [Спецификация Flex](./modules/flex.md) — кастомные поля: Attached mode (в `rustok-core`) + Standalone mode (`rustok-flex`, planned)
+- [План реализации Flex](./architecture/flex.md)
 
 ### Стандарты (`docs/standards/`)
 
@@ -311,6 +313,7 @@ graph TD
 - `rustok-cache`: [README](../crates/rustok-cache/README.md), [docs/README](../crates/rustok-cache/docs/README.md), [docs/implementation-plan](../crates/rustok-cache/docs/implementation-plan.md)
 - `rustok-storage` *(planned)*: `crates/rustok-storage/` — leaf crate, `StorageBackend` trait + backends
 - `rustok-media` *(planned)*: `crates/rustok-media/` — Core module, `MediaService`/`ThumbnailService`/`QuotaService`
+- `rustok-flex` *(planned, future)*: `crates/rustok-flex/` — Standalone Flex mode (произвольные схемы, формы); Attached mode уже в `rustok-core`
 
 ### Пакеты (`packages/*`)
 
