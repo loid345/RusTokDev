@@ -9899,6 +9899,7 @@ dependencies = [
  "rustok-telemetry",
  "rustok-tenant",
  "rustok-test-utils",
+ "rustok-workflow",
  "sea-orm",
  "sea-orm-migration",
  "semver",

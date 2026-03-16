@@ -3,17 +3,19 @@ use chrono::Utc;
 use sea_orm::sea_query::Expr;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, Order, QueryFilter, QueryOrder,
-    Set,
+    QuerySelect, Set,
 };
 use uuid::Uuid;
 
 use crate::dto::{
     CreateWorkflowInput, CreateWorkflowStepInput, UpdateWorkflowInput, UpdateWorkflowStepInput,
-    WorkflowResponse, WorkflowStepResponse, WorkflowSummary,
+    WorkflowExecutionResponse, WorkflowResponse, WorkflowStepExecutionResponse, WorkflowStepResponse,
+    WorkflowSummary,
 };
 use crate::entities::{
-    workflow, workflow_step, WorkflowActiveModel, WorkflowEntity, WorkflowStatus,
-    WorkflowStepActiveModel, WorkflowStepEntity,
+    workflow, workflow_execution, workflow_step, workflow_step_execution, WorkflowActiveModel,
+    WorkflowEntity, WorkflowExecutionEntity, WorkflowStatus, WorkflowStepActiveModel,
+    WorkflowStepEntity, WorkflowStepExecutionEntity,
 };
 use crate::error::{WorkflowError, WorkflowResult};
 
@@ -340,6 +342,56 @@ impl WorkflowService {
         Ok(())
     }
 
+    // ── Execution queries ──────────────────────────────────────────────────────
+
+    /// List executions for a workflow (most recent first, limit 50).
+    pub async fn list_executions(
+        &self,
+        tenant_id: Uuid,
+        workflow_id: Uuid,
+    ) -> WorkflowResult<Vec<WorkflowExecutionResponse>> {
+        let executions: Vec<crate::entities::WorkflowExecution> = WorkflowExecutionEntity::find()
+            .filter(workflow_execution::Column::WorkflowId.eq(workflow_id))
+            .filter(workflow_execution::Column::TenantId.eq(tenant_id))
+            .order_by(workflow_execution::Column::StartedAt, Order::Desc)
+            .limit(50)
+            .all(&self.db)
+            .await?;
+
+        let mut result = Vec::with_capacity(executions.len());
+        for exec in executions {
+            let step_execs = WorkflowStepExecutionEntity::find()
+                .filter(workflow_step_execution::Column::ExecutionId.eq(exec.id))
+                .order_by(workflow_step_execution::Column::StartedAt, Order::Asc)
+                .all(&self.db)
+                .await?;
+
+            result.push(execution_to_response(exec, step_execs));
+        }
+        Ok(result)
+    }
+
+    /// Get a single execution by id (tenant-scoped).
+    pub async fn get_execution(
+        &self,
+        tenant_id: Uuid,
+        execution_id: Uuid,
+    ) -> WorkflowResult<WorkflowExecutionResponse> {
+        let exec = WorkflowExecutionEntity::find_by_id(execution_id)
+            .filter(workflow_execution::Column::TenantId.eq(tenant_id))
+            .one(&self.db)
+            .await?
+            .ok_or(WorkflowError::ExecutionNotFound(execution_id))?;
+
+        let step_execs = WorkflowStepExecutionEntity::find()
+            .filter(workflow_step_execution::Column::ExecutionId.eq(exec.id))
+            .order_by(workflow_step_execution::Column::StartedAt, Order::Asc)
+            .all(&self.db)
+            .await?;
+
+        Ok(execution_to_response(exec, step_execs))
+    }
+
     /// Reset failure counter (call after successful execution).
     pub async fn reset_failure_count(&self, workflow_id: Uuid) -> WorkflowResult<()> {
         use sea_orm::sea_query::Expr;
@@ -354,6 +406,40 @@ impl WorkflowService {
             .await?;
 
         Ok(())
+    }
+}
+
+fn execution_to_response(
+    exec: crate::entities::WorkflowExecution,
+    step_execs: Vec<crate::entities::WorkflowStepExecution>,
+) -> WorkflowExecutionResponse {
+    use chrono::DateTime;
+    WorkflowExecutionResponse {
+        id: exec.id,
+        workflow_id: exec.workflow_id,
+        tenant_id: exec.tenant_id,
+        trigger_event_id: exec.trigger_event_id,
+        status: exec.status,
+        context: exec.context,
+        error: exec.error,
+        started_at: DateTime::from(exec.started_at),
+        completed_at: exec.completed_at.map(DateTime::from),
+        step_executions: step_execs.into_iter().map(step_execution_to_response).collect(),
+    }
+}
+
+fn step_execution_to_response(s: crate::entities::WorkflowStepExecution) -> WorkflowStepExecutionResponse {
+    use chrono::DateTime;
+    WorkflowStepExecutionResponse {
+        id: s.id,
+        execution_id: s.execution_id,
+        step_id: s.step_id,
+        status: s.status,
+        input: s.input,
+        output: s.output,
+        error: s.error,
+        started_at: DateTime::from(s.started_at),
+        completed_at: s.completed_at.map(DateTime::from),
     }
 }
 
