@@ -3,7 +3,7 @@ use rustok_core::i18n::{Locale, translate};
 use loco_rs::app::AppContext;
 use crate::error::Error;
 
-use crate::auth::{auth_config_from_ctx, encode_password_reset_token};
+use crate::auth::{auth_config_from_ctx, decode_invite_token, encode_password_reset_token};
 use crate::context::{infer_user_role_from_permissions, TenantContext};
 use crate::graphql::errors::{ErrorCode, GraphQLError};
 use crate::models::users;
@@ -278,6 +278,115 @@ impl AuthMutation {
         .map_err(|e| map_auth_lifecycle_error(e, locale_from_ctx(ctx)))?;
 
         Ok(ResetPasswordPayload { success: true })
+    }
+
+    /// Log out: revoke the current session.
+    async fn logout(&self, ctx: &Context<'_>) -> Result<SignOutPayload> {
+        let app_ctx = ctx.data::<AppContext>()?;
+        let auth = ctx
+            .data::<AuthContext>()
+            .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
+        let tenant = ctx.data::<TenantContext>()?;
+
+        AuthLifecycleService::logout(app_ctx, tenant.id, auth.session_id)
+            .await
+            .map_err(|e| map_auth_lifecycle_error(e, locale_from_ctx(ctx)))?;
+
+        Ok(SignOutPayload { success: true })
+    }
+
+    /// Revoke a specific session by ID.
+    async fn revoke_session(
+        &self,
+        ctx: &Context<'_>,
+        session_id: String,
+    ) -> Result<RevokeSessionPayload> {
+        let app_ctx = ctx.data::<AppContext>()?;
+        let auth = ctx
+            .data::<AuthContext>()
+            .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
+        let tenant = ctx.data::<TenantContext>()?;
+
+        let sid = uuid::Uuid::parse_str(&session_id)
+            .map_err(|_| FieldError::new("Invalid session ID format"))?;
+
+        let revoked =
+            AuthLifecycleService::revoke_session(app_ctx, tenant.id, auth.user_id, sid)
+                .await
+                .map_err(|e| map_auth_lifecycle_error(e, locale_from_ctx(ctx)))?;
+
+        Ok(RevokeSessionPayload {
+            success: true,
+            revoked,
+        })
+    }
+
+    /// Revoke all sessions for the current user except the current one.
+    async fn revoke_all_sessions(&self, ctx: &Context<'_>) -> Result<RevokeAllSessionsPayload> {
+        let app_ctx = ctx.data::<AppContext>()?;
+        let auth = ctx
+            .data::<AuthContext>()
+            .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
+        let tenant = ctx.data::<TenantContext>()?;
+
+        let revoked_count = AuthLifecycleService::revoke_all_other_sessions(
+            app_ctx,
+            tenant.id,
+            auth.user_id,
+            auth.session_id,
+        )
+        .await
+        .map_err(|e| map_auth_lifecycle_error(e, locale_from_ctx(ctx)))?;
+
+        Ok(RevokeAllSessionsPayload {
+            success: true,
+            revoked_count: revoked_count as i32,
+        })
+    }
+
+    /// Accept an invitation and create an account.
+    async fn accept_invite(
+        &self,
+        ctx: &Context<'_>,
+        input: AcceptInviteInput,
+    ) -> Result<AcceptInvitePayload> {
+        let app_ctx = ctx.data::<AppContext>()?;
+        let tenant = ctx.data::<TenantContext>()?;
+
+        let config = auth_config_from_ctx(app_ctx)
+            .map_err(|e| <FieldError as GraphQLError>::internal_error(&e.to_string()))?;
+
+        let claims = decode_invite_token(&config, &input.token).map_err(|_| {
+            FieldError::new(translate(locale_from_ctx(ctx), "auth.invalid_invite_token"))
+        })?;
+
+        if claims.tenant_id != tenant.id {
+            return Err(FieldError::new(translate(
+                locale_from_ctx(ctx),
+                "auth.invalid_invite_token",
+            )));
+        }
+
+        let email = claims.sub.clone();
+        let role = claims.role.clone();
+
+        AuthLifecycleService::create_user(
+            app_ctx,
+            tenant.id,
+            &email,
+            &input.password,
+            input.name,
+            role.clone(),
+            Some(rustok_core::UserStatus::Active),
+        )
+        .await
+        .map_err(|e| map_auth_lifecycle_error(e, locale_from_ctx(ctx)))?;
+
+        Ok(AcceptInvitePayload {
+            success: true,
+            email,
+            role: role.to_string(),
+        })
     }
 }
 

@@ -12,3 +12,5 @@ tracing.workspace = true
 serde.workspace = true
 thiserror.workspace = true
 lettre = { version = "0.11", default-features = false, features = ["builder", "smtp-transport", "tokio1", "tokio1-rustls-tls"] }
+
+sea-orm-migration = { workspace = true }

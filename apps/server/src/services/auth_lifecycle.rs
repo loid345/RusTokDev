@@ -4,7 +4,7 @@ use crate::error::Error;
 use crate::error::Result;
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
-    Set,
+    QueryOrder, QuerySelect, Set,
 };
 
 use crate::auth::{auth_config_from_ctx, 
@@ -436,6 +436,74 @@ impl AuthLifecycleService {
         AUTH_CHANGE_PASSWORD_SESSIONS_REVOKED_TOTAL.fetch_add(revoked_sessions, Ordering::Relaxed);
 
         Ok(())
+    }
+
+    /// Revoke the current session (logout).
+    pub async fn logout(
+        ctx: &AppContext,
+        tenant_id: uuid::Uuid,
+        session_id: uuid::Uuid,
+    ) -> std::result::Result<(), AuthLifecycleError> {
+        let now = Utc::now();
+        sessions::Entity::update_many()
+            .col_expr(sessions::Column::RevokedAt, Expr::value(now))
+            .filter(sessions::Column::TenantId.eq(tenant_id))
+            .filter(sessions::Column::Id.eq(session_id))
+            .filter(sessions::Column::RevokedAt.is_null())
+            .exec(&ctx.db)
+            .await
+            .map_err(AuthLifecycleError::from)?;
+        Ok(())
+    }
+
+    /// List active sessions for a user, newest first (max `limit`).
+    pub async fn list_sessions(
+        ctx: &AppContext,
+        tenant_id: uuid::Uuid,
+        user_id: uuid::Uuid,
+        limit: u64,
+    ) -> std::result::Result<Vec<sessions::Model>, AuthLifecycleError> {
+        let rows = sessions::Entity::find()
+            .filter(sessions::Column::TenantId.eq(tenant_id))
+            .filter(sessions::Column::UserId.eq(user_id))
+            .filter(sessions::Column::RevokedAt.is_null())
+            .filter(sessions::Column::ExpiresAt.gt(Utc::now()))
+            .order_by_desc(sessions::Column::CreatedAt)
+            .limit(limit)
+            .all(&ctx.db)
+            .await
+            .map_err(AuthLifecycleError::from)?;
+        Ok(rows)
+    }
+
+    /// Revoke a specific session. Returns `false` if the session was not found
+    /// or did not belong to `user_id` (ownership check prevents cross-user revocation).
+    pub async fn revoke_session(
+        ctx: &AppContext,
+        tenant_id: uuid::Uuid,
+        user_id: uuid::Uuid,
+        session_id: uuid::Uuid,
+    ) -> std::result::Result<bool, AuthLifecycleError> {
+        let result = sessions::Entity::update_many()
+            .col_expr(sessions::Column::RevokedAt, Expr::value(Utc::now()))
+            .filter(sessions::Column::TenantId.eq(tenant_id))
+            .filter(sessions::Column::UserId.eq(user_id))
+            .filter(sessions::Column::Id.eq(session_id))
+            .filter(sessions::Column::RevokedAt.is_null())
+            .exec(&ctx.db)
+            .await
+            .map_err(AuthLifecycleError::from)?;
+        Ok(result.rows_affected > 0)
+    }
+
+    /// Revoke all sessions for a user except the current one.
+    pub async fn revoke_all_other_sessions(
+        ctx: &AppContext,
+        tenant_id: uuid::Uuid,
+        user_id: uuid::Uuid,
+        current_session_id: uuid::Uuid,
+    ) -> std::result::Result<u64, AuthLifecycleError> {
+        Self::revoke_user_sessions(ctx, tenant_id, user_id, Some(current_session_id)).await
     }
 
     async fn reset_password_and_revoke_sessions(

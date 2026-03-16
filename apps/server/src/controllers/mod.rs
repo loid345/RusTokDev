@@ -12,3 +12,4 @@ pub mod oauth;
 pub mod oauth_metadata;
 pub mod pages;
 pub mod swagger;
+pub mod users;

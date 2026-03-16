@@ -5236,6 +5236,7 @@ dependencies = [
 name = "leptos-graphql"
 version = "0.1.0"
 dependencies = [
+ "gloo-storage",
  "leptos 0.8.17",
  "reqwest 0.13.2",
  "serde",
@@ -8779,6 +8780,7 @@ dependencies = [
  "password-hash",
  "rand 0.10.0",
  "rustok-core",
+ "sea-orm-migration",
  "serde",
  "serde_json",
  "sha2",
@@ -8835,6 +8837,7 @@ dependencies = [
  "moka",
  "redis 1.0.4",
  "rustok-core",
+ "sea-orm-migration",
  "tokio",
  "tracing",
 ]
@@ -8935,6 +8938,7 @@ dependencies = [
  "async-trait",
  "lettre",
  "rustok-core",
+ "sea-orm-migration",
  "serde",
  "thiserror 2.0.18",
  "tracing",
