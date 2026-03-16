@@ -31,7 +31,8 @@ pub mod steps;
 
 pub use dto::*;
 pub use error::{WorkflowError, WorkflowResult};
-pub use services::{WorkflowEngine, WorkflowService, WorkflowTriggerHandler};
+pub use services::{WorkflowCronScheduler, WorkflowEngine, WorkflowService, WorkflowTriggerHandler};
+pub use steps::{AlloyScriptStep, NotifyStep, ScriptRunner, NotificationSender};
 
 pub struct WorkflowModule;
 

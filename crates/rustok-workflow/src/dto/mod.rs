@@ -32,6 +32,8 @@ pub struct WorkflowResponse {
     pub created_by: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub failure_count: i32,
+    pub auto_disabled_at: Option<DateTime<Utc>>,
     pub steps: Vec<WorkflowStepResponse>,
 }
 
@@ -41,6 +43,7 @@ pub struct WorkflowSummary {
     pub tenant_id: Uuid,
     pub name: String,
     pub status: WorkflowStatus,
+    pub failure_count: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -110,6 +113,14 @@ pub struct WorkflowStepExecutionResponse {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum TriggerConfig {
+    /// Triggered by a matching DomainEvent. Supports wildcard suffix: "blog.*"
     Event { event_type: String },
+    /// Triggered on a cron schedule (6-field: sec min hour dom month dow)
+    Cron { expression: String },
+    /// Triggered manually via API or admin UI
     Manual,
+    /// Triggered by an incoming webhook (Phase 4)
+    Webhook { path: String },
+    /// Triggered by an Alloy script calling workflow.trigger()
+    Alloy { workflow_id: String },
 }

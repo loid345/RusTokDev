@@ -4,12 +4,20 @@ use serde_json::Value;
 use crate::error::WorkflowResult;
 
 pub mod action;
+pub mod alloy_script;
 pub mod condition;
+pub mod delay;
 pub mod emit_event;
+pub mod http;
+pub mod notify;
 
 pub use action::ActionStep;
+pub use alloy_script::{AlloyScriptStep, ScriptRunner};
 pub use condition::ConditionStep;
+pub use delay::DelayStep;
 pub use emit_event::EmitEventStep;
+pub use http::HttpStep;
+pub use notify::{NotificationSender, NotifyStep};
 
 /// Context passed between workflow steps during execution.
 /// Steps can read from and write to the context.

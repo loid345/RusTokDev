@@ -14,7 +14,8 @@ use crate::entities::{
 };
 use crate::error::WorkflowResult;
 use crate::steps::{
-    ActionStep, ConditionStep, EmitEventStep, StepContext, WorkflowStep,
+    ActionStep, AlloyScriptStep, ConditionStep, DelayStep, EmitEventStep, HttpStep, NotifyStep,
+    StepContext, WorkflowStep,
 };
 
 /// Registry of available step executors, keyed by step type string.
@@ -25,6 +26,11 @@ fn default_registry() -> StepRegistry {
     map.insert("action".into(), Arc::new(ActionStep));
     map.insert("emit_event".into(), Arc::new(EmitEventStep));
     map.insert("condition".into(), Arc::new(ConditionStep));
+    map.insert("delay".into(), Arc::new(DelayStep));
+    map.insert("http".into(), Arc::new(HttpStep::new()));
+    map.insert("alloy_script".into(), Arc::new(AlloyScriptStep::stub()));
+    map.insert("notify".into(), Arc::new(NotifyStep::stub()));
+    map.insert("transform".into(), Arc::new(ActionStep)); // placeholder
     map
 }
 
@@ -178,32 +184,64 @@ impl WorkflowEngine {
                             continue 'steps;
                         }
                         OnError::Retry => {
-                            // Simple single retry
-                            match executor.execute(&step.config, context.clone()).await {
-                                Ok(out) => {
-                                    self.finish_step_execution(
-                                        step_execution_id,
-                                        StepExecutionStatus::Completed,
-                                        step_input,
-                                        out.data,
-                                        None,
-                                    )
-                                    .await?;
-                                    context = out.context;
+                            // Retry with exponential backoff
+                            // Configurable via step config: { "max_retries": 3, "retry_base_ms": 1000 }
+                            let max_retries = step.config
+                                .get("max_retries")
+                                .and_then(Value::as_u64)
+                                .unwrap_or(3) as u32;
+                            let retry_base_ms = step.config
+                                .get("retry_base_ms")
+                                .and_then(Value::as_u64)
+                                .unwrap_or(1000);
+
+                            let mut last_err = err_msg.clone();
+                            let mut succeeded = false;
+
+                            for attempt in 1..=max_retries {
+                                let backoff = retry_base_ms * (2u64.pow(attempt - 1));
+                                warn!(
+                                    step_id = %step.id,
+                                    attempt = attempt,
+                                    backoff_ms = backoff,
+                                    "Retrying step after failure"
+                                );
+                                tokio::time::sleep(
+                                    tokio::time::Duration::from_millis(backoff)
+                                ).await;
+
+                                match executor.execute(&step.config, context.clone()).await {
+                                    Ok(out) => {
+                                        self.finish_step_execution(
+                                            step_execution_id,
+                                            StepExecutionStatus::Completed,
+                                            step_input.clone(),
+                                            out.data,
+                                            None,
+                                        )
+                                        .await?;
+                                        context = out.context;
+                                        succeeded = true;
+                                        break;
+                                    }
+                                    Err(retry_err) => {
+                                        last_err = retry_err.to_string();
+                                    }
                                 }
-                                Err(retry_err) => {
-                                    failed = true;
-                                    failure_msg = retry_err.to_string();
-                                    self.finish_step_execution(
-                                        step_execution_id,
-                                        StepExecutionStatus::Failed,
-                                        step_input,
-                                        Value::Null,
-                                        Some(failure_msg.clone()),
-                                    )
-                                    .await?;
-                                    break 'steps;
-                                }
+                            }
+
+                            if !succeeded {
+                                failed = true;
+                                failure_msg = last_err.clone();
+                                self.finish_step_execution(
+                                    step_execution_id,
+                                    StepExecutionStatus::Failed,
+                                    step_input,
+                                    Value::Null,
+                                    Some(failure_msg.clone()),
+                                )
+                                .await?;
+                                break 'steps;
                             }
                         }
                     }

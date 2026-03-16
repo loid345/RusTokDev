@@ -1,4 +1,6 @@
 use chrono::Utc;
+#[allow(unused_imports)]
+use sea_orm::sea_query::Expr;
 use sea_orm::{
     ActiveModelTrait, ColumnTrait, DatabaseConnection, EntityTrait, Order, QueryFilter, QueryOrder,
     Set,
@@ -45,6 +47,8 @@ impl WorkflowService {
             created_by: Set(actor_id),
             created_at: Set(now),
             updated_at: Set(now),
+            failure_count: Set(0),
+            auto_disabled_at: Set(None),
         };
         model.insert(&self.db).await?;
 
@@ -74,6 +78,8 @@ impl WorkflowService {
             created_by: workflow.created_by,
             created_at: workflow.created_at.into(),
             updated_at: workflow.updated_at.into(),
+            failure_count: workflow.failure_count,
+            auto_disabled_at: workflow.auto_disabled_at.map(Into::into),
             steps: steps.into_iter().map(step_to_response).collect(),
         })
     }
@@ -92,6 +98,7 @@ impl WorkflowService {
                 tenant_id: w.tenant_id,
                 name: w.name,
                 status: w.status,
+                failure_count: w.failure_count,
                 created_at: w.created_at.into(),
                 updated_at: w.updated_at.into(),
             })
@@ -249,6 +256,104 @@ impl WorkflowService {
             .all(&self.db)
             .await?;
         Ok(steps)
+    }
+
+    /// Manually trigger a workflow execution.
+    /// Requires the workflow to be Active or explicitly bypassed via `force`.
+    pub async fn trigger_manual(
+        &self,
+        tenant_id: Uuid,
+        workflow_id: Uuid,
+        actor_id: Option<Uuid>,
+        payload: serde_json::Value,
+        force: bool,
+    ) -> WorkflowResult<Uuid> {
+        let workflow = WorkflowEntity::find_by_id(workflow_id)
+            .filter(workflow::Column::TenantId.eq(tenant_id))
+            .one(&self.db)
+            .await?
+            .ok_or(WorkflowError::NotFound(workflow_id))?;
+
+        if !force && workflow.status != WorkflowStatus::Active {
+            return Err(WorkflowError::NotActive(workflow.status.to_string()));
+        }
+
+        let steps = self.load_steps(workflow_id).await?;
+
+        let initial_context = serde_json::json!({
+            "trigger": { "type": "manual", "actor_id": actor_id },
+            "payload": payload
+        });
+
+        let engine = crate::services::WorkflowEngine::new(self.db.clone());
+        let execution_id = engine
+            .execute(workflow_id, tenant_id, None, steps, initial_context)
+            .await?;
+
+        Ok(execution_id)
+    }
+
+    /// Increment failure counter and auto-disable after threshold.
+    pub async fn record_failure(
+        &self,
+        tenant_id: Uuid,
+        workflow_id: Uuid,
+        auto_disable_threshold: u32,
+    ) -> WorkflowResult<()> {
+        use sea_orm::sea_query::Expr;
+
+        // Increment failure_count
+        workflow::Entity::update_many()
+            .col_expr(
+                workflow::Column::FailureCount,
+                Expr::col(workflow::Column::FailureCount).add(1),
+            )
+            .col_expr(
+                workflow::Column::UpdatedAt,
+                Expr::value(Utc::now().fixed_offset()),
+            )
+            .filter(workflow::Column::Id.eq(workflow_id))
+            .filter(workflow::Column::TenantId.eq(tenant_id))
+            .exec(&self.db)
+            .await?;
+
+        // Re-fetch to check threshold
+        let wf = WorkflowEntity::find_by_id(workflow_id)
+            .one(&self.db)
+            .await?
+            .ok_or(WorkflowError::NotFound(workflow_id))?;
+
+        if wf.failure_count >= auto_disable_threshold as i32 {
+            let mut model: WorkflowActiveModel = wf.into();
+            model.status = Set(WorkflowStatus::Paused);
+            model.auto_disabled_at = Set(Some(Utc::now().fixed_offset()));
+            model.updated_at = Set(Utc::now().fixed_offset());
+            model.update(&self.db).await?;
+
+            tracing::warn!(
+                workflow_id = %workflow_id,
+                threshold = auto_disable_threshold,
+                "Workflow auto-disabled after consecutive failures"
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Reset failure counter (call after successful execution).
+    pub async fn reset_failure_count(&self, workflow_id: Uuid) -> WorkflowResult<()> {
+        use sea_orm::sea_query::Expr;
+
+        workflow::Entity::update_many()
+            .col_expr(
+                workflow::Column::FailureCount,
+                Expr::value(0i32),
+            )
+            .filter(workflow::Column::Id.eq(workflow_id))
+            .exec(&self.db)
+            .await?;
+
+        Ok(())
     }
 }
 

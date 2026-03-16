@@ -10023,6 +10023,8 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "chrono",
+ "cron 0.15.0",
+ "reqwest 0.13.2",
  "rustok-core",
  "rustok-events",
  "rustok-outbox",

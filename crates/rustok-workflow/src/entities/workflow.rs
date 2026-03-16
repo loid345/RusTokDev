@@ -45,6 +45,10 @@ pub struct Model {
     pub created_by: Option<Uuid>,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
+    /// Consecutive failure counter — reset on success, incremented on failure
+    pub failure_count: i32,
+    /// Set when the workflow is auto-disabled due to exceeding the failure threshold
+    pub auto_disabled_at: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

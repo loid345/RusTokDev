@@ -8,6 +8,8 @@ description = "Visual workflow automation module for RusToK platform"
 [dependencies]
 async-trait.workspace = true
 chrono.workspace = true
+cron = "0.15"
+reqwest = { workspace = true }
 rustok-core.workspace = true
 rustok-events.workspace = true
 rustok-outbox.workspace = true
