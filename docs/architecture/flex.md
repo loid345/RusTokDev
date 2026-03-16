@@ -1032,7 +1032,7 @@ impl SchemaCache {
 - [x] Event emission: FieldDefinitionCreated/Updated/Deleted
 - [x] GraphQL: `customFields` в User type, `fieldDefinitions` resolver
 - [x] Error handling через `ErrorExtensions` (§13)
-- [ ] Тесты: CRUD, validation, guardrails, events *(добавлены unit-тесты `UserFieldService` для guardrails + events create/update/delete; интеграционные CRUD/validation сценарии pending)*
+- [ ] Тесты: CRUD, validation, guardrails, events *(добавлены unit-тесты `UserFieldService` для guardrails, events create/update/delete, not-found веток update/deactivate и skip unknown field_type при schema load; интеграционные CRUD/validation сценарии pending)*
 
 ### Phase 3 — Admin API
 - [x] GraphQL queries/mutations для управления определениями (§7)

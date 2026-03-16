@@ -480,6 +480,74 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn get_schema_skips_unknown_field_type_rows() {
+        let tenant_id = Uuid::new_v4();
+        let mut invalid = row(tenant_id, "legacy");
+        invalid.field_type = "legacy_custom".to_string();
+
+        let db = MockDatabase::new(DatabaseBackend::Postgres)
+            .append_query_results([vec![row(tenant_id, "phone"), invalid]])
+            .into_connection();
+
+        let schema = UserFieldService::get_schema(&db, tenant_id)
+            .await
+            .expect("schema should load");
+
+        let errors = schema.validate(&json!({"phone": "ok", "legacy": 123}));
+        assert!(
+            errors.is_empty(),
+            "unknown field type rows should be skipped"
+        );
+
+        let only_legacy = schema.validate(&json!({"legacy": 123}));
+        assert!(only_legacy.is_empty());
+    }
+
+    #[tokio::test]
+    async fn update_returns_not_found_for_missing_definition() {
+        let tenant_id = Uuid::new_v4();
+        let actor_id = Uuid::new_v4();
+        let id = Uuid::new_v4();
+        let db = MockDatabase::new(DatabaseBackend::Postgres)
+            .append_query_results([Vec::<Model>::new()])
+            .into_connection();
+
+        let err = UserFieldService::update(
+            &db,
+            tenant_id,
+            Some(actor_id),
+            id,
+            crate::models::user_field_definitions::UpdateFieldDefinitionInput::default(),
+        )
+        .await
+        .expect_err("missing row should return not found");
+
+        match err {
+            FlexError::NotFound(missing_id) => assert_eq!(missing_id, id),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn deactivate_returns_not_found_for_missing_definition() {
+        let tenant_id = Uuid::new_v4();
+        let actor_id = Uuid::new_v4();
+        let id = Uuid::new_v4();
+        let db = MockDatabase::new(DatabaseBackend::Postgres)
+            .append_query_results([Vec::<Model>::new()])
+            .into_connection();
+
+        let err = UserFieldService::deactivate(&db, tenant_id, Some(actor_id), id)
+            .await
+            .expect_err("missing row should return not found");
+
+        match err {
+            FlexError::NotFound(missing_id) => assert_eq!(missing_id, id),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
     async fn deactivate_emits_field_definition_deleted_event() {
         let tenant_id = Uuid::new_v4();
         let actor_id = Uuid::new_v4();
