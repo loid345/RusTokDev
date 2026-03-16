@@ -232,7 +232,7 @@ pub async fn sign_in(
 
     let request = GraphqlRequest::new(SIGN_IN_MUTATION, Some(variables));
 
-    let response: SignInResponse = execute(&url, request, None, Some(tenant.clone()))
+    let response: SignInResponse = execute(&url, request, None, Some(tenant.clone()), None)
         .await
         .map_err(|e| match e {
             leptos_graphql::GraphqlHttpError::Unauthorized => AuthError::InvalidCredentials,
@@ -285,7 +285,7 @@ pub async fn sign_up(
 
     let request = GraphqlRequest::new(SIGN_UP_MUTATION, Some(variables));
 
-    let response: SignUpResponse = execute(&url, request, None, Some(tenant.clone()))
+    let response: SignUpResponse = execute(&url, request, None, Some(tenant.clone()), None)
         .await
         .map_err(|e| match e {
             leptos_graphql::GraphqlHttpError::Unauthorized => AuthError::Unauthorized,
@@ -318,7 +318,7 @@ pub async fn sign_out(token: String, tenant: String) -> Result<(), AuthError> {
 
     let request = GraphqlRequest::new(SIGN_OUT_MUTATION, None::<serde_json::Value>);
 
-    let _response: SignOutResponse = execute(&url, request, Some(token), Some(tenant))
+    let _response: SignOutResponse = execute(&url, request, Some(token), Some(tenant), None)
         .await
         .map_err(|_| AuthError::Network)?;
 
@@ -340,7 +340,7 @@ pub async fn refresh_token(
 
     let request = GraphqlRequest::new(REFRESH_TOKEN_MUTATION, Some(variables));
 
-    let response: RefreshTokenResponse = execute(&url, request, None, Some(tenant.clone()))
+    let response: RefreshTokenResponse = execute(&url, request, None, Some(tenant.clone()), None)
         .await
         .map_err(|_| AuthError::Network)?;
 
@@ -375,7 +375,7 @@ pub async fn forgot_password(email: String, tenant: String) -> Result<String, Au
 
     let request = GraphqlRequest::new(FORGOT_PASSWORD_MUTATION, Some(variables));
 
-    let response: ForgotPasswordResponse = execute(&url, request, None, Some(tenant))
+    let response: ForgotPasswordResponse = execute(&url, request, None, Some(tenant), None)
         .await
         .map_err(|_| AuthError::Network)?;
 
@@ -391,7 +391,7 @@ pub async fn fetch_current_user(
 
     let request = GraphqlRequest::new(CURRENT_USER_QUERY, None::<serde_json::Value>);
 
-    let response: CurrentUserResponse = execute(&url, request, Some(token), Some(tenant))
+    let response: CurrentUserResponse = execute(&url, request, Some(token), Some(tenant), None)
         .await
         .map_err(|e| match e {
             leptos_graphql::GraphqlHttpError::Unauthorized => AuthError::Unauthorized,

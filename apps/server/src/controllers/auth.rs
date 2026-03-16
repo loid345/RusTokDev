@@ -1,11 +1,16 @@
 use axum::{
-    extract::{ConnectInfo, Query},
+    extract::{ConnectInfo, Path, Query},
     http::header::USER_AGENT,
-    routing::{get, post},
+    routing::{delete, get, post},
     Json,
 };
 use chrono::Utc;
-use loco_rs::prelude::*;
+use loco_rs::app::AppContext;
+use loco_rs::controller::format;
+use loco_rs::controller::Routes;
+use crate::error::Error;
+use crate::error::Result;
+use axum::response::Response;
 use rustok_telemetry::metrics;
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, QueryOrder,
@@ -613,6 +618,34 @@ async fn login_history(
     format::json(SessionsResponse { sessions: data })
 }
 
+#[utoipa::path(delete, path = "/api/auth/sessions/{id}", tag = "auth", security(("bearer_auth" = [])),
+    params(("id" = uuid::Uuid, Path, description = "Session ID to revoke")),
+    responses(
+        (status = 200, description = "Session revoked", body = GenericStatusResponse),
+        (status = 404, description = "Session not found or already revoked")
+    ))]
+async fn revoke_session(
+    State(ctx): State<AppContext>,
+    CurrentTenant(tenant): CurrentTenant,
+    current: CurrentUser,
+    Path(session_id): Path<uuid::Uuid>,
+) -> Result<Response> {
+    let revoked = AuthLifecycleService::revoke_session(
+        &ctx,
+        tenant.id,
+        current.user.id,
+        session_id,
+    )
+    .await
+    .map_err(|e: AuthLifecycleError| Error::from(e))?;
+
+    if revoked {
+        format::json(GenericStatusResponse { status: "ok" })
+    } else {
+        Err(Error::NotFound)
+    }
+}
+
 pub fn routes() -> Routes {
     Routes::new()
         .prefix("api/auth")
@@ -628,6 +661,7 @@ pub fn routes() -> Routes {
         .add("/verify/confirm", post(confirm_verification))
         .add("/sessions", get(list_sessions))
         .add("/sessions/revoke-all", post(revoke_all_sessions))
+        .add("/sessions/:id", delete(revoke_session))
         .add("/change-password", post(change_password))
         .add("/profile", post(update_profile))
         .add("/history", get(login_history))

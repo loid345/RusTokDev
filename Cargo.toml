@@ -30,7 +30,7 @@ loco-rs = "0.16"
 tokio = { version = "1.50", features = ["full"] }
 
 # Web
-axum = "0.8.8"
+axum = { version = "0.8.8", features = ["ws"] }
 tower = "0.5"
 tower-http = { version = "0.6.8", features = ["cors", "fs"] }
 
@@ -57,6 +57,7 @@ ulid = "1.1"
 # Serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+tera = "1.19"
 serde_yaml = "0.9"
 toml = "1.0.6"
 postcard = { version = "1", features = ["use-std"] }
@@ -153,4 +154,6 @@ rustok-tenant = { path = "crates/rustok-tenant" }
 rustok-rbac = { path = "crates/rustok-rbac" }
 rustok-telemetry = { path = "crates/rustok-telemetry" }
 rustok-test-utils = { path = "crates/rustok-test-utils" }
+rustok-storage = { path = "crates/rustok-storage" }
+rustok-media = { path = "crates/rustok-media" }
 alloy-scripting = { path = "crates/alloy-scripting" }

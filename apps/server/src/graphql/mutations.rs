@@ -124,7 +124,7 @@ async fn ensure_modules_manage_permission(
         .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?
         .clone();
     let tenant = ctx.data::<TenantContext>()?.clone();
-    let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
+    let app_ctx = ctx.data::<loco_rs::app::AppContext>()?;
 
     let can_manage_modules = RbacService::has_permission(
         &app_ctx.db,
@@ -145,7 +145,7 @@ async fn ensure_modules_manage_permission(
 }
 
 async fn request_build_for_manifest(
-    app_ctx: &loco_rs::prelude::AppContext,
+    app_ctx: &loco_rs::app::AppContext,
     tenant_id: Uuid,
     manifest: &ModulesManifest,
     manifest_diff: &ManifestDiff,
@@ -179,7 +179,7 @@ async fn request_build_for_manifest(
 }
 
 async fn persist_manifest_and_request_build(
-    app_ctx: &loco_rs::prelude::AppContext,
+    app_ctx: &loco_rs::app::AppContext,
     tenant_id: Uuid,
     registry: &ModuleRegistry,
     original_manifest: ModulesManifest,
@@ -221,7 +221,7 @@ impl RootMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
         let tenant = ctx.data::<TenantContext>()?;
-        let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
+        let app_ctx = ctx.data::<loco_rs::app::AppContext>()?;
 
         let can_create_users = RbacService::has_any_permission(
             &app_ctx.db,
@@ -286,7 +286,7 @@ impl RootMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
         let tenant = ctx.data::<TenantContext>()?;
-        let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
+        let app_ctx = ctx.data::<loco_rs::app::AppContext>()?;
 
         let can_update_users = RbacService::has_any_permission(
             &app_ctx.db,
@@ -386,7 +386,7 @@ impl RootMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
         let tenant = ctx.data::<TenantContext>()?;
-        let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
+        let app_ctx = ctx.data::<loco_rs::app::AppContext>()?;
 
         let can_manage_users = RbacService::has_permission(
             &app_ctx.db,
@@ -426,7 +426,7 @@ impl RootMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
         let tenant = ctx.data::<TenantContext>()?;
-        let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
+        let app_ctx = ctx.data::<loco_rs::app::AppContext>()?;
 
         let can_manage_users = RbacService::has_permission(
             &app_ctx.db,
@@ -466,7 +466,7 @@ impl RootMutation {
         version: String,
     ) -> Result<BuildJob> {
         let (auth, tenant) = ensure_modules_manage_permission(ctx).await?;
-        let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
+        let app_ctx = ctx.data::<loco_rs::app::AppContext>()?;
         let registry = ctx.data::<ModuleRegistry>()?;
 
         let mut manifest = ManifestManager::load().map_err(map_manifest_error)?;
@@ -490,7 +490,7 @@ impl RootMutation {
 
     async fn uninstall_module(&self, ctx: &Context<'_>, slug: String) -> Result<BuildJob> {
         let (auth, tenant) = ensure_modules_manage_permission(ctx).await?;
-        let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
+        let app_ctx = ctx.data::<loco_rs::app::AppContext>()?;
         let registry = ctx.data::<ModuleRegistry>()?;
 
         let mut manifest = ManifestManager::load().map_err(map_manifest_error)?;
@@ -518,7 +518,7 @@ impl RootMutation {
         version: String,
     ) -> Result<BuildJob> {
         let (auth, tenant) = ensure_modules_manage_permission(ctx).await?;
-        let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
+        let app_ctx = ctx.data::<loco_rs::app::AppContext>()?;
         let registry = ctx.data::<ModuleRegistry>()?;
 
         let mut manifest = ManifestManager::load().map_err(map_manifest_error)?;
@@ -542,7 +542,7 @@ impl RootMutation {
     async fn rollback_build(&self, ctx: &Context<'_>, build_id: String) -> Result<BuildJob> {
         let (_, tenant) = ensure_modules_manage_permission(ctx).await?;
 
-        let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
+        let app_ctx = ctx.data::<loco_rs::app::AppContext>()?;
         let service = BuildService::with_event_publisher(
             app_ctx.db.clone(),
             Arc::new(CompositeBuildEventPublisher::new(vec![
@@ -625,7 +625,7 @@ impl RootMutation {
             .data::<AuthContext>()
             .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
 
-        let app_ctx = ctx.data::<loco_rs::prelude::AppContext>()?;
+        let app_ctx = ctx.data::<loco_rs::app::AppContext>()?;
         let tenant = ctx.data::<TenantContext>()?;
 
         let can_manage_modules = RbacService::has_permission(
@@ -694,7 +694,7 @@ mod tests {
     #[test]
     fn create_user_maps_internal_error() {
         let err = map_create_user_error(AuthLifecycleError::Internal(
-            loco_rs::prelude::Error::InternalServerError,
+            crate::error::Error::InternalServerError,
         ));
         assert!(!err.message.is_empty());
     }

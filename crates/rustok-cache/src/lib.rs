@@ -3,7 +3,8 @@ mod service;
 pub use service::{CacheHealthReport, CacheService};
 
 use async_trait::async_trait;
-use rustok_core::module::{HealthStatus, ModuleKind, RusToKModule};
+use rustok_core::module::{HealthStatus, MigrationSource, ModuleKind, RusToKModule};
+use sea_orm_migration::MigrationTrait;
 
 /// Core cache module — owns Redis connection lifecycle and cache backend factory.
 ///
@@ -36,6 +37,12 @@ impl CacheModule {
 impl Default for CacheModule {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+impl MigrationSource for CacheModule {
+    fn migrations(&self) -> Vec<Box<dyn MigrationTrait>> {
+        Vec::new()
     }
 }
 

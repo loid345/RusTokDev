@@ -15,13 +15,20 @@ pub use jwt::{
 };
 
 use async_trait::async_trait;
-use rustok_core::module::{HealthStatus, ModuleKind, RusToKModule};
+use rustok_core::module::{HealthStatus, MigrationSource, ModuleKind, RusToKModule};
+use sea_orm_migration::MigrationTrait;
 
 /// Core auth module — JWT lifecycle, credential hashing, token management.
 ///
 /// Pure logic module with no framework dependencies. The server constructs
 /// `AuthConfig` from its config source and passes it to the auth functions.
 pub struct AuthModule;
+
+impl MigrationSource for AuthModule {
+    fn migrations(&self) -> Vec<Box<dyn MigrationTrait>> {
+        Vec::new()
+    }
+}
 
 #[async_trait]
 impl RusToKModule for AuthModule {

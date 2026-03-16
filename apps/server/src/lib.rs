@@ -1,6 +1,8 @@
 pub mod app;
 pub mod auth;
+pub mod channels;
 pub mod common;
+pub mod error;
 pub mod context;
 pub mod controllers;
 pub mod extractors;

@@ -7,8 +7,11 @@ pub mod content;
 pub mod forum;
 pub mod graphql;
 pub mod health;
+#[cfg(feature = "mod-media")]
+pub mod media;
 pub mod metrics;
 pub mod oauth;
 pub mod oauth_metadata;
 pub mod pages;
 pub mod swagger;
+pub mod users;

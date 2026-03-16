@@ -13,7 +13,8 @@ use std::path::Path;
 
 use sea_orm::EntityTrait;
 
-use crate::common::settings::RustokSettings;
+use crate::common::settings::{EmailProvider, RustokSettings};
+use crate::channels;
 use crate::controllers;
 use crate::initializers;
 use crate::seeds;
@@ -22,6 +23,8 @@ use crate::services::app_router::compose_application_router;
 use crate::services::app_runtime::bootstrap_app_runtime;
 use crate::tasks;
 use loco_rs::prelude::Queue;
+
+use crate::error::Error;
 use migration::Migrator;
 
 pub struct App;
@@ -57,8 +60,45 @@ impl Hooks for App {
         create_app::<Self, Migrator>(mode, environment, config).await
     }
 
+    async fn after_context(mut ctx: AppContext) -> Result<AppContext> {
+        // Initialise Loco's ctx.mailer when email.provider = "loco".
+        // This must happen before after_routes so every request handler
+        // can call email_service_from_ctx() and get a working Loco mailer.
+        if let Ok(settings) = RustokSettings::from_settings(&ctx.config.settings) {
+            if settings.email.provider == EmailProvider::Loco {
+                match loco_rs::mailer::EmailSender::smtp(&loco_rs::config::SmtpMailer {
+                    enable: settings.email.enabled,
+                    host: settings.email.smtp.host,
+                    port: settings.email.smtp.port,
+                    secure: settings.email.smtp.port == 465,
+                    auth: if settings.email.smtp.username.is_empty() {
+                        None
+                    } else {
+                        Some(loco_rs::config::MailerAuth {
+                            user: settings.email.smtp.username,
+                            password: settings.email.smtp.password,
+                        })
+                    },
+                    hello_name: None,
+                }) {
+                    Ok(sender) => {
+                        ctx.mailer = Some(sender);
+                        tracing::info!("Loco Mailer initialised from rustok email settings");
+                    }
+                    Err(err) => {
+                        tracing::warn!(
+                            error = %err,
+                            "Failed to initialise Loco Mailer; emails will be disabled"
+                        );
+                    }
+                }
+            }
+        }
+        Ok(ctx)
+    }
+
     fn routes(_ctx: &AppContext) -> AppRoutes {
-        AppRoutes::with_default_routes()
+        let mut routes = AppRoutes::with_default_routes()
             .add_route(controllers::health::routes())
             .add_route(controllers::metrics::routes())
             .add_route(controllers::swagger::routes())
@@ -72,14 +112,25 @@ impl Hooks for App {
             .add_route(controllers::blog::routes())
             .add_route(controllers::forum::routes())
             .add_route(controllers::pages::routes())
+            .add_route(controllers::users::routes());
+
+        #[cfg(feature = "mod-media")]
+        {
+            routes = routes.add_route(controllers::media::routes());
+        }
+
+        routes = routes.add_route(channels::builds::routes());
+
+        routes
     }
 
     async fn after_routes(router: AxumRouter, ctx: &AppContext) -> Result<AxumRouter> {
         let rustok_settings =
             RustokSettings::from_settings(&ctx.config.settings).map_err(|error| {
-                loco_rs::Error::BadRequest(format!("Invalid rustok settings: {error}"))
+                Error::BadRequest(format!("Invalid rustok settings: {error}"))
             })?;
         let runtime = bootstrap_app_runtime(ctx, &rustok_settings).await?;
+        connect_runtime_workers(ctx).await?;
 
         Ok(compose_application_router(router, ctx, runtime))
     }
@@ -126,12 +177,25 @@ impl Hooks for App {
         initializers::create(ctx).await
     }
 
-    async fn connect_workers(ctx: &AppContext, _queue: &Queue) -> Result<()> {
-        connect_runtime_workers(ctx).await
+    async fn connect_workers(_ctx: &AppContext, _queue: &Queue) -> Result<()> {
+        // Workers are started in after_routes where the full runtime is available.
+        Ok(())
     }
 
     async fn seed(ctx: &AppContext, path: &Path) -> Result<()> {
         seeds::seed(ctx, path).await
+    }
+
+    /// Graceful shutdown: stop background workers and flush telemetry.
+    async fn on_shutdown(ctx: &AppContext) {
+        use crate::services::app_lifecycle::StopHandle;
+
+        if let Some(handle) = ctx.shared_store.get::<StopHandle>() {
+            tracing::info!("Stopping background workers…");
+            handle.stop().await;
+        }
+
+        tracing::info!("RusTok server shut down cleanly");
     }
 }
 

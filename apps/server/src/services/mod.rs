@@ -19,6 +19,7 @@ pub mod rbac_consistency;
 pub mod rbac_persistence;
 pub mod rbac_runtime;
 pub mod rbac_service;
+pub mod settings_service;
 pub mod redis_runtime;
 pub mod release_backend;
 pub mod runtime_guardrails;

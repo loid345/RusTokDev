@@ -9,6 +9,17 @@ use std::sync::Arc;
 
 use crate::{execute, GraphqlHttpError, GraphqlRequest};
 
+fn get_locale() -> Option<String> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        gloo_storage::LocalStorage::get::<String>("rustok-admin-locale").ok()
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        None
+    }
+}
+
 /// Result структура для use_query hook
 #[derive(Clone)]
 pub struct QueryResult<T> {
@@ -81,7 +92,7 @@ where
         spawn_local(async move {
             let request = GraphqlRequest::new(query, variables);
 
-            match execute::<V, T>(&endpoint, request, token, tenant).await {
+            match execute::<V, T>(&endpoint, request, token, tenant, get_locale()).await {
                 Ok(response) => {
                     set_data.set(Some(response));
                     set_loading.set(false);
@@ -175,7 +186,7 @@ where
         spawn_local(async move {
             let request = GraphqlRequest::new(mutation, Some(variables));
 
-            match execute::<Value, T>(&endpoint, request, token, tenant).await {
+            match execute::<Value, T>(&endpoint, request, token, tenant, get_locale()).await {
                 Ok(response) => {
                     set_data.set(Some(response));
                     set_loading.set(false);
@@ -226,7 +237,7 @@ where
         spawn_local(async move {
             let request = GraphqlRequest::new(query, variables);
 
-            match execute::<V, T>(&endpoint, request, token, tenant).await {
+            match execute::<V, T>(&endpoint, request, token, tenant, get_locale()).await {
                 Ok(response) => {
                     set_data.set(Some(response));
                     set_loading.set(false);

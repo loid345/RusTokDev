@@ -2,6 +2,9 @@ use rustok_iggy::IggyConfig;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
+#[cfg(feature = "mod-media")]
+use rustok_storage::StorageConfig;
+
 use crate::services::redis_runtime::resolve_redis_url;
 
 const DEFAULT_TENANT_ID: Uuid = Uuid::from_u128(1);
@@ -24,12 +27,31 @@ pub struct RustokSettings {
     pub email: EmailSettings,
     #[serde(default)]
     pub runtime: RuntimeSettings,
+    #[cfg(feature = "mod-media")]
+    #[serde(default)]
+    pub storage: StorageConfig,
+}
+
+/// Email transport provider selector.
+///
+/// - `smtp` (default): sends via lettre directly using the `[email.smtp]` config
+/// - `loco`: sends via Loco Mailer (`ctx.mailer`) + Tera templates
+/// - `none`: email sending is disabled
+#[derive(Debug, Clone, Deserialize, Serialize, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum EmailProvider {
+    #[default]
+    Smtp,
+    Loco,
+    None,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct EmailSettings {
     #[serde(default)]
     pub enabled: bool,
+    #[serde(default)]
+    pub provider: EmailProvider,
     #[serde(default)]
     pub smtp: SmtpSettings,
     #[serde(default = "default_email_from")]
@@ -65,6 +87,7 @@ impl Default for EmailSettings {
     fn default() -> Self {
         Self {
             enabled: false,
+            provider: EmailProvider::Smtp,
             smtp: SmtpSettings::default(),
             from: default_email_from(),
             reset_base_url: default_reset_base_url(),

@@ -2,7 +2,12 @@
 
 use axum::routing::get;
 use axum::Extension;
-use loco_rs::prelude::*;
+use loco_rs::app::AppContext;
+use loco_rs::controller::format;
+use loco_rs::controller::Routes;
+use crate::error::Result;
+use axum::extract::State;
+use axum::response::Response;
 use once_cell::sync::Lazy;
 use rustok_core::{HealthStatus, ModuleRegistry};
 use sea_orm::DatabaseConnection;
@@ -137,16 +142,8 @@ pub async fn ready(
     Extension(registry): Extension<ModuleRegistry>,
 ) -> Result<Response> {
     let settings =
-        RustokSettings::from_settings(&ctx.config.settings).unwrap_or_else(|_| RustokSettings {
-            tenant: Default::default(),
-            build: Default::default(),
-            search: Default::default(),
-            features: Default::default(),
-            rate_limit: Default::default(),
-            events: Default::default(),
-            email: Default::default(),
-            runtime: Default::default(),
-        });
+        RustokSettings::from_settings(&ctx.config.settings)
+            .unwrap_or_default();
 
     let mut checks = vec![
         run_guarded_check(
@@ -211,6 +208,17 @@ pub async fn ready(
 
     checks.push(check_runtime_guardrails(&ctx).await);
     checks.push(check_search_backend(&settings.search).await);
+
+    #[cfg(feature = "mod-media")]
+    checks.push(
+        run_guarded_check(
+            "storage",
+            DependencyCriticality::NonCritical,
+            "dependency",
+            || check_storage_backend(&ctx),
+        )
+        .await,
+    );
 
     let mut module_checks = Vec::new();
     for module in registry.modules() {
@@ -298,6 +306,29 @@ pub async fn modules(Extension(registry): Extension<ModuleRegistry>) -> Result<R
         status: if overall_healthy { "ok" } else { "degraded" },
         modules: modules_health,
     })
+}
+
+#[cfg(feature = "mod-media")]
+async fn check_storage_backend(ctx: &AppContext) -> std::result::Result<(), String> {
+    use rustok_storage::StorageService;
+
+    let Some(storage) = ctx.shared_store.get::<StorageService>() else {
+        return Ok(()); // not configured — skip
+    };
+
+    let probe = ".health-probe";
+    let data = bytes::Bytes::from_static(b"ok");
+    storage
+        .store(probe, data, "text/plain")
+        .await
+        .map_err(|e| format!("storage write failed: {e}"))?;
+    storage
+        .delete(probe)
+        .await
+        .map_err(|e| format!("storage delete failed: {e}"))?;
+
+    rustok_telemetry::metrics::update_storage_health(storage.backend_name(), true);
+    Ok(())
 }
 
 async fn check_database(db: &DatabaseConnection) -> std::result::Result<(), String> {

@@ -79,3 +79,47 @@ pub struct ChangePasswordInput {
 pub struct ChangePasswordPayload {
     pub success: bool,
 }
+
+// --- Phase 1.5: new types ---
+
+#[derive(Debug, Clone, SimpleObject)]
+pub struct SessionItem {
+    pub id: String,
+    pub ip_address: Option<String>,
+    pub user_agent: Option<String>,
+    pub last_used_at: Option<String>,
+    pub expires_at: String,
+    pub created_at: String,
+    pub current: bool,
+}
+
+#[derive(Debug, Clone, SimpleObject)]
+pub struct SessionsPayload {
+    pub sessions: Vec<SessionItem>,
+}
+
+#[derive(Debug, Clone, SimpleObject)]
+pub struct RevokeSessionPayload {
+    pub success: bool,
+    pub revoked: bool,
+}
+
+#[derive(Debug, Clone, SimpleObject)]
+pub struct RevokeAllSessionsPayload {
+    pub success: bool,
+    pub revoked_count: i32,
+}
+
+#[derive(Debug, Clone, InputObject)]
+pub struct AcceptInviteInput {
+    pub token: String,
+    pub password: String,
+    pub name: Option<String>,
+}
+
+#[derive(Debug, Clone, SimpleObject)]
+pub struct AcceptInvitePayload {
+    pub success: bool,
+    pub email: String,
+    pub role: String,
+}

@@ -340,6 +340,10 @@ pub enum DomainEvent {
         tenant_id: Uuid,
         locale: String,
     },
+    PlatformSettingsChanged {
+        category: String,
+        changed_by: Uuid,
+    },
 
     // ════════════════════════════════════════════════════════════════
     // FLEX — FIELD DEFINITION EVENTS
@@ -431,6 +435,7 @@ impl DomainEvent {
             Self::TenantUpdated { .. } => "tenant.updated",
             Self::LocaleEnabled { .. } => "locale.enabled",
             Self::LocaleDisabled { .. } => "locale.disabled",
+            Self::PlatformSettingsChanged { .. } => "platform_settings.changed",
 
             // Flex field definition events
             Self::FieldDefinitionCreated { .. } => "field_definition.created",
@@ -522,6 +527,7 @@ impl DomainEvent {
             Self::TenantUpdated { .. } => 1,
             Self::LocaleEnabled { .. } => 1,
             Self::LocaleDisabled { .. } => 1,
+            Self::PlatformSettingsChanged { .. } => 1,
 
             // Flex field definition events (v1)
             Self::FieldDefinitionCreated { .. } => 1,
@@ -1042,6 +1048,15 @@ impl ValidateEvent for DomainEvent {
                 validators::validate_not_nil_uuid("tenant_id", tenant_id)?;
                 validators::validate_not_empty("locale", locale)?;
                 validators::validate_max_length("locale", locale, 10)?;
+                Ok(())
+            }
+            Self::PlatformSettingsChanged {
+                category,
+                changed_by,
+            } => {
+                validators::validate_not_nil_uuid("changed_by", changed_by)?;
+                validators::validate_not_empty("category", category)?;
+                validators::validate_max_length("category", category, 64)?;
                 Ok(())
             }
 

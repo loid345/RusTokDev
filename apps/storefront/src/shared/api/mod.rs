@@ -38,6 +38,7 @@ where
         GraphqlRequest::new(query, Some(variables)),
         token,
         tenant_slug,
+        None,
     )
     .await
 }

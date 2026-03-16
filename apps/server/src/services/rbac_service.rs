@@ -1,4 +1,5 @@
-use loco_rs::prelude::*;
+use crate::error::Error;
+use crate::error::Result;
 use sea_orm::{ConnectionTrait, DatabaseConnection};
 use tracing::{debug, warn};
 
