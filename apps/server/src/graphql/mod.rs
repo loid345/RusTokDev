@@ -15,6 +15,7 @@ pub mod pages;
 pub mod persisted;
 pub mod queries;
 pub mod schema;
+pub mod settings;
 pub mod subscriptions;
 pub mod types;
 

@@ -1,4 +1,5 @@
 pub mod oauth_apps;
+pub mod platform_settings;
 pub mod oauth_authorization_codes;
 pub mod oauth_consents;
 pub mod oauth_tokens;
@@ -12,6 +13,7 @@ pub mod user_roles;
 pub mod users;
 
 pub use oauth_apps::Entity as OAuthApps;
+pub use platform_settings::Entity as PlatformSettings;
 pub use oauth_authorization_codes::Entity as OAuthAuthorizationCodes;
 pub use oauth_consents::Entity as OAuthConsents;
 pub use oauth_tokens::Entity as OAuthTokens;

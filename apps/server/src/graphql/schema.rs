@@ -16,6 +16,7 @@ use super::forum::{ForumMutation, ForumQuery};
 use super::loaders::{NodeBodyLoader, NodeLoader, NodeTranslationLoader, TenantNameLoader};
 use super::mutations::RootMutation;
 use super::oauth::{OAuthMutation, OAuthQuery};
+use super::settings::{SettingsMutation, SettingsQuery};
 use super::observability::GraphqlObservability;
 use super::pages::{PagesMutation, PagesQuery};
 use super::queries::RootQuery;
@@ -33,6 +34,7 @@ pub struct Query(
     AlloyQuery,
     PagesQuery,
     OAuthQuery,
+    SettingsQuery,
 );
 
 #[derive(MergedObject, Default)]
@@ -46,6 +48,7 @@ pub struct Mutation(
     AlloyMutation,
     PagesMutation,
     OAuthMutation,
+    SettingsMutation,
 );
 
 #[derive(MergedSubscription, Default)]
