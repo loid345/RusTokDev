@@ -65,13 +65,13 @@ pub async fn create(
 pub async fn update(
     State(ctx): State<AppContext>,
     tenant: TenantContext,
-    _auth: RequireWorkflowsUpdate,
+    auth: RequireWorkflowsUpdate,
     Path(id): Path<Uuid>,
     Json(input): Json<UpdateWorkflowInput>,
 ) -> Result<Json<serde_json::Value>> {
     let service = WorkflowService::new(ctx.db.clone());
     service
-        .update(tenant.id, id, input)
+        .update(tenant.id, id, Some(auth.0.id), input)
         .await
         .map_err(|e| Error::BadRequest(e.to_string()))?;
     Ok(Json(serde_json::json!({ "ok": true })))

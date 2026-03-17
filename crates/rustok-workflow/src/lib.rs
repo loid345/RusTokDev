@@ -29,10 +29,12 @@ pub mod error;
 pub mod migration;
 pub mod services;
 pub mod steps;
+pub mod templates;
 
 pub use dto::*;
 pub use error::{WorkflowError, WorkflowResult};
-pub use migration::WorkflowsMigration;
+pub use migration::{WorkflowPhase4Migration, WorkflowsMigration};
+pub use templates::{WorkflowTemplate, BUILTIN_TEMPLATES};
 pub use services::{WorkflowCronScheduler, WorkflowEngine, WorkflowService, WorkflowTriggerHandler};
 pub use steps::{AlloyScriptStep, NotifyStep, ScriptRunner, NotificationSender};
 
@@ -77,7 +79,10 @@ impl RusToKModule for WorkflowModule {
 
 impl MigrationSource for WorkflowModule {
     fn migrations(&self) -> Vec<Box<dyn MigrationTrait>> {
-        vec![Box::new(WorkflowsMigration)]
+        vec![
+            Box::new(WorkflowsMigration),
+            Box::new(WorkflowPhase4Migration),
+        ]
     }
 }
 

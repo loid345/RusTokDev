@@ -338,6 +338,9 @@
     "not_found": "Workflow not found.",
     "error": {
       "load": "Failed to load workflows"
-    }
+    },
+    "templates": "Templates",
+    "versions": "Versions",
+    "restore": "Restore"
   }
 }

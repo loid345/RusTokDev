@@ -5,7 +5,7 @@ use leptos_router::hooks::use_params;
 use leptos_router::params::Params;
 
 use crate::entities::workflow::{WorkflowDetail, WorkflowExecution};
-use crate::features::workflow::{api, ExecutionHistory, StatusBadge, WorkflowStepEditor};
+use crate::features::workflow::{api, ExecutionHistory, StatusBadge, VersionHistory, WorkflowStepEditor};
 use crate::shared::api::ApiError;
 use crate::{t_string, use_i18n};
 
@@ -142,6 +142,18 @@ pub fn WorkflowDetailPage() -> impl IntoView {
                                         <div>
                                             <h2 class="mb-3 text-lg font-semibold">{t_string!(i18n, workflows.executions)}</h2>
                                             <ExecutionHistory executions=executions />
+                                        </div>
+
+                                        // Version history
+                                        <div>
+                                            <VersionHistory
+                                                workflow_id=wf_id
+                                                token=tok
+                                                tenant_slug=ts
+                                                on_restored=Callback::new(move |_| {
+                                                    // Trigger data_resource to reload
+                                                })
+                                            />
                                         </div>
                                     </div>
                                 }.into_any()

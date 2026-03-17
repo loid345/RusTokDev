@@ -241,3 +241,134 @@ pub async fn delete_step(
     .await?;
     Ok(())
 }
+
+// ── Phase 4 GQL documents ─────────────────────────────────────────────────────
+
+pub const WORKFLOW_TEMPLATES_QUERY: &str = "query WorkflowTemplates { workflowTemplates { id name description category triggerConfig } }";
+
+pub const CREATE_FROM_TEMPLATE_MUTATION: &str = "mutation CreateWorkflowFromTemplate($templateId: String!, $name: String!) { createWorkflowFromTemplate(templateId: $templateId, name: $name) }";
+
+pub const WORKFLOW_VERSIONS_QUERY: &str = "query WorkflowVersions($workflowId: UUID!) { workflowVersions(workflowId: $workflowId) { id version createdBy createdAt } }";
+
+pub const RESTORE_VERSION_MUTATION: &str = "mutation RestoreWorkflowVersion($workflowId: UUID!, $version: Int!) { restoreWorkflowVersion(workflowId: $workflowId, version: $version) }";
+
+// ── Phase 4 DTOs ──────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowTemplateDto {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub category: String,
+    #[serde(rename = "triggerConfig")]
+    pub trigger_config: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowVersionSummaryDto {
+    pub id: String,
+    pub version: i32,
+    #[serde(rename = "createdBy")]
+    pub created_by: Option<String>,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+}
+
+#[derive(Serialize)]
+struct TemplatesVars {}
+
+#[derive(Serialize)]
+struct CreateFromTemplateVars {
+    #[serde(rename = "templateId")]
+    template_id: String,
+    name: String,
+}
+
+#[derive(Serialize)]
+struct VersionsVars {
+    #[serde(rename = "workflowId")]
+    workflow_id: String,
+}
+
+#[derive(Serialize)]
+struct RestoreVersionVars {
+    #[serde(rename = "workflowId")]
+    workflow_id: String,
+    version: i32,
+}
+
+#[derive(Deserialize)]
+struct TemplatesResponse {
+    #[serde(rename = "workflowTemplates")]
+    workflow_templates: Vec<WorkflowTemplateDto>,
+}
+
+#[derive(Deserialize)]
+struct CreateFromTemplateResponse {
+    #[serde(rename = "createWorkflowFromTemplate")]
+    create_workflow_from_template: String,
+}
+
+#[derive(Deserialize)]
+struct VersionsResponse {
+    #[serde(rename = "workflowVersions")]
+    workflow_versions: Vec<WorkflowVersionSummaryDto>,
+}
+
+// ── Phase 4 functions ─────────────────────────────────────────────────────────
+
+pub async fn fetch_templates(
+    token: Option<String>,
+    tenant_slug: Option<String>,
+) -> Result<Vec<WorkflowTemplateDto>, ApiError> {
+    let resp: TemplatesResponse =
+        request(WORKFLOW_TEMPLATES_QUERY, TemplatesVars {}, token, tenant_slug).await?;
+    Ok(resp.workflow_templates)
+}
+
+pub async fn create_from_template(
+    token: Option<String>,
+    tenant_slug: Option<String>,
+    template_id: String,
+    name: String,
+) -> Result<String, ApiError> {
+    let resp: CreateFromTemplateResponse = request(
+        CREATE_FROM_TEMPLATE_MUTATION,
+        CreateFromTemplateVars { template_id, name },
+        token,
+        tenant_slug,
+    )
+    .await?;
+    Ok(resp.create_workflow_from_template)
+}
+
+pub async fn fetch_versions(
+    token: Option<String>,
+    tenant_slug: Option<String>,
+    workflow_id: String,
+) -> Result<Vec<WorkflowVersionSummaryDto>, ApiError> {
+    let resp: VersionsResponse = request(
+        WORKFLOW_VERSIONS_QUERY,
+        VersionsVars { workflow_id },
+        token,
+        tenant_slug,
+    )
+    .await?;
+    Ok(resp.workflow_versions)
+}
+
+pub async fn restore_version(
+    token: Option<String>,
+    tenant_slug: Option<String>,
+    workflow_id: String,
+    version: i32,
+) -> Result<(), ApiError> {
+    let _: serde_json::Value = request(
+        RESTORE_VERSION_MUTATION,
+        RestoreVersionVars { workflow_id, version },
+        token,
+        tenant_slug,
+    )
+    .await?;
+    Ok(())
+}

@@ -2,6 +2,7 @@ pub mod workflow;
 pub mod workflow_execution;
 pub mod workflow_step;
 pub mod workflow_step_execution;
+pub mod workflow_version;
 
 pub use workflow::{ActiveModel as WorkflowActiveModel, Entity as WorkflowEntity, Model as Workflow, WorkflowStatus};
 pub use workflow_execution::{
@@ -15,4 +16,8 @@ pub use workflow_step::{
 pub use workflow_step_execution::{
     ActiveModel as WorkflowStepExecutionActiveModel, Entity as WorkflowStepExecutionEntity,
     Model as WorkflowStepExecution, StepExecutionStatus,
+};
+pub use workflow_version::{
+    ActiveModel as WorkflowVersionActiveModel, Entity as WorkflowVersionEntity,
+    Model as WorkflowVersion,
 };

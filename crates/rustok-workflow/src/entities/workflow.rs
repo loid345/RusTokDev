@@ -49,6 +49,10 @@ pub struct Model {
     pub failure_count: i32,
     /// Set when the workflow is auto-disabled due to exceeding the failure threshold
     pub auto_disabled_at: Option<DateTimeWithTimeZone>,
+    /// Unique slug for webhook trigger: POST /webhooks/:tenant_slug/:webhook_slug
+    pub webhook_slug: Option<String>,
+    /// HMAC-SHA256 secret for verifying webhook payloads (X-Webhook-Signature header)
+    pub webhook_secret: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -57,6 +61,8 @@ pub enum Relation {
     Steps,
     #[sea_orm(has_many = "super::workflow_execution::Entity")]
     Executions,
+    #[sea_orm(has_many = "super::workflow_version::Entity")]
+    Versions,
 }
 
 impl Related<super::workflow_step::Entity> for Entity {
@@ -68,6 +74,12 @@ impl Related<super::workflow_step::Entity> for Entity {
 impl Related<super::workflow_execution::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Executions.def()
+    }
+}
+
+impl Related<super::workflow_version::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Versions.def()
     }
 }
 

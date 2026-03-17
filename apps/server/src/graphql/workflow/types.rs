@@ -7,6 +7,8 @@ use rustok_workflow::{
     WorkflowExecutionResponse, WorkflowResponse, WorkflowStepExecutionResponse,
     WorkflowStepResponse, WorkflowSummary,
 };
+use rustok_workflow::{WorkflowVersionDetail, WorkflowVersionSummary};
+use rustok_workflow::templates::WorkflowTemplate;
 
 // ── Enum mirrors ───────────────────────────────────────────────────────────────
 
@@ -157,6 +159,7 @@ pub struct GqlWorkflowSummary {
     pub tenant_id: Uuid,
     pub name: String,
     pub status: GqlWorkflowStatus,
+    pub webhook_slug: Option<String>,
     pub failure_count: i32,
     pub created_at: String,
     pub updated_at: String,
@@ -169,6 +172,7 @@ impl From<WorkflowSummary> for GqlWorkflowSummary {
             tenant_id: w.tenant_id,
             name: w.name,
             status: w.status.into(),
+            webhook_slug: w.webhook_slug,
             failure_count: w.failure_count,
             created_at: w.created_at.to_rfc3339(),
             updated_at: w.updated_at.to_rfc3339(),
@@ -209,6 +213,7 @@ pub struct GqlWorkflow {
     pub description: Option<String>,
     pub status: GqlWorkflowStatus,
     pub trigger_config: Value,
+    pub webhook_slug: Option<String>,
     pub created_by: Option<Uuid>,
     pub created_at: String,
     pub updated_at: String,
@@ -226,6 +231,7 @@ impl From<WorkflowResponse> for GqlWorkflow {
             description: w.description,
             status: w.status.into(),
             trigger_config: w.trigger_config,
+            webhook_slug: w.webhook_slug,
             created_by: w.created_by,
             created_at: w.created_at.to_rfc3339(),
             updated_at: w.updated_at.to_rfc3339(),
@@ -303,6 +309,7 @@ pub struct GqlCreateWorkflowInput {
     pub name: String,
     pub description: Option<String>,
     pub trigger_config: Value,
+    pub webhook_slug: Option<String>,
 }
 
 #[derive(InputObject)]
@@ -311,6 +318,7 @@ pub struct GqlUpdateWorkflowInput {
     pub description: Option<String>,
     pub status: Option<GqlWorkflowStatus>,
     pub trigger_config: Option<Value>,
+    pub webhook_slug: Option<String>,
 }
 
 #[derive(InputObject)]
@@ -329,4 +337,73 @@ pub struct GqlUpdateStepInput {
     pub config: Option<Value>,
     pub on_error: Option<GqlOnError>,
     pub timeout_ms: Option<i64>,
+}
+
+// ── Phase 4: Version types ──────────────────────────────────────────────────────
+
+#[derive(SimpleObject)]
+pub struct GqlWorkflowVersionSummary {
+    pub id: Uuid,
+    pub workflow_id: Uuid,
+    pub version: i32,
+    pub created_by: Option<Uuid>,
+    pub created_at: String,
+}
+
+impl From<WorkflowVersionSummary> for GqlWorkflowVersionSummary {
+    fn from(v: WorkflowVersionSummary) -> Self {
+        Self {
+            id: v.id,
+            workflow_id: v.workflow_id,
+            version: v.version,
+            created_by: v.created_by,
+            created_at: v.created_at.to_rfc3339(),
+        }
+    }
+}
+
+#[derive(SimpleObject)]
+pub struct GqlWorkflowVersionDetail {
+    pub id: Uuid,
+    pub workflow_id: Uuid,
+    pub version: i32,
+    pub snapshot: Value,
+    pub created_by: Option<Uuid>,
+    pub created_at: String,
+}
+
+impl From<WorkflowVersionDetail> for GqlWorkflowVersionDetail {
+    fn from(v: WorkflowVersionDetail) -> Self {
+        Self {
+            id: v.id,
+            workflow_id: v.workflow_id,
+            version: v.version,
+            snapshot: v.snapshot,
+            created_by: v.created_by,
+            created_at: v.created_at.to_rfc3339(),
+        }
+    }
+}
+
+// ── Phase 4: Template types ─────────────────────────────────────────────────────
+
+#[derive(SimpleObject)]
+pub struct GqlWorkflowTemplate {
+    pub id: String,
+    pub name: String,
+    pub description: String,
+    pub category: String,
+    pub trigger_config: Value,
+}
+
+impl From<&WorkflowTemplate> for GqlWorkflowTemplate {
+    fn from(t: &WorkflowTemplate) -> Self {
+        Self {
+            id: t.id.to_string(),
+            name: t.name.to_string(),
+            description: t.description.to_string(),
+            category: t.category.to_string(),
+            trigger_config: t.trigger_config.clone(),
+        }
+    }
 }

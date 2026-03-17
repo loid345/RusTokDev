@@ -342,3 +342,110 @@ enum WorkflowStepExecutions {
     StartedAt,
     CompletedAt,
 }
+
+/// Migration: add webhook_slug/webhook_secret to workflows + create workflow_versions.
+#[derive(DeriveMigrationName)]
+pub struct WorkflowPhase4Migration;
+
+#[async_trait::async_trait]
+impl MigrationTrait for WorkflowPhase4Migration {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        // Add webhook_slug + webhook_secret to workflows
+        manager
+            .alter_table(
+                Table::alter()
+                    .table(WorkflowsV2::Table)
+                    .add_column_if_not_exists(ColumnDef::new(WorkflowsV2::WebhookSlug).string_len(128))
+                    .add_column_if_not_exists(ColumnDef::new(WorkflowsV2::WebhookSecret).string_len(128))
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("uidx_workflows_tenant_webhook_slug")
+                    .table(WorkflowsV2::Table)
+                    .col(WorkflowsV2::TenantId)
+                    .col(WorkflowsV2::WebhookSlug)
+                    .unique()
+                    .if_not_exists()
+                    .to_owned(),
+            )
+            .await?;
+
+        // Create workflow_versions table
+        manager
+            .create_table(
+                Table::create()
+                    .table(WorkflowVersions::Table)
+                    .if_not_exists()
+                    .col(ColumnDef::new(WorkflowVersions::Id).uuid().not_null().primary_key())
+                    .col(ColumnDef::new(WorkflowVersions::WorkflowId).uuid().not_null())
+                    .col(ColumnDef::new(WorkflowVersions::Version).integer().not_null())
+                    .col(ColumnDef::new(WorkflowVersions::Snapshot).json_binary().not_null())
+                    .col(ColumnDef::new(WorkflowVersions::CreatedBy).uuid())
+                    .col(ColumnDef::new(WorkflowVersions::CreatedAt).timestamp_with_time_zone().not_null())
+                    .foreign_key(
+                        ForeignKey::create()
+                            .name("fk_workflow_versions_workflow_id")
+                            .from(WorkflowVersions::Table, WorkflowVersions::WorkflowId)
+                            .to(WorkflowsV2::Table, WorkflowVersions::WorkflowId)
+                            .on_delete(ForeignKeyAction::Cascade),
+                    )
+                    .index(
+                        Index::create()
+                            .unique()
+                            .name("uidx_workflow_versions_workflow_version")
+                            .col(WorkflowVersions::WorkflowId)
+                            .col(WorkflowVersions::Version),
+                    )
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_workflow_versions_workflow_id")
+                    .table(WorkflowVersions::Table)
+                    .col(WorkflowVersions::WorkflowId)
+                    .to_owned(),
+            )
+            .await
+    }
+
+    async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .drop_table(Table::drop().table(WorkflowVersions::Table).to_owned())
+            .await?;
+        manager
+            .alter_table(
+                Table::alter()
+                    .table(WorkflowsV2::Table)
+                    .drop_column(WorkflowsV2::WebhookSlug)
+                    .drop_column(WorkflowsV2::WebhookSecret)
+                    .to_owned(),
+            )
+            .await
+    }
+}
+
+#[derive(DeriveIden)]
+enum WorkflowsV2 {
+    Table,
+    TenantId,
+    WebhookSlug,
+    WebhookSecret,
+}
+
+#[derive(DeriveIden)]
+enum WorkflowVersions {
+    Table,
+    Id,
+    WorkflowId,
+    Version,
+    Snapshot,
+    CreatedBy,
+    CreatedAt,
+}

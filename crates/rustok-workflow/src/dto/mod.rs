@@ -11,14 +11,18 @@ pub struct CreateWorkflowInput {
     pub name: String,
     pub description: Option<String>,
     pub trigger_config: serde_json::Value,
+    /// Optional unique webhook slug for this workflow
+    pub webhook_slug: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct UpdateWorkflowInput {
     pub name: Option<String>,
     pub description: Option<String>,
     pub status: Option<WorkflowStatus>,
     pub trigger_config: Option<serde_json::Value>,
+    /// Set to Some("") to clear the webhook slug, or Some("slug") to set it
+    pub webhook_slug: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -29,6 +33,7 @@ pub struct WorkflowResponse {
     pub description: Option<String>,
     pub status: WorkflowStatus,
     pub trigger_config: serde_json::Value,
+    pub webhook_slug: Option<String>,
     pub created_by: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -43,9 +48,31 @@ pub struct WorkflowSummary {
     pub tenant_id: Uuid,
     pub name: String,
     pub status: WorkflowStatus,
+    pub webhook_slug: Option<String>,
     pub failure_count: i32,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+// ── Version DTOs ───────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowVersionSummary {
+    pub id: Uuid,
+    pub workflow_id: Uuid,
+    pub version: i32,
+    pub created_by: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WorkflowVersionDetail {
+    pub id: Uuid,
+    pub workflow_id: Uuid,
+    pub version: i32,
+    pub snapshot: serde_json::Value,
+    pub created_by: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
 }
 
 // ── WorkflowStep DTOs ──────────────────────────────────────────────────────────
