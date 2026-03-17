@@ -1,26 +1,19 @@
-# Flex — Implementation Plan
+# Flex — Architecture
 
-> **Статус:** Draft v4 (2026-03-14)
-> **Архитектурное решение:** Flex — модуль-библиотека (набор типов, валидаторов, хелперов) внутри `rustok-core`.
+> Документация модуля: [`docs/modules/flex.md`](../modules/flex.md)
+> Implementation plan: [`crates/flex/docs/implementation-plan.md`](../../crates/flex/docs/implementation-plan.md)
 
 ---
 
-## 1. Философия
+## Философия
 
 **Flex — это катана, а не склад мечей.**
 
-Flex — модуль-библиотека: набор типов, валидаторов, хелперов для миграций и SeaORM,
-которые позволяют **любому модулю** добавить кастомные поля за минимум кода.
-Сейчас не имеет своих таблиц — данные живут в модуле-потребителе.
-В будущем может получить собственные таблицы (standalone mode).
+Flex существует рядом со стандартными модулями, а не вместо них. Это «запасной выход» для edge-cases там, где стандартные модули (content, commerce, blog) недостаточны, но создавать отдельный доменный модуль нецелесообразно.
 
-Когда модуль подключает Flex, происходит следующее:
-- В **миграциях модуля** появляется таблица `{entity}_field_definitions` (через хелпер)
-- В **entity модуля** появляется `impl HasCustomFields` (через trait из core)
-- В **мутациях модуля** появляется валидация metadata (через `CustomFieldsSchema`)
-- **Данные остаются в модуле**, в его `metadata` JSONB колонке
+Flex — модуль-библиотека: как `serde` — предоставляет типы и трейт, а реализация у каждого потребителя своя.
 
-Flex — это как `serde`: derive + trait, а реализация у каждого своя.
+## Два режима
 
 ---
 
@@ -1088,10 +1081,16 @@ impl SchemaCache {
 
 ---
 
-## 17. Tracking and Updates
+**Standalone mode** — произвольные схемы и записи (`flex_schemas`, `flex_entries`). Не реализован (Phase 5).
 
-When updating field schema architecture:
+## Архитектурные законы
 
-1. Update this file first.
-2. Ensure all migration helpers produce identical table structures.
-3. Run `cargo test -p rustok-core` — field_schema tests must pass.
+| # | Правило |
+|---|---------|
+| 1 | Standard modules NEVER depend on Flex |
+| 2 | Flex зависит только от `rustok-core` |
+| 3 | Removal-safe: отключение Flex не ломает платформу |
+| 4 | Данные остаются в модуле-потребителе |
+| 5 | Schema-first: валидация при каждой записи |
+| 6 | Tenant isolation: определения per-tenant |
+| 7 | No Flex in critical domains (orders, payments, inventory) |
