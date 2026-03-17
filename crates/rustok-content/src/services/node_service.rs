@@ -17,10 +17,15 @@ use crate::dto::{
     BodyInput, BodyResponse, CreateNodeInput, ListNodesFilter, NodeListItem, NodeResponse,
     NodeTranslationResponse, UpdateNodeInput,
 };
+use rustok_core::json_object_depth;
+
 use crate::entities::{body, node, node_translation};
 use crate::error::{ContentError, ContentResult};
 use crate::locale::{resolve_by_locale_with_fallback, PLATFORM_FALLBACK_LOCALE};
 use crate::state_machine::validate_status_transition;
+
+/// Maximum allowed JSON nesting depth for the `metadata` field.
+const METADATA_MAX_DEPTH: usize = 5;
 
 pub struct NodeService {
     db: DatabaseConnection,
@@ -173,6 +178,13 @@ impl NodeService {
             .status
             .unwrap_or(crate::entities::node::ContentStatus::Draft);
         let metadata = input.metadata;
+
+        let depth = json_object_depth(&metadata);
+        if depth > METADATA_MAX_DEPTH {
+            return Err(ContentError::Validation(format!(
+                "metadata exceeds maximum nesting depth ({depth} > {METADATA_MAX_DEPTH})"
+            )));
+        }
 
         if input.translations.is_empty() {
             error!("Node creation failed: no translations provided");
@@ -357,6 +369,12 @@ impl NodeService {
             active.reply_count = Set(reply_count);
         }
         if let Some(metadata) = update.metadata {
+            let depth = json_object_depth(&metadata);
+            if depth > METADATA_MAX_DEPTH {
+                return Err(ContentError::Validation(format!(
+                    "metadata exceeds maximum nesting depth ({depth} > {METADATA_MAX_DEPTH})"
+                )));
+            }
             active.metadata = Set(metadata);
         }
 

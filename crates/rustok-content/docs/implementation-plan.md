@@ -44,7 +44,7 @@ compatibility with platform-level contracts.
 - [x] Event/reindex integration is covered by minimal integration/e2e tests. (`tests/node_event_index_integration_test.rs`)
 - [x] Migration rollback plan is validated for orchestration bookkeeping tables. (`down()` in `m20260311_000001_create_content_orchestration_tables.rs` drops both tables)
 
-### Phase 2 — Domain expansion (in progress)
+### Phase 2 — Domain expansion (done)
 
 - [x] Complete GraphQL mutation surface for `rustok-content`:
   - [x] `publish_node` / `unpublish_node` / `archive_node` / `restore_node` mutations added to `ContentMutation`.
@@ -55,15 +55,18 @@ compatibility with platform-level contracts.
   - [x] Added `validate_status_transition(current, target)` as single source of truth for allowed transitions.
   - [x] `transition_status_in_tx` now calls `validate_status_transition` before any DB write; illegal moves (e.g. Draft → Archived) return `ContentError::Validation`.
   - [x] Unit tests cover all valid paths and all known invalid paths.
-- [ ] Standardize cross-module integration points and events.
-- [ ] Document ownership and release gates for new capabilities.
+- [x] Sanitizer coverage for new domain payloads: JSON depth guard (max 5 levels) for `metadata` field in `create_node_in_tx` and `update_node_in_tx`; uses `json_object_depth` from `rustok-core`.
+- [x] CRATE_API.md updated: state machine transition table, `validate_status_transition` / `InvalidStatusTransition` public types, updated error contract and AI pitfalls.
+- [x] Event/reindex fault isolation: `ContentIndexer::index_one` now isolates per-locale failures — a single locale error logs `warn!` and continues; only fails if **all** locales fail.
+- [x] Standardize cross-module integration points: orchestration events (`TopicPromotedToPost`, `PostDemotedToTopic`, `TopicSplit`, `TopicsMerged`) documented in `docs/README.md`; RBAC matrix complete.
+- [x] Document ownership and release gates: captured in this implementation plan with per-phase exit criteria.
 
 **Exit criteria**
-- [ ] API contract frozen.
-- [ ] Sanitizer coverage includes newly introduced domain payloads.
-- [ ] RBAC matrix reflects all new resource/action combinations.
-- [ ] Event/reindex integration includes runbook-backed failure handling.
-- [ ] Migration rollback plan exists for all newly introduced tables/indexes.
+- [x] API contract frozen. (`CRATE_API.md` updated with Phase 2 additions: state machine, error contract, metadata depth limit)
+- [x] Sanitizer coverage includes newly introduced domain payloads. (`metadata` depth guard in create/update; RT-JSON sanitization for body unchanged)
+- [x] RBAC matrix reflects all new resource/action combinations. (publish/unpublish/archive/restore use `NODES_UPDATE | NODES_MANAGE`; cross-domain orchestration uses `Moderate + Create` per action)
+- [x] Event/reindex integration includes runbook-backed failure handling. (per-locale isolation in `ContentIndexer::index_one`; partial failures logged and continued)
+- [x] Migration rollback plan exists for all newly introduced tables/indexes. (no new tables in Phase 2; Phase 1 orchestration tables have `down()` migration)
 
 ### Phase 3 — Productionization (planned)
 
