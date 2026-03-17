@@ -556,10 +556,10 @@ apps/server/src/
 `async-graphql`, `axum`, `loco_rs` — тяжёлые web-зависимости. Они не должны
 попадать в доменное ядро. Модульный крейт должен оставаться framework-agnostic.
 
-**Правильное решение — новый крейт `rustok-server-sdk`**:
+**Правильное решение — новый крейт `rustok-api`**:
 
 ```
-crates/rustok-server-sdk/
+crates/rustok-api/
   └── src/
       ├── context.rs       ← TenantContext, AuthContext (из apps/server/src/context/)
       ├── graphql/
@@ -592,14 +592,14 @@ use rustok_blog::graphql::{BlogMutation, BlogQuery};
 ```
 
 **Что нужно сделать**:
-1. Создать `crates/rustok-server-sdk/` с общими типами из сервера
+1. Создать `crates/rustok-api/` с общими типами из сервера
 2. Перенести `graphql/{blog,content,commerce,forum,pages,workflow,alloy,media}/`
    в соответствующие модульные крейты
 3. Перенести `controllers/{blog,content,commerce,forum,pages,workflow,media}/`
    в соответствующие модульные крейты
 4. Обновить `apps/server/src/graphql/schema.rs` и `apps/server/src/app.rs`
 
-**Открытый вопрос**: точный состав `rustok-server-sdk` — что именно туда идёт,
+**Открытый вопрос**: точный состав `rustok-api` — что именно туда идёт,
 какие трейты нужны для абстракции `AppContext`.
 
 ---
@@ -612,6 +612,6 @@ use rustok_blog::graphql::{BlogMutation, BlogQuery};
 | 2 | `updateModuleSettings` мутация | Малая | Высокая — `[settings]` уже везде есть |
 | 3 | Build progress → subscription | Малая | Средняя — UX, инфраструктура уже есть |
 | 4 | Docker deploy в BuildExecutor | Средняя | Высокая — без этого install не prod-ready |
-| 5 | `rustok-server-sdk` + перенос GraphQL/REST | Большая | Критическая — блокирует 3rd party |
+| 5 | `rustok-api` + перенос GraphQL/REST | Большая | Критическая — блокирует 3rd party |
 | 6 | Внешний реестр V1 (read-only) | Большая | Высокая — основа marketplace |
 | 7 | Внешний реестр V2 + publish | Очень большая | Средняя — нужен только для 3rd party |
