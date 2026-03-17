@@ -42,29 +42,18 @@ leptos-storefront = ["leptos", "leptos-router", "leptos-meta"]
 
 ### 2. Режимы деплоя
 
-Один и тот же крейт поддерживает все режимы через features:
-
-| Режим | Features | Описание |
-|---|---|---|
-| **Monolith** | `server + leptos-admin + leptos-storefront` | Бинарник = API + все UI. WordPress-like авто-установка |
-| **Headless** | `server` | Только API (GraphQL/REST). UI отдельно (Next.js, любой клиент) |
-| **Storefront SSR** | `server + leptos-storefront` | API + Leptos SSR для публичных страниц, admin headless |
-| **Hybrid** | по необходимости | Любая комбинация |
+Каждый бинарник собирается с нужным набором features. Конкретная топология
+деплоя — решение оператора: monolith, headless, раздельные серверы для API/admin/
+нескольких фронтендов, мультитенант, edge — всё это варианты одного принципа.
 
 ```bash
-# Monolith (WordPress-like, авто-установка через marketplace)
-cargo build --release --features "server,leptos-admin,leptos-storefront"
-
-# Headless (Next.js или любой frontend подключается к API)
-cargo build --release --features "server"
-
-# Storefront SSR + headless admin
-cargo build --release --features "server,leptos-storefront"
+cargo build --release --features "server"                              # чистый API
+cargo build --release --features "server,leptos-admin"                 # + admin UI
+cargo build --release --features "server,leptos-storefront"            # + storefront SSR
+cargo build --release --features "server,leptos-admin,leptos-storefront" # всё вместе
 ```
 
-Оператор выбирает режим в `rustok.toml` или переменных окружения.
-Marketplace авто-установка работает для **всех режимов** — в headless просто
-не компилируются Leptos-компоненты.
+Marketplace авто-установка работает для любого набора features.
 
 ### 3. Next.js — "Batteries Included", ручная сборка
 
