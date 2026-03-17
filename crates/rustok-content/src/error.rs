@@ -140,6 +140,22 @@ impl ContentError {
     pub fn concurrent_modification(expected: i32, actual: i32) -> Self {
         ContentError::ConcurrentModification { expected, actual }
     }
+
+    /// Return a short, stable string identifying the error class.
+    /// Used as a label in telemetry metrics.
+    pub fn kind(&self) -> &'static str {
+        match self {
+            ContentError::Database(_) => "database",
+            ContentError::Core(_) => "core",
+            ContentError::NodeNotFound(_) => "not_found",
+            ContentError::TranslationNotFound { .. } => "not_found",
+            ContentError::DuplicateSlug { .. } => "conflict",
+            ContentError::ConcurrentModification { .. } => "conflict",
+            ContentError::Forbidden(_) => "forbidden",
+            ContentError::Validation(_) => "validation",
+            ContentError::Rich(_) => "rich",
+        }
+    }
 }
 
 #[cfg(test)]

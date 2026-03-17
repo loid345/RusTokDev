@@ -9,7 +9,7 @@
 /// - **Self-documenting**: State diagram visible in type system
 ///
 /// State Diagram:
-/// ```
+/// ```text
 ///  ┌───────┐
 ///  │ Draft │──────────────────┐
 ///  └───┬───┘                  │
@@ -26,7 +26,7 @@
 /// ```
 ///
 /// Usage:
-/// ```rust
+/// ```rust,ignore
 /// // Create new node in draft state
 /// let node = ContentNode::new_draft(id, tenant_id, author_id);
 ///
