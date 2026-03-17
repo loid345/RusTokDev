@@ -15,7 +15,7 @@
 | Phase 3 | Admin API (GraphQL CRUD, RBAC, кеш, пагинация) | ✅ Done |
 | Phase 4 | Commerce, Content, Forum | 🔄 В основном выполнено, есть долги |
 | Phase 4.5 | Вынос в `crates/flex` | 🔄 В процессе |
-| Phase 5 | Standalone mode | ⬜ Не начат |
+| Phase 5 | Standalone mode | 🔄 Начат (контракты в `crates/flex`) |
 | Phase 6 | Advanced features | ⬜ Не начат |
 
 ---
@@ -66,7 +66,9 @@
   - `apps/server` использует mapping из agnostic-модуля
 - [x] Перевести `user/product/order/topic` сервисы на новый crate API
   - Bootstrap/GraphQL используют прямой API `flex` без изменения GraphQL-контрактов
-- [ ] Убрать дублирование между `apps/server` и `crates/flex`
+- [x] Удалён legacy-дубликат `crates/rustok-flex`
+  - В workspace остаётся единый agnostic модуль `crates/flex`
+- [x] Убрать дублирование между `apps/server` и `crates/flex`
 - [x] Написать migration guide: `apps/server/docs/` + cross-link в `docs/index.md`
 
 ---
@@ -74,6 +76,14 @@
 ## Phase 5 — Standalone mode
 
 Произвольные схемы и записи без привязки к существующим сущностям.
+
+### Что уже начато
+
+- [x] Добавлены transport-agnostic standalone контракты в `crates/flex/src/standalone.rs`
+  - DTO для схем/записей (`FlexSchemaView`, `FlexEntryView`)
+  - Commands и trait-контракт `FlexStandaloneService` для будущих adapter-реализаций
+  - Базовые guardrail validators для create/update-команд (`validate_create_schema_command`, `validate_update_schema_command`, `validate_create_entry_command`, `validate_update_entry_command`)
+  - Orchestration helpers (`list/find/create/update/delete` для schemas и entries), чтобы adapters не дублировали routing/pre-validation
 
 ### Таблицы
 
@@ -111,11 +121,11 @@ CREATE INDEX idx_flex_entries_entity ON flex_entries (entity_type, entity_id);
 
 ### Checklist
 
-- [ ] Миграции для `flex_schemas`, `flex_entries`
-- [ ] SeaORM entities
-- [ ] Validation service (использует `CustomFieldsSchema` из core)
-- [ ] CRUD services
-- [ ] Events: `FlexSchemaCreated/Updated/Deleted`, `FlexEntryCreated/Updated/Deleted`
+- [x] Миграции для `flex_schemas`, `flex_entries` *(добавлена migration `m20260317_000001_create_flex_standalone_tables` в `apps/server/migration`)*
+- [x] SeaORM entities *(добавлены `flex_schemas` и `flex_entries` в `apps/server/src/models/_entities` + re-export в `models/`)*
+- [x] Validation service (использует `CustomFieldsSchema` из core) *(добавлен `apps/server/src/services/flex_standalone_validation_service.rs`, включая normalize/apply_defaults/strip_unknown/validate pipeline)*
+- [x] CRUD services *(добавлен SeaORM adapter `FlexStandaloneSeaOrmService` в `apps/server/src/services/flex_standalone_service.rs`, реализующий `flex::FlexStandaloneService` с tenant-scoped CRUD для schemas/entries)*
+- [~] Events: `FlexSchemaCreated/Updated/Deleted`, `FlexEntryCreated/Updated/Deleted` *(event contracts + schema registry добавлены в `rustok-events`; в `crates/flex` добавлены transport-agnostic envelope helper-ы и orchestration helper-ы `*_with_event()`, emission wiring в adapters pending)*
 - [ ] REST API: `/api/v1/flex/schemas`, `/api/v1/flex/schemas/:slug/entries`
 - [ ] GraphQL: `FlexSchema`, `FlexEntry`, queries/mutations
 - [ ] RBAC permissions: `flex.schemas.*`, `flex.entries.*` → добавить в `RusToKModule::permissions()`
@@ -128,12 +138,12 @@ CREATE INDEX idx_flex_entries_entity ON flex_entries (entity_type, entity_id);
 ### События standalone mode
 
 ```rust
-DomainEvent::FlexSchemaCreated { schema_id, slug }
-DomainEvent::FlexSchemaUpdated { schema_id, slug }
-DomainEvent::FlexSchemaDeleted { schema_id }
-DomainEvent::FlexEntryCreated { schema_id, entry_id, entity_type, entity_id }
-DomainEvent::FlexEntryUpdated { schema_id, entry_id }
-DomainEvent::FlexEntryDeleted { schema_id, entry_id }
+DomainEvent::FlexSchemaCreated { tenant_id, schema_id, slug }
+DomainEvent::FlexSchemaUpdated { tenant_id, schema_id, slug }
+DomainEvent::FlexSchemaDeleted { tenant_id, schema_id }
+DomainEvent::FlexEntryCreated { tenant_id, schema_id, entry_id, entity_type, entity_id }
+DomainEvent::FlexEntryUpdated { tenant_id, schema_id, entry_id }
+DomainEvent::FlexEntryDeleted { tenant_id, schema_id, entry_id }
 ```
 
 ### Read model (indexer)

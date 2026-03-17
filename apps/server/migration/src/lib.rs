@@ -18,6 +18,13 @@ mod m20260211_000001_add_event_versioning;
 mod m20260211_000002_create_sys_events;
 mod m20260315_000001_create_user_field_definitions;
 mod m20260316_000001_create_platform_settings;
+mod m20260316_000002_create_product_field_definitions;
+mod m20260316_000003_create_node_field_definitions;
+mod m20260316_000004_create_topic_field_definitions;
+mod m20260316_000005_create_order_field_definitions;
+mod m20260316_000006_create_workflows;
+mod m20260316_000007_alter_workflows_add_failure_tracking;
+mod m20260317_000001_create_flex_standalone_tables;
 
 pub struct Migrator;
 
@@ -39,6 +46,13 @@ impl MigratorTrait for Migrator {
             Box::new(m20260211_000002_create_sys_events::Migration),
             Box::new(m20260315_000001_create_user_field_definitions::Migration),
             Box::new(m20260316_000001_create_platform_settings::Migration),
+            Box::new(m20260316_000002_create_product_field_definitions::Migration),
+            Box::new(m20260316_000003_create_node_field_definitions::Migration),
+            Box::new(m20260316_000004_create_topic_field_definitions::Migration),
+            Box::new(m20260316_000005_create_order_field_definitions::Migration),
+            Box::new(m20260316_000006_create_workflows::Migration),
+            Box::new(m20260316_000007_alter_workflows_add_failure_tracking::Migration),
+            Box::new(m20260317_000001_create_flex_standalone_tables::Migration),
         ];
 
         // Module-owned migrations — each module crate manages its own schema.
