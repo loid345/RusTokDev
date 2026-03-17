@@ -183,26 +183,53 @@ CREATE INDEX idx_flex_entries_tenant_schema ON flex_entries (tenant_id, schema_i
 
 | Guardrail | Значение | Статус |
 |-----------|----------|--------|
-| Max fields per schema | 50 | ⬜ TODO |
-| Max nesting depth | 2 | ⬜ TODO |
-| Max relation depth | 1 (no recursive populate) | ⬜ TODO |
-| Mandatory pagination | Да | ⬜ TODO |
-| Validation on write | Строгая по schema | ⬜ TODO |
+| Max fields per schema | 50 | ⬜ TODO (service-layer) |
+| Max nesting depth (FieldType::Json) | 2 | ✅ реализовано в `rustok-core` |
+| Max relation depth | 1 (no recursive populate) | ⬜ TODO (Phase 5 standalone) |
+| Mandatory pagination | Да | ⬜ TODO (GraphQL layer) |
+| Validation on write | Строгая по schema | ✅ реализовано (`CustomFieldsSchema::validate`) |
 | Timeout for operations | 5s | ⬜ TODO |
 
-### 6.1 Validation Contract
+### 6.1 Метод счёта глубины JSON — Variant A
+
+Реализован в `rustok-core/src/field_schema.rs`: функция `json_object_depth()`, константа `MAX_JSON_NESTING_DEPTH = 2`.
+
+**Правило:** считаются только объекты `{…}`. Массивы `[…]` прозрачны и не создают уровень.
+
+```
+{"items": [{"id": 1}]}  →  depth 2  ✅  (массив прозрачен)
+{"a": {"b": {"c": 1}}}  →  depth 3  ❌
+```
+
+Ошибка: `FieldErrorCode::NestingTooDeep` — содержит текущую глубину и лимит.
+
+**Почему Variant A выбран вместо Variant B** (массивы тоже считают):
+Паттерн `{"items": [{"id":1}]}` — стандартный для списков в любой CMS. При Variant B он давал бы depth=3 и блокировался бы, что неудобно без реальной пользы для безопасности. Variant A при лимите 2 запрещает именно тройную вложенность объектов.
+
+### 6.2 Max relation depth = 1 (Phase 5, standalone mode)
+
+Это отдельное ограничение для standalone Flex-модуля (не для attached mode Phase 2–4). Означает:
+- FlexEntry A может ссылаться на другую сущность (User, Product) — `depth 1` ✅
+- FlexEntry A → FlexEntry B → FlexEntry C — рекурсивный populate запрещён ❌
+
+Цель: предотвратить N+1 при populate и циклические ссылки. Не реализовано — ждёт Phase 5.
+
+### 6.3 Validation Contract
 
 ```rust
+// Текущий контракт (attached mode, Phase 2–4):
+let errors = schema.validate(&metadata_json);
+// validate() проверяет: required, типы, constraints, nesting depth для Json
+
+// Будущий контракт (standalone mode, Phase 5):
 pub fn validate_entry(schema: &FlexSchema, data: &serde_json::Value) -> Result<(), ValidationError> {
     // 1. Проверить required fields
     // 2. Проверить типы
     // 3. Проверить constraints (max_length, min, max_items)
     // 4. НЕ допускать лишних полей
+    // 5. Проверить relation depth <= 1
 }
 ```
-
-- ⬜ TODO: Реализовать валидацию
-- ⬜ TODO: Тесты на все edge-cases
 
 ---
 

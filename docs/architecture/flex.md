@@ -781,17 +781,39 @@ FieldDefinition* => {
 
 ## 10. Guardrails
 
-| Guardrail | Значение | Где проверяется |
-|-----------|----------|-----------------|
-| Max fields per entity type per tenant | **50** | `create_definition()` — count before insert |
-| Max nesting depth (JSON in metadata) | **2** | `validate_field_value()` для FieldType::Json |
-| Validation on write | **Строгая** | `CustomFieldsSchema::validate()` |
-| Mandatory pagination | **Да** | GraphQL: использовать `PaginationInput` из `graphql/common.rs` |
-| Timeout for JSONB operations | **5s** | Database query timeout |
-| field_key format | **snake_case** | Regex: `^[a-z][a-z0-9_]{0,127}$` |
-| Locale keys in label | **BCP 47** | Validate keys match `^[a-z]{2}(-[A-Z]{2})?$` |
+| Guardrail | Значение | Статус | Где проверяется |
+|-----------|----------|--------|-----------------|
+| Max fields per entity type per tenant | **50** | ⬜ TODO | `create_definition()` — count before insert |
+| Max nesting depth (JSON in metadata) | **2** | ✅ реализовано | `validate_field_value()` для FieldType::Json |
+| Validation on write | **Строгая** | ✅ реализовано | `CustomFieldsSchema::validate()` |
+| Mandatory pagination | **Да** | ⬜ TODO | GraphQL: использовать `PaginationInput` из `graphql/common.rs` |
+| Timeout for JSONB operations | **5s** | ⬜ TODO | Database query timeout |
+| field_key format | **snake_case** | ✅ реализовано | `is_valid_field_key()` — `^[a-z][a-z0-9_]{0,127}$` |
+| Locale keys in label | **BCP 47** | ✅ реализовано | `is_valid_locale_key()` — `^[a-z]{2}(-[A-Z]{2})?$` |
 
-### 10.1 Реализация в коде
+### 10.1 Метод счёта глубины JSON — Variant A (массивы прозрачны)
+
+Глубина считается только по уровням JSON-объектов `{…}`. Массивы `[…]` прозрачны и **не прибавляют уровень**.
+
+| Значение | Object-depth | Разрешено? |
+|----------|-------------|-----------|
+| `42`, `"hello"`, `true`, `null` | 0 | ✅ |
+| `[1, 2, 3]` | 0 | ✅ |
+| `{"key": "value"}` | 1 | ✅ |
+| `{"items": [1, 2, 3]}` | 1 | ✅ |
+| `{"address": {"city": "NY"}}` | 2 | ✅ (граница) |
+| `{"items": [{"id": 1, "name": "x"}]}` | 2 | ✅ (массив прозрачен) |
+| `{"a": {"b": {"c": 1}}}` | 3 | ❌ |
+| `{"a": {"b": [{"c": 1}]}}` | 3 | ❌ |
+
+**Почему Variant A, а не Variant B** (где массивы тоже считаются):
+- Паттерн `{"items": [{"id": 1}]}` встречается во всех CMS постоянно
+- При Variant B он попадал бы на depth=3 и требовал бы поднять лимит до 3, что даёт меньше защиты
+- Variant A при лимите 2 запрещает именно то, что нужно: три уровня вложенных объектов
+
+**Реализация:** `json_object_depth()` + `MAX_JSON_NESTING_DEPTH` в `rustok-core/src/field_schema.rs`.
+
+### 10.2 Реализация в коде
 
 ```rust
 // В CustomFieldDefinitionService::create():
