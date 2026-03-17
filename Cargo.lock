@@ -9619,6 +9619,7 @@ dependencies = [
  "rustok-core",
  "rustok-events",
  "rustok-outbox",
+ "rustok-telemetry",
  "rustok-test-utils",
  "sea-orm",
  "sea-orm-migration",
