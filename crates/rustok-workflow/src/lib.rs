@@ -26,11 +26,13 @@ use sea_orm_migration::MigrationTrait;
 pub mod dto;
 pub mod entities;
 pub mod error;
+pub mod migration;
 pub mod services;
 pub mod steps;
 
 pub use dto::*;
 pub use error::{WorkflowError, WorkflowResult};
+pub use migration::WorkflowsMigration;
 pub use services::{WorkflowCronScheduler, WorkflowEngine, WorkflowService, WorkflowTriggerHandler};
 pub use steps::{AlloyScriptStep, NotifyStep, ScriptRunner, NotificationSender};
 
@@ -75,7 +77,7 @@ impl RusToKModule for WorkflowModule {
 
 impl MigrationSource for WorkflowModule {
     fn migrations(&self) -> Vec<Box<dyn MigrationTrait>> {
-        Vec::new()
+        vec![Box::new(WorkflowsMigration)]
     }
 }
 
