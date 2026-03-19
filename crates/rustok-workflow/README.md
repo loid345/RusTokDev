@@ -1,64 +1,28 @@
 # rustok-workflow
 
-Visual workflow automation module for the RusToK platform.
-
 ## Purpose
 
-`rustok-workflow` provides an n8n/Directus Flows-style orchestrator that integrates with
-the platform's event infrastructure. It allows tenants to define automated workflows
-triggered by domain events, schedules, webhooks, or manual actions.
+`rustok-workflow` owns workflow automation and execution history for RusToK.
 
 ## Responsibilities
 
-- Define and store workflows and their step chains.
-- Execute workflow step chains in response to triggers.
-- Persist execution history and per-step logs.
-- Integrate with `alloy-scripting` for arbitrary Rhai script steps.
-- Provide CRUD API and admin UI for workflow management.
+- Provide `WorkflowModule` metadata for the runtime registry.
+- Own workflow CRUD, execution engine, schedules, webhooks, and execution history.
+- Publish the typed `workflows:*` and `workflow_executions:*` RBAC surface.
 
 ## Interactions
 
-| Depends on | Purpose |
-|-----------|---------|
-| `rustok-core` | `RusToKModule`, RBAC permissions, `EventBus`, `EventTransport` |
-| `rustok-events` | `DomainEvent`, `EventEnvelope` contracts |
-| `rustok-outbox` | Transactional event publishing inside step execution |
+- Depends on `alloy` for script-backed workflow steps.
+- Depends on `rustok-core` for module contracts, permissions, and shared runtime types.
+- Used directly by `apps/server` workflow GraphQL, REST, and background runtime wiring.
+- Declares permissions via `rustok-core::Permission`.
+- `apps/server` enforces workflow permissions through `RbacService` or RBAC extractors before
+  invoking workflow services.
 
 ## Entry points
 
-- `WorkflowModule` — registers migrations, slug `workflow`, RBAC permissions.
-- `WorkflowService` — CRUD for workflows and steps.
-- `WorkflowEngine` — executes a workflow step chain, writes execution logs.
-- `WorkflowTriggerHandler` — subscribes to `DomainEvent`s and dispatches matching workflows.
-- `WorkflowCronScheduler` — polls cron-triggered workflows on a tick.
-- `BUILTIN_TEMPLATES` — built-in marketplace templates.
-
-## Step types
-
-| Step | Description |
-|------|-------------|
-| `action` | Calls a platform service action |
-| `emit_event` | Publishes a `DomainEvent` back to the outbox |
-| `condition` | Branches on a JSON pointer equality check |
-| `delay` | Deferred execution via scheduled event |
-| `http` | Outbound HTTP request (webhook) |
-| `alloy_script` | Runs a Rhai script via `alloy-scripting` engine |
-| `notify` | Sends a notification (email / Slack / Telegram) |
-
-## Trigger types
-
-`event` · `cron` · `webhook` · `manual`
-
-## Admin UI
-
-Next.js UI package: `crates/rustok-workflow/ui/admin`
-
-Provides: workflows list, workflow form with step editor, execution history, template gallery,
-version history, and manual trigger button.
-
-## Documentation
-
-- [Module docs](./docs/README.md)
-- [Implementation plan](./docs/implementation-plan.md)
-- [Architecture](../../docs/architecture/workflow.md)
-- [CRATE_API](./CRATE_API.md)
+- `WorkflowModule`
+- `WorkflowService`
+- `WorkflowEngine`
+- `WorkflowCronScheduler`
+- `WorkflowTriggerHandler`

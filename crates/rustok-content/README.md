@@ -1,45 +1,31 @@
 # rustok-content
 
-## Назначение
-`rustok-content` — модуль контента (CMS): страницы, посты, категории, теги и тела материалов.
+## Purpose
 
-## Что делает
-- Хранит контентные сущности (nodes/bodies/categories/tags).
-- Публикует события о создании/обновлении/публикации контента.
-- Дает сервисы для CRUD и бизнес-правил контента.
+`rustok-content` owns the core CMS domain for RusToK: nodes, posts, media, comments,
+categories, and tags.
 
-## Как работает (простыми словами)
-1. API вызывает сервис контента.
-2. Сервис сохраняет данные в БД.
-3. После записи публикуется событие для индексации или других модулей.
+## Responsibilities
 
-## Ключевые компоненты
-- `entities/` — SeaORM модели таблиц контента.
-- `services/` — бизнес-логика (CRUD + события).
-- `dto/` — входные/выходные структуры.
+- Provide `ContentModule` metadata for the runtime registry.
+- Own content entities, services, orchestration, and migrations.
+- Publish the typed RBAC surface for content resources such as `nodes:*`, `posts:*`,
+  `media:*`, `comments:*`, `categories:*`, and `tags:*`.
 
-## Кому нужен
-Всем, кто работает с контентом: админка, фронтенд, поисковые индексы.
+## Interactions
 
+- Depends on `rustok-core` for permissions, events, and `SecurityContext`.
+- Used directly by `apps/server` content REST and GraphQL adapters.
+- Used as a storage/orchestration dependency by `rustok-blog`, `rustok-forum`, and `rustok-pages`.
+- Declares permissions via `rustok-core::Permission`.
+- `apps/server` enforces those permissions through `RbacService` or RBAC extractors, then passes
+  a permission-aware `SecurityContext` into content services.
 
-## Взаимодействие
-- crates/rustok-core
-- crates/rustok-index
-- crates/rustok-tenant
+## Entry points
 
-## Документация
-- Локальная документация: `./docs/`
-- Общая документация платформы: `/docs`
-
-## Паспорт компонента
-- **Роль в системе:** CMS-модуль контента: nodes, bodies, таксономии, публикация и локали.
-- **Основные данные/ответственность:** бизнес-логика и API данного компонента; структура кода и документации в корне компонента.
-- **Взаимодействует с:**
-  - crates/rustok-core
-  - crates/rustok-index
-  - crates/rustok-tenant
-- **Точки входа:**
-  - `crates/rustok-content/src/lib.rs`
-- **Локальная документация:** `./docs/`
-- **Глобальная документация платформы:** `/docs/`
-
+- `ContentModule`
+- `NodeService`
+- `ContentOrchestrationService`
+- `CategoryService`
+- `TagService`
+- content DTO and entity re-exports

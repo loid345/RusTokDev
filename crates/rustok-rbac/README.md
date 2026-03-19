@@ -1,26 +1,31 @@
 # rustok-rbac
 
-Role and permission helpers for RusToK.
+## Purpose
 
+`rustok-rbac` owns the Casbin-backed authorization runtime for RusToK.
 
-## Взаимодействие
-- crates/rustok-core
-- apps/server
-- доменные модули требующие ACL
+## Responsibilities
 
-## Документация
-- Локальная документация: `./docs/`
-- Общая документация платформы: `/docs`
+- Provide `RbacModule` metadata for the runtime registry.
+- Resolve effective permissions from relation data.
+- Evaluate permission checks through the single live Casbin engine.
+- Publish the typed `settings:*` and `logs:*` platform-admin surface used by server adapters.
 
-## Паспорт компонента
-- **Роль в системе:** Модуль ролей и прав доступа (ACL/RBAC) для всех доменов.
-- **Основные данные/ответственность:** бизнес-логика и API данного компонента; структура кода и документации в корне компонента.
-- **Взаимодействует с:**
-  - crates/rustok-core
-  - apps/server
-  - доменные модули с проверкой прав
-- **Точки входа:**
-  - `crates/rustok-rbac/src/lib.rs`
-- **Локальная документация:** `./docs/`
-- **Глобальная документация платформы:** `/docs/`
+## Interactions
 
+- Depends on `rustok-core` for permission vocabulary and module contracts.
+- Used by `apps/server` through `RbacService`, RBAC extractors, and permission-aware
+  `SecurityContext` creation.
+- Other runtime modules do not need a direct dependency on `rustok-rbac`; they publish typed
+  permissions via `rustok-core`, and server transport layers enforce them through this module.
+- Manual role-based authorization in `apps/server` is not part of the live contract.
+
+## Entry points
+
+- `RbacModule`
+- `RuntimePermissionResolver`
+- `PermissionResolver`
+- `authorize_permission`
+- `authorize_any_permission`
+- `authorize_all_permissions`
+- `has_effective_permission_in_set`

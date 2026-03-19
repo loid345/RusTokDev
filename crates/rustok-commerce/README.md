@@ -1,45 +1,29 @@
 # rustok-commerce
 
-## Назначение
-`rustok-commerce` — модуль e-commerce: товары, варианты, цены, заказы и склад.
+## Purpose
 
-## Что делает
-- Управляет каталогом товаров и их вариантами.
-- Обрабатывает заказы и изменения статусов.
-- Публикует события для аналитики и индексации.
+`rustok-commerce` owns the commerce domain for RusToK: catalog, pricing, orders, customers,
+inventory, and discounts.
 
-## Как работает (простыми словами)
-1. Клиент оформляет заказ или изменяет товар.
-2. Сервис сохраняет изменения в БД.
-3. Генерируется событие для витрины, поиска и интеграций.
+## Responsibilities
 
-## Ключевые компоненты
-- `entities/` — модели SeaORM.
-- `services/` — бизнес-логика заказов и каталога.
-- `dto/` — структуры запросов/ответов.
+- Provide `CommerceModule` metadata for the runtime registry.
+- Own commerce services, entities, and migrations.
+- Publish the typed RBAC surface for commerce resources.
 
-## Кому нужен
-Магазин, витрина, аналитика, интеграции и фоновая обработка заказов.
+## Interactions
 
+- Depends on `rustok-core` for module contracts and permission vocabulary.
+- Used directly by `apps/server` commerce REST and GraphQL adapters.
+- Declares permissions via `rustok-core::Permission` for `products`, `orders`, `customers`,
+  `inventory`, and `discounts`.
+- `apps/server` enforces those permissions through `RbacService` and RBAC extractors before
+  invoking commerce services.
 
-## Взаимодействие
-- crates/rustok-core
-- crates/rustok-index
-- crates/rustok-tenant
+## Entry points
 
-## Документация
-- Локальная документация: `./docs/`
-- Общая документация платформы: `/docs`
-
-## Паспорт компонента
-- **Роль в системе:** Доменный модуль commerce: каталог, цены, остатки, заказы и checkout.
-- **Основные данные/ответственность:** бизнес-логика и API данного компонента; структура кода и документации в корне компонента.
-- **Взаимодействует с:**
-  - crates/rustok-core
-  - crates/rustok-index
-  - crates/rustok-tenant
-- **Точки входа:**
-  - `crates/rustok-commerce/src/lib.rs`
-- **Локальная документация:** `./docs/`
-- **Глобальная документация платформы:** `/docs/`
-
+- `CommerceModule`
+- `CatalogService`
+- `PricingService`
+- `InventoryService`
+- commerce DTO and state-machine re-exports

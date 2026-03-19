@@ -1,50 +1,28 @@
 # rustok-index
 
-## Назначение
-`rustok-index` — модуль CQRS/read-model. Делает быстрые индексы для поиска и витрины.
+## Purpose
 
-## Что делает
-- Слушает события домена.
-- Обновляет денормализованные таблицы индекса.
-- Готовит данные для быстрого чтения.
+`rustok-index` owns read-model and indexing contracts for RusToK.
 
-## Как работает (простыми словами)
-1. Модуль получает событие (например, `ProductUpdated`).
-2. Из основной БД собирается нужная информация.
-3. Записывается в индексные таблицы для быстрого поиска.
+## Responsibilities
 
-## Ключевые компоненты
-- `handlers/` — обработчики событий.
-- `services/` — пересборка и обновление индексов.
+- Provide `IndexModule` metadata for the runtime registry.
+- Define indexer traits and indexing runtime contracts.
+- Own index migrations and index rebuild helpers.
 
-## События, которые триггерят пересборку
-- `ProductCreated`, `ProductUpdated`, `ProductPublished`, `ProductDeleted`.
-- `VariantCreated`, `VariantUpdated`, `VariantDeleted`.
-- `InventoryUpdated`, `PriceUpdated` (ожидается `product_id` в payload для быстрого реиндекса).
-- `ReindexRequested` (массовая пересборка или точечный реиндекс).
+## Interactions
 
-## Кому нужен
-Поиску, витрине, любым read-heavy запросам.
+- Depends on `rustok-core` for module contracts.
+- Consumes domain events published by content, commerce, blog, forum, pages, and workflow paths.
+- Used by `apps/server` runtime wiring for index rebuild and search-related integrations.
+- Does not publish its own RBAC surface.
+- Admin access to indexing operations is enforced by `apps/server` through the permissions
+  of the domain being managed, not through direct role checks inside the module.
 
+## Entry points
 
-## Взаимодействие
-- crates/rustok-core events
-- crates/rustok-content
-- crates/rustok-commerce
-
-## Документация
-- Локальная документация: `./docs/`
-- Общая документация платформы: `/docs`
-
-## Паспорт компонента
-- **Роль в системе:** CQRS/read-модель и индексаторы для быстрых витринных и поисковых запросов.
-- **Основные данные/ответственность:** бизнес-логика и API данного компонента; структура кода и документации в корне компонента.
-- **Взаимодействует с:**
-  - crates/rustok-core (events)
-  - crates/rustok-content
-  - crates/rustok-commerce
-- **Точки входа:**
-  - `crates/rustok-index/src/lib.rs`
-- **Локальная документация:** `./docs/`
-- **Глобальная документация платформы:** `/docs/`
-
+- `IndexModule`
+- `Indexer`
+- `LocaleIndexer`
+- `IndexerContext`
+- `IndexerRuntimeConfig`

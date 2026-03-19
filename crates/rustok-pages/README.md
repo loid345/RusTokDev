@@ -1,41 +1,27 @@
 # rustok-pages
 
-Pages and menus domain logic for RusToK.
+## Purpose
 
-## Назначение
-`rustok-pages` — модуль для управления статическими страницами, блоками и меню в CMS-части RusToK.
+`rustok-pages` owns static pages, blocks, and menus for RusToK.
 
-## Что делает
-- Управляет страницами, блоками и меню.
-- Использует `rustok-content` как слой хранения.
-- Публикует события изменений через `TransactionalEventBus`.
+## Responsibilities
 
-## Как работает (простыми словами)
-1. API обращается к сервисам страниц/блоков/меню.
-2. Сервисы сохраняют данные через `NodeService`.
-3. События отправляются через `TransactionalEventBus` из `rustok-outbox` для надёжной доставки.
+- Provide `PagesModule` metadata for the runtime registry.
+- Own page, block, and menu services layered on top of content storage.
+- Publish the typed RBAC surface for `pages:*` and the node-based block helpers it needs.
 
+## Interactions
 
-## Взаимодействие
-- crates/rustok-core
-- crates/rustok-content
-- crates/rustok-outbox (TransactionalEventBus)
-- crates/rustok-index
+- Depends on `rustok-content` for shared node storage and content helpers.
+- Depends on `rustok-core` for module contracts, permissions, and `SecurityContext`.
+- Used directly by `apps/server` pages GraphQL and REST adapters.
+- Declares permissions via `rustok-core::Permission`.
+- `apps/server` enforces page permissions through `RbacService` or RBAC extractors, then passes
+  a permission-aware `SecurityContext` into page services.
 
-## Документация
-- Локальная документация: `./docs/`
-- Общая документация платформы: `/docs`
+## Entry points
 
-## Паспорт компонента
-- **Роль в системе:** Доменный модуль страниц и меню для CMS-части RusToK.
-- **Основные данные/ответственность:** бизнес-логика и API данного компонента; структура кода и документации в корне компонента.
-- **Взаимодействует с:**
-  - crates/rustok-core
-  - crates/rustok-content
-  - crates/rustok-outbox (TransactionalEventBus)
-  - crates/rustok-index
-- **Точки входа:**
-  - `crates/rustok-pages/src/lib.rs`
-- **Локальная документация:** `./docs/`
-- **Глобальная документация платформы:** `/docs/`
-
+- `PagesModule`
+- `PageService`
+- `BlockService`
+- `MenuService`

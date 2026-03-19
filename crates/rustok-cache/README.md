@@ -1,58 +1,26 @@
 # rustok-cache
 
-Crate для управления кешированием в RusToK.
-Выделен из `rustok-core` для разделения ответственности между инфраструктурным ядром и lifecycle Redis/Moka соединений.
+## Purpose
 
-## Назначение
+`rustok-cache` centralizes cache backend lifecycle for RusToK, including Redis-backed and
+in-memory cache implementations.
 
-Предоставляет:
+## Responsibilities
 
-- **`CacheModule`** — `RusToKModule`-реализация, регистрирующая backend в `ModuleRegistry`.
-- **`CacheService`** — высокоуровневый сервис get/set/del/invalidate с поддержкой namespace и TTL.
-- **`CacheBackendFactory`** — создание backend из конфигурации (`moka`, `redis`, `fallback`).
+- Provide `CacheModule` metadata for the runtime registry.
+- Own `CacheService` and backend selection logic.
+- Expose cache health information to server runtime wiring.
 
-## Как работает
+## Interactions
 
-`CacheBackend` абстрагирует три режима:
+- Depends on `rustok-core` for module contracts.
+- Used by `apps/server` to build cache backends for tenant, RBAC, and other runtime caches.
+- Does not publish its own RBAC surface.
+- Access to cache-backed admin operations is enforced by `apps/server` through permissions
+  declared by the owning domain modules.
 
-```
-Moka (in-process)
-  └─ circuit breaker, anti-stampede coalescing, negative cache
+## Entry points
 
-Redis (distributed)
-  └─ pub/sub invalidation между инстансами
-  └─ connection-manager с авто-переподключением
-
-FallbackCacheBackend
-  └─ Redis → Moka (при недоступности Redis деградирует gracefully)
-  └─ метрики hit/miss, ошибок, degradation
-```
-
-Все три варианта реализуют `CacheBackend` из `rustok-core`.
-
-## Зона ответственности
-
-- Lifecycle Redis-соединения (pool, reconnect, health check).
-- Конфигурирование и создание `CacheBackend` по settings.
-- Регистрация как `ModuleKind::Core` в `ModuleRegistry`.
-- Метрики: cache hit/miss, degradation, error rate.
-
-## Взаимодействие
-
-| Компонент | Связь |
-|-----------|-------|
-| `rustok-core` | Зависит от: предоставляет `CacheBackend` trait и `ModuleRegistry` |
-| `apps/server` | Регистрирует `CacheModule` при старте |
-| `rustok-tenant` | Использует `CacheService` для кэширования tenant-resolver |
-| `rustok-rbac` | Использует `CacheService` для кэширования RBAC-матрицы |
-
-## Точки входа
-
-- `src/lib.rs` — публичный API: `CacheModule`, `CacheService`, `CacheBackendFactory`
-- `src/backends/` — реализации `moka.rs`, `redis.rs`, `fallback.rs`
-- `src/module.rs` — `impl RusToKModule for CacheModule`
-
-## Документация
-
-- [Детальная документация](./docs/README.md)
-- [Глобальный docs/index.md](../../docs/index.md)
+- `CacheModule`
+- `CacheService`
+- `CacheHealthReport`
