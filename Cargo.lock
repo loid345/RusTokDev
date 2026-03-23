@@ -9606,11 +9606,16 @@ dependencies = [
  "leptos_router",
  "log",
  "reqwest 0.13.2",
+ "rustok-blog-admin",
+ "rustok-pages-admin",
+ "rustok-workflow-admin",
  "serde",
  "serde_json",
  "serde_urlencoded",
  "thiserror 2.0.18",
+ "toml 1.0.7+spec-1.1.0",
  "uuid",
+ "wasm-bindgen",
  "web-sys",
 ]
 
@@ -9697,6 +9702,30 @@ dependencies = [
  "tracing",
  "utoipa",
  "uuid",
+]
+
+[[package]]
+name = "rustok-blog-admin"
+version = "0.1.0"
+dependencies = [
+ "leptos 0.8.17",
+ "leptos-auth",
+ "leptos-graphql",
+ "leptos-ui",
+ "leptos_router",
+ "rustok-blog",
+ "rustok-core",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "rustok-blog-storefront"
+version = "0.1.0"
+dependencies = [
+ "leptos 0.8.17",
+ "rustok-blog",
+ "rustok-core",
 ]
 
 [[package]]
@@ -10005,6 +10034,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustok-pages-admin"
+version = "0.1.0"
+dependencies = [
+ "leptos 0.8.17",
+ "leptos-auth",
+ "leptos-graphql",
+ "serde",
+]
+
+[[package]]
+name = "rustok-pages-storefront"
+version = "0.1.0"
+dependencies = [
+ "leptos 0.8.17",
+ "leptos-graphql",
+ "serde",
+]
+
+[[package]]
 name = "rustok-rbac"
 version = "0.1.0"
 dependencies = [
@@ -10118,6 +10166,7 @@ name = "rustok-storefront"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "futures",
  "leptos 0.8.17",
  "leptos-auth",
  "leptos-graphql",
@@ -10133,8 +10182,11 @@ dependencies = [
  "leptos_i18n_build",
  "leptos_query",
  "leptos_router",
+ "rustok-blog-storefront",
+ "rustok-pages-storefront",
  "serde",
  "tokio",
+ "toml 1.0.7+spec-1.1.0",
 ]
 
 [[package]]
@@ -10217,6 +10269,19 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "rustok-workflow-admin"
+version = "0.1.0"
+dependencies = [
+ "leptos 0.8.17",
+ "leptos-auth",
+ "leptos-graphql",
+ "leptos_router",
+ "serde",
+ "serde_json",
+ "web-sys",
 ]
 
 [[package]]

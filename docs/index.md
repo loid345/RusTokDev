@@ -109,6 +109,7 @@ graph TD
 - [Реестр](./modules/registry.md)
 - [Реестр crate-ов RusToK](./modules/crates-registry.md)
 - [Манифест](./modules/manifest.md)
+- [План развития модульной платформы](./modules/module-system-plan.md) — актуальный roadmap по marketplace, install/uninstall, build/release, real frontend artifacts и UI codegen.
 - [Plan внедрения rich-text (Tiptap) и GrapesJS Page Builder](./modules/tiptap-page-builder-implementation-plan.md)
 - [Индекс модульной документации](./modules/_index.md)
 
@@ -130,7 +131,7 @@ graph TD
 ### AI (`docs/ai/`)
 
 - [Шаблон сессии](./ai/SESSION_TEMPLATE.md)
-- [Известные подводные камни](./ai/KNOWN_PITFALL.md)
+- [Известные подводные камни](./ai/KNOWN_PITFALLS.md)
 
 ### Alloy (`docs/`)
 
@@ -163,11 +164,11 @@ graph TD
   - `docs/README.md`
   - `docs/implementation-plan.md`
 
-- [Документация Server](../apps/server/docs/README.md) (включает обязательный/критичный базовый набор core-модулей для агентов (6 модулей), матрицу возможностей Loco, доставку писем для сброса пароля в auth, заметки по поведению dev seed и схему публикации событий build-request).
+- [Документация Server](../apps/server/docs/README.md) (включает обязательный/критичный базовый набор core-модулей для агентов (6 модулей), матрицу возможностей Loco, доставку писем для сброса пароля в auth, заметки по поведению dev seed, схему публикации событий build-request, текущий server-side `build.rs` composition-root contract для optional-модулей, explicit server entry points и manifest-derived build/release pipeline для `server`/`admin`/`storefront`).
 - [План реализации Server](../apps/server/docs/implementation-plan.md)
 - [Migration guide Flex Phase 4.5 (Server)](../apps/server/docs/flex-phase45-migration-guide.md)
 - [Реестр Loco governance](../apps/server/docs/LOCO_FEATURE_SUPPORT.md#governance-register) — входная точка для архитектурных решений по возможностям Loco в server runtime.
-- [Документация Leptos Admin](../apps/admin/docs/README.md)
+- [Документация Leptos Admin](../apps/admin/docs/README.md) — текущий Leptos-host contract, включая manifest-driven dashboard/nav/page wiring и generic route `/modules/:module_slug` для module-owned admin UI (`blog`, `workflow`, `pages` уже подключаются этим путём).
 - [План реализации Leptos Admin](../apps/admin/docs/implementation-plan.md)
 - [README Next.js Admin](../apps/next-admin/README.md) — экспериментальная headless-альтернатива, ручная сборка
 - [Документация Next.js Admin](../apps/next-admin/docs/README.md)
@@ -176,7 +177,7 @@ graph TD
 - [Настройка Clerk для Next.js Admin](../apps/next-admin/docs/clerk_setup.md)
 - [Темы Next.js Admin](../apps/next-admin/docs/themes.md)
 - [README Leptos Storefront](../apps/storefront/README.md)
-- [Документация Leptos Storefront](../apps/storefront/docs/README.md)
+- [Документация Leptos Storefront](../apps/storefront/docs/README.md) — текущий Leptos-host contract, включая manifest-driven multi-slot wiring и generic route `/modules/:route_segment` для module-owned storefront UI.
 - [План реализации Leptos Storefront](../apps/storefront/docs/implementation-plan.md)
 - [Документация Next.js Storefront](../apps/next-frontend/docs/README.md) — экспериментальный headless, ручная сборка
 - [План реализации Next.js Storefront](../apps/next-frontend/docs/implementation-plan.md)
@@ -204,6 +205,7 @@ graph TD
 - [План реализации модуля Commerce](../crates/rustok-commerce/docs/implementation-plan.md)
 - [Документация модуля Blog](../crates/rustok-blog/docs/README.md)
 - [Пакет админского UI для Blog](../crates/rustok-blog/admin/README.md)
+- [Пакет storefront UI для Blog](../crates/rustok-blog/storefront/README.md)
 - [План реализации модуля Blog](../crates/rustok-blog/docs/implementation-plan.md)
 - [Документация модуля Forum](../crates/rustok-forum/docs/README.md)
 - [План реализации модуля Forum](../crates/rustok-forum/docs/implementation-plan.md)
@@ -230,6 +232,7 @@ graph TD
 - [Документация модуля Outbox](../crates/rustok-outbox/docs/README.md)
 - [План реализации модуля Outbox](../crates/rustok-outbox/docs/implementation-plan.md)
 - [Документация модуля Workflow](../crates/rustok-workflow/docs/README.md) — включая модульные GraphQL/REST адаптеры и webhook ingress
+- [Пакет админского UI для Workflow](../crates/rustok-workflow/admin/README.md)
 - [План реализации модуля Workflow](../crates/rustok-workflow/docs/implementation-plan.md)
 - [Документация Telemetry](../crates/rustok-telemetry/docs/README.md)
 - [План реализации Telemetry](../crates/rustok-telemetry/docs/implementation-plan.md)

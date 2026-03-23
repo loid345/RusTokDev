@@ -7,8 +7,8 @@ use rustok_content::{
     ListNodesFilter, NodeService, NodeTranslationInput, UpdateNodeInput,
 };
 use rustok_core::{
-    normalize_content_format, prepare_content_payload, SecurityContext,
-    CONTENT_FORMAT_GRAPESJS_V1, CONTENT_FORMAT_RT_JSON_V1,
+    normalize_content_format, prepare_content_payload, SecurityContext, CONTENT_FORMAT_GRAPESJS_V1,
+    CONTENT_FORMAT_RT_JSON_V1,
 };
 use rustok_outbox::TransactionalEventBus;
 
@@ -52,9 +52,9 @@ impl PageService {
                 && body.content_json.is_none()
                 && body.content.trim().is_empty()
             {
-                return Err(PagesError::validation(
-                    format!("content_json is required for {format} format"),
-                ));
+                return Err(PagesError::validation(format!(
+                    "content_json is required for {format} format"
+                )));
             }
             let markdown_source = if body.content.trim().is_empty() {
                 None
@@ -290,9 +290,9 @@ impl PageService {
                 && body.content_json.is_none()
                 && body.content.trim().is_empty()
             {
-                return Err(PagesError::validation(
-                    format!("content_json is required for {format} format"),
-                ));
+                return Err(PagesError::validation(format!(
+                    "content_json is required for {format} format"
+                )));
             }
             let markdown_source = if body.content.trim().is_empty() {
                 None
@@ -568,11 +568,12 @@ fn page_translation_response(
 fn page_body_response(body: &rustok_content::dto::BodyResponse) -> PageBodyResponse {
     let content = body.body.clone().unwrap_or_default();
     let format = body.format.clone();
-    let content_json = if format == CONTENT_FORMAT_RT_JSON_V1 || format == CONTENT_FORMAT_GRAPESJS_V1 {
-        serde_json::from_str(&content).ok()
-    } else {
-        None
-    };
+    let content_json =
+        if format == CONTENT_FORMAT_RT_JSON_V1 || format == CONTENT_FORMAT_GRAPESJS_V1 {
+            serde_json::from_str(&content).ok()
+        } else {
+            None
+        };
 
     PageBodyResponse {
         locale: body.locale.clone(),

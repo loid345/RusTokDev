@@ -3,9 +3,11 @@ use super::module_detail_panel::ModuleDetailPanel;
 use super::module_update_card::ModuleUpdateCard;
 use crate::app::providers::enabled_modules::use_enabled_modules_context;
 use crate::entities::module::{
-    BuildJob, InstalledModule, MarketplaceModule, ModuleInfo, ReleaseInfo,
+    BuildJob, InstalledModule, MarketplaceModule, ModuleInfo, ReleaseInfo, TenantModule,
 };
 use crate::features::modules::api;
+#[cfg(target_arch = "wasm32")]
+use crate::shared::api as shared_api;
 use crate::shared::ui::ui_success_message as UiSuccessMessage;
 use crate::{t, t_string, use_i18n};
 use leptos::prelude::*;
@@ -15,6 +17,10 @@ use leptos_hook_form::FormState;
 use leptos_router::hooks::{use_navigate, use_query_map};
 use leptos_use::use_interval_fn;
 use std::collections::HashSet;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::{closure::Closure, JsCast};
+#[cfg(target_arch = "wasm32")]
+use web_sys::{CloseEvent, ErrorEvent, Event, MessageEvent, WebSocket};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum ModulesTab {
@@ -61,6 +67,13 @@ fn humanize_label(value: &str) -> String {
         .join(" ")
 }
 
+fn pretty_json(value: &str) -> String {
+    serde_json::from_str::<serde_json::Value>(value)
+        .ok()
+        .and_then(|json| serde_json::to_string_pretty(&json).ok())
+        .unwrap_or_else(|| value.to_string())
+}
+
 fn tab_button_class(active: bool) -> &'static str {
     if active {
         "inline-flex items-center justify-center rounded-md bg-background px-3 py-2 text-sm font-medium text-foreground shadow-sm transition-colors"
@@ -89,6 +102,20 @@ fn is_build_active(build: &BuildJob) -> bool {
     matches!(build.status.as_str(), "QUEUED" | "RUNNING")
 }
 
+#[cfg(target_arch = "wasm32")]
+fn is_build_terminal_status(status: &str) -> bool {
+    matches!(status, "SUCCESS" | "FAILED" | "CANCELLED")
+}
+
+#[cfg(target_arch = "wasm32")]
+fn apply_build_progress_to_job(job: &mut BuildJob, event: &api::BuildProgressEvent) {
+    job.status = event.status.clone();
+    job.stage = event.stage.clone();
+    job.progress = event.progress;
+    job.release_id = event.release_id.clone();
+    job.error_message = event.error_message.clone();
+}
+
 fn normalize_catalog_filters(filters: &CatalogFilters) -> api::MarketplaceVariables {
     api::MarketplaceVariables {
         search: (!filters.search.trim().is_empty()).then(|| filters.search.trim().to_string()),
@@ -100,12 +127,51 @@ fn normalize_catalog_filters(filters: &CatalogFilters) -> api::MarketplaceVariab
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+#[derive(serde::Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum BuildProgressSubscriptionMessage {
+    ConnectionAck,
+    Next {
+        payload: BuildProgressSubscriptionPayload,
+    },
+    Error {
+        payload: Vec<BuildProgressSubscriptionError>,
+    },
+    Complete,
+    Ping {
+        payload: Option<serde_json::Value>,
+    },
+    Pong,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(serde::Deserialize)]
+struct BuildProgressSubscriptionPayload {
+    data: Option<BuildProgressSubscriptionData>,
+    errors: Option<Vec<BuildProgressSubscriptionError>>,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(serde::Deserialize)]
+struct BuildProgressSubscriptionData {
+    #[serde(rename = "buildProgress")]
+    build_progress: Option<api::BuildProgressEvent>,
+}
+
+#[cfg(target_arch = "wasm32")]
+#[derive(Clone, serde::Deserialize)]
+struct BuildProgressSubscriptionError {
+    message: String,
+}
+
 #[component]
 pub fn ModulesList(
     admin_surface: String,
     modules: Vec<ModuleInfo>,
     marketplace_modules: Vec<MarketplaceModule>,
     installed_modules: Vec<InstalledModule>,
+    tenant_modules: Vec<TenantModule>,
     active_build: Option<BuildJob>,
     active_release: Option<ReleaseInfo>,
     build_history: Vec<BuildJob>,
@@ -114,6 +180,7 @@ pub fn ModulesList(
     let (module_list, set_module_list) = signal(modules);
     let (marketplace_catalog, set_marketplace_catalog) = signal(marketplace_modules);
     let (installed_module_list, set_installed_module_list) = signal(installed_modules);
+    let (tenant_module_list, set_tenant_module_list) = signal(tenant_modules);
     let (active_build_state, set_active_build_state) = signal(active_build);
     let (active_release_state, set_active_release_state) = signal(active_release);
     let (build_history_state, set_build_history_state) = signal(build_history);
@@ -147,9 +214,12 @@ pub fn ModulesList(
     let (selected_tab, set_selected_tab) = signal(ModulesTab::Installed);
     let (loading_slug, set_loading_slug) = signal::<Option<String>>(None);
     let (platform_loading_slug, set_platform_loading_slug) = signal::<Option<String>>(None);
+    let (settings_loading_slug, set_settings_loading_slug) = signal::<Option<String>>(None);
     let (rollback_loading_build_id, set_rollback_loading_build_id) = signal::<Option<String>>(None);
+    let (module_settings_draft, set_module_settings_draft) = signal("{}".to_string());
     let (form_state, set_form_state) = signal(FormState::idle());
     let (success_message, set_success_message) = signal::<Option<String>>(None);
+    let (live_subscription_connected, set_live_subscription_connected) = signal(false);
     let token = use_token();
     let tenant = use_tenant();
     let navigate = use_navigate();
@@ -275,6 +345,35 @@ pub fn ModulesList(
     (live_polling.pause)();
     let pause_live_polling = live_polling.pause.clone();
     let resume_live_polling = live_polling.resume.clone();
+    #[cfg(target_arch = "wasm32")]
+    let apply_build_progress_event =
+        move |event: api::BuildProgressEvent,
+              token_value: Option<String>,
+              tenant_value: Option<String>| {
+            let mut matched_active_build = false;
+            set_active_build_state.update(|active_build| {
+                if let Some(build) = active_build.as_mut() {
+                    if build.id == event.build_id {
+                        apply_build_progress_to_job(build, &event);
+                        matched_active_build = true;
+                    }
+                }
+            });
+
+            set_build_history_state.update(|history| {
+                if let Some(build) = history.iter_mut().find(|build| build.id == event.build_id) {
+                    apply_build_progress_to_job(build, &event);
+                }
+            });
+
+            if !matched_active_build || is_build_terminal_status(&event.status) {
+                refresh_orchestration_state(
+                    token_value,
+                    tenant_value,
+                    applied_catalog_filters.get_untracked(),
+                );
+            }
+        };
 
     Effect::new(move |_| {
         let module_from_query = query.get().get("module");
@@ -293,10 +392,161 @@ pub fn ModulesList(
             .as_ref()
             .is_some_and(is_build_active)
         {
-            refresh_live_state();
-            resume_live_polling();
+            if live_subscription_connected.get() {
+                pause_live_polling();
+            } else {
+                refresh_live_state();
+                resume_live_polling();
+            }
         } else {
             pause_live_polling();
+        }
+    });
+
+    Effect::new(move |_| {
+        let token_value = token.get();
+        let tenant_value = tenant.get();
+
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = (token_value, tenant_value);
+            set_live_subscription_connected.set(false);
+        }
+
+        #[cfg(target_arch = "wasm32")]
+        {
+            let Some(token_value) = token_value else {
+                set_live_subscription_connected.set(false);
+                return;
+            };
+            let Some(tenant_value) = tenant_value else {
+                set_live_subscription_connected.set(false);
+                return;
+            };
+
+            set_live_subscription_connected.set(false);
+
+            let ws = match WebSocket::new_with_str(
+                &shared_api::get_graphql_ws_url(),
+                "graphql-transport-ws",
+            ) {
+                Ok(ws) => ws,
+                Err(_) => return,
+            };
+
+            let init_message = serde_json::json!({
+                "type": "connection_init",
+                "payload": {
+                    "token": token_value.clone(),
+                    "tenantSlug": tenant_value.clone(),
+                    "locale": shared_api::get_stored_locale(),
+                }
+            })
+            .to_string();
+            let subscribe_message = serde_json::json!({
+                "id": "modules-build-progress",
+                "type": "subscribe",
+                "payload": {
+                    "query": api::BUILD_PROGRESS_SUBSCRIPTION,
+                }
+            })
+            .to_string();
+
+            let subscribed = std::rc::Rc::new(std::cell::Cell::new(false));
+
+            let ws_for_open = ws.clone();
+            let on_open = Closure::<dyn FnMut(Event)>::new(move |_| {
+                let _ = ws_for_open.send_with_str(&init_message);
+            });
+
+            let ws_for_message = ws.clone();
+            let subscribed_for_message = subscribed.clone();
+            let token_for_message = token_value.clone();
+            let tenant_for_message = tenant_value.clone();
+            let on_message = Closure::<dyn FnMut(MessageEvent)>::new(move |event| {
+                let Some(text) = event.data().as_string() else {
+                    return;
+                };
+
+                let Ok(message) = serde_json::from_str::<BuildProgressSubscriptionMessage>(&text)
+                else {
+                    return;
+                };
+
+                match message {
+                    BuildProgressSubscriptionMessage::ConnectionAck => {
+                        set_live_subscription_connected.set(true);
+                        if !subscribed_for_message.get() {
+                            subscribed_for_message.set(true);
+                            let _ = ws_for_message.send_with_str(&subscribe_message);
+                        }
+                    }
+                    BuildProgressSubscriptionMessage::Next { payload } => {
+                        if let Some(errors) = payload.errors {
+                            if !errors.is_empty() {
+                                set_live_subscription_connected.set(false);
+                                refresh_orchestration_state(
+                                    Some(token_for_message.clone()),
+                                    Some(tenant_for_message.clone()),
+                                    applied_catalog_filters.get_untracked(),
+                                );
+                                return;
+                            }
+                        }
+
+                        if let Some(build_progress) =
+                            payload.data.and_then(|data| data.build_progress)
+                        {
+                            apply_build_progress_event(
+                                build_progress,
+                                Some(token_for_message.clone()),
+                                Some(tenant_for_message.clone()),
+                            );
+                        }
+                    }
+                    BuildProgressSubscriptionMessage::Error { payload } => {
+                        if payload.iter().any(|error| !error.message.trim().is_empty()) {
+                            set_live_subscription_connected.set(false);
+                        }
+                    }
+                    BuildProgressSubscriptionMessage::Ping { payload } => {
+                        let pong = serde_json::json!({
+                            "type": "pong",
+                            "payload": payload,
+                        })
+                        .to_string();
+                        let _ = ws_for_message.send_with_str(&pong);
+                    }
+                    BuildProgressSubscriptionMessage::Complete
+                    | BuildProgressSubscriptionMessage::Pong => {}
+                }
+            });
+
+            let on_error = Closure::<dyn FnMut(ErrorEvent)>::new(move |_| {
+                set_live_subscription_connected.set(false);
+            });
+
+            let on_close = Closure::<dyn FnMut(CloseEvent)>::new(move |_| {
+                set_live_subscription_connected.set(false);
+            });
+
+            ws.set_onopen(Some(on_open.as_ref().unchecked_ref()));
+            ws.set_onmessage(Some(on_message.as_ref().unchecked_ref()));
+            ws.set_onerror(Some(on_error.as_ref().unchecked_ref()));
+            ws.set_onclose(Some(on_close.as_ref().unchecked_ref()));
+
+            on_cleanup(move || {
+                set_live_subscription_connected.set(false);
+                ws.set_onopen(None);
+                ws.set_onmessage(None);
+                ws.set_onerror(None);
+                ws.set_onclose(None);
+                let _ = ws.close();
+                drop(on_open);
+                drop(on_message);
+                drop(on_error);
+                drop(on_close);
+            });
         }
     });
 
@@ -367,6 +617,22 @@ pub fn ModulesList(
                             module.enabled = result.enabled;
                         }
                     });
+                    set_tenant_module_list.update(|modules: &mut Vec<TenantModule>| {
+                        let module = TenantModule {
+                            module_slug: result.module_slug.clone(),
+                            enabled: result.enabled,
+                            settings: result.settings.clone(),
+                        };
+                        if let Some(existing) = modules
+                            .iter_mut()
+                            .find(|existing| existing.module_slug == module.module_slug)
+                        {
+                            *existing = module;
+                        } else {
+                            modules.push(module);
+                            modules.sort_by(|left, right| left.module_slug.cmp(&right.module_slug));
+                        }
+                    });
                     enabled_modules_for_toggle_async
                         .set_module_enabled(&slug_clone, result.enabled);
                     let status = if result.enabled {
@@ -428,6 +694,14 @@ pub fn ModulesList(
                 Ok(build) => {
                     set_installed_module_list
                         .update(|modules| modules.retain(|module| module.slug != slug_clone));
+                    set_tenant_module_list.update(|modules: &mut Vec<TenantModule>| {
+                        if let Some(module) = modules
+                            .iter_mut()
+                            .find(|module| module.module_slug == slug_clone)
+                        {
+                            module.enabled = false;
+                        }
+                    });
                     set_module_list.update(|modules| {
                         if let Some(module) = modules
                             .iter_mut()
@@ -506,6 +780,73 @@ pub fn ModulesList(
                 Err(err) => set_form_state.set(FormState::with_form_error(format!("{}", err))),
             }
             set_rollback_loading_build_id.set(None);
+        });
+    });
+
+    let selected_tenant_module = Signal::derive(move || {
+        selected_module_slug.get().and_then(|slug| {
+            tenant_module_list
+                .get()
+                .into_iter()
+                .find(|module| module.module_slug == slug)
+        })
+    });
+    let settings_editable = Signal::derive(move || {
+        let Some(slug) = selected_module_slug.get() else {
+            return false;
+        };
+
+        module_list
+            .get()
+            .into_iter()
+            .find(|module| module.module_slug == slug)
+            .is_some_and(|module| module.enabled || module.is_core())
+    });
+    let settings_saving = Signal::derive(move || settings_loading_slug.get().is_some());
+    Effect::new(move |_| {
+        let draft = selected_tenant_module
+            .get()
+            .map(|module| pretty_json(&module.settings))
+            .unwrap_or_else(|| "{}".to_string());
+        set_module_settings_draft.set(draft);
+    });
+    let on_settings_input = Callback::new(move |value: String| {
+        set_module_settings_draft.set(value);
+    });
+    let on_save_settings = Callback::new(move |_| {
+        let Some(slug) = selected_module_slug.get() else {
+            return;
+        };
+
+        set_settings_loading_slug.set(Some(slug.clone()));
+        set_form_state.set(FormState::idle());
+        set_success_message.set(None);
+        let token_val = token.get();
+        let tenant_val = tenant.get();
+        let settings_payload = module_settings_draft.get_untracked();
+        spawn_local(async move {
+            set_form_state.set(FormState::submitting());
+            match api::update_module_settings(slug.clone(), settings_payload, token_val, tenant_val)
+                .await
+            {
+                Ok(module) => {
+                    set_tenant_module_list.update(|modules: &mut Vec<TenantModule>| {
+                        if let Some(existing) = modules
+                            .iter_mut()
+                            .find(|existing| existing.module_slug == module.module_slug)
+                        {
+                            *existing = module.clone();
+                        } else {
+                            modules.push(module.clone());
+                            modules.sort_by(|left, right| left.module_slug.cmp(&right.module_slug));
+                        }
+                    });
+                    set_module_settings_draft.set(pretty_json(&module.settings));
+                    set_success_message.set(Some(format!("Saved tenant settings for {}", slug)));
+                }
+                Err(err) => set_form_state.set(FormState::with_form_error(format!("{}", err))),
+            }
+            set_settings_loading_slug.set(None);
         });
     });
     let navigate_for_inspect = navigate.clone();
@@ -885,7 +1226,13 @@ pub fn ModulesList(
                                 admin_surface=admin_surface_value.clone()
                                 selected_slug=slug
                                 module=selected_module_detail.get()
+                                tenant_module=selected_tenant_module.get()
+                                settings_draft=Signal::derive(move || module_settings_draft.get())
+                                settings_editable=settings_editable
+                                settings_saving=settings_saving
                                 loading=Signal::derive(move || module_detail_loading.get())
+                                on_settings_input=on_settings_input
+                                on_save_settings=on_save_settings
                                 on_close=on_close_detail
                             />
                         }

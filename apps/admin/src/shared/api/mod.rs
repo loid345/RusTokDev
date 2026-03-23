@@ -25,11 +25,24 @@ pub fn get_graphql_url() -> String {
     }
 }
 
+pub fn get_graphql_ws_url() -> String {
+    let graphql_url = get_graphql_url();
+    let ws_base = if let Some(rest) = graphql_url.strip_prefix("https://") {
+        format!("wss://{rest}")
+    } else if let Some(rest) = graphql_url.strip_prefix("http://") {
+        format!("ws://{rest}")
+    } else {
+        graphql_url
+    };
+
+    format!("{}/ws", ws_base.trim_end_matches('/'))
+}
+
 pub type ApiError = GraphqlHttpError;
 
 /// Read the admin UI locale from LocalStorage.
 /// Returns None in non-WASM environments or if the key is absent.
-fn get_stored_locale() -> Option<String> {
+pub fn get_stored_locale() -> Option<String> {
     #[cfg(target_arch = "wasm32")]
     {
         gloo_storage::LocalStorage::get::<String>("rustok-admin-locale").ok()

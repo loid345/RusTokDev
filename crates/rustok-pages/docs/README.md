@@ -5,6 +5,8 @@
 ## Documents
 
 - [Implementation plan](./implementation-plan.md)
+- [Admin package](../admin/README.md)
+- [Storefront package](../storefront/README.md)
 
 ## Event contracts
 
@@ -35,3 +37,9 @@
 На текущем этапе `body.format=grapesjs_v1` считается каноническим write-path для нового visual page-builder, а block endpoints сохраняются как legacy/migration-compatible поверхность до синхронизации storefront renderers.
 
 OpenAPI и GraphQL типы/мутации должны поддерживаться синхронно при дальнейших изменениях pages-контракта.
+
+## Module-owned UI packages
+
+- `crates/rustok-pages/admin/` — publishable Leptos admin root package (`PagesAdmin`).
+- `crates/rustok-pages/storefront/` — publishable Leptos storefront root package (`PagesView`).
+- Host applications подключают их через manifest-driven generated wiring, без ручной pages-логики в `apps/admin` и `apps/storefront`.

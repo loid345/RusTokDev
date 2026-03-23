@@ -18,13 +18,28 @@ pub struct AdminComponentRegistration {
     pub render: fn() -> AnyView,
 }
 
+#[derive(Clone)]
+pub struct AdminPageRegistration {
+    pub module_slug: &'static str,
+    pub route_segment: &'static str,
+    pub title: &'static str,
+    pub render: fn() -> AnyView,
+}
+
 thread_local! {
     static REGISTRY: RefCell<Vec<AdminComponentRegistration>> = const { RefCell::new(Vec::new()) };
+    static PAGE_REGISTRY: RefCell<Vec<AdminPageRegistration>> = const { RefCell::new(Vec::new()) };
 }
 
 pub fn register_component(component: AdminComponentRegistration) {
     REGISTRY.with(|registry| {
         registry.borrow_mut().push(component);
+    });
+}
+
+pub fn register_page(page: AdminPageRegistration) {
+    PAGE_REGISTRY.with(|registry| {
+        registry.borrow_mut().push(page);
     });
 }
 
@@ -52,5 +67,24 @@ pub fn components_for_slot(
                 .then_with(|| left.id.cmp(right.id))
         });
         sorted
+    })
+}
+
+pub fn page_for_route_segment(
+    route_segment: &str,
+    enabled_modules: Option<&HashSet<String>>,
+) -> Option<AdminPageRegistration> {
+    PAGE_REGISTRY.with(|registry| {
+        registry
+            .borrow()
+            .iter()
+            .find(|page| {
+                page.route_segment == route_segment
+                    && match enabled_modules {
+                        Some(enabled_modules) => enabled_modules.contains(page.module_slug),
+                        None => true,
+                    }
+            })
+            .cloned()
     })
 }

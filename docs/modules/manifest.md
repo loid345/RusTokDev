@@ -72,6 +72,10 @@ default_enabled = ["content", "commerce", "pages"]
 | `modules` | table | да | Карта `slug -> module spec`. |
 | `settings.default_enabled` | array | нет | Какие модули включать по умолчанию после сборки. |
 
+> `settings.default_enabled` в `modules.toml` — это **platform-level build/runtime setting**.
+> Tenant-specific настройки модулей живут отдельно, в `tenant_modules.settings`,
+> и обновляются через GraphQL mutation `updateModuleSettings(moduleSlug, settings)`.
+
 ### Module spec
 
 | Поле | Тип | Обязательное | Описание |
@@ -82,10 +86,35 @@ default_enabled = ["content", "commerce", "pages"]
 | `git` | string | нет | Git URL. |
 | `rev` | string | нет | Commit SHA/таг. |
 | `path` | string | нет | Локальный путь (monorepo или vendor). |
+| `depends_on` | array | нет | Грубый dependency graph для сборки и toggle flow. |
+| `dependency_version_reqs` | table | нет | Semver-требования к зависимостям (`slug -> version_req`). Может приезжать из `rustok-module.toml`. |
+| `conflicts_with` | array | нет | Явные конфликтующие модули. Может приезжать из `rustok-module.toml`. |
+| `entry_type` | string | нет | Нормализованный Rust path к типу модуля для `ModuleRegistry` (`rustok_blog::BlogModule`). Нужен прежде всего для external/non-path crate-ов. |
+| `graphql_query_type` | string | нет | Нормализованный Rust path к GraphQL query type модуля. |
+| `graphql_mutation_type` | string | нет | Нормализованный Rust path к GraphQL mutation type модуля. |
+| `http_routes_fn` | string | нет | Нормализованный Rust path к HTTP route factory функции модуля. |
+| `http_webhook_routes_fn` | string | нет | Нормализованный Rust path к optional webhook route factory функции модуля. |
 | `features` | array | нет | Фичи для конкретного модуля. |
 
-> Сами метаданные модуля (slug/name/description/version/deps) всё равно берутся
-> из `RusToKModule` во время сборки и регистрации в `ModuleRegistry`.
+> Нормативный путь для optional-модулей: identity, semver-зависимости и конфликты
+> живут в `rustok-module.toml` самого модуля. `apps/server` не должен содержать
+> модульно-специфичные правила — он только читает и валидирует этот generic-контракт.
+
+> Текущий composition-root contract для `apps/server`: `apps/server/build.rs` читает `modules.toml`
+> и генерирует optional module registry, GraphQL schema fragments и HTTP routes в `OUT_DIR`.
+> Явный server entry-point contract теперь поддерживается в двух формах:
+> path-модули объявляют его в `rustok-module.toml` через `[crate]`, `[provides.graphql]` и `[provides.http]`,
+> а external/non-path модули могут хранить уже нормализованные Rust paths прямо в `modules.toml`
+> (`entry_type`, `graphql_query_type`, `graphql_mutation_type`, `http_routes_fn`, `http_webhook_routes_fn`).
+> Naming conventions (`<PascalSlug>Module`, `<PascalSlug>Query`, `<PascalSlug>Mutation`, `controllers::routes`,
+> optional `webhook_routes`) остаются только как backward-compatible fallback для path-модулей без явного контракта.
+>
+> Для Leptos-host приложений foundation тоже уже поднят частично:
+> `apps/admin/build.rs` генерирует dashboard/nav/page registry wiring из `[provides.admin_ui].leptos_crate`
+> и соглашения `<PascalSlug>Admin`, а `apps/admin` монтирует module root pages через generic route
+> `/modules/:module_slug`. `apps/storefront/build.rs` генерирует slot/page wiring
+> из `[provides.storefront_ui].leptos_crate`, optional `slot`, `route_segment`, `page_title`
+> и соглашения `<PascalSlug>View`. Nested admin route contract остаётся отдельным шагом.
 
 
 ## UI-контракты модулей в манифесте и сборке
@@ -96,11 +125,41 @@ default_enabled = ["content", "commerce", "pages"]
 Рантайм-контракты и entry-points:
 
 - `leptos_crate` (в `rustok-module.toml`) — указывает имя Rust-субкрейта для админки или витрины.
+- `route_segment` (optional, только для `[provides.admin_ui]`) — относительный segment для host route `/modules/:module_slug`; по умолчанию равен `module.slug`.
+- `nav_label` (optional, только для `[provides.admin_ui]`) — подпись generated nav item; по умолчанию равна `module.name`.
+- `slot` (optional, только для `[provides.storefront_ui]`) — host storefront slot (`home_after_hero`, `home_after_catalog`, `home_before_footer`); по умолчанию `home_after_hero`.
+- `route_segment` (optional, для `[provides.storefront_ui]`) — segment для generic storefront route `/modules/:route_segment`; по умолчанию равен `module.slug`.
+- `page_title` (optional, только для `[provides.storefront_ui]`) — заголовок generic storefront module page; по умолчанию равен `module.name`.
 - `next_package` (в `rustok-module.toml`) — указывает имя npm-пакета.
 
-Приложения (`apps/admin`, `apps/storefront`) подключают Leptos-пакеты автоматически через `BuildExecutor`. Приложения Next.js требуют ручного добавления зависимостей в `package.json` и ручной пересборки.
+Пример server entry-point contract в `rustok-module.toml`:
 
-Референсный образец для Leptos: модуль blog (`crates/rustok-blog/admin/` и `crates/rustok-blog/storefront/`).
+```toml
+[crate]
+entry_type = "BlogModule"
+
+[provides.graphql]
+query = "graphql::BlogQuery"
+mutation = "graphql::BlogMutation"
+
+[provides.http]
+routes = "controllers::routes"
+
+[provides.storefront_ui]
+leptos_crate = "rustok-blog-storefront"
+slot = "home_after_catalog"
+route_segment = "blog"
+page_title = "Blog"
+```
+
+Для path-модулей эти значения считаются относительными к crate и нормализуются сервером в полные Rust paths
+вроде `rustok_blog::graphql::BlogQuery`. Для external/non-path crate-ов тот же контракт должен быть уже
+сохранён в `modules.toml` полями `entry_type`, `graphql_query_type`, `graphql_mutation_type`,
+`http_routes_fn`, `http_webhook_routes_fn`.
+
+Leptos-host приложения (`apps/admin`, `apps/storefront`) подключают модульные пакеты через свои `build.rs`, а `BuildExecutor` затем собирает реальные host-артефакты по manifest-derived plan. Приложения Next.js требуют ручного добавления зависимостей в `package.json` и ручной пересборки.
+
+Референсные образцы для Leptos: модуль `blog` (`crates/rustok-blog/admin/` и `crates/rustok-blog/storefront/`), модуль `workflow` (`crates/rustok-workflow/admin/` как root-page package поверх legacy detail flow) и модуль `pages` (`crates/rustok-pages/admin/` и `crates/rustok-pages/storefront/`).
 
 Исключение:
 
@@ -169,6 +228,7 @@ UI шаги:
 - **Консистентность**: если сборка прошла, модуль гарантированно присутствует.
 - **Безопасность**: нет runtime-подгрузки нативного кода.
 - **Воспроизводимость**: манифест фиксирует точный состав и версии.
+- **Namespace safety**: GraphQL-visible типы модулей обязаны иметь уникальные имена в общей schema; module-specific enum/object names не должны конфликтовать с типами других модулей.
 
 ## Blueprint: API для admin rebuild
 
@@ -233,18 +293,23 @@ UI шаги:
 
 1. **Checkout + deps**: забрать repo + загрузить зависимости.
 2. **Render manifest**: зафиксировать `modules.toml` в workspace.
-3. **Cargo build**: команда выводится из `modules.toml`:
+3. **Build plan**: команда выводится из `modules.toml`:
    `cargo build -p rustok-server --release --target <build.target> --features <derived-from-build.server>`.
    Для текущих server surfaces это `embed-admin` и `embed-storefront`.
+   Если manifest требует Leptos admin, в тот же execution plan добавляется `trunk build` для `apps/admin`.
+   Если manifest требует Leptos storefront, в тот же execution plan добавляется `cargo build -p rustok-storefront`.
    Текущий operator path: `cargo loco task --name rebuild` или `target/debug/rustok-server.exe task rebuild`.
    Можно указать `build_id=<uuid>` для конкретной записи или `dry_run=true`, чтобы только распечатать derived command без запуска.
    Для runtime automation можно включить `settings.rustok.build.enabled=true`; тогда server поднимет background worker,
    который будет забирать queued builds и выполнять тот же manifest-derived plan.
    Дополнительно доступны `auto_release_environment` и `auto_activate_release` для локального release/deploy flow.
    В `settings.rustok.build.deployment` можно выбрать backend:
-   `record_only` (только release record), `filesystem` (копирование server artifact в release bundle directory) или `http` (multipart publish в удалённый deployment endpoint).
-   Для filesystem backend используются `filesystem_root_dir` и опциональный `public_base_url`; для HTTP backend используются `endpoint_url` и опциональный `bearer_token`; release API после publish начинает отдавать artifact URLs.
-   HTTP endpoint может дополнительно вернуть `deployment_status` (`accepted|deploying|deployed|failed`), и тогда сервер синхронизирует локальный release state с фактическим outcome вместо преждевременной auto-activation.
+   `record_only` (только release record), `filesystem` (копирование server/admin/storefront artifacts в release bundle directory), `http` (multipart publish в удалённый deployment endpoint) или `container` (локальный `docker build`/`docker push` поверх уже собранного release bundle).
+   Для filesystem backend используются `filesystem_root_dir` и опциональный `public_base_url`; для HTTP backend используются `endpoint_url` и опциональный `bearer_token`; для container backend используются `docker_bin` (по умолчанию `docker`), `image_repository` и опциональный `rollout_command`.
+   Filesystem и container backend публикуют реальные `server_artifact_url`, `admin_artifact_url`, `storefront_artifact_url`; для `admin` это entrypoint `index.html` из `apps/admin/dist`, для `storefront` — отдельный SSR binary `rustok-storefront`.
+   Container backend переиспользует текущий release bundle, упаковывает бинарник + `apps/server/migration` + `apps/server/config` в runtime image, публикует image в registry и заполняет `releases.container_image`.
+   HTTP endpoint может дополнительно вернуть `deployment_status` (`accepted|deploying|deployed|failed`) и готовые frontend artifact URLs; сервер синхронизирует локальный release state с фактическим outcome вместо преждевременной auto-activation.
+   Для container backend `rollout_command` остаётся generic hook без знания о конкретном orchestrator: сервер подставляет placeholders `{image}`, `{release_id}`, `{environment}`, `{bundle_dir}` и также прокидывает env vars `RUSTOK_RELEASE_ID`, `RUSTOK_RELEASE_ENVIRONMENT`, `RUSTOK_CONTAINER_IMAGE`, `RUSTOK_RELEASE_BUNDLE_DIR`.
    Отдельная smoke-проверка profile matrix теперь живёт в `scripts/verify/verify-deployment-profiles.sh`.
 4. **Docker image**: собрать образ с готовым бинарником.
 5. **Push**: загрузить в registry.

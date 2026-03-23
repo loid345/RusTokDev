@@ -37,6 +37,14 @@ pub struct InstalledModule {
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub struct TenantModule {
+    #[serde(rename = "moduleSlug")]
+    pub module_slug: String,
+    pub enabled: bool,
+    pub settings: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
 pub struct MarketplaceModule {
     pub slug: String,
     pub name: String,

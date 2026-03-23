@@ -1,0 +1,8 @@
+[module]
+slug = "media"
+name = "Media"
+version = "0.1.0"
+description = "Media library, uploads and localized asset metadata module"
+ownership = "first_party"
+trust_level = "verified"
+recommended_admin_surfaces = ["leptos-admin"]

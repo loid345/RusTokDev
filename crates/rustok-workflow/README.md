@@ -9,6 +9,7 @@
 - Provide `WorkflowModule` metadata for the runtime registry.
 - Own workflow CRUD, execution engine, schedules, webhooks, and execution history.
 - Own workflow GraphQL and REST transport adapters for module-facing APIs.
+- Publish the module-owned Leptos admin root page through `crates/rustok-workflow/admin`.
 - Publish the typed `workflows:*` and `workflow_executions:*` RBAC surface.
 
 ## Interactions
@@ -35,3 +36,4 @@
 - `graphql::WorkflowMutation`
 - `controllers::routes`
 - `controllers::webhook_routes`
+- `admin/WorkflowAdmin` (publishable Leptos admin root page)

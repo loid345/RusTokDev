@@ -25,13 +25,15 @@ impl PagesMutation {
     async fn create_page(
         &self,
         ctx: &Context<'_>,
-        tenant_id: Uuid,
         input: CreateGqlPageInput,
+        tenant_id: Option<Uuid>,
     ) -> Result<GqlPage> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_pages_permission(ctx, Permission::PAGES_CREATE)?;
+        let tenant = ctx.data::<rustok_api::TenantContext>()?;
+        let tenant_id = tenant_id.unwrap_or(tenant.id);
 
         let service = PageService::new(db.clone(), event_bus.clone());
         let page = service
@@ -78,14 +80,16 @@ impl PagesMutation {
     async fn update_page(
         &self,
         ctx: &Context<'_>,
-        tenant_id: Uuid,
         id: Uuid,
         input: UpdateGqlPageInput,
+        tenant_id: Option<Uuid>,
     ) -> Result<GqlPage> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_pages_permission(ctx, Permission::PAGES_UPDATE)?;
+        let tenant = ctx.data::<rustok_api::TenantContext>()?;
+        let tenant_id = tenant_id.unwrap_or(tenant.id);
 
         let service = PageService::new(db.clone(), event_bus.clone());
         let page = service
@@ -122,11 +126,18 @@ impl PagesMutation {
         Ok(page.into())
     }
 
-    async fn publish_page(&self, ctx: &Context<'_>, tenant_id: Uuid, id: Uuid) -> Result<GqlPage> {
+    async fn publish_page(
+        &self,
+        ctx: &Context<'_>,
+        id: Uuid,
+        tenant_id: Option<Uuid>,
+    ) -> Result<GqlPage> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_pages_permission(ctx, Permission::PAGES_UPDATE)?;
+        let tenant = ctx.data::<rustok_api::TenantContext>()?;
+        let tenant_id = tenant_id.unwrap_or(tenant.id);
 
         let service = PageService::new(db.clone(), event_bus.clone());
         let page = service
@@ -140,13 +151,15 @@ impl PagesMutation {
     async fn unpublish_page(
         &self,
         ctx: &Context<'_>,
-        tenant_id: Uuid,
         id: Uuid,
+        tenant_id: Option<Uuid>,
     ) -> Result<GqlPage> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_pages_permission(ctx, Permission::PAGES_UPDATE)?;
+        let tenant = ctx.data::<rustok_api::TenantContext>()?;
+        let tenant_id = tenant_id.unwrap_or(tenant.id);
 
         let service = PageService::new(db.clone(), event_bus.clone());
         let page = service
@@ -157,11 +170,18 @@ impl PagesMutation {
         Ok(page.into())
     }
 
-    async fn delete_page(&self, ctx: &Context<'_>, tenant_id: Uuid, id: Uuid) -> Result<bool> {
+    async fn delete_page(
+        &self,
+        ctx: &Context<'_>,
+        id: Uuid,
+        tenant_id: Option<Uuid>,
+    ) -> Result<bool> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_pages_permission(ctx, Permission::PAGES_DELETE)?;
+        let tenant = ctx.data::<rustok_api::TenantContext>()?;
+        let tenant_id = tenant_id.unwrap_or(tenant.id);
 
         let service = PageService::new(db.clone(), event_bus.clone());
         service
@@ -175,14 +195,16 @@ impl PagesMutation {
     async fn add_block(
         &self,
         ctx: &Context<'_>,
-        tenant_id: Uuid,
         page_id: Uuid,
         input: CreateGqlBlockInput,
+        tenant_id: Option<Uuid>,
     ) -> Result<GqlBlock> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_pages_permission(ctx, Permission::PAGES_UPDATE)?;
+        let tenant = ctx.data::<rustok_api::TenantContext>()?;
+        let tenant_id = tenant_id.unwrap_or(tenant.id);
 
         let service = BlockService::new(db.clone(), event_bus.clone());
         let block = service
@@ -201,14 +223,16 @@ impl PagesMutation {
     async fn update_block(
         &self,
         ctx: &Context<'_>,
-        tenant_id: Uuid,
         block_id: Uuid,
         input: UpdateGqlBlockInput,
+        tenant_id: Option<Uuid>,
     ) -> Result<GqlBlock> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_pages_permission(ctx, Permission::PAGES_UPDATE)?;
+        let tenant = ctx.data::<rustok_api::TenantContext>()?;
+        let tenant_id = tenant_id.unwrap_or(tenant.id);
 
         let service = BlockService::new(db.clone(), event_bus.clone());
         let block = service
@@ -231,13 +255,15 @@ impl PagesMutation {
     async fn delete_block(
         &self,
         ctx: &Context<'_>,
-        tenant_id: Uuid,
         block_id: Uuid,
+        tenant_id: Option<Uuid>,
     ) -> Result<bool> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_pages_permission(ctx, Permission::PAGES_DELETE)?;
+        let tenant = ctx.data::<rustok_api::TenantContext>()?;
+        let tenant_id = tenant_id.unwrap_or(tenant.id);
 
         let service = BlockService::new(db.clone(), event_bus.clone());
         service
@@ -251,14 +277,16 @@ impl PagesMutation {
     async fn reorder_blocks(
         &self,
         ctx: &Context<'_>,
-        tenant_id: Uuid,
         page_id: Uuid,
         input: ReorderBlocksInput,
+        tenant_id: Option<Uuid>,
     ) -> Result<bool> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_pages_permission(ctx, Permission::PAGES_UPDATE)?;
+        let tenant = ctx.data::<rustok_api::TenantContext>()?;
+        let tenant_id = tenant_id.unwrap_or(tenant.id);
 
         let service = BlockService::new(db.clone(), event_bus.clone());
         service

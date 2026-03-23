@@ -1,6 +1,7 @@
 use crate::models::build::DeploymentProfile;
 use crate::services::build_service::ModuleSpec as BuildModuleSpec;
 use rustok_core::ModuleRegistry;
+use semver::{Version, VersionReq};
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -80,6 +81,37 @@ pub struct BuildExecutionPlan {
     pub cargo_target: Option<String>,
     pub cargo_features: Vec<String>,
     pub cargo_command: String,
+    #[serde(default)]
+    pub admin_build: Option<FrontendBuildPlan>,
+    #[serde(default)]
+    pub storefront_build: Option<FrontendBuildPlan>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FrontendBuildTool {
+    Cargo,
+    Trunk,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FrontendArtifactKind {
+    File,
+    Directory,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct FrontendBuildPlan {
+    pub surface: String,
+    pub tool: FrontendBuildTool,
+    pub package: String,
+    pub workspace_path: String,
+    pub profile: String,
+    pub target: Option<String>,
+    pub artifact_path: String,
+    pub artifact_kind: FrontendArtifactKind,
+    pub command: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -106,6 +138,10 @@ pub struct ManifestModuleSpec {
     #[serde(default)]
     pub depends_on: Vec<String>,
     #[serde(default)]
+    pub dependency_version_reqs: HashMap<String, String>,
+    #[serde(default)]
+    pub conflicts_with: Vec<String>,
+    #[serde(default)]
     pub ownership: String,
     #[serde(default)]
     pub trust_level: String,
@@ -113,6 +149,16 @@ pub struct ManifestModuleSpec {
     pub rustok_min_version: Option<String>,
     #[serde(default)]
     pub rustok_max_version: Option<String>,
+    #[serde(default)]
+    pub entry_type: Option<String>,
+    #[serde(default)]
+    pub graphql_query_type: Option<String>,
+    #[serde(default)]
+    pub graphql_mutation_type: Option<String>,
+    #[serde(default)]
+    pub http_routes_fn: Option<String>,
+    #[serde(default)]
+    pub http_webhook_routes_fn: Option<String>,
     #[serde(default)]
     pub recommended_admin_surfaces: Vec<String>,
     #[serde(default)]
@@ -170,14 +216,135 @@ pub struct CatalogModuleVersion {
     pub signature: Option<String>,
 }
 
+fn admin_frontend_build_plan(
+    manifest: &ModulesManifest,
+    cargo_profile: &str,
+) -> Option<FrontendBuildPlan> {
+    let admin_stack = manifest.build.admin.stack.trim().to_ascii_lowercase();
+    let requires_leptos_admin = manifest.build.server.embed_admin || admin_stack == "leptos";
+
+    requires_leptos_admin.then(|| {
+        let mut command_parts = vec!["trunk".to_string(), "build".to_string()];
+        if cargo_profile == "release" {
+            command_parts.push("--release".to_string());
+        }
+
+        FrontendBuildPlan {
+            surface: "admin".to_string(),
+            tool: FrontendBuildTool::Trunk,
+            package: "rustok-admin".to_string(),
+            workspace_path: "apps/admin".to_string(),
+            profile: cargo_profile.to_string(),
+            target: None,
+            artifact_path: "apps/admin/dist".to_string(),
+            artifact_kind: FrontendArtifactKind::Directory,
+            command: command_parts.join(" "),
+        }
+    })
+}
+
+fn storefront_frontend_build_plan(
+    manifest: &ModulesManifest,
+    cargo_profile: &str,
+    cargo_target: Option<&str>,
+) -> Option<FrontendBuildPlan> {
+    let has_leptos_storefront = manifest.build.server.embed_storefront
+        || manifest
+            .build
+            .storefront
+            .iter()
+            .any(|storefront| storefront.stack.trim().eq_ignore_ascii_case("leptos"));
+
+    has_leptos_storefront.then(|| {
+        let mut command_parts = vec![
+            "cargo".to_string(),
+            "build".to_string(),
+            "-p".to_string(),
+            "rustok-storefront".to_string(),
+        ];
+        if cargo_profile == "release" {
+            command_parts.push("--release".to_string());
+        } else {
+            command_parts.push("--profile".to_string());
+            command_parts.push(cargo_profile.to_string());
+        }
+        if let Some(target) = cargo_target {
+            command_parts.push("--target".to_string());
+            command_parts.push(target.to_string());
+        }
+
+        let mut artifact_path = String::from("target/");
+        if let Some(target) = cargo_target {
+            artifact_path.push_str(target);
+            artifact_path.push('/');
+        }
+        artifact_path.push_str(binary_output_dir_name(cargo_profile));
+        artifact_path.push('/');
+        artifact_path.push_str(&binary_file_name("rustok-storefront", cargo_target));
+
+        FrontendBuildPlan {
+            surface: "storefront".to_string(),
+            tool: FrontendBuildTool::Cargo,
+            package: "rustok-storefront".to_string(),
+            workspace_path: ".".to_string(),
+            profile: cargo_profile.to_string(),
+            target: cargo_target.map(ToString::to_string),
+            artifact_path,
+            artifact_kind: FrontendArtifactKind::File,
+            command: command_parts.join(" "),
+        }
+    })
+}
+
+fn binary_output_dir_name(profile: &str) -> &str {
+    if profile == "release" {
+        "release"
+    } else {
+        profile
+    }
+}
+
+fn binary_file_name(package: &str, cargo_target: Option<&str>) -> String {
+    let exe_suffix = executable_suffix(cargo_target);
+    if exe_suffix.is_empty() {
+        package.to_string()
+    } else {
+        format!("{package}.{exe_suffix}")
+    }
+}
+
+fn executable_suffix(cargo_target: Option<&str>) -> &'static str {
+    match cargo_target {
+        Some(target) if target.contains("windows") => "exe",
+        Some(_) => "",
+        None => std::env::consts::EXE_EXTENSION,
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct ModulePackageManifest {
     #[serde(default)]
     module: ModulePackageMetadata,
+    #[serde(rename = "crate", default)]
+    crate_contract: ModulePackageCrateContract,
+    #[serde(default)]
+    dependencies: HashMap<String, ModulePackageDependencySpec>,
+    #[serde(default)]
+    conflicts: ModulePackageConflicts,
+    #[serde(default)]
+    provides: ModulePackageProvides,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 struct ModulePackageMetadata {
+    #[serde(default)]
+    slug: Option<String>,
+    #[serde(default)]
+    name: Option<String>,
+    #[serde(default)]
+    version: Option<String>,
+    #[serde(default)]
+    description: Option<String>,
     #[serde(default)]
     ownership: String,
     #[serde(default)]
@@ -190,6 +357,48 @@ struct ModulePackageMetadata {
     recommended_admin_surfaces: Vec<String>,
     #[serde(default)]
     showcase_admin_surfaces: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct ModulePackageCrateContract {
+    #[serde(default)]
+    entry_type: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct ModulePackageProvides {
+    #[serde(default)]
+    graphql: Option<ModulePackageGraphqlProvides>,
+    #[serde(default)]
+    http: Option<ModulePackageHttpProvides>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct ModulePackageGraphqlProvides {
+    #[serde(default)]
+    query: Option<String>,
+    #[serde(default)]
+    mutation: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct ModulePackageHttpProvides {
+    #[serde(default)]
+    routes: Option<String>,
+    #[serde(default)]
+    webhook_routes: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct ModulePackageDependencySpec {
+    #[serde(default)]
+    version_req: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+struct ModulePackageConflicts {
+    #[serde(default)]
+    modules: Vec<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -272,6 +481,43 @@ pub enum ManifestError {
     InvalidModuleOwnership { slug: String, value: String },
     #[error("Module '{slug}' has invalid trust level '{value}'")]
     InvalidModuleTrustLevel { slug: String, value: String },
+    #[error("Module package manifest for '{slug}' declares slug '{found}', expected '{slug}'")]
+    ModulePackageSlugMismatch { slug: String, found: String },
+    #[error("Module '{slug}' has invalid version '{value}'")]
+    InvalidModuleVersion { slug: String, value: String },
+    #[error("Module '{slug}' declares invalid dependency '{dependency}'")]
+    InvalidModuleDependency { slug: String, dependency: String },
+    #[error("Module '{slug}' declares invalid conflict '{conflict}'")]
+    InvalidModuleConflict { slug: String, conflict: String },
+    #[error("Module '{slug}' dependency '{dependency}' has invalid version requirement '{value}'")]
+    InvalidDependencyVersionReq {
+        slug: String,
+        dependency: String,
+        value: String,
+    },
+    #[error("Module '{slug}' requires a version for dependency '{dependency}'")]
+    MissingDependencyVersion { slug: String, dependency: String },
+    #[error(
+        "Module '{slug}' requires '{dependency}' version '{required}', but installed '{installed}'"
+    )]
+    IncompatibleDependencyVersion {
+        slug: String,
+        dependency: String,
+        required: String,
+        installed: String,
+    },
+    #[error("Module '{slug}' conflicts with installed module '{conflicts_with}'")]
+    ConflictingModule {
+        slug: String,
+        conflicts_with: String,
+    },
+    #[error("Module '{slug}' is incompatible with RusToK {current_version} (min={minimum:?}, max={maximum:?})")]
+    IncompatibleRustokVersion {
+        slug: String,
+        current_version: String,
+        minimum: Option<String>,
+        maximum: Option<String>,
+    },
     #[error("Module '{slug}' has invalid admin surface '{value}' in {field}")]
     InvalidModuleAdminSurface {
         slug: String,
@@ -327,10 +573,22 @@ fn module_root_path(spec: &ManifestModuleSpec) -> Option<PathBuf> {
     )
 }
 
-fn merge_module_package_metadata(
+fn merge_module_package_manifest(
     mut spec: ManifestModuleSpec,
-    metadata: ModulePackageMetadata,
+    package_manifest: ModulePackageManifest,
 ) -> ManifestModuleSpec {
+    let crate_name = spec.crate_name.clone();
+    let metadata = package_manifest.module;
+
+    if let Some(version) = metadata
+        .version
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        spec.version = Some(version.to_string());
+    }
+
     if !metadata.ownership.trim().is_empty() {
         spec.ownership = metadata.ownership;
     }
@@ -343,21 +601,121 @@ fn merge_module_package_metadata(
     if metadata.rustok_max_version.is_some() {
         spec.rustok_max_version = metadata.rustok_max_version;
     }
+    if let Some(entry_type) = qualify_module_type_path(
+        &crate_name,
+        package_manifest.crate_contract.entry_type.as_deref(),
+    ) {
+        spec.entry_type = Some(entry_type);
+    }
+    if let Some(graphql) = package_manifest.provides.graphql {
+        if let Some(query_type) = qualify_module_type_path(&crate_name, graphql.query.as_deref()) {
+            spec.graphql_query_type = Some(query_type);
+        }
+        if let Some(mutation_type) =
+            qualify_module_type_path(&crate_name, graphql.mutation.as_deref())
+        {
+            spec.graphql_mutation_type = Some(mutation_type);
+        }
+    }
+    if let Some(http) = package_manifest.provides.http {
+        if let Some(routes_fn) = qualify_module_member_path(&crate_name, http.routes.as_deref()) {
+            spec.http_routes_fn = Some(routes_fn);
+        }
+        if let Some(webhook_routes_fn) =
+            qualify_module_member_path(&crate_name, http.webhook_routes.as_deref())
+        {
+            spec.http_webhook_routes_fn = Some(webhook_routes_fn);
+        }
+    }
     if !metadata.recommended_admin_surfaces.is_empty() {
         spec.recommended_admin_surfaces = metadata.recommended_admin_surfaces;
     }
     if !metadata.showcase_admin_surfaces.is_empty() {
         spec.showcase_admin_surfaces = metadata.showcase_admin_surfaces;
     }
+
+    for (dependency, dependency_spec) in package_manifest.dependencies {
+        let dependency = dependency.trim().to_string();
+        if !spec.depends_on.iter().any(|item| item == &dependency) {
+            spec.depends_on.push(dependency.clone());
+        }
+
+        let version_req = dependency_spec.version_req.trim();
+        if !version_req.is_empty() {
+            spec.dependency_version_reqs
+                .insert(dependency, version_req.to_string());
+        }
+    }
+
+    spec.depends_on.sort();
+    spec.depends_on.dedup();
+
+    for conflict in package_manifest.conflicts.modules {
+        let conflict = conflict.trim().to_string();
+        if !conflict.is_empty() && !spec.conflicts_with.iter().any(|item| item == &conflict) {
+            spec.conflicts_with.push(conflict);
+        }
+    }
+
+    spec.conflicts_with.sort();
+    spec.conflicts_with.dedup();
+
     spec
+}
+
+fn qualify_module_type_path(crate_name: &str, value: Option<&str>) -> Option<String> {
+    let value = value?.trim();
+    if value.is_empty() {
+        return None;
+    }
+
+    let crate_ident = crate_name.replace('-', "_");
+    let relative = value.strip_prefix("crate::").unwrap_or(value);
+    if relative.contains("::") {
+        Some(format!("{crate_ident}::{relative}"))
+    } else {
+        Some(format!("{crate_ident}::{relative}"))
+    }
+}
+
+fn qualify_module_member_path(crate_name: &str, value: Option<&str>) -> Option<String> {
+    qualify_module_type_path(crate_name, value)
 }
 
 fn validate_module_package_metadata(
     slug: &str,
-    metadata: &ModulePackageMetadata,
+    package_manifest: &ModulePackageManifest,
 ) -> Result<(), ManifestError> {
+    let metadata = &package_manifest.module;
+
+    if let Some(found_slug) = metadata
+        .slug
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        if !is_valid_module_slug(found_slug) || found_slug != slug {
+            return Err(ManifestError::ModulePackageSlugMismatch {
+                slug: slug.to_string(),
+                found: found_slug.to_string(),
+            });
+        }
+    }
+
+    if let Some(version) = metadata
+        .version
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        Version::parse(version).map_err(|_| ManifestError::InvalidModuleVersion {
+            slug: slug.to_string(),
+            value: version.to_string(),
+        })?;
+    }
+
     let ownership = metadata.ownership.trim();
-    if !is_valid_module_ownership(ownership) {
+    if !ownership.is_empty() && !is_valid_module_ownership(ownership) {
         return Err(ManifestError::InvalidModuleOwnership {
             slug: slug.to_string(),
             value: ownership.to_string(),
@@ -365,7 +723,7 @@ fn validate_module_package_metadata(
     }
 
     let trust_level = metadata.trust_level.trim();
-    if !is_valid_trust_level(trust_level) {
+    if !trust_level.is_empty() && !is_valid_trust_level(trust_level) {
         return Err(ManifestError::InvalidModuleTrustLevel {
             slug: slug.to_string(),
             value: trust_level.to_string(),
@@ -388,6 +746,37 @@ fn validate_module_package_metadata(
             slug: slug.to_string(),
             surface: surface.clone(),
         });
+    }
+
+    for (dependency, dependency_spec) in &package_manifest.dependencies {
+        let dependency = dependency.trim();
+        if !is_valid_module_slug(dependency) {
+            return Err(ManifestError::InvalidModuleDependency {
+                slug: slug.to_string(),
+                dependency: dependency.to_string(),
+            });
+        }
+
+        let version_req = dependency_spec.version_req.trim();
+        if version_req.is_empty() {
+            continue;
+        }
+
+        VersionReq::parse(version_req).map_err(|_| ManifestError::InvalidDependencyVersionReq {
+            slug: slug.to_string(),
+            dependency: dependency.to_string(),
+            value: version_req.to_string(),
+        })?;
+    }
+
+    for conflict in &package_manifest.conflicts.modules {
+        let conflict = conflict.trim();
+        if !is_valid_module_slug(conflict) || conflict == slug {
+            return Err(ManifestError::InvalidModuleConflict {
+                slug: slug.to_string(),
+                conflict: conflict.to_string(),
+            });
+        }
     }
 
     Ok(())
@@ -414,11 +803,11 @@ fn apply_module_package_manifest(
             path: path.display().to_string(),
             error: error.to_string(),
         })?;
-    validate_module_package_metadata(slug, &package_manifest.module)?;
+    validate_module_package_metadata(slug, &package_manifest)?;
 
-    Ok(merge_module_package_metadata(
+    Ok(merge_module_package_manifest(
         spec.clone(),
-        package_manifest.module,
+        package_manifest,
     ))
 }
 
@@ -575,11 +964,44 @@ fn is_valid_trust_level(value: &str) -> bool {
     matches!(value, "core" | "verified" | "unverified" | "private")
 }
 
+fn is_valid_module_slug(value: &str) -> bool {
+    !value.is_empty()
+        && value
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
+}
+
 fn is_valid_admin_surface(value: &str) -> bool {
     !value.is_empty()
         && value
             .chars()
             .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '-')
+}
+
+fn normalize_version_req(raw: &str, is_max: bool) -> String {
+    let trimmed = raw.trim();
+    let wildcard = trimmed.replace(".x", ".*").replace(".X", ".*");
+    let has_operator = wildcard.contains('<')
+        || wildcard.contains('>')
+        || wildcard.contains('=')
+        || wildcard.contains('~')
+        || wildcard.contains('^')
+        || wildcard.contains('*')
+        || wildcard.contains(',');
+
+    if has_operator {
+        return wildcard;
+    }
+
+    if is_max {
+        format!("<= {wildcard}")
+    } else {
+        format!(">= {wildcard}")
+    }
+}
+
+fn current_platform_version() -> Option<Version> {
+    Version::parse(env!("CARGO_PKG_VERSION")).ok()
 }
 
 fn validate_admin_surfaces(
@@ -863,12 +1285,18 @@ impl ManifestManager {
             command_parts.push(cargo_features.join(","));
         }
 
+        let admin_build = admin_frontend_build_plan(manifest, &cargo_profile);
+        let storefront_build =
+            storefront_frontend_build_plan(manifest, &cargo_profile, cargo_target.as_deref());
+
         BuildExecutionPlan {
             cargo_package,
             cargo_profile,
             cargo_target,
             cargo_features,
             cargo_command: command_parts.join(" "),
+            admin_build,
+            storefront_build,
         }
     }
 
@@ -982,7 +1410,9 @@ impl ManifestManager {
     }
 
     pub fn validate(manifest: &ModulesManifest) -> Result<(), ManifestError> {
-        let installed = manifest.modules.keys().cloned().collect::<HashSet<_>>();
+        let resolved_specs = resolve_module_specs(manifest)?;
+
+        let installed = resolved_specs.keys().cloned().collect::<HashSet<_>>();
 
         let missing_defaults = manifest
             .settings
@@ -998,7 +1428,13 @@ impl ManifestManager {
             ));
         }
 
-        for (slug, spec) in &manifest.modules {
+        let mut ordered_slugs = resolved_specs.keys().cloned().collect::<Vec<_>>();
+        ordered_slugs.sort();
+
+        for slug in ordered_slugs {
+            let spec = resolved_specs
+                .get(&slug)
+                .expect("resolved module slug must exist");
             let missing = spec
                 .depends_on
                 .iter()
@@ -1012,6 +1448,88 @@ impl ManifestManager {
                     missing: missing.join(", "),
                 });
             }
+
+            for conflict in &spec.conflicts_with {
+                if installed.contains(conflict) {
+                    return Err(ManifestError::ConflictingModule {
+                        slug: slug.clone(),
+                        conflicts_with: conflict.clone(),
+                    });
+                }
+            }
+
+            for (dependency, raw_req) in &spec.dependency_version_reqs {
+                let Some(dependency_spec) = resolved_specs.get(dependency) else {
+                    continue;
+                };
+
+                let installed_version = dependency_spec.version.as_deref().ok_or_else(|| {
+                    ManifestError::MissingDependencyVersion {
+                        slug: slug.clone(),
+                        dependency: dependency.clone(),
+                    }
+                })?;
+                let installed_version = Version::parse(installed_version).map_err(|_| {
+                    ManifestError::InvalidModuleVersion {
+                        slug: dependency.clone(),
+                        value: installed_version.to_string(),
+                    }
+                })?;
+                let version_req = VersionReq::parse(raw_req).map_err(|_| {
+                    ManifestError::InvalidDependencyVersionReq {
+                        slug: slug.clone(),
+                        dependency: dependency.clone(),
+                        value: raw_req.clone(),
+                    }
+                })?;
+
+                if !version_req.matches(&installed_version) {
+                    return Err(ManifestError::IncompatibleDependencyVersion {
+                        slug: slug.clone(),
+                        dependency: dependency.clone(),
+                        required: raw_req.clone(),
+                        installed: installed_version.to_string(),
+                    });
+                }
+            }
+
+            if let Some(current_version) = current_platform_version() {
+                let min_ok = spec
+                    .rustok_min_version
+                    .as_deref()
+                    .map(|raw| normalize_version_req(raw, false))
+                    .map(|req| VersionReq::parse(&req))
+                    .transpose()
+                    .map_err(|_| ManifestError::IncompatibleRustokVersion {
+                        slug: slug.clone(),
+                        current_version: current_version.to_string(),
+                        minimum: spec.rustok_min_version.clone(),
+                        maximum: spec.rustok_max_version.clone(),
+                    })?
+                    .is_none_or(|req| req.matches(&current_version));
+                let max_ok = spec
+                    .rustok_max_version
+                    .as_deref()
+                    .map(|raw| normalize_version_req(raw, true))
+                    .map(|req| VersionReq::parse(&req))
+                    .transpose()
+                    .map_err(|_| ManifestError::IncompatibleRustokVersion {
+                        slug: slug.clone(),
+                        current_version: current_version.to_string(),
+                        minimum: spec.rustok_min_version.clone(),
+                        maximum: spec.rustok_max_version.clone(),
+                    })?
+                    .is_none_or(|req| req.matches(&current_version));
+
+                if !(min_ok && max_ok) {
+                    return Err(ManifestError::IncompatibleRustokVersion {
+                        slug: slug.clone(),
+                        current_version: current_version.to_string(),
+                        minimum: spec.rustok_min_version.clone(),
+                        maximum: spec.rustok_max_version.clone(),
+                    });
+                }
+            }
         }
 
         validate_build_surfaces(manifest)?;
@@ -1023,6 +1541,7 @@ impl ManifestManager {
         manifest: &ModulesManifest,
         registry: &ModuleRegistry,
     ) -> Result<(), ManifestError> {
+        let resolved_specs = resolve_module_specs(manifest)?;
         let missing_in_registry: Vec<String> = manifest
             .modules
             .iter()
@@ -1073,7 +1592,7 @@ impl ManifestManager {
             .list()
             .into_iter()
             .filter_map(|module| {
-                manifest.modules.get(module.slug()).and_then(|spec| {
+                resolved_specs.get(module.slug()).and_then(|spec| {
                     if !is_registry_managed_module(spec) {
                         None
                     } else {
@@ -1107,6 +1626,18 @@ impl ManifestManager {
 
         Ok(())
     }
+}
+
+fn resolve_module_specs(
+    manifest: &ModulesManifest,
+) -> Result<HashMap<String, ManifestModuleSpec>, ManifestError> {
+    let mut resolved_specs = HashMap::new();
+    for (slug, spec) in &manifest.modules {
+        let resolved = apply_module_package_manifest(slug, spec)?;
+        resolved_specs.insert(slug.clone(), resolved);
+    }
+
+    Ok(resolved_specs)
 }
 
 fn validate_build_surfaces(manifest: &ModulesManifest) -> Result<(), ManifestError> {
@@ -1214,7 +1745,7 @@ mod tests {
         StorefrontBuildConfig,
     };
     use crate::models::build::DeploymentProfile;
-    use crate::modules::build_registry;
+    use crate::modules::{build_registry, FrontendArtifactKind, FrontendBuildTool};
     use serial_test::serial;
     use std::collections::HashMap;
     use tempfile::tempdir;
@@ -1234,7 +1765,13 @@ mod tests {
         }
     }
 
+    fn write_module_manifest(crate_dir: &std::path::Path, contents: &str) {
+        std::fs::create_dir_all(crate_dir).unwrap();
+        std::fs::write(crate_dir.join("rustok-module.toml"), contents).unwrap();
+    }
+
     #[test]
+    #[serial]
     fn derives_deployment_surface_contract_from_build_server_flags() {
         let mut manifest = ModulesManifest::default();
 
@@ -1269,6 +1806,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn derives_build_execution_plan_from_manifest() {
         let mut manifest = ModulesManifest::default();
         manifest.app = "rustok-server".to_string();
@@ -1293,9 +1831,33 @@ mod tests {
             plan.cargo_command,
             "cargo build -p rustok-server --release --target x86_64-unknown-linux-gnu --features embed-admin,embed-storefront"
         );
+        let admin_build = plan.admin_build.expect("expected admin build plan");
+        assert_eq!(admin_build.surface, "admin");
+        assert_eq!(admin_build.tool, FrontendBuildTool::Trunk);
+        assert_eq!(admin_build.workspace_path, "apps/admin");
+        assert_eq!(admin_build.artifact_path, "apps/admin/dist");
+        assert_eq!(admin_build.artifact_kind, FrontendArtifactKind::Directory);
+        assert_eq!(admin_build.command, "trunk build --release");
+
+        let storefront_build = plan
+            .storefront_build
+            .expect("expected storefront build plan");
+        assert_eq!(storefront_build.surface, "storefront");
+        assert_eq!(storefront_build.tool, FrontendBuildTool::Cargo);
+        assert_eq!(storefront_build.package, "rustok-storefront");
+        assert_eq!(storefront_build.workspace_path, ".");
+        assert_eq!(
+            storefront_build.target.as_deref(),
+            Some("x86_64-unknown-linux-gnu")
+        );
+        assert_eq!(
+            storefront_build.command,
+            "cargo build -p rustok-storefront --release --target x86_64-unknown-linux-gnu"
+        );
     }
 
     #[test]
+    #[serial]
     fn rejects_standalone_admin_without_redirect_uris() {
         let mut manifest = ModulesManifest::default();
         manifest.build.server.embed_admin = false;
@@ -1312,6 +1874,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn allows_standalone_surfaces_with_public_oauth_config() {
         let mut manifest = ModulesManifest::default();
         manifest.build.server.embed_admin = false;
@@ -1333,6 +1896,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn allows_registry_superset_when_optional_module_is_removed_from_manifest() {
         let registry = build_registry();
         let manifest = manifest_with_modules(&[
@@ -1347,6 +1911,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn uninstall_removes_default_enabled_entry() {
         let mut manifest = manifest_with_modules(&[
             "index", "outbox", "content", "commerce", "pages", "tenant", "rbac",
@@ -1367,8 +1932,9 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn install_builtin_module_restores_catalog_defaults() {
-        let mut manifest = manifest_with_modules(&["index", "outbox", "tenant", "rbac"]);
+        let mut manifest = manifest_with_modules(&["index", "outbox", "content", "tenant", "rbac"]);
 
         ManifestManager::install_builtin_module(&mut manifest, "pages", Some("1.2.0".to_string()))
             .unwrap();
@@ -1429,6 +1995,95 @@ showcase_admin_surfaces = ["next-admin", "storybook"]
         assert_eq!(
             blog.showcase_admin_surfaces,
             vec!["next-admin", "storybook"]
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn validate_overlays_server_entrypoints_from_rustok_module_manifest() {
+        let temp = tempdir().unwrap();
+        let blog_dir = temp.path().join("crates").join("rustok-blog");
+        let content_dir = temp.path().join("crates").join("rustok-content");
+        let manifest_path = temp.path().join("modules.toml");
+        write_module_manifest(
+            &blog_dir,
+            r#"[module]
+slug = "blog"
+name = "Blog"
+version = "0.1.0"
+ownership = "first_party"
+trust_level = "verified"
+
+[crate]
+entry_type = "BlogModule"
+
+[provides.graphql]
+query = "graphql::BlogQuery"
+mutation = "graphql::BlogMutation"
+
+[provides.http]
+routes = "controllers::routes"
+webhook_routes = "controllers::webhook_routes"
+"#,
+        );
+        write_module_manifest(
+            &content_dir,
+            r#"[module]
+slug = "content"
+name = "Content"
+version = "0.1.0"
+ownership = "first_party"
+trust_level = "verified"
+"#,
+        );
+
+        let mut manifest =
+            manifest_with_modules(&["index", "outbox", "blog", "content", "tenant", "rbac"]);
+        manifest.modules.get_mut("blog").unwrap().path = Some("crates/rustok-blog".to_string());
+        manifest.modules.get_mut("content").unwrap().path =
+            Some("crates/rustok-content".to_string());
+        ManifestManager::save_to_path(&manifest_path, &manifest).unwrap();
+
+        let previous = std::env::var("RUSTOK_MODULES_MANIFEST").ok();
+        unsafe {
+            std::env::set_var("RUSTOK_MODULES_MANIFEST", &manifest_path);
+        }
+
+        let result = ManifestManager::load()
+            .and_then(|loaded| {
+                ManifestManager::validate(&loaded)?;
+                super::resolve_module_specs(&loaded)
+            })
+            .map(|specs| specs.get("blog").cloned());
+
+        match previous {
+            Some(value) => unsafe {
+                std::env::set_var("RUSTOK_MODULES_MANIFEST", value);
+            },
+            None => unsafe {
+                std::env::remove_var("RUSTOK_MODULES_MANIFEST");
+            },
+        }
+
+        let blog = result
+            .expect("manifest should validate with explicit server entry points")
+            .expect("blog spec");
+        assert_eq!(blog.entry_type.as_deref(), Some("rustok_blog::BlogModule"));
+        assert_eq!(
+            blog.graphql_query_type.as_deref(),
+            Some("rustok_blog::graphql::BlogQuery")
+        );
+        assert_eq!(
+            blog.graphql_mutation_type.as_deref(),
+            Some("rustok_blog::graphql::BlogMutation")
+        );
+        assert_eq!(
+            blog.http_routes_fn.as_deref(),
+            Some("rustok_blog::controllers::routes")
+        );
+        assert_eq!(
+            blog.http_webhook_routes_fn.as_deref(),
+            Some("rustok_blog::controllers::webhook_routes")
         );
     }
 
@@ -1509,5 +2164,186 @@ showcase_admin_surfaces = ["next-admin"]
             Err(ManifestError::ConflictingModuleAdminSurface { slug, surface })
                 if slug == "blog" && surface == "next-admin"
         ));
+    }
+
+    #[test]
+    #[serial]
+    fn validate_rejects_dependency_version_mismatch_from_module_package_manifest() {
+        let temp = tempdir().unwrap();
+        let blog_dir = temp.path().join("crates").join("rustok-blog");
+        let content_dir = temp.path().join("crates").join("rustok-content");
+        write_module_manifest(
+            &blog_dir,
+            r#"[module]
+slug = "blog"
+name = "Blog"
+version = "0.1.0"
+ownership = "first_party"
+trust_level = "verified"
+
+[dependencies]
+content = { version_req = ">=0.2.0" }
+"#,
+        );
+        write_module_manifest(
+            &content_dir,
+            r#"[module]
+slug = "content"
+name = "Content"
+version = "0.1.0"
+ownership = "first_party"
+trust_level = "verified"
+"#,
+        );
+
+        let mut manifest =
+            manifest_with_modules(&["index", "outbox", "blog", "content", "tenant", "rbac"]);
+        manifest.modules.get_mut("blog").unwrap().path = Some("crates/rustok-blog".to_string());
+        manifest.modules.get_mut("content").unwrap().path =
+            Some("crates/rustok-content".to_string());
+
+        let previous = std::env::var("RUSTOK_MODULES_MANIFEST").ok();
+        unsafe {
+            std::env::set_var("RUSTOK_MODULES_MANIFEST", temp.path().join("modules.toml"));
+        }
+
+        let result = ManifestManager::validate(&manifest);
+
+        match previous {
+            Some(value) => unsafe {
+                std::env::set_var("RUSTOK_MODULES_MANIFEST", value);
+            },
+            None => unsafe {
+                std::env::remove_var("RUSTOK_MODULES_MANIFEST");
+            },
+        }
+
+        assert!(matches!(
+            result,
+            Err(ManifestError::IncompatibleDependencyVersion {
+                slug,
+                dependency,
+                ..
+            }) if slug == "blog" && dependency == "content"
+        ));
+    }
+
+    #[test]
+    #[serial]
+    fn validate_rejects_conflicting_module_from_module_package_manifest() {
+        let temp = tempdir().unwrap();
+        let blog_dir = temp.path().join("crates").join("rustok-blog");
+        let forum_dir = temp.path().join("crates").join("rustok-forum");
+        write_module_manifest(
+            &blog_dir,
+            r#"[module]
+slug = "blog"
+name = "Blog"
+version = "0.1.0"
+ownership = "first_party"
+trust_level = "verified"
+
+[conflicts]
+modules = ["forum"]
+"#,
+        );
+        write_module_manifest(
+            &forum_dir,
+            r#"[module]
+slug = "forum"
+name = "Forum"
+version = "0.1.0"
+ownership = "first_party"
+trust_level = "verified"
+"#,
+        );
+
+        let mut manifest = manifest_with_modules(&[
+            "index", "outbox", "content", "blog", "forum", "tenant", "rbac",
+        ]);
+        manifest.modules.get_mut("blog").unwrap().path = Some("crates/rustok-blog".to_string());
+        manifest.modules.get_mut("forum").unwrap().path = Some("crates/rustok-forum".to_string());
+
+        let previous = std::env::var("RUSTOK_MODULES_MANIFEST").ok();
+        unsafe {
+            std::env::set_var("RUSTOK_MODULES_MANIFEST", temp.path().join("modules.toml"));
+        }
+
+        let result = ManifestManager::validate(&manifest);
+
+        match previous {
+            Some(value) => unsafe {
+                std::env::set_var("RUSTOK_MODULES_MANIFEST", value);
+            },
+            None => unsafe {
+                std::env::remove_var("RUSTOK_MODULES_MANIFEST");
+            },
+        }
+
+        assert!(matches!(
+            result,
+            Err(ManifestError::ConflictingModule {
+                slug,
+                conflicts_with,
+            }) if slug == "blog" && conflicts_with == "forum"
+        ));
+    }
+
+    #[test]
+    #[serial]
+    fn validate_uses_module_package_version_for_dependency_checks() {
+        let temp = tempdir().unwrap();
+        let blog_dir = temp.path().join("crates").join("rustok-blog");
+        let content_dir = temp.path().join("crates").join("rustok-content");
+        write_module_manifest(
+            &blog_dir,
+            r#"[module]
+slug = "blog"
+name = "Blog"
+version = "0.1.0"
+ownership = "first_party"
+trust_level = "verified"
+
+[dependencies]
+content = { version_req = ">=0.1.0" }
+"#,
+        );
+        write_module_manifest(
+            &content_dir,
+            r#"[module]
+slug = "content"
+name = "Content"
+version = "0.1.0"
+ownership = "first_party"
+trust_level = "verified"
+"#,
+        );
+
+        let mut manifest =
+            manifest_with_modules(&["index", "outbox", "blog", "content", "tenant", "rbac"]);
+        manifest.modules.get_mut("blog").unwrap().path = Some("crates/rustok-blog".to_string());
+        manifest.modules.get_mut("content").unwrap().path =
+            Some("crates/rustok-content".to_string());
+
+        let previous = std::env::var("RUSTOK_MODULES_MANIFEST").ok();
+        unsafe {
+            std::env::set_var("RUSTOK_MODULES_MANIFEST", temp.path().join("modules.toml"));
+        }
+
+        let result = ManifestManager::validate(&manifest);
+
+        match previous {
+            Some(value) => unsafe {
+                std::env::set_var("RUSTOK_MODULES_MANIFEST", value);
+            },
+            None => unsafe {
+                std::env::remove_var("RUSTOK_MODULES_MANIFEST");
+            },
+        }
+
+        assert!(
+            result.is_ok(),
+            "expected dependency version to be resolved from rustok-module.toml"
+        );
     }
 }

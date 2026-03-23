@@ -11,9 +11,7 @@ use validator::ValidationError;
 /// `grapesjs_v1` is the canonical page-builder project payload format for pages.
 pub fn validate_body_format(format: &str) -> Result<(), ValidationError> {
     match format {
-        "markdown" | "html" | "plain" | "json" | "rt_json_v1" | "rt_json" | "grapesjs_v1" => {
-            Ok(())
-        }
+        "markdown" | "html" | "plain" | "json" | "rt_json_v1" | "rt_json" | "grapesjs_v1" => Ok(()),
         _ => Err(ValidationError::new("invalid_format")),
     }
 }

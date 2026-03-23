@@ -11,18 +11,22 @@ use loco_rs::app::AppContext;
 
 use crate::models::build::{BuildStage, BuildStatus, Model as Build};
 use crate::models::release::Model as Release;
-use crate::modules::BuildExecutionPlan;
+use crate::modules::{BuildExecutionPlan, FrontendBuildPlan, FrontendBuildTool};
 use crate::services::build_event_hub::{build_event_hub_from_context, BuildEventHubPublisher};
 use crate::services::build_service::{BuildEventPublisher, BuildService};
 
 const DEFAULT_CARGO_BIN: &str = "cargo";
 const BUILD_CARGO_BIN_ENV: &str = "RUSTOK_BUILD_CARGO_BIN";
+const DEFAULT_TRUNK_BIN: &str = "trunk";
+const BUILD_TRUNK_BIN_ENV: &str = "RUSTOK_BUILD_TRUNK_BIN";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct BuildExecutionReport {
     pub build_id: Uuid,
     pub status: String,
     pub cargo_command: String,
+    pub admin_command: Option<String>,
+    pub storefront_command: Option<String>,
     pub release_id: Option<String>,
     pub release_status: Option<String>,
 }
@@ -95,13 +99,25 @@ impl BuildExecutionService {
         }
 
         let plan = build_execution_plan(&build)?;
-        let spec = BuildCommandSpec::from_plan(&plan);
+        let server_spec = BuildCommandSpec::from_server_plan(&plan);
+        let admin_spec = plan
+            .admin_build
+            .as_ref()
+            .map(BuildCommandSpec::from_frontend_plan)
+            .transpose()?;
+        let storefront_spec = plan
+            .storefront_build
+            .as_ref()
+            .map(BuildCommandSpec::from_frontend_plan)
+            .transpose()?;
 
         if dry_run {
             return Ok(BuildExecutionReport {
                 build_id: build.id,
                 status: "dry-run".to_string(),
-                cargo_command: spec.render(),
+                cargo_command: server_spec.render(),
+                admin_command: admin_spec.as_ref().map(BuildCommandSpec::render),
+                storefront_command: storefront_spec.as_ref().map(BuildCommandSpec::render),
                 release_id: None,
                 release_status: None,
             });
@@ -116,18 +132,38 @@ impl BuildExecutionService {
             )
             .await?;
 
-        self.build_service
-            .update_build_status(
-                build.id,
-                BuildStatus::Running,
-                Some(BuildStage::Build),
-                Some(35),
-            )
-            .await?;
+        let mut specs = vec![("server", server_spec.clone())];
+        if let Some(spec) = admin_spec.clone() {
+            specs.push(("admin", spec));
+        }
+        if let Some(spec) = storefront_spec.clone() {
+            specs.push(("storefront", spec));
+        }
 
-        let status = run_build_command(&spec)
-            .await
-            .with_context(|| format!("failed to execute build command for build {}", build.id));
+        let total_steps = specs.len().max(1);
+        let status = async {
+            for (index, (label, spec)) in specs.iter().enumerate() {
+                let progress = 15 + (((index + 1) * 75) / total_steps) as i32;
+                self.build_service
+                    .update_build_status(
+                        build.id,
+                        BuildStatus::Running,
+                        Some(BuildStage::Build),
+                        Some(progress),
+                    )
+                    .await?;
+
+                run_build_command(spec).await.with_context(|| {
+                    format!(
+                        "failed to execute {label} build command for build {}",
+                        build.id
+                    )
+                })?;
+            }
+
+            Ok::<(), anyhow::Error>(())
+        }
+        .await;
 
         match status {
             Ok(()) => {
@@ -143,7 +179,9 @@ impl BuildExecutionService {
                 Ok(BuildExecutionReport {
                     build_id: build.id,
                     status: "success".to_string(),
-                    cargo_command: spec.render(),
+                    cargo_command: server_spec.render(),
+                    admin_command: admin_spec.as_ref().map(BuildCommandSpec::render),
+                    storefront_command: storefront_spec.as_ref().map(BuildCommandSpec::render),
                     release_id: None,
                     release_status: None,
                 })
@@ -206,7 +244,7 @@ struct BuildCommandSpec {
 }
 
 impl BuildCommandSpec {
-    fn from_plan(plan: &BuildExecutionPlan) -> Self {
+    fn from_server_plan(plan: &BuildExecutionPlan) -> Self {
         let program =
             std::env::var(BUILD_CARGO_BIN_ENV).unwrap_or_else(|_| DEFAULT_CARGO_BIN.to_string());
         let workdir = workspace_root();
@@ -237,6 +275,51 @@ impl BuildCommandSpec {
             args,
             workdir,
             manifest_path,
+        }
+    }
+
+    fn from_frontend_plan(plan: &FrontendBuildPlan) -> anyhow::Result<Self> {
+        let workdir = workspace_root().join(&plan.workspace_path);
+        let manifest_path = workspace_root().join("modules.toml");
+
+        match plan.tool {
+            FrontendBuildTool::Cargo => {
+                let program = std::env::var(BUILD_CARGO_BIN_ENV)
+                    .unwrap_or_else(|_| DEFAULT_CARGO_BIN.to_string());
+                let mut args = vec!["build".to_string(), "-p".to_string(), plan.package.clone()];
+                if plan.profile == "release" {
+                    args.push("--release".to_string());
+                } else {
+                    args.push("--profile".to_string());
+                    args.push(plan.profile.clone());
+                }
+                if let Some(target) = &plan.target {
+                    args.push("--target".to_string());
+                    args.push(target.to_string());
+                }
+
+                Ok(Self {
+                    program,
+                    args,
+                    workdir,
+                    manifest_path,
+                })
+            }
+            FrontendBuildTool::Trunk => {
+                let program = std::env::var(BUILD_TRUNK_BIN_ENV)
+                    .unwrap_or_else(|_| DEFAULT_TRUNK_BIN.to_string());
+                let mut args = vec!["build".to_string()];
+                if plan.profile == "release" {
+                    args.push("--release".to_string());
+                }
+
+                Ok(Self {
+                    program,
+                    args,
+                    workdir,
+                    manifest_path,
+                })
+            }
         }
     }
 
@@ -291,12 +374,15 @@ fn build_module_slugs(build: &Build) -> anyhow::Result<Vec<String>> {
 }
 
 async fn run_build_command(spec: &BuildCommandSpec) -> anyhow::Result<()> {
-    let status = Command::new(&spec.program)
+    let mut command = Command::new(&spec.program);
+    command
         .args(&spec.args)
         .current_dir(&spec.workdir)
         .env("RUSTOK_MODULES_MANIFEST", &spec.manifest_path)
         .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
+        .stderr(Stdio::inherit());
+
+    let status = command
         .status()
         .await
         .with_context(|| format!("failed to spawn {}", spec.render()))?;
@@ -319,7 +405,9 @@ async fn run_build_command(spec: &BuildCommandSpec) -> anyhow::Result<()> {
 mod tests {
     use super::{build_execution_plan, workspace_root, BuildCommandSpec};
     use crate::models::build::{DeploymentProfile, Model as Build};
-    use crate::modules::BuildExecutionPlan;
+    use crate::modules::{
+        BuildExecutionPlan, FrontendArtifactKind, FrontendBuildPlan, FrontendBuildTool,
+    };
 
     fn build_with_plan(plan: &BuildExecutionPlan) -> Build {
         let mut build = Build::new(
@@ -343,6 +431,18 @@ mod tests {
             cargo_target: Some("x86_64-unknown-linux-gnu".to_string()),
             cargo_features: vec!["embed-admin".to_string(), "embed-storefront".to_string()],
             cargo_command: "cargo build -p rustok-server --release".to_string(),
+            admin_build: Some(FrontendBuildPlan {
+                surface: "admin".to_string(),
+                tool: FrontendBuildTool::Trunk,
+                package: "rustok-admin".to_string(),
+                workspace_path: "apps/admin".to_string(),
+                profile: "release".to_string(),
+                target: None,
+                artifact_path: "apps/admin/dist".to_string(),
+                artifact_kind: FrontendArtifactKind::Directory,
+                command: "trunk build --release".to_string(),
+            }),
+            storefront_build: None,
         };
 
         let parsed = build_execution_plan(&build_with_plan(&plan)).unwrap();
@@ -357,15 +457,40 @@ mod tests {
             cargo_target: Some("x86_64-unknown-linux-gnu".to_string()),
             cargo_features: vec!["embed-admin".to_string()],
             cargo_command: String::new(),
+            admin_build: None,
+            storefront_build: None,
         };
 
-        let spec = BuildCommandSpec::from_plan(&plan);
+        let spec = BuildCommandSpec::from_server_plan(&plan);
         assert_eq!(
             spec.args[0..4],
             ["build", "-p", "rustok-server", "--release"]
         );
         assert!(spec.args.contains(&"x86_64-unknown-linux-gnu".to_string()));
         assert!(spec.args.contains(&"embed-admin".to_string()));
+    }
+
+    #[test]
+    fn derives_trunk_command_spec_from_frontend_plan() {
+        let plan = FrontendBuildPlan {
+            surface: "admin".to_string(),
+            tool: FrontendBuildTool::Trunk,
+            package: "rustok-admin".to_string(),
+            workspace_path: "apps/admin".to_string(),
+            profile: "release".to_string(),
+            target: None,
+            artifact_path: "apps/admin/dist".to_string(),
+            artifact_kind: FrontendArtifactKind::Directory,
+            command: "trunk build --release".to_string(),
+        };
+
+        let spec = BuildCommandSpec::from_frontend_plan(&plan).unwrap();
+        assert_eq!(spec.program, "trunk");
+        assert_eq!(
+            spec.args,
+            vec!["build".to_string(), "--release".to_string()]
+        );
+        assert!(spec.workdir.ends_with("apps\\admin") || spec.workdir.ends_with("apps/admin"));
     }
 
     #[test]
@@ -376,6 +501,8 @@ mod tests {
             cargo_target: None,
             cargo_features: vec![],
             cargo_command: String::new(),
+            admin_build: None,
+            storefront_build: None,
         };
 
         let mut build = build_with_plan(&plan);

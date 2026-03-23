@@ -1,4 +1,8 @@
 [module]
+slug = "content"
+name = "Content"
+version = "0.1.0"
+description = "Core content and node module"
 ownership = "first_party"
 trust_level = "verified"
 recommended_admin_surfaces = ["leptos-admin"]

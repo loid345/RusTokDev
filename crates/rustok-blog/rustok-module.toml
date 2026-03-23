@@ -3,12 +3,33 @@ slug = "blog"
 name = "Blog"
 version = "0.1.0"
 description = "Blog and news module"
+ownership = "first_party"
+trust_level = "verified"
+recommended_admin_surfaces = ["leptos-admin"]
+showcase_admin_surfaces = ["next-admin"]
+
+[dependencies]
+content = { version_req = ">=0.1.0" }
+
+[crate]
+entry_type = "BlogModule"
+
+[provides.graphql]
+query = "graphql::BlogQuery"
+mutation = "graphql::BlogMutation"
+
+[provides.http]
+routes = "controllers::routes"
 
 [provides.admin_ui]
 leptos_crate = "rustok-blog-admin"
+route_segment = "blog"
+nav_label = "Blog"
 next_package = "@rustok/blog-admin"
 
 [provides.storefront_ui]
 leptos_crate = "rustok-blog-storefront"
+slot = "home_after_catalog"
+route_segment = "blog"
+page_title = "Blog"
 next_package = "@rustok/blog-frontend"
-showcase_admin_surfaces = ["next-admin"]

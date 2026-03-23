@@ -6,7 +6,7 @@ use crate::{BlogPostStatus, CreatePostInput as DomainCreatePostInput, PostRespon
 use rustok_content::dto::NodeListItem;
 
 #[derive(Enum, Copy, Clone, Eq, PartialEq)]
-#[graphql(rename_items = "SCREAMING_SNAKE_CASE")]
+#[graphql(name = "BlogPostStatus", rename_items = "SCREAMING_SNAKE_CASE")]
 pub enum GqlContentStatus {
     Draft,
     Published,

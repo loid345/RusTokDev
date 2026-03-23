@@ -18,7 +18,9 @@ use crate::services::build_event_hub::{
 use crate::services::build_service::EventBusBuildEventPublisher;
 use crate::services::build_service::{BuildRequest, BuildService};
 use crate::services::event_bus::event_bus_from_context;
-use crate::services::module_lifecycle::{ModuleLifecycleService, ToggleModuleError};
+use crate::services::module_lifecycle::{
+    ModuleLifecycleService, ToggleModuleError, UpdateModuleSettingsError,
+};
 use crate::services::rbac_service::RbacService;
 use crate::services::user_field_service::UserFieldService;
 use rustok_core::{ModuleRegistry, Permission};
@@ -102,6 +104,15 @@ fn map_manifest_error(err: ManifestError) -> FieldError {
         | ManifestError::RequiredMismatch(_)
         | ManifestError::DependencyMismatch(_)
         | ManifestError::MissingModulePackageManifest { .. }
+        | ManifestError::ModulePackageSlugMismatch { .. }
+        | ManifestError::InvalidModuleVersion { .. }
+        | ManifestError::InvalidModuleDependency { .. }
+        | ManifestError::InvalidModuleConflict { .. }
+        | ManifestError::InvalidDependencyVersionReq { .. }
+        | ManifestError::MissingDependencyVersion { .. }
+        | ManifestError::IncompatibleDependencyVersion { .. }
+        | ManifestError::ConflictingModule { .. }
+        | ManifestError::IncompatibleRustokVersion { .. }
         | ManifestError::InvalidModuleOwnership { .. }
         | ManifestError::InvalidModuleTrustLevel { .. }
         | ManifestError::InvalidModuleAdminSurface { .. }
@@ -675,6 +686,48 @@ impl RootMutation {
                 "Module lifecycle hook failed, state rolled back: {}",
                 err
             )),
+        })?;
+
+        Ok(TenantModule {
+            module_slug: module.module_slug,
+            enabled: module.enabled,
+            settings: module.settings.to_string(),
+        })
+    }
+
+    async fn update_module_settings(
+        &self,
+        ctx: &Context<'_>,
+        module_slug: String,
+        settings: String,
+    ) -> Result<TenantModule> {
+        let (_, tenant) = ensure_modules_manage_permission(ctx).await?;
+        let app_ctx = ctx.data::<loco_rs::app::AppContext>()?;
+        let registry = ctx.data::<ModuleRegistry>()?;
+
+        let settings_json: serde_json::Value = serde_json::from_str(&settings)
+            .map_err(|err| FieldError::new(format!("Invalid JSON in settings: {err}")))?;
+
+        let module = ModuleLifecycleService::update_module_settings(
+            &app_ctx.db,
+            registry,
+            tenant.id,
+            &module_slug,
+            settings_json,
+        )
+        .await
+        .map_err(|err| match err {
+            UpdateModuleSettingsError::UnknownModule => FieldError::new("Unknown module"),
+            UpdateModuleSettingsError::ModuleNotEnabled(module_slug) => FieldError::new(format!(
+                "Module is not enabled for this tenant: {}",
+                module_slug
+            )),
+            UpdateModuleSettingsError::InvalidSettings => {
+                FieldError::new("Module settings must be a JSON object")
+            }
+            UpdateModuleSettingsError::Database(err) => {
+                <FieldError as GraphQLError>::internal_error(&err.to_string())
+            }
         })?;
 
         Ok(TenantModule {

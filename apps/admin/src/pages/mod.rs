@@ -1,5 +1,6 @@
 pub mod dashboard;
 pub mod login;
+pub mod module_admin;
 pub mod modules;
 pub mod not_found;
 pub mod oauth_apps;

@@ -3,7 +3,7 @@ use leptos_auth::hooks::{use_tenant, use_token};
 use serde::{Deserialize, Serialize};
 
 use crate::entities::module::{
-    BuildJob, InstalledModule, MarketplaceModule, ModuleInfo, ReleaseInfo,
+    BuildJob, InstalledModule, MarketplaceModule, ModuleInfo, ReleaseInfo, TenantModule,
 };
 use crate::features::modules::api;
 use crate::features::modules::components::ModulesList;
@@ -16,6 +16,7 @@ struct ModulesPageData {
     modules: Vec<ModuleInfo>,
     marketplace_modules: Vec<MarketplaceModule>,
     installed_modules: Vec<InstalledModule>,
+    tenant_modules: Vec<TenantModule>,
     active_build: Option<BuildJob>,
     active_release: Option<ReleaseInfo>,
     build_history: Vec<BuildJob>,
@@ -46,6 +47,8 @@ pub fn Modules() -> impl IntoView {
             .await?;
             let installed_modules =
                 api::fetch_installed_modules(token_value.clone(), tenant_value.clone()).await?;
+            let tenant_modules =
+                api::fetch_tenant_modules(token_value.clone(), tenant_value.clone()).await?;
             let active_build =
                 api::fetch_active_build(token_value.clone(), tenant_value.clone()).await?;
             let active_release =
@@ -56,6 +59,7 @@ pub fn Modules() -> impl IntoView {
                 modules,
                 marketplace_modules,
                 installed_modules,
+                tenant_modules,
                 active_build,
                 active_release,
                 build_history,
@@ -102,6 +106,7 @@ pub fn Modules() -> impl IntoView {
                                         modules=data.modules
                                         marketplace_modules=data.marketplace_modules
                                         installed_modules=data.installed_modules
+                                        tenant_modules=data.tenant_modules
                                         active_build=data.active_build
                                         active_release=data.active_release
                                         build_history=data.build_history

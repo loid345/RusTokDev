@@ -27,6 +27,10 @@ use loco_rs::prelude::Queue;
 use crate::error::Error;
 use migration::Migrator;
 
+mod routes_codegen {
+    include!(concat!(env!("OUT_DIR"), "/app_routes_codegen.rs"));
+}
+
 pub struct App;
 
 #[async_trait]
@@ -98,7 +102,7 @@ impl Hooks for App {
     }
 
     fn routes(_ctx: &AppContext) -> AppRoutes {
-        let mut routes = AppRoutes::with_default_routes()
+        let routes = AppRoutes::with_default_routes()
             .add_route(controllers::health::routes())
             .add_route(controllers::metrics::routes())
             .add_route(controllers::swagger::routes())
@@ -108,24 +112,9 @@ impl Hooks for App {
             .add_route(controllers::mcp::routes())
             .add_route(controllers::oauth::routes())
             .add_route(controllers::oauth_metadata::routes())
-            .add_route(controllers::commerce::routes())
-            .add_route(controllers::content::routes())
-            .add_route(controllers::blog::routes())
-            .add_route(controllers::forum::routes())
-            .add_route(controllers::pages::routes())
             .add_route(controllers::users::routes());
 
-        #[cfg(feature = "mod-media")]
-        {
-            routes = routes.add_route(controllers::media::routes());
-        }
-
-        #[cfg(feature = "mod-workflow")]
-        {
-            routes = routes
-                .add_route(controllers::workflow::routes())
-                .add_route(controllers::workflow::webhook_routes());
-        }
+        let mut routes = routes_codegen::append_optional_module_routes(routes);
 
         routes = routes.add_route(channels::builds::routes());
 
@@ -211,6 +200,8 @@ mod tests {
     use axum::body::{to_bytes, Body};
     use axum::http::{Request, StatusCode};
     use loco_rs::{app::Hooks, tests_cfg::app::get_app_context};
+    use migration::Migrator;
+    use sea_orm_migration::MigratorTrait;
     use serial_test::serial;
     use std::sync::Arc;
     use tower::ServiceExt;
@@ -226,6 +217,9 @@ mod tests {
     #[serial]
     async fn startup_smoke_builds_router_and_runtime_shared_state() {
         let mut ctx = get_app_context().await;
+        Migrator::up(&ctx.db, None)
+            .await
+            .expect("server migrations should apply for startup smoke");
         ctx.config.settings = Some(serde_json::json!({
             "rustok": {
                 "events": {

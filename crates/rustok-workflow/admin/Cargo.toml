@@ -1,0 +1,18 @@
+[package]
+name = "rustok-workflow-admin"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Leptos admin UI package for the rustok-workflow module"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+leptos = { workspace = true, features = ["csr"] }
+leptos-auth.workspace = true
+leptos-graphql.workspace = true
+leptos_router.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+web-sys = { version = "0.3", features = ["Location", "Window"] }

@@ -22,7 +22,9 @@ pub fn HomePage(
     newsletter_placeholder: &'static str,
     newsletter_cta: &'static str,
     newsletter_note: &'static str,
-    module_views: Vec<AnyView>,
+    after_hero_views: Vec<AnyView>,
+    after_catalog_views: Vec<AnyView>,
+    before_footer_views: Vec<AnyView>,
 ) -> impl IntoView {
     view! {
         <main class="space-y-20">
@@ -49,7 +51,7 @@ pub fn HomePage(
                 </div>
             </section>
 
-            {module_views.into_iter().collect_view()}
+            {after_hero_views.into_iter().collect_view()}
 
             <section id="catalog" class="container-app px-4">
                 <div class="mx-auto max-w-6xl space-y-6">
@@ -73,6 +75,8 @@ pub fn HomePage(
                     </div>
                 </div>
             </section>
+
+            {after_catalog_views.into_iter().collect_view()}
 
             <section id="about" class="container-app px-4">
                 <div class="mx-auto grid max-w-6xl gap-6 lg:grid-cols-2">
@@ -100,6 +104,8 @@ pub fn HomePage(
                     </div>
                 </div>
             </section>
+
+            {before_footer_views.into_iter().collect_view()}
         </main>
     }
 }

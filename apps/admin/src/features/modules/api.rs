@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use crate::entities::module::{
-    BuildJob, InstalledModule, MarketplaceModule, ModuleInfo, ReleaseInfo, ToggleModuleResult,
+    BuildJob, InstalledModule, MarketplaceModule, ModuleInfo, ReleaseInfo, TenantModule,
+    ToggleModuleResult,
 };
 use crate::shared::api::{request, ApiError};
 
@@ -10,6 +11,8 @@ pub const MODULE_REGISTRY_QUERY: &str =
     "query ModuleRegistry { moduleRegistry { moduleSlug name description version kind dependencies enabled ownership trustLevel recommendedAdminSurfaces showcaseAdminSurfaces } }";
 pub const INSTALLED_MODULES_QUERY: &str =
     "query InstalledModules { installedModules { slug source crateName version required dependencies } }";
+pub const TENANT_MODULES_QUERY: &str =
+    "query TenantModules { tenantModules { moduleSlug enabled settings } }";
 pub const MARKETPLACE_QUERY: &str =
     "query Marketplace($search: String, $category: String, $source: String, $trustLevel: String, $onlyCompatible: Boolean, $installedOnly: Boolean) { marketplace(search: $search, category: $category, source: $source, trustLevel: $trustLevel, onlyCompatible: $onlyCompatible, installedOnly: $installedOnly) { slug name latestVersion description source kind category crateName dependencies ownership trustLevel rustokMinVersion rustokMaxVersion publisher checksumSha256 signaturePresent versions { version changelog yanked publishedAt checksumSha256 signaturePresent } compatible recommendedAdminSurfaces showcaseAdminSurfaces installed installedVersion updateAvailable } }";
 pub const MARKETPLACE_MODULE_QUERY: &str =
@@ -20,8 +23,12 @@ pub const ACTIVE_RELEASE_QUERY: &str =
     "query ActiveRelease { activeRelease { id buildId status environment manifestHash modules previousReleaseId deployedAt rolledBackAt createdAt updatedAt } }";
 pub const BUILD_HISTORY_QUERY: &str =
     "query BuildHistory($limit: Int!, $offset: Int!) { buildHistory(limit: $limit, offset: $offset) { id status stage progress profile manifestRef manifestHash modulesDelta requestedBy reason releaseId logsUrl errorMessage startedAt createdAt updatedAt finishedAt } }";
+pub const BUILD_PROGRESS_SUBSCRIPTION: &str =
+    "subscription BuildProgress { buildProgress { buildId status stage progress releaseId errorMessage } }";
 pub const TOGGLE_MODULE_MUTATION: &str =
     "mutation ToggleModule($moduleSlug: String!, $enabled: Boolean!) { toggleModule(moduleSlug: $moduleSlug, enabled: $enabled) { moduleSlug enabled settings } }";
+pub const UPDATE_MODULE_SETTINGS_MUTATION: &str =
+    "mutation UpdateModuleSettings($moduleSlug: String!, $settings: String!) { updateModuleSettings(moduleSlug: $moduleSlug, settings: $settings) { moduleSlug enabled settings } }";
 pub const INSTALL_MODULE_MUTATION: &str =
     "mutation InstallModule($slug: String!, $version: String!) { installModule(slug: $slug, version: $version) { id status stage progress modulesDelta requestedBy reason createdAt updatedAt finishedAt } }";
 pub const UNINSTALL_MODULE_MUTATION: &str =
@@ -47,6 +54,12 @@ pub struct ModuleRegistryResponse {
 pub struct InstalledModulesResponse {
     #[serde(rename = "installedModules")]
     pub installed_modules: Vec<InstalledModule>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct TenantModulesResponse {
+    #[serde(rename = "tenantModules")]
+    pub tenant_modules: Vec<TenantModule>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -78,10 +91,29 @@ pub struct BuildHistoryResponse {
     pub build_history: Vec<BuildJob>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
+pub struct BuildProgressEvent {
+    #[serde(rename = "buildId")]
+    pub build_id: String,
+    pub status: String,
+    pub stage: String,
+    pub progress: i32,
+    #[serde(rename = "releaseId")]
+    pub release_id: Option<String>,
+    #[serde(rename = "errorMessage")]
+    pub error_message: Option<String>,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ToggleModuleResponse {
     #[serde(rename = "toggleModule")]
     pub toggle_module: ToggleModuleResult,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct UpdateModuleSettingsResponse {
+    #[serde(rename = "updateModuleSettings")]
+    pub update_module_settings: TenantModule,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -113,6 +145,13 @@ pub struct ToggleModuleVariables {
     #[serde(rename = "moduleSlug")]
     pub module_slug: String,
     pub enabled: bool,
+}
+
+#[derive(Clone, Debug, Serialize)]
+pub struct UpdateModuleSettingsVariables {
+    #[serde(rename = "moduleSlug")]
+    pub module_slug: String,
+    pub settings: String,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -204,6 +243,20 @@ pub async fn fetch_installed_modules(
     Ok(response.installed_modules)
 }
 
+pub async fn fetch_tenant_modules(
+    token: Option<String>,
+    tenant_slug: Option<String>,
+) -> Result<Vec<TenantModule>, ApiError> {
+    let response: TenantModulesResponse = request(
+        TENANT_MODULES_QUERY,
+        serde_json::json!({}),
+        token,
+        tenant_slug,
+    )
+    .await?;
+    Ok(response.tenant_modules)
+}
+
 pub async fn fetch_marketplace_modules(
     token: Option<String>,
     tenant_slug: Option<String>,
@@ -290,6 +343,25 @@ pub async fn toggle_module(
     )
     .await?;
     Ok(response.toggle_module)
+}
+
+pub async fn update_module_settings(
+    module_slug: String,
+    settings: String,
+    token: Option<String>,
+    tenant_slug: Option<String>,
+) -> Result<TenantModule, ApiError> {
+    let response: UpdateModuleSettingsResponse = request(
+        UPDATE_MODULE_SETTINGS_MUTATION,
+        UpdateModuleSettingsVariables {
+            module_slug,
+            settings,
+        },
+        token,
+        tenant_slug,
+    )
+    .await?;
+    Ok(response.update_module_settings)
 }
 
 pub async fn install_module(

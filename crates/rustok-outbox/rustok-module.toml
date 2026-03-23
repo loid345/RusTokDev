@@ -1,4 +1,8 @@
 [module]
+slug = "outbox"
+name = "Outbox"
+version = "0.1.0"
+description = "Transactional outbox and event relay module"
 ownership = "first_party"
 trust_level = "core"
 recommended_admin_surfaces = ["leptos-admin"]

@@ -1,4 +1,8 @@
 [module]
+slug = "index"
+name = "Index"
+version = "0.1.0"
+description = "Read-model indexing and search module"
 ownership = "first_party"
 trust_level = "core"
 recommended_admin_surfaces = ["leptos-admin"]

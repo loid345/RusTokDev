@@ -1,6 +1,7 @@
 ﻿# RusTok вЂ” РЎРёСЃС‚РµРјР° РјРѕРґСѓР»РµР№: РїРѕР»РЅР°СЏ РєР°СЂС‚Р° Рё РїР»Р°РЅ
 
 > **Р”Р°С‚Р°**: 2026-03-19
+> **Актуализировано**: 2026-03-23
 > **РќР°Р·РЅР°С‡РµРЅРёРµ**: РїРѕР»РЅР°СЏ РєР°СЂС‚Р° СЂРµР°Р»РёР·Р°С†РёРё вЂ” С‡С‚Рѕ СЃРґРµР»Р°РЅРѕ, РіРґРµ РґРѕРєСѓРјРµРЅС‚РёСЂРѕРІР°РЅРѕ,
 > С‡С‚Рѕ РѕСЃС‚Р°Р»РѕСЃСЊ. РЎР»СѓР¶РёС‚ РѕСЃРЅРѕРІРѕР№ РґР»СЏ РїРµСЂРёРѕРґРёС‡РµСЃРєРѕР№ РІРµСЂРёС„РёРєР°С†РёРё РєРѕСЂСЂРµРєС‚РЅРѕСЃС‚Рё.
 >
@@ -21,6 +22,19 @@
 9. [РџСЂРёРѕСЂРёС‚РµС‚ РЅРµР·Р°РІРµСЂС€С‘РЅРЅРѕРіРѕ](#9-РїСЂРёРѕСЂРёС‚РµС‚-РЅРµР·Р°РІРµСЂС€С‘РЅРЅРѕРіРѕ)
 
 ---
+
+## Статус на 2026-03-23
+
+- ✅ `rustok-api` уже существует как foundation-слой и подключён к модульным crate-ам; это больше не «будущий план».
+- ✅ Основные GraphQL/REST адаптеры уже вынесены из `apps/server` в crate-ы модулей, а `apps/server` удерживает роль composition root.
+- ✅ Build/release pipeline теперь исполняет полный manifest-derived план: `cargo build` для `apps/server`, `trunk build` для `apps/admin` и `cargo build -p rustok-storefront` для Leptos storefront; filesystem/container backend публикуют реальные `server`/`admin`/`storefront` артефакты и заполняют отдельные artifact URLs, а `container` дополнительно поддерживает generic rollout hook без знания о конкретном orchestrator.
+- ⚠️ `ManifestManager` уже валидирует metadata path-модулей и конфликты admin surface-ов, но semver-диапазоны зависимостей и продуктовые runtime-конфликты модулей ещё не покрыты.
+- ⚠️ `updateModuleSettings` уже появился в базовом виде: есть GraphQL mutation и JSON editor в `/modules`, но schema-driven форма и валидация из `rustok-module.toml` ещё не доведены до конца.
+- ✅ `buildProgress` теперь работает end-to-end: `apps/server` поднимает GraphQL WS transport на `/api/graphql/ws`, а `/modules` в `apps/admin` подписывается на live progress и держит polling только как fallback.
+- ⚠️ `apps/server/build.rs` уже генерирует optional module registry, GraphQL schema fragments и HTTP routes из `modules.toml`; explicit server entry-point contract через `[crate]` / `[provides.graphql]` / `[provides.http]` уже поднят, `apps/admin/build.rs` уже доведён до generic module root pages/nav/dashboard wiring, `apps/storefront/build.rs` уже поддерживает multi-slot storefront sections и generic module route `/modules/:route_segment`, `pages` стал следующим publishable Leptos package после `blog`/`workflow`, но перенос остальных модулей и richer nested admin contract всё ещё открыты.
+
+> [!NOTE]
+> Раздел 9 ниже и этот статус-блок являются канонической точкой отсчёта на 2026-03-23.
 
 ## 1. РЎС‚Р°РЅРґР°СЂС‚ РјРѕРґСѓР»СЏ
 
@@ -251,28 +265,31 @@ rollbackBuild(buildId: ID!): BuildJob!
 
 ---
 
-### вљ пёЏ Semver-РІР°Р»РёРґР°С†РёСЏ Р·Р°РІРёСЃРёРјРѕСЃС‚РµР№ Рё РєРѕРЅС„Р»РёРєС‚РѕРІ
+### ⚠️ Semver-валидация зависимостей и конфликтов
 
-`ManifestManager::validate()` РїСЂРѕРІРµСЂСЏРµС‚ С‚РѕР»СЊРєРѕ С„Р°РєС‚ РЅР°Р»РёС‡РёСЏ slug РІ РјР°РЅРёС„РµСЃС‚Рµ.
-Р”РёР°РїР°Р·РѕРЅС‹ РІРµСЂСЃРёР№ РІ `[dependencies]` (`>= 1.0.0`, `~2.0`) РЅРµ РїСЂРѕРІРµСЂСЏСЋС‚СЃСЏ.
-РЎРµРєС†РёСЏ `[conflicts]` РїР°СЂСЃРёС‚СЃСЏ, РЅРѕ РЅРёРіРґРµ РЅРµ РїСЂРѕРІРµСЂСЏРµС‚СЃСЏ.
+Секция уже не в нулевом состоянии, а **частично закрыта**.
 
-**Р§С‚Рѕ РЅСѓР¶РЅРѕ** РІ `apps/server/src/modules/manifest.rs`:
+Что уже есть в `apps/server/src/modules/manifest.rs`:
+
+- path-модули обязаны иметь `rustok-module.toml`;
+- валидируются `ownership`, `trust_level` и admin surface metadata;
+- ловятся metadata-конфликты вида `ConflictingModuleAdminSurface`;
+- базовая проверка `depends_on` по slug уже выполняется.
+
+Что ещё остаётся:
+
+- проверка semver-диапазонов из `[dependencies]`;
+- проверка продуктовых/runtime-конфликтов модулей, а не только admin-surface metadata;
+- отдельные manifest-ошибки для несовместимой версии зависимости и конфликтующего модуля.
+
+Минимальный следующий шаг:
 ```rust
-// Р”Р»СЏ РєР°Р¶РґРѕР№ Р·Р°РІРёСЃРёРјРѕСЃС‚Рё:
 let req = semver::VersionReq::parse(&dep.version_req)?;
 let installed = semver::Version::parse(&installed_spec.version)?;
 if !req.matches(&installed) {
     return Err(IncompatibleDependencyVersion { ... });
 }
-
-// Р”Р»СЏ РєРѕРЅС„Р»РёРєС‚РѕРІ:
-if manifest.modules.contains_key(&conflict_slug) {
-    return Err(ConflictingModule { slug, conflicts_with: conflict_slug });
-}
 ```
-
-Р”РѕР±Р°РІРёС‚СЊ `semver = "1"` РІ `apps/server/Cargo.toml`.
 
 ---
 
@@ -297,9 +314,10 @@ BuildService::running_build()
 
 ---
 
-### вњ… `BuildExecutor` вЂ” cargo build
+### вњ… `BuildExecutor` вЂ” manifest-derived build plan
 
-Р’С‹РїРѕР»РЅСЏРµС‚ `cargo build -p rustok-server` СЃ feature flags РёР· СѓСЃС‚Р°РЅРѕРІР»РµРЅРЅС‹С… РјРѕРґСѓР»РµР№.
+Р’С‹РїРѕР»РЅСЏРµС‚ РЅРµ С‚РѕР»СЊРєРѕ `cargo build -p rustok-server`, Р° РІРµСЃСЊ build plan,
+РІС‹РІРµРґРµРЅРЅС‹Р№ РёР· `modules.toml`: server, optional `admin` Рё optional `storefront`.
 РћР±РЅРѕРІР»СЏРµС‚ `builds.stage` Рё `builds.progress` РїРѕ С…РѕРґСѓ РІС‹РїРѕР»РЅРµРЅРёСЏ.
 РЎРѕР·РґР°С‘С‚ Р·Р°РїРёСЃСЊ РІ `releases` РїСЂРё СѓСЃРїРµС…Рµ.
 
@@ -308,6 +326,14 @@ BuildService::running_build()
 
 **Env vars**:
 - `RUSTOK_BUILD_CARGO_BIN` вЂ” РїСѓС‚СЊ Рє cargo (default: `cargo`)
+- `RUSTOK_BUILD_TRUNK_BIN` вЂ” РїСѓС‚СЊ Рє trunk (default: `trunk`)
+
+Что уже делается в build plan:
+
+- server СЃРѕР±РёСЂР°РµС‚СЃСЏ С‡РµСЂРµР· `cargo build -p <app>`;
+- `admin` СЃРѕР±РёСЂР°РµС‚СЃСЏ С‡РµСЂРµР· `trunk build` Рё РґР°С‘С‚ Р°СЂС‚РµС„Р°РєС‚-РґРёСЂРµРєС‚РѕСЂРёСЋ `apps/admin/dist`;
+- `storefront` СЃРѕР±РёСЂР°РµС‚СЃСЏ РєР°Рє РѕС‚РґРµР»СЊРЅС‹Р№ SSR-Р±РёРЅР°СЂРЅРёРє `cargo build -p rustok-storefront`;
+- execution plan СЃРµСЂРёР°Р»РёР·СѓРµС‚СЃСЏ РІ metadata build-Р·Р°РїРёСЃРё Рё РїРµСЂРµРёСЃРїРѕР»СЊР·СѓРµС‚СЃСЏ release backend-РѕРј.
 
 ---
 
@@ -350,46 +376,38 @@ buildHistory(limit: Int, offset: Int): [BuildJob!]!
 
 ---
 
-### вљ пёЏ Docker deploy вЂ” РЅРµ СЂРµР°Р»РёР·РѕРІР°РЅ
+### ✅ Release deploy backend — server publish path закрыт
 
-`BuildExecutor` РІС‹РїРѕР»РЅСЏРµС‚ С‚РѕР»СЊРєРѕ `cargo build`. РџРѕСЃР»Рµ РєРѕРјРїРёР»СЏС†РёРё СЃРѕР·РґР°С‘С‚СЃСЏ
-`Release` Р·Р°РїРёСЃСЊ, РЅРѕ `container_image` Рё `server_artifact_url` РѕСЃС‚Р°СЋС‚СЃСЏ РїСѓСЃС‚С‹РјРё.
-`ReleaseStatus::Deploying` / `Active` РЅРµ РёСЃРїРѕР»СЊР·СѓСЋС‚СЃСЏ РїРѕ РЅР°Р·РЅР°С‡РµРЅРёСЋ.
+Старое описание «после `cargo build` ничего нет» больше не соответствует коду.
 
-**Р§С‚Рѕ РЅСѓР¶РЅРѕ** РІ `apps/server/src/services/build_executor.rs`:
-```
-Stage: Deploy (progress 85вЂ“99%)
-  1. docker build -t {registry}/rustok-server:{release_id} .
-  2. docker push
-  3. Р—Р°РїРѕР»РЅРёС‚СЊ releases.container_image
-  4. Rolling restart (monolith) | kubectl rollout (K8s)
-```
+Что уже есть:
 
-**РќРѕРІС‹Рµ env vars**:
-- `RUSTOK_BUILD_DOCKER_BIN` вЂ” РїСѓС‚СЊ Рє docker (default: `docker`)
-- `RUSTOK_BUILD_REGISTRY` вЂ” registry URL
-- `RUSTOK_DEPLOY_MODE` вЂ” `monolith` | `docker` | `k8s`
+- `ReleaseDeploymentService` и `release_backend` в `apps/server/src/services/`;
+- публикация серверного артефакта в filesystem и HTTP backend;
+- публикация реальных frontend-артефактов (`apps/admin/dist` и `rustok-storefront`) в filesystem/container backend;
+- отдельный `container` backend поверх того же release bundle;
+- `docker build` / `docker push` через generic config (`docker_bin`, `image_repository`);
+- заполнение `releases.container_image`;
+- optional `rollout_command` hook без жёсткой привязки к Kubernetes/docker-compose;
+- заполнение `server_artifact_url`, `admin_artifact_url`, `storefront_artifact_url`;
+- связка build-worker → publish-release → attach artifacts.
+
+Что остаётся вне этого блока:
+
+- provider-specific deploy logic по-прежнему должна жить во внешнем orchestrator/hook, а не в `apps/server`;
+- HTTP backend пока не грузит директорию `apps/admin/dist` сам по multipart и остаётся совместимым с внешним deployment endpoint, который может вернуть готовые `admin_artifact_url` / `storefront_artifact_url`.
 
 ---
 
-### вљ пёЏ Build progress UI вЂ” polling РІРјРµСЃС‚Рѕ subscription
+### вњ… Build progress UI вЂ” live subscription + polling fallback
 
-РџСЂРѕРіСЂРµСЃСЃ-Р±Р°СЂ РІ `/modules` РѕР±РЅРѕРІР»СЏРµС‚СЃСЏ РѕРїСЂРѕСЃРѕРј РєР°Р¶РґС‹Рµ 5 СЃРµРєСѓРЅРґ
-(`use_interval_fn(refresh_live_state, 5000)`).
-Р‘СЌРєРµРЅРґ-subscription (`buildProgress`) СЂРµР°Р»РёР·РѕРІР°РЅР°, РЅРѕ UI Рє РЅРµР№ РЅРµ РїРѕРґРєР»СЋС‡С‘РЅ.
+РџСЂРѕРіСЂРµСЃСЃ-Р±Р°СЂ РІ `/modules` С‚РµРїРµСЂСЊ РѕР±РЅРѕРІР»СЏРµС‚СЃСЏ С‡РµСЂРµР· `buildProgress` subscription, Р° polling РѕСЃС‚Р°С‘С‚СЃСЏ С‚РѕР»СЊРєРѕ РєР°Рє fallback РїСЂРё РѕР±СЂС‹РІРµ live-РєР°РЅР°Р»Р°.
 
-**Р§С‚Рѕ РЅСѓР¶РЅРѕ** РІ `apps/admin/src/features/modules/components/modules_list.rs`:
-```rust
-// Р—Р°РјРµРЅРёС‚СЊ:
-use_interval_fn(refresh_live_state, 5000);
-// РќР°:
-let _sub = use_graphql_subscription::<BuildProgressSubscription>(
-    BuildProgressSubscriptionVariables { build_id: active_build_id },
-    move |event| set_build.set(Some(event.build_progress)),
-);
-```
-
-`leptos-graphql` СѓР¶Рµ РїРѕРґРґРµСЂР¶РёРІР°РµС‚ subscriptions.
+РС‚РѕРіРѕРІС‹Р№ transport contract:
+- GraphQL websocket endpoint: `/api/graphql/ws`;
+- browser-side auth/tenant/context РёРґСѓС‚ С‡РµСЂРµР· `connection_init` payload (`token`, `tenantSlug`, `locale`);
+- `apps/server` РґР»СЏ subscription route РЅРµ С‚СЂРµР±СѓРµС‚ `X-Tenant-Slug` РЅР° HTTP upgrade и СЂРµР·РѕР»РІРёС‚ tenant РІРЅСѓС‚СЂРё handshake;
+- `apps/admin` Р»РѕРєР°Р»СЊРЅРѕ РѕР±РЅРѕРІР»СЏРµС‚ active build РїРѕ push-СЃРѕР±С‹С‚РёСЏРј Рё РґРµР»Р°РµС‚ РѕР±С‹С‡РЅС‹Р№ refresh С‚РѕР»СЊРєРѕ РґР»СЏ terminal state / resync.
 
 ---
 
@@ -607,70 +625,48 @@ use rustok_blog::graphql::{BlogMutation, BlogQuery};
 ```
 
 **Р§С‚Рѕ РЅСѓР¶РЅРѕ СЃРґРµР»Р°С‚СЊ РґР°Р»СЊС€Рµ**:
-1. Р—Р°РІРµСЂС€РёС‚СЊ С„Р°Р·Сѓ foundation: Р·Р°С„РёРєСЃРёСЂРѕРІР°С‚СЊ СЃРѕСЃС‚Р°РІ `rustok-api` РєР°Рє РµРґРёРЅСЃС‚РІРµРЅРЅРѕР№ С‚РѕС‡РєРё РґР»СЏ РѕР±С‰РёС… GraphQL/HTTP helper-РѕРІ Рё РЅРµ РІРѕР·РІСЂР°С‰Р°С‚СЊ СЌС‚Рё С‚РёРїС‹ РѕР±СЂР°С‚РЅРѕ РІ `apps/server`.
-2. Зафиксировать split `alloy` + `alloy-scripting` как шаблон для module-agnostic capabilities, которые не должны попадать в runtime module registry даже при наличии собственного transport-слоя.
-3. РћР±РЅРѕРІРёС‚СЊ `apps/server/src/graphql/schema.rs` Рё `apps/server/src/app.rs`, С‡С‚РѕР±С‹ РѕРЅРё Рё РґР°Р»СЊС€Рµ РѕСЃС‚Р°РІР°Р»РёСЃСЊ С‚РѕР»СЊРєРѕ composition-root СЃР»РѕРµРј РґР»СЏ РјРѕРґСѓР»СЊРЅС‹С… entry points.
-4. РџРµСЂРµР№С‚Рё Рє СЃР»РµРґСѓСЋС‰РµРјСѓ РїР»Р°СЃС‚Сѓ Р°СЂС…РёС‚РµРєС‚СѓСЂРЅРѕРіРѕ РґРѕР»РіР°: `build.rs`-РєРѕРґРѕРіРµРЅРµСЂР°С†РёСЏ module entry points Рё РІС‹РЅРѕСЃ UI-СЃР»РѕСЏ РІ publishable module packages.
+1. Зафиксировать `rustok-api` как тонкий и единственный shared host/API layer для общих GraphQL/HTTP helper-ов, не допускать обратного дрейфа этих типов в `apps/server` и не создавать параллельную реализацию такого же слоя в других crate-ах.
+2. Довести до одинакового стандарта оставшиеся composition-root shim-слои, чтобы новые модульные transport-адаптеры появлялись сразу в crate-ах модулей.
+3. Зафиксировать split `alloy` + `alloy-scripting` как шаблон для module-agnostic capabilities вне runtime module registry.
+4. Перейти к следующему реальному блокеру extensibility: `build.rs`-кодогенерация entry points и системный вынос UI-слоя в publishable module packages.
 
 **РћС‚РєСЂС‹С‚С‹Р№ РІРѕРїСЂРѕСЃ**: СЃР»РµРґСѓСЋС‰РёР№ СЃСЂРµР· РґР»СЏ `rustok-api` вЂ” abstraction around `CurrentUser`/RBAC extractor-С‹ Рё РјРёРЅРёРјР°Р»СЊРЅС‹Р№ runtime-contract, РЅСѓР¶РЅС‹Р№ РјРѕРґСѓР»СЊРЅС‹Рј HTTP-РєРѕРЅС‚СЂРѕР»Р»РµСЂР°Рј Р±РµР· РїСЂРѕС‚Р°СЃРєРёРІР°РЅРёСЏ РІСЃРµРіРѕ `AppContext`.
 
 ---
 
-### в¬њ РљРѕРґРѕРіРµРЅРµСЂР°С†РёСЏ СЂРµРіРёСЃС‚СЂР°С†РёРё РјРѕРґСѓР»РµР№ (`build.rs`)
+### ⚠️ Кодогенерация регистрации модулей (`build.rs`)
 
-**РўРµРєСѓС‰РµРµ СЃРѕСЃС‚РѕСЏРЅРёРµ** вЂ” С‚СЂРё РјРµСЃС‚Р° РїСЂРѕС€РёС‚С‹ РІСЂСѓС‡РЅСѓСЋ:
-
-```rust
-// 1. apps/server/src/modules/mod.rs вЂ” build_registry()
-registry.register(BlogModule);     // в†ђ РєР°Р¶РґС‹Р№ РјРѕРґСѓР»СЊ СЏРІРЅРѕ
-registry.register(CommerceModule); // в†ђ СЃС‚РѕСЂРѕРЅРЅРёР№ СЃСЋРґР° РЅРµ РїРѕРїР°РґС‘С‚
-
-// 2. apps/server/src/graphql/schema.rs вЂ” СЃС‚Р°С‚РёС‡РµСЃРєРёР№ MergedObject
-#[derive(MergedObject, Default)]
-pub struct Query(
-    #[cfg(feature = "mod-blog")] BlogQuery,   // в†ђ compile-time С‚РёРїС‹
-    // PodcastQuery СЃС‚РѕСЂРѕРЅРЅРµРіРѕ РјРѕРґСѓР»СЏ СЃСЋРґР° РЅРµ РїРѕРїР°РґС‘С‚
-);
-
-// 3. apps/server/src/app.rs вЂ” РјР°СЂС€СЂСѓС‚С‹
-.add_route(controllers::blog::routes()) // в†ђ СЃС‚РѕСЂРѕРЅРЅРёР№ РЅРµ РґРѕР±Р°РІРёС‚СЃСЏ
-```
-
-Р”Р»СЏ СѓСЃС‚Р°РЅРѕРІРєРё СЃС‚РѕСЂРѕРЅРЅРµРіРѕ РјРѕРґСѓР»СЏ РЅСѓР¶РЅРѕ РІСЂСѓС‡РЅСѓСЋ РјРµРЅСЏС‚СЊ РІСЃРµ С‚СЂРё С„Р°Р№Р»Р°.
-Р­С‚Рѕ РЅРµ РјР°СЂРєРµС‚РїР»РµР№СЃ вЂ” СЌС‚Рѕ СЂСѓС‡РЅР°СЏ РёРЅС‚РµРіСЂР°С†РёСЏ.
-
-**Р РµС€РµРЅРёРµ вЂ” `apps/server/build.rs`**:
-
-`build.rs` С‡РёС‚Р°РµС‚ `modules.toml` Рё РіРµРЅРµСЂРёСЂСѓРµС‚ С‚СЂРё С„Р°Р№Р»Р°:
+`apps/server/build.rs` уже существует и генерирует три include-файла в `OUT_DIR`:
 
 ```
-apps/server/src/generated/
-в”њв”Ђв”Ђ registry.rs   в†ђ РІС‹Р·РѕРІС‹ register() РґР»СЏ РІСЃРµС… СѓСЃС‚Р°РЅРѕРІР»РµРЅРЅС‹С… РјРѕРґСѓР»РµР№
-в”њв”Ђв”Ђ schema.rs     в†ђ MergedObject СЃ Query/Mutation РІСЃРµС… РјРѕРґСѓР»РµР№
-в””в”Ђв”Ђ routes.rs     в†ђ add_route() РґР»СЏ РІСЃРµС… РјРѕРґСѓР»РµР№
+modules_registry_codegen.rs
+graphql_schema_codegen.rs
+app_routes_codegen.rs
 ```
 
-РљР°Р¶РґС‹Р№ РјРѕРґСѓР»СЊ СЌРєСЃРїРѕСЂС‚РёСЂСѓРµС‚ СЃС‚Р°РЅРґР°СЂС‚РЅС‹Рµ С‚РѕС‡РєРё РІС…РѕРґР° (РїРѕСЃР»Рµ РїРµСЂРµРЅРѕСЃР° РІ РєСЂРµР№С‚):
-```rust
-// crates/rustok-podcast/src/lib.rs
-pub mod graphql { pub struct PodcastQuery; pub struct PodcastMutation; }
-pub mod controllers { pub fn routes() -> Routes { ... } }
-```
+Что уже закрыто:
 
-`build.rs` Р·РЅР°РµС‚ С‡С‚Рѕ РіРµРЅРµСЂРёСЂРѕРІР°С‚СЊ РёР· `rustok-module.toml`:
-```toml
-[provides.graphql]
-query_type = "PodcastQuery"
-mutation_type = "PodcastMutation"
+- `apps/server/src/modules/mod.rs` больше не регистрирует optional-модули вручную.
+- `apps/server/src/graphql/schema.rs` больше не держит статический список optional `Query`/`Mutation`.
+- `apps/server/src/app.rs` больше не добавляет optional HTTP routes вручную.
+- `workflow` и `media` уже проходят через тот же manifest-managed composition-root path, что и остальные optional-модули.
+- startup smoke теперь реально собирает полный runtime через codegen, а не через ручной список entry points.
 
-[provides.http]
-routes_fn = "controllers::routes"
-```
+Текущий контракт генерации:
 
-**РС‚РѕРі**: СЃРµСЂРІРµСЂ Р±РѕР»СЊС€Рµ РЅРёРєРѕРіРґР° РЅРµ С‚СЂРѕРіР°РµС‚СЃСЏ РІСЂСѓС‡РЅСѓСЋ РїСЂРё СѓСЃС‚Р°РЅРѕРІРєРµ РјРѕРґСѓР»СЏ.
-`modules.toml` в†’ РєРѕРґРѕРіРµРЅРµСЂР°С†РёСЏ в†’ `cargo build` в†’ Р±РёРЅР°СЂРЅРёРє СЃ РЅРѕРІС‹Рј РјРѕРґСѓР»РµРј.
+- источник правды для server composition root — `modules.toml`;
+- path-модули могут объявить server entry points явно в `rustok-module.toml` через `[crate].entry_type`, `[provides.graphql]` и `[provides.http]`;
+- external/non-path crate-ы могут хранить уже нормализованные entry points прямо в `modules.toml` (`entry_type`, `graphql_query_type`, `graphql_mutation_type`, `http_routes_fn`, `http_webhook_routes_fn`);
+- naming conventions (`<PascalSlug>Module`, `<PascalSlug>Query`, `<PascalSlug>Mutation`, `controllers::routes`, optional `webhook_routes`) остались только как backward-compatible fallback для path-модулей без явного контракта;
+- если в `apps/server/src/controllers/<slug>` существует shim, generator сохраняет его как route entry point, чтобы не ломать server-specific health/webhook composition.
 
-**Р—Р°РІРёСЃРёС‚ РѕС‚**: `rustok-api` + РїРµСЂРµРЅРѕСЃ GraphQL/REST РІ РјРѕРґСѓР»СЊРЅС‹Рµ РєСЂРµР№С‚С‹.
+Что ещё остаётся:
+
+- richer nested admin route/page contract поверх уже существующего module root route wiring;
+- richer storefront slot/page contract поверх уже существующего generated slot wiring;
+- правило namespace-safety для GraphQL-visible типов модулей: после включения server codegen пришлось развести `BlogPostStatus` и `GqlContentStatus`, и новые модули не должны публиковать конфликтующие GraphQL names.
+
+**Итог**: server composition root уже не требует ручной правки при подключении manifest-managed optional-модуля внутри текущего workspace, storefront host уже регистрирует module-owned Leptos sections через generated slot wiring, а admin host уже монтирует module-owned dashboard sections, nav items и module root pages через generated registry wiring. Полная extensibility всё ещё упирается в explicit entry-point contract и более богатые UI contracts поверх базового root-page path.
 
 ---
 
@@ -724,36 +720,61 @@ crates/rustok-workflow/
     в””в”Ђв”Ђ src/            # Leptos SSR components
 ```
 
-2. **`apps/admin/build.rs`** РіРµРЅРµСЂРёСЂСѓРµС‚ РёР· `modules.toml`:
+2. **`apps/admin/build.rs`** уже поднят частично:
 ```rust
-// generated/routes.rs
-<Route path=path!("/workflows") view=rustok_workflow::ui::admin::WorkflowsPage />
-<Route path=path!("/workflows/:id") view=rustok_workflow::ui::admin::WorkflowDetailPage />
+// generated/registry.rs
+register_component(AdminComponentRegistration {
+    module_slug: Some("blog"),
+    slot: AdminSlot::DashboardSection,
+    render: render_blog_dashboard_section,
+});
 ```
 
-3. **`apps/storefront/build.rs`** РіРµРЅРµСЂРёСЂСѓРµС‚ РІС‹Р·РѕРІС‹ `register_component()`:
+Состояние на 2026-03-23:
+- generated host wiring для admin уже монтирует module-owned `<PascalSlug>Admin`
+  как `DashboardSection`, `NavItem` и `AdminPageRegistration`;
+- единый host route `/modules/:module_slug` резолвит модульную страницу через generated registry;
+- `[provides.admin_ui]` дополнительно поддерживает optional `route_segment` и `nav_label`.
+- `workflow` уже имеет publishable Leptos admin crate (`crates/rustok-workflow/admin`) и больше не зависит от вручную зашитого nav item в `apps/admin`.
+- `pages` теперь тоже имеет publishable Leptos admin crate (`crates/rustok-pages/admin`) и storefront crate (`crates/rustok-pages/storefront`) по тому же стандарту подпакетов модуля.
+
+Что ещё остаётся открытым:
+- nested route/page contract для модулей с несколькими admin screens;
+- более явный entry-point contract для внешних crate-ов вместо чистых naming conventions.
+
+3. **`apps/storefront/build.rs`** уже генерирует `register_component()` и `register_page()`:
 ```rust
 // generated/registrations.rs
-rustok_workflow::storefront::register_slot_components();
+register_component(StorefrontComponentRegistration {
+    module_slug: Some("blog"),
+    slot: StorefrontSlot::HomeAfterCatalog,
+    render: render_blog_storefront_view,
+});
+
+register_page(StorefrontPageRegistration {
+    module_slug: "blog",
+    route_segment: "blog",
+    title: "Blog",
+    render: render_blog_storefront_view,
+});
 ```
 
 4. **`BuildExecutor`** СЃРѕР±РёСЂР°РµС‚ С‚СЂРё Р°СЂС‚РµС„Р°РєС‚Р°:
 ```
 cargo build -p rustok-server          // Р±РёРЅР°СЂРЅРёРє СЃРµСЂРІРµСЂР° (СЃРµР№С‡Р°СЃ вњ…)
-wasm-pack build apps/admin            // admin WASM         (в¬њ РЅРµ СЂРµР°Р»РёР·РѕРІР°РЅРѕ)
-cargo build -p rustok-storefront      // storefront         (в¬њ РЅРµ СЂРµР°Р»РёР·РѕРІР°РЅРѕ)
+trunk build apps/admin                // admin artifact     (СЃРµР№С‡Р°СЃ вњ…)
+cargo build -p rustok-storefront      // storefront binary  (СЃРµР№С‡Р°СЃ вњ…)
 ```
 
 **`rustok-module.toml`** РѕР±СЉСЏРІР»СЏРµС‚ UI С‚РѕС‡РєРё РІС…РѕРґР°:
 ```toml
 [provides.admin_ui]
 leptos_crate  = "rustok-workflow-admin"
-routes_fn     = "register_routes"
-components_fn = "register_components"
+route_segment = "workflow"
+nav_label     = "Workflow"
 
 [provides.storefront_ui]
 leptos_crate  = "rustok-workflow-storefront"
-components_fn = "register_slot_components"
 ```
 
 **Р—Р°РІРёСЃРёС‚ РѕС‚**: РєРѕРґРѕРіРµРЅРµСЂР°С†РёРё `build.rs` (Рї.6 РІС‹С€Рµ).
@@ -764,20 +785,14 @@ components_fn = "register_slot_components"
 
 | # | Р—Р°РґР°С‡Р° | РЎР»РѕР¶РЅРѕСЃС‚СЊ | Р¦РµРЅРЅРѕСЃС‚СЊ |
 |---|---|---|---|
-| **1** | **Audit РґРѕРєСѓРјРµРЅС‚Р°С†РёРё** вЂ” РїСЂРёРІРµСЃС‚Рё РІ СЃРѕРѕС‚РІРµС‚СЃС‚РІРёРµ СЃ СЂРµС€РµРЅРёСЏРјРё РѕС‚ 2026-03-17 | РЎСЂРµРґРЅСЏСЏ | РљСЂРёС‚РёС‡РµСЃРєР°СЏ вЂ” РґРѕРєСѓРјРµРЅС‚Р°С†РёСЏ РЅР°РїСЂСЏРјСѓСЋ РѕРїСЂРµРґРµР»СЏРµС‚ РєР°Рє СЂР°Р·СЂР°Р±Р°С‚С‹РІР°СЋС‚СЃСЏ РјРѕРґСѓР»Рё Рё РјР°СЂРєРµС‚РїР»РµР№СЃ |
-| 2 | Semver + conflict РІР°Р»РёРґР°С†РёСЏ | РњР°Р»Р°СЏ | Р’С‹СЃРѕРєР°СЏ вЂ” Р·Р°С‰РёС‚Р° РѕС‚ broken installs |
-| 3 | `updateModuleSettings` РјСѓС‚Р°С†РёСЏ | РњР°Р»Р°СЏ | Р’С‹СЃРѕРєР°СЏ вЂ” `[settings]` СѓР¶Рµ РІРµР·РґРµ РµСЃС‚СЊ |
-| 4 | Build progress в†’ subscription | РњР°Р»Р°СЏ | РЎСЂРµРґРЅСЏСЏ вЂ” UX, РёРЅС„СЂР°СЃС‚СЂСѓРєС‚СѓСЂР° СѓР¶Рµ РµСЃС‚СЊ |
-| 5 | Docker deploy РІ BuildExecutor | РЎСЂРµРґРЅСЏСЏ | Р’С‹СЃРѕРєР°СЏ вЂ” Р±РµР· СЌС‚РѕРіРѕ install РЅРµ prod-ready |
-| 6 | `rustok-api` foundation + РїРµСЂРµРЅРѕСЃ GraphQL/REST РІ РєСЂРµР№С‚С‹ | Р‘РѕР»СЊС€Р°СЏ | РљСЂРёС‚РёС‡РµСЃРєР°СЏ вЂ” Р±Р»РѕРєРёСЂСѓРµС‚ 3rd party |
-| 7 | РџРµСЂРµРЅРѕСЃ UI (admin/storefront) РІ РјРѕРґСѓР»СЊРЅС‹Рµ РєСЂРµР№С‚С‹ | Р‘РѕР»СЊС€Р°СЏ | РљСЂРёС‚РёС‡РµСЃРєР°СЏ вЂ” Р±Р»РѕРєРёСЂСѓРµС‚ 3rd party |
-| 8 | `build.rs` РєРѕРґРѕРіРµРЅРµСЂР°С†РёСЏ (СЃРµСЂРІРµСЂ + admin + storefront) | Р‘РѕР»СЊС€Р°СЏ | РљСЂРёС‚РёС‡РµСЃРєР°СЏ вЂ” Р±Р»РѕРєРёСЂСѓРµС‚ 3rd party |
-| 9 | `BuildExecutor`: СЃР±РѕСЂРєР° admin WASM + storefront | РЎСЂРµРґРЅСЏСЏ | РљСЂРёС‚РёС‡РµСЃРєР°СЏ вЂ” Р±РµР· СЌС‚РѕРіРѕ install РЅРµРїРѕР»РЅС‹Р№ |
-| 10 | Р’РЅРµС€РЅРёР№ СЂРµРµСЃС‚СЂ V1 (read-only) | Р‘РѕР»СЊС€Р°СЏ | Р’С‹СЃРѕРєР°СЏ вЂ” РѕСЃРЅРѕРІР° marketplace |
-| 11 | Р’РЅРµС€РЅРёР№ СЂРµРµСЃС‚СЂ V2 + publish | РћС‡РµРЅСЊ Р±РѕР»СЊС€Р°СЏ | РЎСЂРµРґРЅСЏСЏ вЂ” РЅСѓР¶РµРЅ С‚РѕР»СЊРєРѕ РґР»СЏ 3rd party |
+| **1** | **Semver-диапазоны и продуктовые конфликты модулей в `ManifestManager`** | Малая | Высокая — защита от broken installs и нечестных marketplace-совместимостей |
+| 2 | `updateModuleSettings` mutation + UI-форма из `[settings]` | Малая | Высокая — persisted settings уже есть, но не доведены до оператора |
+| 3 | Перенос Leptos UI в publishable module packages beyond `rustok-blog` | Большая | Критическая — `workflow` и `pages` уже стали следующими шаблонами, но остальные модули ещё не переведены |
+| 4 | Richer nested admin route/page contract поверх текущего module root route wiring | Средняя | Высокая — нужен для сложных модулей с несколькими admin screens |
+| 5 | Внешний реестр V1 (read-only catalog) | Большая | Высокая — фундамент marketplace |
+| 6 | Внешний реестр V2 + publish/governance | Очень большая | Средняя — следующий шаг после read-only каталога |
 
-> РџРї. 6, 7, 8, 9 вЂ” РµРґРёРЅС‹Р№ Р±Р»РѕРє. Р’СЃРµ С‡РµС‚С‹СЂРµ РЅСѓР¶РЅС‹ РІРјРµСЃС‚Рµ, С‡С‚РѕР±С‹
-> СЃС‚РѕСЂРѕРЅРЅРёР№ РјРѕРґСѓР»СЊ РїРѕР»РЅРѕС†РµРЅРЅРѕ Р·Р°СЂР°Р±РѕС‚Р°Р» (СЃРµСЂРІРµСЂ + UI).
+> Пп. 3 и 4 — текущий оставшийся UI/extensibility блок. Они нужны вместе, чтобы сторонний модуль полноценно заработал как платформа, а не как одноразовая интеграция.
 
 ### Р§С‚Рѕ РёР·РјРµРЅРёР»РѕСЃСЊ (2026-03-18) вЂ” С„РёРЅР°Р»СЊРЅС‹Р№ РѕСЂРёРµРЅС‚РёСЂ
 

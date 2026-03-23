@@ -1,0 +1,11 @@
+[package]
+name = "rustok-pages-storefront"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Leptos storefront UI package for the rustok-pages module"
+
+[dependencies]
+leptos.workspace = true
+leptos-graphql.workspace = true
+serde = { workspace = true, features = ["derive"] }

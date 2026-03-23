@@ -1,15 +1,27 @@
-# Storefront Docs
-
-## Назначение
+# Документация Leptos Storefront
 
 Локальная документация для `apps/storefront` (Leptos SSR storefront).
 
-## Состав
+## Текущий runtime contract
 
-- [Implementation Plan](./implementation-plan.md) — целевой план развития архитектуры, контрактов, наблюдаемости, безопасности и тестов.
+- Host storefront рендерит shell, домашнюю страницу, generic module pages и slot-based module sections.
+- Enabled modules резолвятся отдельно и фильтруют storefront registry перед рендером.
+- `StorefrontSlot` теперь поддерживает несколько host extension points для module-owned UI: `HomeAfterHero`, `HomeAfterCatalog`, `HomeBeforeFooter`.
+
+## Generated module UI wiring
+
+- `apps/storefront/build.rs` теперь читает `modules.toml` и модульные `rustok-module.toml`, а затем генерирует manifest-driven storefront registry wiring в `OUT_DIR`.
+- Текущий contract для publishable Leptos storefront UI: `[provides.storefront_ui].leptos_crate` плюс экспорт корневого компонента `<PascalSlug>View`, optional `slot`, `route_segment` и `page_title`.
+- Live generated wiring регистрирует module-owned storefront sections в выбранный host slot и публикует generic storefront route `/modules/:route_segment`.
+- Референсные publishable storefront packages в workspace сейчас: `rustok-blog-storefront` и `rustok-pages-storefront`.
+
+## Ограничения
+
+- Nested storefront routing и более богатые page layouts для модулей всё ещё остаются отдельным слоем поверх текущего generic root-page contract.
+- Для внешних crate-ов вне текущего workspace всё ещё нужен publishable storefront package плюс явный server-side dependency/install story, даже при уже существующем entry-point contract.
 
 ## Связанные документы
 
-- [Storefront README](../README.md)
-- [UI Storefront Notes](../../../docs/UI/storefront.md)
-- [Documentation Map](../../../docs/index.md)
+- [План реализации](./implementation-plan.md)
+- [Заметки по storefront UI](../../../docs/UI/storefront.md)
+- [Карта документации](../../../docs/index.md)

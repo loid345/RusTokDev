@@ -1190,7 +1190,10 @@ mod tests {
             Some("session-token")
         );
 
-        headers.insert(AUTHORIZATION, HeaderValue::from_static("Bearer header-token"));
+        headers.insert(
+            AUTHORIZATION,
+            HeaderValue::from_static("Bearer header-token"),
+        );
         assert_eq!(
             extract_browser_access_token(&headers).as_deref(),
             Some("header-token")

@@ -1,10 +1,14 @@
 mod core;
+mod generated_ui_codegen {
+    include!(concat!(env!("OUT_DIR"), "/module_registry_codegen.rs"));
+}
 mod registry;
 
 use std::cell::Cell;
 
 pub use registry::{
-    components_for_slot, register_component, AdminComponentRegistration, AdminSlot,
+    components_for_slot, page_for_route_segment, register_component, register_page,
+    AdminComponentRegistration, AdminPageRegistration, AdminSlot,
 };
 
 thread_local! {
@@ -18,5 +22,6 @@ pub fn init_modules() {
         }
         flag.set(true);
         core::register_components();
+        generated_ui_codegen::register_generated_components();
     });
 }

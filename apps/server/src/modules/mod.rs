@@ -1,44 +1,40 @@
 mod manifest;
+mod registry_codegen {
+    include!(concat!(env!("OUT_DIR"), "/modules_registry_codegen.rs"));
+}
 
 use rustok_auth::AuthModule;
-use rustok_blog::BlogModule;
 use rustok_cache::CacheModule;
-use rustok_commerce::CommerceModule;
-use rustok_content::ContentModule;
 use rustok_core::ModuleRegistry;
 use rustok_email::EmailModule;
-use rustok_forum::ForumModule;
 use rustok_index::IndexModule;
-use rustok_pages::PagesModule;
 use rustok_rbac::RbacModule;
 use rustok_tenant::TenantModule;
 
 pub use manifest::{
     validate_registry_vs_manifest, BuildExecutionPlan, CatalogManifestModule, CatalogModuleVersion,
-    DeploymentSurfaceContract, InstalledManifestModule, ManifestDiff, ManifestError,
-    ManifestManager, ManifestModuleSpec, ModulesManifest,
+    DeploymentSurfaceContract, FrontendArtifactKind, FrontendBuildPlan, FrontendBuildTool,
+    InstalledManifestModule, ManifestDiff, ManifestError, ManifestManager, ManifestModuleSpec,
+    ModulesManifest,
 };
 
 pub fn build_registry() -> ModuleRegistry {
     let cache_module = CacheModule::new();
-    ModuleRegistry::new()
+    let registry = ModuleRegistry::new()
         .register(AuthModule)
         .register(cache_module)
         .register(EmailModule)
         .register(IndexModule)
         .register(TenantModule)
-        .register(RbacModule)
-        .register(ContentModule)
-        .register(CommerceModule)
-        .register(BlogModule)
-        .register(ForumModule)
-        .register(PagesModule)
-        .register(rustok_workflow::WorkflowModule)
+        .register(RbacModule);
+
+    registry_codegen::register_optional_modules(registry)
 }
 
 #[cfg(test)]
 mod contract_tests {
     use super::build_registry;
+    use rustok_core::permissions::{Action, Resource};
     use rustok_core::Permission;
 
     const AUTH_README: &str = include_str!("../../../../crates/rustok-auth/README.md");
@@ -51,6 +47,7 @@ mod contract_tests {
     const COMMERCE_README: &str = include_str!("../../../../crates/rustok-commerce/README.md");
     const BLOG_README: &str = include_str!("../../../../crates/rustok-blog/README.md");
     const FORUM_README: &str = include_str!("../../../../crates/rustok-forum/README.md");
+    const MEDIA_README: &str = include_str!("../../../../crates/rustok-media/README.md");
     const PAGES_README: &str = include_str!("../../../../crates/rustok-pages/README.md");
     const WORKFLOW_README: &str = include_str!("../../../../crates/rustok-workflow/README.md");
     const FLEX_MUTATION: &str = include_str!("../graphql/flex/mutation.rs");
@@ -68,6 +65,7 @@ mod contract_tests {
             ("commerce", COMMERCE_README),
             ("blog", BLOG_README),
             ("forum", FORUM_README),
+            ("media", MEDIA_README),
             ("pages", PAGES_README),
             ("workflow", WORKFLOW_README),
         ] {
@@ -86,6 +84,7 @@ mod contract_tests {
         let rbac = registry.get("rbac").expect("rbac module");
         let blog = registry.get("blog").expect("blog module");
         let forum = registry.get("forum").expect("forum module");
+        let media = registry.get("media").expect("media module");
         let pages = registry.get("pages").expect("pages module");
         let workflow = registry.get("workflow").expect("workflow module");
 
@@ -98,6 +97,9 @@ mod contract_tests {
         assert!(forum
             .permissions()
             .contains(&Permission::FORUM_TOPICS_MANAGE));
+        assert!(media
+            .permissions()
+            .contains(&Permission::new(Resource::Media, Action::Manage)));
         assert!(pages.permissions().contains(&Permission::PAGES_MANAGE));
         assert!(workflow
             .permissions()

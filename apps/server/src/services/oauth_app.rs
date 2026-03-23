@@ -1030,6 +1030,7 @@ mod tests {
     use crate::models::_entities::tenants::Model as TenantModel;
     use crate::models::oauth_apps::Entity as OAuthAppsEntity;
     use crate::models::oauth_tokens;
+    use crate::models::tenants;
     use migration::Migrator;
     use rustok_test_utils::db::setup_test_db_with_migrations;
     use sea_orm::{
@@ -1038,15 +1039,15 @@ mod tests {
     };
     use sea_orm_migration::SchemaManager;
     use serial_test::serial;
-    use crate::models::tenants;
 
     async fn test_db_with_tenant() -> (DatabaseConnection, TenantModel) {
         let db = setup_test_db_with_migrations::<Migrator>().await;
         ensure_oauth_schema(&db).await;
-        let tenant = tenants::ActiveModel::new("Test tenant", &format!("tenant-{}", Uuid::new_v4()))
-            .insert(&db)
-            .await
-            .expect("failed to create tenant");
+        let tenant =
+            tenants::ActiveModel::new("Test tenant", &format!("tenant-{}", Uuid::new_v4()))
+                .insert(&db)
+                .await
+                .expect("failed to create tenant");
 
         (db, tenant)
     }
@@ -1631,7 +1632,10 @@ mod tests {
                 icon_url: Some("https://example.com/icon.png".to_string()),
                 redirect_uris: vec!["https://partner.example.com/callback".to_string()],
                 scopes: vec!["catalog:read".to_string()],
-                grant_types: vec!["authorization_code".to_string(), "refresh_token".to_string()],
+                grant_types: vec![
+                    "authorization_code".to_string(),
+                    "refresh_token".to_string(),
+                ],
             },
         )
         .await
@@ -1656,7 +1660,10 @@ mod tests {
                 icon_url: None,
                 redirect_uris: vec!["https://partner.example.com/oauth/callback".to_string()],
                 scopes: vec!["catalog:*".to_string()],
-                grant_types: vec!["authorization_code".to_string(), "refresh_token".to_string()],
+                grant_types: vec![
+                    "authorization_code".to_string(),
+                    "refresh_token".to_string(),
+                ],
             },
         )
         .await
@@ -1732,9 +1739,14 @@ mod tests {
             icon_url: Set(None),
             client_id: Set(Uuid::new_v4()),
             client_secret_hash: Set(Some(secret_hash)),
-            redirect_uris: Set(serde_json::json!(["https://admin.example.com/auth/callback"])),
+            redirect_uris: Set(serde_json::json!([
+                "https://admin.example.com/auth/callback"
+            ])),
             scopes: Set(serde_json::json!(["admin:*"])),
-            grant_types: Set(serde_json::json!(["authorization_code", "client_credentials"])),
+            grant_types: Set(serde_json::json!([
+                "authorization_code",
+                "client_credentials"
+            ])),
             manifest_ref: Set(Some("next-admin".to_string())),
             auto_created: Set(true),
             is_active: Set(true),
@@ -1798,7 +1810,10 @@ mod tests {
             client_secret_hash: Set(Some(auth::hash_password("old-secret").expect("hash"))),
             redirect_uris: Set(serde_json::json!(["https://old.example.com/callback"])),
             scopes: Set(serde_json::json!(["storefront:*"])),
-            grant_types: Set(serde_json::json!(["authorization_code", "client_credentials"])),
+            grant_types: Set(serde_json::json!([
+                "authorization_code",
+                "client_credentials"
+            ])),
             manifest_ref: Set(Some("old-storefront".to_string())),
             auto_created: Set(true),
             is_active: Set(true),

@@ -23,15 +23,16 @@ impl PagesQuery {
     async fn page(
         &self,
         ctx: &Context<'_>,
-        tenant_id: Uuid,
         id: Uuid,
         locale: Option<String>,
+        tenant_id: Option<Uuid>,
     ) -> Result<Option<GqlPage>> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let security = auth_context_to_security(ctx);
         let tenant = ctx.data::<TenantContext>()?;
+        let tenant_id = tenant_id.unwrap_or(tenant.id);
         let locale = resolve_graphql_locale(ctx, locale.as_deref());
 
         let service = PageService::new(db.clone(), event_bus.clone());
@@ -54,15 +55,16 @@ impl PagesQuery {
     async fn page_by_slug(
         &self,
         ctx: &Context<'_>,
-        tenant_id: Uuid,
         locale: Option<String>,
         slug: String,
+        tenant_id: Option<Uuid>,
     ) -> Result<Option<GqlPage>> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let security = auth_context_to_security(ctx);
         let tenant = ctx.data::<TenantContext>()?;
+        let tenant_id = tenant_id.unwrap_or(tenant.id);
         let locale = resolve_graphql_locale(ctx, locale.as_deref());
 
         let service = PageService::new(db.clone(), event_bus.clone());
@@ -83,13 +85,15 @@ impl PagesQuery {
     async fn pages(
         &self,
         ctx: &Context<'_>,
-        tenant_id: Uuid,
         filter: Option<ListGqlPagesFilter>,
+        tenant_id: Option<Uuid>,
     ) -> Result<GqlPageList> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let security = auth_context_to_security(ctx);
+        let tenant = ctx.data::<TenantContext>()?;
+        let tenant_id = tenant_id.unwrap_or(tenant.id);
 
         let filter = filter.unwrap_or(ListGqlPagesFilter {
             locale: None,

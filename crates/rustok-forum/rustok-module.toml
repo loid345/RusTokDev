@@ -1,4 +1,11 @@
 [module]
+slug = "forum"
+name = "Forum"
+version = "0.1.0"
+description = "Forum discussions module"
 ownership = "first_party"
 trust_level = "verified"
 recommended_admin_surfaces = ["leptos-admin"]
+
+[dependencies]
+content = { version_req = ">=0.1.0" }

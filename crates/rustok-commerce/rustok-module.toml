@@ -1,4 +1,8 @@
 [module]
+slug = "commerce"
+name = "Commerce"
+version = "0.1.0"
+description = "Catalog, pricing, and commerce module"
 ownership = "first_party"
 trust_level = "verified"
 recommended_admin_surfaces = ["leptos-admin"]

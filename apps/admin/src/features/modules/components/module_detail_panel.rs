@@ -1,6 +1,6 @@
 use leptos::prelude::*;
 
-use crate::entities::module::MarketplaceModule;
+use crate::entities::module::{MarketplaceModule, TenantModule};
 
 fn short_checksum(value: Option<&str>) -> Option<String> {
     let value = value?;
@@ -30,12 +30,20 @@ pub fn ModuleDetailPanel(
     admin_surface: String,
     selected_slug: String,
     module: Option<MarketplaceModule>,
+    tenant_module: Option<TenantModule>,
+    #[prop(into)] settings_draft: Signal<String>,
+    #[prop(into)] settings_editable: Signal<bool>,
+    #[prop(into)] settings_saving: Signal<bool>,
     #[prop(into)] loading: Signal<bool>,
+    on_settings_input: Callback<String>,
+    on_save_settings: Callback<()>,
     on_close: Callback<()>,
 ) -> impl IntoView {
     let detail = module.clone();
     let detail_for_body = StoredValue::new(module.clone());
     let admin_surface_for_body = StoredValue::new(admin_surface.clone());
+    let selected_slug_for_body = StoredValue::new(selected_slug.clone());
+    let tenant_module_for_body = StoredValue::new(tenant_module.clone());
 
     view! {
         <div class="rounded-xl border border-primary/20 bg-primary/5 p-6 shadow-sm">
@@ -189,9 +197,9 @@ pub fn ModuleDetailPanel(
                                         </dl>
                                     </div>
 
-                                    <div class="rounded-lg border border-border bg-background/70 p-4 text-sm">
-                                        <p class="text-xs uppercase tracking-wide text-muted-foreground">"Surface policy"</p>
-                                        <div class="mt-3 space-y-3">
+                                <div class="rounded-lg border border-border bg-background/70 p-4 text-sm">
+                                    <p class="text-xs uppercase tracking-wide text-muted-foreground">"Surface policy"</p>
+                                    <div class="mt-3 space-y-3">
                                             <div class="flex flex-wrap gap-2">
                                                 {if module.recommended_admin_surfaces.is_empty() {
                                                     view! {
@@ -249,6 +257,51 @@ pub fn ModuleDetailPanel(
                                             </div>
                                         </div>
                                     </div>
+                                </div>
+
+                                <div class="rounded-lg border border-border bg-background/70 p-4">
+                                    <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                                        <div class="space-y-1">
+                                            <p class="text-xs uppercase tracking-wide text-muted-foreground">"Tenant settings"</p>
+                                            <p class="text-sm text-muted-foreground">
+                                                {if settings_editable.get() {
+                                                    "Persist JSON settings for the current tenant. The payload is stored in tenant_modules.settings."
+                                                } else {
+                                                    "Enable this module for the current tenant before saving settings."
+                                                }}
+                                            </p>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            class="inline-flex items-center justify-center rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
+                                            disabled=move || !settings_editable.get() || settings_saving.get()
+                                            on:click=move |_| on_save_settings.run(())
+                                        >
+                                            {move || if settings_saving.get() { "Saving..." } else { "Save settings" }}
+                                        </button>
+                                    </div>
+                                    <div class="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                                        <span class="inline-flex items-center rounded-full border border-border px-2.5 py-0.5 font-medium text-muted-foreground">
+                                            {move || match tenant_module_for_body.get_value().as_ref() {
+                                                Some(module) if module.enabled => "Tenant-enabled".to_string(),
+                                                Some(_) => "Tenant-disabled".to_string(),
+                                                None if settings_editable.get() => "No tenant override yet".to_string(),
+                                                None => "Unavailable until enabled".to_string(),
+                                            }}
+                                        </span>
+                                    </div>
+                                    <textarea
+                                        class="mt-3 min-h-48 w-full rounded-lg border border-border bg-background px-3 py-3 font-mono text-sm text-card-foreground shadow-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-70"
+                                        prop:value=move || settings_draft.get()
+                                        disabled=move || !settings_editable.get() || settings_saving.get()
+                                        on:input=move |event| on_settings_input.run(event_target_value(&event))
+                                    ></textarea>
+                                    <p class="mt-2 text-xs text-muted-foreground">
+                                        {format!(
+                                            "Editing settings for `{}`.",
+                                            selected_slug_for_body.get_value()
+                                        )}
+                                    </p>
                                 </div>
 
                                 <div class="rounded-lg border border-border bg-background/70 p-4">

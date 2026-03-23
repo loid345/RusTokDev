@@ -24,6 +24,7 @@ All significant architectural choices should be recorded as ADRs.
 | [2026-03-20](./2026-03-20-alloy-is-alloy-not-rustok-alloy.md) | Alloy называется `alloy`, а не `rustok-alloy` | Accepted |
 | [2026-03-20](./2026-03-20-persisted-alloy-scaffold-drafts-in-server-control-plane.md) | Persisted Alloy scaffold drafts в server control plane | Accepted |
 | [2026-03-20](./2026-03-20-mcp-runtime-scaffold-store-binding.md) | Live MCP scaffold flow через pluggable persisted draft store | Accepted |
+| [2026-03-23](./2026-03-23-rustok-api-thin-shared-host-api-layer.md) | `rustok-api` как тонкий и единый shared host/API layer | Accepted |
 | [2026-03-07](./2026-03-07-deployment-profiles-and-ui-stack.md) | Deployment Profiles: composable layers (monolith / hybrid / headless) | Proposed (v2) |
 | [2026-03-07](../docs/concepts/plan-oauth2-app-connections.md) | OAuth2 App Connections: подключение внешних приложений к API | Draft |
 | [2026-03-07](./2026-03-07-admin-module-ui-unification.md) | Унификация UI модулей между Next.js и Leptos Admin | Accepted & Implemented |

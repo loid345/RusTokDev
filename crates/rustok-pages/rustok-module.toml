@@ -1,4 +1,32 @@
 [module]
+slug = "pages"
+name = "Pages"
+version = "0.1.0"
+description = "Static pages and page-management module"
 ownership = "first_party"
 trust_level = "verified"
 recommended_admin_surfaces = ["leptos-admin"]
+
+[dependencies]
+content = { version_req = ">=0.1.0" }
+
+[crate]
+entry_type = "PagesModule"
+
+[provides.graphql]
+query = "graphql::PagesQuery"
+mutation = "graphql::PagesMutation"
+
+[provides.http]
+routes = "controllers::routes"
+
+[provides.admin_ui]
+leptos_crate = "rustok-pages-admin"
+route_segment = "pages"
+nav_label = "Pages"
+
+[provides.storefront_ui]
+leptos_crate = "rustok-pages-storefront"
+slot = "home_before_footer"
+route_segment = "pages"
+page_title = "Pages"

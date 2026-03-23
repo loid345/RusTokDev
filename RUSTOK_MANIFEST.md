@@ -32,7 +32,7 @@
 | [docs/modules/manifest.md](docs/modules/manifest.md) | Манифест модулей и rebuild |
 | [crates/rustok-rbac/docs/README.md](crates/rustok-rbac/docs/README.md) | RBAC система прав доступа |
 | [crates/rustok-outbox/docs/README.md](crates/rustok-outbox/docs/README.md) | Event system и transactional publishing |
-| [docs/architecture/improvement-recommendations.md](docs/architecture/improvement-recommendations.md) | Актуальные рекомендации по архитектуре |
+| [docs/modules/module-system-plan.md](docs/modules/module-system-plan.md) | Актуальный план развития модульной платформы и marketplace/runtime roadmap |
 | [CHANGELOG.md](CHANGELOG.md) | История версий и релизов |
 
 ---

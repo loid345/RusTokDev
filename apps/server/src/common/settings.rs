@@ -272,6 +272,12 @@ pub struct BuildDeploymentSettings {
     pub endpoint_url: Option<String>,
     #[serde(default)]
     pub bearer_token: Option<String>,
+    #[serde(default = "default_build_deployment_docker_bin")]
+    pub docker_bin: String,
+    #[serde(default)]
+    pub image_repository: Option<String>,
+    #[serde(default)]
+    pub rollout_command: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, Default, Eq, PartialEq)]
@@ -281,6 +287,7 @@ pub enum BuildDeploymentBackendKind {
     RecordOnly,
     Filesystem,
     Http,
+    Container,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -409,6 +416,9 @@ impl Default for BuildDeploymentSettings {
             public_base_url: None,
             endpoint_url: None,
             bearer_token: None,
+            docker_bin: default_build_deployment_docker_bin(),
+            image_repository: None,
+            rollout_command: None,
         }
     }
 }
@@ -627,6 +637,32 @@ impl RustokSettings {
             parsed.build.deployment.endpoint_url = Some(endpoint_url);
         }
 
+        let docker_bin = parsed.build.deployment.docker_bin.trim();
+        if docker_bin.is_empty() {
+            parsed.build.deployment.docker_bin = default_build_deployment_docker_bin();
+        } else {
+            parsed.build.deployment.docker_bin = docker_bin.to_string();
+        }
+
+        if parsed.build.deployment.backend == BuildDeploymentBackendKind::Container {
+            let image_repository = parsed
+                .build
+                .deployment
+                .image_repository
+                .as_ref()
+                .map(|value| value.trim().to_string())
+                .unwrap_or_default();
+
+            if image_repository.is_empty() {
+                return Err(serde_json::Error::io(std::io::Error::new(
+                    std::io::ErrorKind::InvalidInput,
+                    "rustok.build.deployment.image_repository must not be empty when backend=container",
+                )));
+            }
+
+            parsed.build.deployment.image_repository = Some(image_repository);
+        }
+
         if let Some(public_base_url) = parsed
             .build
             .deployment
@@ -652,6 +688,20 @@ impl RustokSettings {
                 parsed.build.deployment.bearer_token = None;
             } else {
                 parsed.build.deployment.bearer_token = Some(bearer_token);
+            }
+        }
+
+        if let Some(rollout_command) = parsed
+            .build
+            .deployment
+            .rollout_command
+            .as_ref()
+            .map(|value| value.trim().to_string())
+        {
+            if rollout_command.is_empty() {
+                parsed.build.deployment.rollout_command = None;
+            } else {
+                parsed.build.deployment.rollout_command = Some(rollout_command);
             }
         }
 
@@ -771,6 +821,10 @@ fn default_build_poll_interval_ms() -> u64 {
 
 fn default_build_deployment_filesystem_root_dir() -> String {
     "artifacts/releases".to_string()
+}
+
+fn default_build_deployment_docker_bin() -> String {
+    "docker".to_string()
 }
 
 fn default_requests_per_minute() -> u32 {
@@ -1200,6 +1254,9 @@ mod tests {
         assert!(settings.build.deployment.public_base_url.is_none());
         assert!(settings.build.deployment.endpoint_url.is_none());
         assert!(settings.build.deployment.bearer_token.is_none());
+        assert_eq!(settings.build.deployment.docker_bin, "docker");
+        assert!(settings.build.deployment.image_repository.is_none());
+        assert!(settings.build.deployment.rollout_command.is_none());
 
         let raw = serde_json::json!({
             "rustok": {
@@ -1271,6 +1328,49 @@ mod tests {
         assert_eq!(
             settings.build.deployment.bearer_token.as_deref(),
             Some("secret-token")
+        );
+
+        let raw = serde_json::json!({
+            "rustok": {
+                "build": {
+                    "deployment": {
+                        "backend": "container"
+                    }
+                }
+            }
+        });
+        let err =
+            RustokSettings::from_settings(&Some(raw)).expect_err("container deployment validation");
+        assert!(err
+            .to_string()
+            .contains("rustok.build.deployment.image_repository must not be empty"));
+
+        let raw = serde_json::json!({
+            "rustok": {
+                "build": {
+                    "deployment": {
+                        "backend": "container",
+                        "docker_bin": " docker ",
+                        "image_repository": " registry.example.com/rustok/server ",
+                        "rollout_command": " ./scripts/deploy.sh {image} "
+                    }
+                }
+            }
+        });
+        let settings =
+            RustokSettings::from_settings(&Some(raw)).expect("container deployment settings parse");
+        assert_eq!(
+            settings.build.deployment.backend,
+            BuildDeploymentBackendKind::Container
+        );
+        assert_eq!(settings.build.deployment.docker_bin, "docker");
+        assert_eq!(
+            settings.build.deployment.image_repository.as_deref(),
+            Some("registry.example.com/rustok/server")
+        );
+        assert_eq!(
+            settings.build.deployment.rollout_command.as_deref(),
+            Some("./scripts/deploy.sh {image}")
         );
     }
 

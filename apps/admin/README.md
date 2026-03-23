@@ -53,6 +53,7 @@
 - `apps/server` (HTTP/GraphQL API)
 - `crates/rustok-rbac` и другие доменные модули через backend
 - общий UI контракт с `apps/next-admin` и storefront приложениями
+- manifest-driven Leptos module UI через `apps/admin/build.rs`, registry и generic route `/modules/:module_slug`
 
 ## Документация
 
