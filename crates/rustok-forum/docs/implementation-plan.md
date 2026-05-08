@@ -39,6 +39,7 @@
 
 ## Проверка
 
+- [ ] Contract tests cover the current public use-cases
 - `cargo xtask module validate forum`
 - `cargo xtask module test forum`
 - targeted tests для lifecycle, moderation, votes, subscriptions, user stats и visibility filtering
