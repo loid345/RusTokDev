@@ -816,6 +816,14 @@ impl CartService {
             .filter(entities::cart_adjustment::Column::CartLineItemId.eq(line_item_id))
             .exec(&txn)
             .await?;
+        entities::cart_tax_line::Entity::delete_many()
+            .filter(entities::cart_tax_line::Column::CartLineItemId.eq(line_item_id))
+            .exec(&txn)
+            .await?;
+        entities::cart_line_item_translation::Entity::delete_many()
+            .filter(entities::cart_line_item_translation::Column::CartLineItemId.eq(line_item_id))
+            .exec(&txn)
+            .await?;
         let active: entities::cart_line_item::ActiveModel = line_item.into();
         active.delete(&txn).await?;
 
