@@ -200,16 +200,16 @@ async fn test_post_read_paths_normalize_requested_and_fallback_locale() -> TestR
     let direct = post_service
         .get_post(tenant_id, admin.clone(), post_id, "EN_us")
         .await?;
-    assert_eq!(direct.requested_locale, "en-us");
-    assert_eq!(direct.locale, "en-us");
-    assert_eq!(direct.effective_locale, "en-us");
+    assert_eq!(direct.requested_locale, "en-US");
+    assert_eq!(direct.locale, "en-US");
+    assert_eq!(direct.effective_locale, "en-US");
 
     let by_fallback = post_service
         .get_post_with_locale_fallback(tenant_id, admin.clone(), post_id, "FR_fr", Some("EN_us"))
         .await?;
-    assert_eq!(by_fallback.requested_locale, "fr-fr");
-    assert_eq!(by_fallback.locale, "fr-fr");
-    assert_eq!(by_fallback.effective_locale, "en-us");
+    assert_eq!(by_fallback.requested_locale, "fr-FR");
+    assert_eq!(by_fallback.locale, "fr-FR");
+    assert_eq!(by_fallback.effective_locale, "en-US");
 
     let listed = post_service
         .list_posts(
@@ -224,8 +224,8 @@ async fn test_post_read_paths_normalize_requested_and_fallback_locale() -> TestR
         )
         .await?;
     assert_eq!(listed.items.len(), 1);
-    assert_eq!(listed.items[0].locale, "en-us");
-    assert_eq!(listed.items[0].effective_locale, "en-us");
+    assert_eq!(listed.items[0].locale, "en-US");
+    assert_eq!(listed.items[0].effective_locale, "en-US");
 
     Ok(())
 }
