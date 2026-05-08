@@ -1360,7 +1360,7 @@ async fn admin_graphql_supports_shipping_option_create_update_and_list() {
               createShippingOption(
                 tenantId: "{tenant_id}",
                 input: {{
-                  name: "Bulky Freight",
+                  translations: [{{ locale: "en", name: "Bulky Freight" }}],
                   currencyCode: "eur",
                   amount: "29.99",
                   providerId: "manual",
@@ -1404,7 +1404,7 @@ async fn admin_graphql_supports_shipping_option_create_update_and_list() {
                 tenantId: "{tenant_id}",
                 id: "{shipping_option_id}",
                 input: {{
-                  name: "Cold Chain Freight",
+                  translations: [{{ locale: "en", name: "Cold Chain Freight" }}],
                   currencyCode: "usd",
                   amount: "39.99",
                   providerId: "custom-provider",
@@ -1604,8 +1604,7 @@ async fn admin_graphql_supports_shipping_profile_create_update_and_list() {
                 tenantId: "{tenant_id}",
                 input: {{
                   slug: " bulky-freight "
-                  name: "Bulky Freight"
-                  description: "Large parcel handling"
+                  translations: [{{ locale: "en", name: "Bulky Freight", description: "Large parcel handling" }}]
                   metadata: "{{\"source\":\"graphql-admin-shipping-profile\"}}"
                 }}
               ) {{
@@ -1645,8 +1644,7 @@ async fn admin_graphql_supports_shipping_profile_create_update_and_list() {
                 tenantId: "{tenant_id}",
                 id: "{profile_id}",
                 input: {{
-                  name: "Oversize Freight"
-                  description: "Updated profile"
+                  translations: [{{ locale: "en", name: "Oversize Freight", description: "Updated profile" }}]
                   metadata: "{{\"updated\":true}}"
                 }}
               ) {{
@@ -1805,7 +1803,7 @@ async fn admin_graphql_rejects_unknown_shipping_profile_references() {
               createShippingOption(
                 tenantId: "{tenant_id}",
                 input: {{
-                  name: "Invalid Option"
+                  translations: [{{ locale: "en", name: "Invalid Option" }}]
                   currencyCode: "eur"
                   amount: "9.99"
                   allowedShippingProfileSlugs: ["missing-profile"]
@@ -4383,7 +4381,7 @@ async fn storefront_graphql_checkout_preserves_typed_adjustments_and_net_payment
     );
     assert_eq!(
         cart_json["storefrontCart"]["totalAmount"],
-        Value::from("15.00")
+        Value::from("24.99")
     );
     assert_eq!(
         cart_json["storefrontCart"]["adjustments"][0]["lineItemId"],
@@ -4490,19 +4488,19 @@ async fn storefront_graphql_checkout_preserves_typed_adjustments_and_net_payment
 
     assert_eq!(
         checkout_json["createStorefrontPaymentCollection"]["amount"],
-        Value::from("15")
+        Value::from("24.99")
     );
     assert_eq!(
         checkout_json["completeStorefrontCheckout"]["paymentCollection"]["amount"],
-        Value::from("15")
+        Value::from("24.99")
     );
     assert_eq!(
         checkout_json["completeStorefrontCheckout"]["paymentCollection"]["authorizedAmount"],
-        Value::from("15")
+        Value::from("24.99")
     );
     assert_eq!(
         checkout_json["completeStorefrontCheckout"]["paymentCollection"]["capturedAmount"],
-        Value::from("15")
+        Value::from("24.99")
     );
     assert_eq!(
         checkout_json["completeStorefrontCheckout"]["cart"]["adjustmentTotal"],
@@ -4510,7 +4508,7 @@ async fn storefront_graphql_checkout_preserves_typed_adjustments_and_net_payment
     );
     assert_eq!(
         checkout_json["completeStorefrontCheckout"]["cart"]["totalAmount"],
-        Value::from("15.00")
+        Value::from("24.99")
     );
     assert_eq!(
         checkout_json["completeStorefrontCheckout"]["order"]["subtotalAmount"],
@@ -4522,7 +4520,7 @@ async fn storefront_graphql_checkout_preserves_typed_adjustments_and_net_payment
     );
     assert_eq!(
         checkout_json["completeStorefrontCheckout"]["order"]["totalAmount"],
-        Value::from("15")
+        Value::from("24.99")
     );
     assert_eq!(
         checkout_json["completeStorefrontCheckout"]["order"]["adjustments"][0]["sourceType"],

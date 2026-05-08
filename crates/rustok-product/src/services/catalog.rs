@@ -226,6 +226,10 @@ impl CatalogService {
         for (position, opt_input) in input.options.iter().enumerate() {
             let option_id = generate_id();
             let option_translations = Self::normalize_option_translations(&opt_input.translations)?;
+            let option_translations = Self::expand_option_translations_for_product_locales(
+                option_translations,
+                &translation_locales,
+            );
             let base_values = option_translations
                 .first()
                 .map(|item| item.values.clone())
@@ -1550,6 +1554,15 @@ impl CatalogService {
         metadata
     }
 
+    fn normalize_metadata_tag_state(input_tags: &[String], metadata: &Value) -> Vec<String> {
+        let normalized_input_tags = Self::normalize_tag_names(input_tags);
+        if !normalized_input_tags.is_empty() || !Self::metadata_has_tags_field(metadata) {
+            return normalized_input_tags;
+        }
+
+        Self::normalize_tag_names(&Self::extract_metadata_tags(metadata))
+    }
+
     fn normalize_shipping_profile_slug(value: &str) -> Option<String> {
         let normalized = value.trim().to_ascii_lowercase();
         if normalized.is_empty() {
@@ -1602,14 +1615,13 @@ impl CatalogService {
         shipping_profile_slug: Option<String>,
         metadata: Value,
     ) -> (Value, Option<Vec<String>>) {
-        let normalized_input_tags = Self::normalize_tag_names(&input_tags);
-        (
-            Self::apply_shipping_profile_to_metadata(
-                Self::strip_metadata_tags(metadata),
-                shipping_profile_slug,
-            ),
-            Some(normalized_input_tags),
-        )
+        let normalized_tags = Self::normalize_metadata_tag_state(&input_tags, &metadata);
+        let metadata = Self::apply_shipping_profile_to_metadata(
+            Self::strip_metadata_tags(metadata),
+            shipping_profile_slug,
+        );
+
+        (metadata, Some(normalized_tags))
     }
 
     fn normalize_update_product_metadata(
@@ -1619,8 +1631,9 @@ impl CatalogService {
         existing_metadata: Value,
     ) -> Option<(Value, Option<Vec<String>>)> {
         match (input_tags, shipping_profile_slug, metadata) {
-            (Some(tags), profile_slug, Some(metadata)) => {
+            (Some(tags), profile_slug, metadata) => {
                 let normalized_tags = Self::normalize_tag_names(&tags);
+                let metadata = metadata.unwrap_or(existing_metadata);
                 Some((
                     Self::apply_shipping_profile_to_metadata(
                         Self::strip_metadata_tags(metadata),
@@ -1629,23 +1642,17 @@ impl CatalogService {
                     Some(normalized_tags),
                 ))
             }
-            (Some(tags), profile_slug, None) => {
-                let normalized_tags = Self::normalize_tag_names(&tags);
+            (None, profile_slug, Some(metadata)) => {
+                let normalized_tags = Self::metadata_has_tags_field(&metadata)
+                    .then(|| Self::normalize_tag_names(&Self::extract_metadata_tags(&metadata)));
                 Some((
                     Self::apply_shipping_profile_to_metadata(
-                        Self::strip_metadata_tags(existing_metadata),
+                        Self::strip_metadata_tags(metadata),
                         profile_slug,
                     ),
-                    Some(normalized_tags),
+                    normalized_tags,
                 ))
             }
-            (None, Some(profile_slug), Some(metadata)) => Some((
-                Self::apply_shipping_profile_to_metadata(
-                    Self::strip_metadata_tags(metadata),
-                    Some(profile_slug),
-                ),
-                None,
-            )),
             (None, Some(profile_slug), None) => Some((
                 Self::apply_shipping_profile_to_metadata(
                     Self::strip_metadata_tags(existing_metadata),
@@ -1653,7 +1660,6 @@ impl CatalogService {
                 ),
                 None,
             )),
-            (None, None, Some(metadata)) => Some((Self::strip_metadata_tags(metadata), None)),
             (None, None, None) => None,
         }
     }
@@ -1885,6 +1891,32 @@ impl CatalogService {
     }
 
     #[allow(clippy::result_large_err)]
+    fn expand_option_translations_for_product_locales(
+        mut translations: Vec<ProductOptionTranslationInput>,
+        product_locales: &[String],
+    ) -> Vec<ProductOptionTranslationInput> {
+        let Some(fallback) = translations.first().cloned() else {
+            return translations;
+        };
+
+        for locale in product_locales {
+            if translations
+                .iter()
+                .any(|translation| locale_tags_match(&translation.locale, locale))
+            {
+                continue;
+            }
+
+            translations.push(ProductOptionTranslationInput {
+                locale: locale.clone(),
+                name: fallback.name.clone(),
+                values: fallback.values.clone(),
+            });
+        }
+
+        translations
+    }
+
     fn normalize_option_translations(
         translations: &[ProductOptionTranslationInput],
     ) -> CommerceResult<Vec<ProductOptionTranslationInput>> {

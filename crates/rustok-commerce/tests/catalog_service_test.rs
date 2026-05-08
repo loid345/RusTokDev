@@ -932,7 +932,10 @@ async fn test_product_with_metadata() {
     assert!(result.is_ok());
     let product = result.unwrap();
     assert_eq!(product.metadata["featured"], true);
-    assert!(product.metadata["tags"].is_array());
+    assert!(product.metadata.get("tags").is_none());
+    let mut tags = product.tags.clone();
+    tags.sort();
+    assert_eq!(tags, vec!["new", "popular", "sale"]);
     assert_eq!(product.metadata["color"], "blue");
     assert_eq!(product.metadata["size_chart"], "standard");
 }
