@@ -42,6 +42,7 @@
 - targeted compile/tests для configuration, mode switching, request building и connector errors;
 - integration tests для real embedded/remote paths;
 - docs sync между connector и transport crates.
+- контрактные тесты покрывают все публичные use-case connector surface.
 
 ## Правила обновления
 
