@@ -205,8 +205,10 @@ pub struct ModuleSettingSpec {
     #[serde(default)]
     pub item_type: Option<String>,
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    #[schema(no_recursion)]
     pub properties: HashMap<String, ModuleSettingSpec>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[schema(no_recursion)]
     pub items: Option<Box<ModuleSettingSpec>>,
 }
 
