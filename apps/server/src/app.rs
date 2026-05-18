@@ -880,7 +880,10 @@ mod tests {
                 resolution_trace: Vec::new(),
             }));
 
-        let response = base_router
+        let app = <App as Hooks>::after_routes(base_router, &ctx)
+            .await
+            .expect("runtime hooks should wire registry routes");
+        let response = app
             .clone()
             .oneshot(request)
             .await
@@ -1124,7 +1127,10 @@ mod tests {
         let base_router = App::routes(&ctx)
             .to_router::<App>(ctx.clone(), axum::Router::new())
             .expect("base router should build");
-        let response = base_router
+        let app = <App as Hooks>::after_routes(base_router, &ctx)
+            .await
+            .expect("runtime hooks should wire registry routes");
+        let response = app
             .clone()
             .oneshot(
                 Request::builder()
@@ -1183,7 +1189,10 @@ mod tests {
         let base_router = App::routes(&ctx)
             .to_router::<App>(ctx.clone(), axum::Router::new())
             .expect("base router should build");
-        let response = base_router
+        let app = <App as Hooks>::after_routes(base_router, &ctx)
+            .await
+            .expect("runtime hooks should wire registry routes");
+        let response = app
             .clone()
             .oneshot(
                 Request::builder()
@@ -1233,7 +1242,10 @@ mod tests {
         let base_router = App::routes(&ctx)
             .to_router::<App>(ctx.clone(), axum::Router::new())
             .expect("base router should build");
-        let response = base_router
+        let app = <App as Hooks>::after_routes(base_router, &ctx)
+            .await
+            .expect("runtime hooks should wire registry routes");
+        let response = app
             .clone()
             .oneshot(
                 Request::builder()
@@ -1414,7 +1426,10 @@ mod tests {
         let base_router = App::routes(&ctx)
             .to_router::<App>(ctx.clone(), axum::Router::new())
             .expect("base router should build");
-        let first_response = base_router
+        let app = <App as Hooks>::after_routes(base_router, &ctx)
+            .await
+            .expect("runtime hooks should wire registry routes");
+        let first_response = app
             .clone()
             .oneshot(
                 Request::builder()
@@ -1439,7 +1454,7 @@ mod tests {
             .expect("initial v1 catalog cache response should include x-total-count");
         assert_eq!(first_status, StatusCode::OK);
 
-        let second_response = base_router
+        let second_response = app
             .clone()
             .oneshot(
                 Request::builder()
@@ -3058,7 +3073,10 @@ mod tests {
         let base_router = App::routes(&ctx)
             .to_router::<App>(ctx.clone(), axum::Router::new())
             .expect("base router should build");
-        let response = base_router
+        let app = <App as Hooks>::after_routes(base_router, &ctx)
+            .await
+            .expect("runtime hooks should wire registry routes");
+        let response = app
             .clone()
             .oneshot(
                 Request::builder()
