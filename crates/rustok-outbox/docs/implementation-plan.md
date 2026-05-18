@@ -22,7 +22,8 @@ manifest/doc contract.
 
 - [x] выровнять root README, local docs и manifest metadata под единый standard path;
 - [x] зафиксировать transactional publishing как основной bounded-context contract;
-- [ ] удерживать sync между public crate API и server event-runtime tests.
+- [ ] удерживать sync между public crate API и server event-runtime tests;
+- [ ] контрактные тесты покрывают все публичные use-case для transactional publishing, relay, retry и DLQ semantics.
 
 ### 2. Runtime hardening
 

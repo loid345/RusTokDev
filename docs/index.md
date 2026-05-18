@@ -233,6 +233,7 @@
 - [Fluid Backend Architecture для RusTok](./research/fluid-backend-architecture.md)
 - [План реализации Fluid Backend Architecture](./research/fluid-backend-architecture-implementation-plan.md)
 - [Verified TODO по control plane и module lifecycle](./research/deep-research-report%20(4).md)
+- [План устранения недостатков control plane и module lifecycle](./research/control-plane-module-lifecycle-remediation-plan.md)
 - [Исследования и ADR-черновики](./research/ADR-xxxx-grpc-adoption.md)
 
 ## Документация приложений

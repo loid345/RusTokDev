@@ -25,6 +25,8 @@
 - [x] зафиксировать boundary `index != search`;
 - [x] удерживать PostgreSQL как baseline engine и settings-driven engine selection;
 - [x] держать admin/storefront surfaces на едином backend contract;
+- [x] Expand capability matrix and contract tests;
+- [x] Finalize search-facing error catalog and validation policy;
 - [ ] удерживать sync между runtime metadata, UI packages и diagnostics surfaces.
 
 ### 2. Product hardening

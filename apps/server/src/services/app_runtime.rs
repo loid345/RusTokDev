@@ -127,6 +127,24 @@ pub async fn bootstrap_app_runtime(
         init_alloy_runtime(ctx);
     }
 
+    if settings.runtime.is_registry_only() {
+        use rustok_core::events::MemoryTransport;
+
+        // Registry-only mode does not bootstrap full event runtime, but
+        // GraphQL schema construction still expects an EventTransport in shared_store.
+        // Seed a local memory transport to keep shared initialization deterministic
+        // for tests and non-GraphQL surfaces.
+        if ctx
+            .shared_store
+            .get::<std::sync::Arc<dyn rustok_core::events::EventTransport>>()
+            .is_none()
+        {
+            ctx.shared_store
+                .insert(std::sync::Arc::new(MemoryTransport::new())
+                    as std::sync::Arc<dyn rustok_core::events::EventTransport>);
+        }
+    }
+
     let graphql_schema = init_graphql_schema(ctx);
     let rate_limits = init_rate_limit_layers(ctx, settings, &cache_service)?;
 

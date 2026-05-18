@@ -23,7 +23,8 @@
 - [x] закрыть storage split для pages, blocks и menus;
 - [x] зафиксировать builder contract `markdown | rt_json_v1 | grapesjs_v1`;
 - [x] удерживать compatibility surface для legacy block-driven pages;
-- [ ] удерживать sync между runtime contracts, UI packages и module metadata.
+- [ ] удерживать sync между runtime contracts, UI packages и module metadata;
+- [ ] контрактные тесты покрывают все публичные use-case для уже поставленных pages runtime surfaces.
 
 ### 2. Product hardening
 

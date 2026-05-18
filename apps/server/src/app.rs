@@ -880,7 +880,10 @@ mod tests {
                 resolution_trace: Vec::new(),
             }));
 
-        let response = base_router
+        let app = <App as Hooks>::after_routes(base_router, &ctx)
+            .await
+            .expect("runtime hooks should wire registry routes");
+        let response = app
             .clone()
             .oneshot(request)
             .await
@@ -1124,11 +1127,15 @@ mod tests {
         let base_router = App::routes(&ctx)
             .to_router::<App>(ctx.clone(), axum::Router::new())
             .expect("base router should build");
-        let response = base_router
+        let app = <App as Hooks>::after_routes(base_router, &ctx)
+            .await
+            .expect("runtime hooks should wire registry routes");
+        let response = app
             .clone()
             .oneshot(
                 Request::builder()
                     .uri("/v1/catalog")
+                    .header("X-Tenant-ID", Uuid::nil().to_string())
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -1183,11 +1190,15 @@ mod tests {
         let base_router = App::routes(&ctx)
             .to_router::<App>(ctx.clone(), axum::Router::new())
             .expect("base router should build");
-        let response = base_router
+        let app = <App as Hooks>::after_routes(base_router, &ctx)
+            .await
+            .expect("runtime hooks should wire registry routes");
+        let response = app
             .clone()
             .oneshot(
                 Request::builder()
                     .uri("/v1/catalog/blog")
+                    .header("X-Tenant-ID", Uuid::nil().to_string())
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -1233,11 +1244,15 @@ mod tests {
         let base_router = App::routes(&ctx)
             .to_router::<App>(ctx.clone(), axum::Router::new())
             .expect("base router should build");
-        let response = base_router
+        let app = <App as Hooks>::after_routes(base_router, &ctx)
+            .await
+            .expect("runtime hooks should wire registry routes");
+        let response = app
             .clone()
             .oneshot(
                 Request::builder()
                     .uri("/v1/catalog?search=blog")
+                    .header("X-Tenant-ID", Uuid::nil().to_string())
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -1297,6 +1312,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/v1/catalog?limit=1&offset=1")
+                    .header("X-Tenant-ID", Uuid::nil().to_string())
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -1358,6 +1374,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/v1/catalog")
+                    .header("X-Tenant-ID", Uuid::nil().to_string())
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -1414,11 +1431,15 @@ mod tests {
         let base_router = App::routes(&ctx)
             .to_router::<App>(ctx.clone(), axum::Router::new())
             .expect("base router should build");
-        let first_response = base_router
+        let app = <App as Hooks>::after_routes(base_router, &ctx)
+            .await
+            .expect("runtime hooks should wire registry routes");
+        let first_response = app
             .clone()
             .oneshot(
                 Request::builder()
                     .uri("/v1/catalog?limit=1")
+                    .header("X-Tenant-ID", Uuid::nil().to_string())
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -1439,11 +1460,12 @@ mod tests {
             .expect("initial v1 catalog cache response should include x-total-count");
         assert_eq!(first_status, StatusCode::OK);
 
-        let second_response = base_router
+        let second_response = app
             .clone()
             .oneshot(
                 Request::builder()
                     .uri("/v1/catalog?limit=1")
+                    .header("X-Tenant-ID", Uuid::nil().to_string())
                     .header("if-none-match", etag.as_str())
                     .body(Body::empty())
                     .expect("request"),
@@ -1521,6 +1543,7 @@ mod tests {
                                 "crate_name": "rustok-blog",
                                 "name": "Blog",
                                 "description": "Blog and news module contract preview.",
+                                "default_locale": "en",
                                 "ownership": "first_party",
                                 "trust_level": "verified",
                                 "license": "MIT",
@@ -3058,11 +3081,15 @@ mod tests {
         let base_router = App::routes(&ctx)
             .to_router::<App>(ctx.clone(), axum::Router::new())
             .expect("base router should build");
-        let response = base_router
+        let app = <App as Hooks>::after_routes(base_router, &ctx)
+            .await
+            .expect("runtime hooks should wire registry routes");
+        let response = app
             .clone()
             .oneshot(
                 Request::builder()
                     .uri(format!("/v1/catalog/{slug}"))
+                    .header("X-Tenant-ID", "00000000-0000-0000-0000-000000000001")
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -3104,6 +3131,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/v1/catalog")
+                    .header("X-Tenant-ID", Uuid::nil().to_string())
                     .body(Body::empty())
                     .expect("request"),
             )
