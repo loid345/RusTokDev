@@ -85,13 +85,11 @@ pub mod schema {
     pub fn offer(price: f64, price_currency: &str, availability: Option<&str>) -> Value {
         let mut object = schema_object("Offer");
         insert_number(&mut object, "price", Some(price));
-        let currency = price_currency
-            .trim()
-            .to_ascii_uppercase();
+        let currency = normalize_currency_code(price_currency);
         insert_string(
             &mut object,
             "priceCurrency",
-            (!currency.is_empty()).then_some(currency.as_str()),
+            currency.as_deref(),
         );
         let availability = availability
             .and_then(normalize_schema_org_availability);
@@ -116,10 +114,9 @@ pub mod schema {
             let mut rating = typed_object("Rating");
             insert_number(&mut rating, "ratingValue", rating_value);
             insert_number(&mut rating, "bestRating", best_rating);
-            if rating.len() == 1 {
-                return Value::Object(object);
+            if rating.len() > 1 {
+                object.insert("reviewRating".to_string(), Value::Object(rating));
             }
-            object.insert("reviewRating".to_string(), Value::Object(rating));
         }
         Value::Object(object)
     }
@@ -221,6 +218,14 @@ pub mod schema {
         if let Some(value) = value.filter(|value| value.is_finite()) {
             object.insert(key.to_string(), json!(value));
         }
+    }
+
+    fn normalize_currency_code(value: &str) -> Option<String> {
+        let value = value.trim();
+        if value.is_empty() || value.len() != 3 || !value.chars().all(|ch| ch.is_ascii_alphabetic()) {
+            return None;
+        }
+        Some(value.to_ascii_uppercase())
     }
 
     fn normalize_schema_org_availability(value: &str) -> Option<&str> {
@@ -769,6 +774,8 @@ mod tests {
         let offer_without_valid_price = schema::offer(f64::NAN, " usd ", None);
         assert!(offer_without_valid_price.get("price").is_none());
         assert_eq!(offer_without_valid_price["priceCurrency"], json!("USD"));
+        let offer_with_invalid_currency = schema::offer(10.0, "USDT", None);
+        assert!(offer_with_invalid_currency.get("priceCurrency").is_none());
         let offer_with_invalid_availability = schema::offer(10.0, "USD", Some("InStock"));
         assert!(offer_with_invalid_availability.get("availability").is_none());
         let offer_with_http_availability =
