@@ -342,13 +342,16 @@ fn extract_primary_type_value(value: Option<&Value>) -> Option<String> {
                 Some(trimmed.to_string())
             }
         }
-        Some(Value::Array(values)) => values.iter().find_map(Value::as_str).and_then(|raw| {
-            let trimmed = raw.trim();
-            if trimmed.is_empty() {
-                None
-            } else {
-                Some(trimmed.to_string())
+        Some(Value::Array(values)) => values.iter().find_map(|value| match value {
+            Value::String(raw) => {
+                let trimmed = raw.trim();
+                if trimmed.is_empty() {
+                    None
+                } else {
+                    Some(trimmed.to_string())
+                }
             }
+            _ => None,
         }),
         _ => None,
     }
@@ -532,5 +535,30 @@ mod tests {
         form.apply_record(&record);
 
         assert_eq!(form.structured_data_type, "Article");
+    }
+
+    #[test]
+    fn apply_record_extracts_first_non_empty_type_from_type_array() {
+        let mut form = SeoEntityForm::new("en-US".to_string());
+        let record = SeoMetaView {
+            target_kind: None,
+            target_id: None,
+            requested_locale: None,
+            effective_locale: "en-US".to_string(),
+            available_locales: vec!["en-US".to_string()],
+            noindex: false,
+            nofollow: false,
+            canonical_url: None,
+            translation: SeoMetaTranslationView {
+                locale: "en-US".to_string(),
+                ..SeoMetaTranslationView::default()
+            },
+            source: "explicit".to_string(),
+            structured_data: Some(json!({"@type":["", " ", "FAQPage"],"name":"Demo"})),
+        };
+
+        form.apply_record(&record);
+
+        assert_eq!(form.structured_data_type, "FAQPage");
     }
 }
