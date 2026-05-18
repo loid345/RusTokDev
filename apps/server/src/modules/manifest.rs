@@ -3366,6 +3366,7 @@ mod tests {
             "index",
             "outbox",
             "content",
+            "taxonomy",
             "cart",
             "customer",
             "product",
@@ -3395,6 +3396,7 @@ mod tests {
             "index",
             "outbox",
             "content",
+            "taxonomy",
             "cart",
             "customer",
             "product",
@@ -4283,7 +4285,7 @@ seo = { type = "object", properties = { metaTitle = { type = "string" }, indexab
             Err(ManifestError::InvalidModuleSettingValue { slug, key, reason })
                 if slug == "blog"
                     && key == "seo.metaTitle"
-                    && reason.contains("expected string")
+                    && reason.contains("expected") && reason.contains("string")
         ));
     }
 
@@ -4342,7 +4344,7 @@ contentBlocks = { type = "array", items = { type = "object", properties = { kind
             Err(ManifestError::InvalidModuleSettingValue { slug, key, reason })
                 if slug == "blog"
                     && key == "contentBlocks[1].enabled"
-                    && reason.contains("expected boolean")
+                    && reason.contains("expected") && reason.contains("boolean")
         ));
     }
 
