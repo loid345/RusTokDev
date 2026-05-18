@@ -1279,11 +1279,14 @@ mod tests {
             !modules.is_empty(),
             "filtered v1 catalog should not be empty"
         );
-        assert!(modules.iter().any(|module| {
-            module["slug"]
-                .as_str()
-                .is_some_and(|slug| slug.eq_ignore_ascii_case("blog"))
-        }), "filtered v1 catalog should include blog module");
+        assert!(
+            modules.iter().any(|module| {
+                module["slug"]
+                    .as_str()
+                    .is_some_and(|slug| slug.eq_ignore_ascii_case("blog"))
+            }),
+            "filtered v1 catalog should include blog module"
+        );
     }
 
     #[tokio::test]
