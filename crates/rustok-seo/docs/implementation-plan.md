@@ -84,9 +84,21 @@
 
 ### Следующий scope
 
+#### Phase A — typed schema authoring parity
+
 - [ ] Нарастить schema builders до Product Offer/Review, BreadcrumbList, ItemList, Organization/LocalBusiness, FAQ/HowTo и расширенных forum-specific schema.
-- [ ] Owner-module schema editors должны писать через typed schema input, а не через свободный JSON textarea.
+- [ ] Добавить typed schema input contract в `rustok-seo-admin-support`, чтобы owner-module panels писали schema blocks без raw JSON textarea.
+- [ ] Переключить owner-side SEO panels (`pages/product/blog/forum`) на typed schema input с сохранением GraphQL parity.
+- [ ] Зафиксировать server-side validation matrix для typed schema input: обязательные поля, unknown `@type` fallback в `other`, deterministic normalization.
+
+#### Phase B — operator UX и remediation
+
 - [ ] Rich-snippet preview/validation UI в owner-module panels и diagnostics remediation.
+- [ ] Добавить diagnostics issue codes для schema completeness (missing required fields, invalid array/object shape, unsupported source payload).
+- [ ] Добавить bulk-safe remediation actions для schema issues без implicit overwrite explicit SEO.
+
+#### Phase C — indexing и linking automation
+
 - [ ] Cross-linking engine с controlled insertion points без silent HTML mutation.
 - [ ] Google Indexing API / sitemap ping и позже Search Console-style diagnostics adapters.
 - [ ] Image SEO hooks через `rustok-media` после стабилизации templates + diagnostics.
