@@ -21,6 +21,7 @@
 
 - [x] вынести typed snippet preview и diagnostics cards в отдельные reusable subcomponents;
 - [x] добавить targeted tests для panel transport, scoring logic и host-locale wiring.
+- [x] заменить raw `structured_data` textarea на typed schema input contract (`schema type` + JSON object payload) с сохранением текущего GraphQL write contract.
 
 ## Проверка
 
