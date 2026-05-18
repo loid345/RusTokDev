@@ -1,6 +1,5 @@
 use chrono::Utc;
 use sea_orm::prelude::*;
-use chrono::Utc;
 use sea_orm::EntityTrait;
 
 use rustok_core::generate_id;
