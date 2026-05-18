@@ -132,18 +132,20 @@ impl SeoEntityForm {
                 Value::Object(object) => {
                     if let Some(schema_type) = extract_primary_type_value(object.get("@type")) {
                         self.structured_data_type =
-                            normalize_schema_type_input(schema_type.as_str()).unwrap_or(schema_type);
+                            normalize_schema_type_input(schema_type.as_str())
+                                .unwrap_or(schema_type);
                     }
                     let mut payload = object.clone();
                     payload.remove("@type");
                     if !payload.is_empty() {
-                        self.structured_data_payload = serde_json::to_string_pretty(&Value::Object(payload))
-                            .unwrap_or_else(|_| "{}".to_string());
+                        self.structured_data_payload =
+                            serde_json::to_string_pretty(&Value::Object(payload))
+                                .unwrap_or_else(|_| "{}".to_string());
                     }
                 }
                 other => {
-                    self.structured_data_payload = serde_json::to_string_pretty(other)
-                        .unwrap_or_else(|_| "{}".to_string());
+                    self.structured_data_payload =
+                        serde_json::to_string_pretty(other).unwrap_or_else(|_| "{}".to_string());
                 }
             }
         }
@@ -245,7 +247,9 @@ impl SeoEntityForm {
             recommendations.push(SeoRecommendation::AddOpenGraphImage);
         }
 
-        if !self.structured_data_type.trim().is_empty() || !self.structured_data_payload.trim().is_empty() {
+        if !self.structured_data_type.trim().is_empty()
+            || !self.structured_data_payload.trim().is_empty()
+        {
             score += 5;
         }
 
@@ -256,7 +260,8 @@ impl SeoEntityForm {
     }
 
     fn parse_structured_data(&self) -> Result<Option<Value>, String> {
-        let normalized_schema_type = normalize_schema_type_input(self.structured_data_type.as_str());
+        let normalized_schema_type =
+            normalize_schema_type_input(self.structured_data_type.as_str());
         let schema_type = normalized_schema_type.as_deref().unwrap_or("");
         let payload = self.structured_data_payload.trim();
         if schema_type.is_empty() && payload.is_empty() {
@@ -289,8 +294,8 @@ impl SeoEntityForm {
                 if let Some(existing_type) =
                     extract_primary_type_value(object.get("@type")).as_deref()
                 {
-                    let normalized_existing_type =
-                        normalize_schema_type_input(existing_type).unwrap_or_else(|| existing_type.to_string());
+                    let normalized_existing_type = normalize_schema_type_input(existing_type)
+                        .unwrap_or_else(|| existing_type.to_string());
                     if normalized_existing_type != schema_type {
                         return Err(
                             "Structured data payload @type must match schema type field."
@@ -423,7 +428,6 @@ fn non_empty_option(value: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{SeoEntityForm, SeoMetaTranslationView, SeoMetaView, SeoRecommendation};
-    use serde_json::json;
     use rustok_seo_targets::{builtin_slug as seo_builtin_slug, SeoTargetSlug};
     use serde_json::json;
     use uuid::Uuid;
@@ -482,7 +486,10 @@ mod tests {
             )
             .expect("input should build");
 
-        assert_eq!(input.structured_data, Some(json!({"@type":"Product","name":"Demo"})));
+        assert_eq!(
+            input.structured_data,
+            Some(json!({"@type":"Product","name":"Demo"}))
+        );
     }
 
     #[test]
