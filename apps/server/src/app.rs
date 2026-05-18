@@ -1135,6 +1135,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/v1/catalog")
+                    .header("X-Tenant-ID", "00000000-0000-0000-0000-000000000001")
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -1197,6 +1198,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/v1/catalog/blog")
+                    .header("X-Tenant-ID", "00000000-0000-0000-0000-000000000001")
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -1250,6 +1252,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/v1/catalog?search=blog")
+                    .header("X-Tenant-ID", "00000000-0000-0000-0000-000000000001")
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -1309,6 +1312,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/v1/catalog?limit=1&offset=1")
+                    .header("X-Tenant-ID", "00000000-0000-0000-0000-000000000001")
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -1370,6 +1374,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/v1/catalog")
+                    .header("X-Tenant-ID", "00000000-0000-0000-0000-000000000001")
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -1434,6 +1439,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/v1/catalog?limit=1")
+                    .header("X-Tenant-ID", "00000000-0000-0000-0000-000000000001")
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -1459,6 +1465,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/v1/catalog?limit=1")
+                    .header("X-Tenant-ID", "00000000-0000-0000-0000-000000000001")
                     .header("if-none-match", etag.as_str())
                     .body(Body::empty())
                     .expect("request"),
@@ -3081,6 +3088,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri(format!("/v1/catalog/{slug}"))
+                    .header("X-Tenant-ID", "00000000-0000-0000-0000-000000000001")
                     .body(Body::empty())
                     .expect("request"),
             )
@@ -3122,6 +3130,7 @@ mod tests {
             .oneshot(
                 Request::builder()
                     .uri("/v1/catalog")
+                    .header("X-Tenant-ID", "00000000-0000-0000-0000-000000000001")
                     .body(Body::empty())
                     .expect("request"),
             )
