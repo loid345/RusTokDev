@@ -99,7 +99,9 @@ pub mod schema {
         let mut object = schema_object("Review");
         insert_string(&mut object, "reviewBody", review_body);
         if let Some(author_name) = author_name.map(str::trim).filter(|value| !value.is_empty()) {
-            object.insert("author".to_string(), json!({"@type":"Person","name":author_name}));
+            let mut author = typed_object("Person");
+            author.insert("name".to_string(), json!(author_name));
+            object.insert("author".to_string(), Value::Object(author));
         }
         if rating_value.is_some() || best_rating.is_some() {
             let mut rating = typed_object("Rating");
@@ -123,19 +125,22 @@ pub mod schema {
         let mut object = schema_object("BreadcrumbList");
         let item_list = items
             .into_iter()
-            .enumerate()
-            .filter_map(|(index, (name, item))| {
+            .filter_map(|(name, item)| {
                 let name = name.as_ref().trim();
                 let item = item.as_ref().trim();
                 if name.is_empty() || item.is_empty() {
                     return None;
                 }
-                Some(json!({
+                Some((name.to_string(), item.to_string()))
+            })
+            .enumerate()
+            .map(|(position, (name, item))| {
+                json!({
                     "@type": "ListItem",
-                    "position": index + 1,
+                    "position": position + 1,
                     "name": name,
                     "item": item
-                }))
+                })
             })
             .collect::<Vec<_>>();
         object.insert("itemListElement".to_string(), Value::Array(item_list));
