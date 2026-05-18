@@ -1,6 +1,6 @@
 use rustok_seo_targets::SeoTargetSlug;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Map, Value};
 use uuid::Uuid;
 
 use crate::locale::normalize_locale_tag;
@@ -88,7 +88,8 @@ pub struct SeoEntityForm {
     pub og_title: String,
     pub og_description: String,
     pub og_image: String,
-    pub structured_data: String,
+    pub structured_data_type: String,
+    pub structured_data_payload: String,
     pub noindex: bool,
     pub nofollow: bool,
 }
@@ -104,7 +105,8 @@ impl SeoEntityForm {
             og_title: String::new(),
             og_description: String::new(),
             og_image: String::new(),
-            structured_data: String::new(),
+            structured_data_type: String::new(),
+            structured_data_payload: String::new(),
             noindex: false,
             nofollow: false,
         }
@@ -123,11 +125,27 @@ impl SeoEntityForm {
         self.og_title = meta.translation.og_title.clone().unwrap_or_default();
         self.og_description = meta.translation.og_description.clone().unwrap_or_default();
         self.og_image = meta.translation.og_image.clone().unwrap_or_default();
-        self.structured_data = meta
-            .structured_data
-            .as_ref()
-            .map(|value| serde_json::to_string_pretty(value).unwrap_or_else(|_| "{}".to_string()))
-            .unwrap_or_default();
+        self.structured_data_type.clear();
+        self.structured_data_payload.clear();
+        if let Some(structured_data) = meta.structured_data.as_ref() {
+            match structured_data {
+                Value::Object(object) => {
+                    if let Some(Value::String(schema_type)) = object.get("@type") {
+                        self.structured_data_type = schema_type.clone();
+                    }
+                    let mut payload = object.clone();
+                    payload.remove("@type");
+                    if !payload.is_empty() {
+                        self.structured_data_payload = serde_json::to_string_pretty(&Value::Object(payload))
+                            .unwrap_or_else(|_| "{}".to_string());
+                    }
+                }
+                other => {
+                    self.structured_data_payload = serde_json::to_string_pretty(other)
+                        .unwrap_or_else(|_| "{}".to_string());
+                }
+            }
+        }
         self.noindex = meta.noindex;
         self.nofollow = meta.nofollow;
     }
@@ -140,7 +158,8 @@ impl SeoEntityForm {
         self.og_title.clear();
         self.og_description.clear();
         self.og_image.clear();
-        self.structured_data.clear();
+        self.structured_data_type.clear();
+        self.structured_data_payload.clear();
         self.noindex = false;
         self.nofollow = false;
     }
@@ -225,7 +244,7 @@ impl SeoEntityForm {
             recommendations.push(SeoRecommendation::AddOpenGraphImage);
         }
 
-        if !self.structured_data.trim().is_empty() {
+        if !self.structured_data_type.trim().is_empty() || !self.structured_data_payload.trim().is_empty() {
             score += 5;
         }
 
@@ -236,13 +255,37 @@ impl SeoEntityForm {
     }
 
     fn parse_structured_data(&self) -> Result<Option<Value>, String> {
-        if self.structured_data.trim().is_empty() {
+        let schema_type = self.structured_data_type.trim();
+        let payload = self.structured_data_payload.trim();
+        if schema_type.is_empty() && payload.is_empty() {
             return Ok(None);
         }
 
-        serde_json::from_str::<Value>(self.structured_data.as_str())
-            .map(Some)
-            .map_err(|err| format!("Invalid structured data JSON: {err}"))
+        let payload_value = if payload.is_empty() {
+            None
+        } else {
+            Some(
+                serde_json::from_str::<Value>(payload)
+                    .map_err(|err| format!("Invalid structured data payload JSON: {err}"))?,
+            )
+        };
+
+        if schema_type.is_empty() {
+            return Ok(payload_value);
+        }
+
+        let mut object = match payload_value {
+            Some(Value::Object(object)) => object,
+            Some(_) => {
+                return Err(
+                    "Structured data payload must be a JSON object when schema type is set."
+                        .to_string(),
+                )
+            }
+            None => Map::new(),
+        };
+        object.insert("@type".to_string(), Value::String(schema_type.to_string()));
+        Ok(Some(Value::Object(object)))
     }
 }
 
@@ -284,6 +327,7 @@ fn non_empty_option(value: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{SeoEntityForm, SeoRecommendation};
+    use serde_json::json;
     use rustok_seo_targets::{builtin_slug as seo_builtin_slug, SeoTargetSlug};
     use uuid::Uuid;
 
@@ -326,5 +370,40 @@ mod tests {
         assert!(report
             .recommendations
             .contains(&SeoRecommendation::AddMetaDescription));
+    }
+
+    #[test]
+    fn build_input_serializes_typed_structured_data_fields() {
+        let mut form = SeoEntityForm::new("en-US".to_string());
+        form.structured_data_type = "Product".to_string();
+        form.structured_data_payload = r#"{"name":"Demo"}"#.to_string();
+
+        let input = form
+            .build_input(
+                SeoTargetSlug::new(seo_builtin_slug::PRODUCT).expect("builtin SEO target slug"),
+                Uuid::new_v4().to_string().as_str(),
+            )
+            .expect("input should build");
+
+        assert_eq!(input.structured_data, Some(json!({"@type":"Product","name":"Demo"})));
+    }
+
+    #[test]
+    fn build_input_rejects_non_object_payload_when_schema_type_present() {
+        let mut form = SeoEntityForm::new("en-US".to_string());
+        form.structured_data_type = "Product".to_string();
+        form.structured_data_payload = r#"["not-object"]"#.to_string();
+
+        let error = form
+            .build_input(
+                SeoTargetSlug::new(seo_builtin_slug::PRODUCT).expect("builtin SEO target slug"),
+                Uuid::new_v4().to_string().as_str(),
+            )
+            .expect_err("non-object payload should fail");
+
+        assert_eq!(
+            error,
+            "Structured data payload must be a JSON object when schema type is set."
+        );
     }
 }
