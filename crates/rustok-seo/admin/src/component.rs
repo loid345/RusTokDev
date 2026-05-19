@@ -308,6 +308,7 @@ pub fn SeoAdmin() -> impl IntoView {
     });
 
     let queue_schema_fix = Callback::new(move |(target_kind, apply_mode, payload): (rustok_seo_targets::SeoTargetSlug, rustok_seo::SeoBulkApplyMode, String)| {
+        let select_tab = select_tab.clone();
         select_tab.run(SeoAdminTab::Bulk);
         bulk_action_form.update(|draft| {
             draft.apply_mode = apply_mode;

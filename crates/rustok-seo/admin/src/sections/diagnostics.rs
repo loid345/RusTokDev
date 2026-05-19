@@ -57,6 +57,18 @@ fn DiagnosticsHealthCard(
     ui_locale: Option<String>,
     #[prop(into)] on_queue_schema_fix: Callback<(SeoTargetSlug, SeoBulkApplyMode, String)>,
 ) -> impl IntoView {
+    let schema_remediation_label = t(
+        ui_locale.as_deref(),
+        "seo.diagnostics.schema_remediation",
+        "Schema remediation",
+    );
+    let queue_fix_label = t(ui_locale.as_deref(), "seo.diagnostics.queue_fix", "Queue fix");
+    let affected_targets_template = t(
+        ui_locale.as_deref(),
+        "seo.diagnostics.affected_targets",
+        "{} affected targets",
+    );
+
     view! {
         <div class="space-y-3 rounded-xl border border-border/80 bg-background/60 p-4">
             <h3 class="text-base font-semibold text-card-foreground">"SEO health"</h3>
@@ -84,7 +96,7 @@ fn DiagnosticsHealthCard(
                                 <Show when=move || has_schema_issues>
                                     <div class="space-y-2">
                                         <h4 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                            {t(ui_locale.as_deref(), "seo.diagnostics.schema_remediation", "Schema remediation")}
+                                            {schema_remediation_label.clone()}
                                         </h4>
                                         <ul class="space-y-2">
                                             {schema_issue_counts.clone().into_iter().map(|count| {
@@ -95,24 +107,26 @@ fn DiagnosticsHealthCard(
                                                     let payload = default_schema_payload_for_slug(&kind).unwrap_or_default();
                                                     let on_click = on_queue_schema_fix.clone();
                                                     let kind_clone = kind.clone();
+                                                    let queue_fix_label_clone = queue_fix_label.clone();
                                                     view! {
                                                         <button
                                                             type="button"
                                                             class="rounded-lg border border-border px-3 py-1 text-xs font-medium text-foreground transition hover:bg-accent"
                                                             on:click=move |_| on_click.run((kind_clone.clone(), SeoBulkApplyMode::ApplyMissingSchemaOnly, payload.clone()))
                                                         >
-                                                            {t(ui_locale.as_deref(), "seo.diagnostics.queue_fix", "Queue fix")}
+                                                            {queue_fix_label_clone}
                                                         </button>
                                                     }.into_any()
                                                 } else {
                                                     ().into_any()
                                                 };
+                                                let affected_label = affected_targets_template.clone().replace("{}", &count.count.to_string());
                                                 view! {
                                                     <li class="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2">
                                                         <div class="min-w-0">
                                                             <div class="font-medium text-foreground">{count.key.clone()}</div>
                                                             <div class="text-xs text-muted-foreground">
-                                                                {t(ui_locale.as_deref(), "seo.diagnostics.affected_targets", "{} affected targets").replace("{}", &count.count.to_string())}
+                                                                {affected_label}
                                                             </div>
                                                         </div>
                                                         {fix_button}
