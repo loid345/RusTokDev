@@ -16,6 +16,8 @@
 - **boundary hardening**: auth module (user entity, repository, service, migrations) удалён из `rustok-core` — canonical auth lifecycle живёт в `rustok-auth`;
 - **contract sync**: `CRATE_API.md`, `README.md`, `docs/README.md` синхронизированы с актуальным public surface;
 - **deps cleanup**: удалены `jsonwebtoken` и `argon2` из `Cargo.toml` (больше не нужны после удаления auth);
+- **targeted tests**: добавлен `tests/foundation_primitives.rs` с coverage для `UserRole`/`UserStatus` (display, parse, serde), `generate_id`/`parse_id`, locale normalization и field-schema guardrails;
+- **contract tests**: расширен `tests/contract_surface.rs` проверками на отсутствие auth re-exports и лишних auth-зависимостей в `Cargo.toml`;
 - local docs и root `README.md` удерживаются как часть scoped audit path.
 
 ## Этапы
@@ -30,13 +32,13 @@
 
 - [x] продолжать вычищать domain-specific logic из foundation layer;
 - [x] переносить shared primitives сюда только при реальной cross-module необходимости;
-- [ ] покрывать новые foundation contracts targeted tests и compatibility checks.
+- [x] покрывать новые foundation contracts targeted tests и compatibility checks.
 
 ### 3. Operability
 
 - [x] документировать изменения foundation contracts одновременно с изменением runtime surface;
 - [x] удерживать local docs и `README.md` синхронизированными;
-- [ ] обновлять consumer-module docs, если меняются базовые typed contracts.
+- [x] обновлять consumer-module docs, если меняются базовые typed contracts.
 
 ## Проверка
 
