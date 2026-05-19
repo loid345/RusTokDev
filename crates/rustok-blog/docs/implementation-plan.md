@@ -44,18 +44,18 @@ packages и module metadata синхронизированы.
   - task: ensure indexer correctly maps events to search schema (проверить маппинг в `rustok-index`).
 - [x] удерживать category/tag/comment semantics покрытыми targeted integration tests.
 - [ ] добавить moderation API endpoints для comment status transitions (approve/spam/trash).
-  - `CommentStatus` transitions существуют в `state_machine.rs` (`approve`, `mark_spam`, `trash`);
-  - `rustok_comments::CommentsService` предоставляет comment lifecycle;
+  - `rustok_comments::CommentsService::set_comment_status` уже существует (RBAC: `enforce_moderation_scope`);
   - нужно добавить REST endpoints в `controllers/` и/или GraphQL mutations;
-  - tasks: `POST /api/blog/comments/{id}/moderate`, RBAC: `BLOG_POSTS_MANAGE`.
+  - tasks: `POST /api/blog/comments/{id}/moderate` → `set_comment_status`, RBAC: `BLOG_POSTS_MANAGE`.
 
 ### 3. Operability
 
 - [x] развивать observability для post lifecycle, visibility filtering и moderation flows;
-  - `#[instrument]` на всех сервисных методах (`PostService`, `CategoryService`, `TagService`);
+  - `#[instrument]` на всех сервисных методах (`PostService`, `CategoryService`, `TagService`, `CommentService`);
+  - `rustok_comments::CommentsService::set_comment_status` также имеет `#[instrument]` (fields: tenant_id, comment_id, status);
   - `metrics::record_read_path_*` на GraphQL/REST read paths;
   - state machine transitions логируются через `tracing::info!` (Draft→Published, etc.);
-  - `CommentStatus` transitions существуют в `state_machine.rs` (approve, mark_spam, trash).
+  - `CommentStatus` transitions существуют в `state_machine.rs` (`approve`, `mark_spam`, `trash`).
 - [ ] документировать новые public/runtime guarantees одновременно с изменением сервисов;
 - [x] держать локальные docs, README и manifest metadata синхронизированными.
 
