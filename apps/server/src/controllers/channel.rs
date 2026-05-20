@@ -595,12 +595,6 @@ fn normalize_optional_string(value: Option<String>) -> Option<String> {
         .map(|v| v.trim().to_lowercase())
         .filter(|v| !v.is_empty())
 }
-
-fn normalize_optional_string(value: Option<String>) -> Option<String> {
-    value
-        .map(|v| v.trim().to_lowercase())
-        .filter(|v| !v.is_empty())
-}
         host_equals: normalize_optional_string(input.host_equals),
         host_suffix: normalize_optional_string(input.host_suffix),
         oauth_app_id: input.oauth_app_id,
