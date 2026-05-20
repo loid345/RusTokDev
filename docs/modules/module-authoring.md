@@ -22,6 +22,7 @@
 - [Документацией `apps/server`](../../apps/server/docs/README.md)
 - [Документацией `apps/admin`](../../apps/admin/docs/README.md)
 - [Workspace CLI `xtask`](../../xtask/README.md)
+- [Реестром implementation plans](./implementation-plans-registry.md)
 
 ## Что считать модулем
 
@@ -55,6 +56,7 @@ Support/crate/capability слой может жить рядом с модуле
 - `rustok-module.toml` с корректными `module.slug`, `module.version`, `module.description`, `module.ui_classification`;
 - root `README.md` на английском;
 - local `docs/README.md` и `docs/implementation-plan.md` на русском.
+- для нового module/support crate обязательно добавить строку в [реестр implementation plans](./implementation-plans-registry.md) (`Global board`) с новым `Plan ID`.
 
 Канон:
 
@@ -118,6 +120,7 @@ Backend модуля должен встраиваться в общий platfor
 3. targeted `cargo test` по модулю и затронутому host/runtime
 4. обновлены local docs модуля
 5. обновлены central docs, если поменялся architecture/runtime contract
+6. план модуля добавлен/синхронизирован в `docs/modules/implementation-plans-registry.md`
 
 ## UI
 
