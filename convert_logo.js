@@ -1,5 +1,4 @@
 const sharp = require('sharp');
-
 async function convert() {
     console.log("Starting conversion...");
     const input = 'assets/rustok-logo.png';
