@@ -1421,13 +1421,6 @@ fn load_runtime_marketplace_modules(
 }
 
 #[cfg(feature = "ssr")]
-struct RuntimeModuleDescriptor {
-    root: std::path::PathBuf,
-    package_manifest: RuntimeModulePackageManifest,
-    cargo_manifest: RuntimeCargoManifest,
-}
-
-#[cfg(feature = "ssr")]
 fn load_runtime_module_package_manifest_by_slug(
     module_slug: &str,
     manifest: &RuntimeModulesManifest,
@@ -1443,124 +1436,6 @@ fn load_runtime_module_package_manifest_by_slug(
     Ok(None)
 }
 
-#[cfg(feature = "ssr")]
-fn load_runtime_module_descriptor_by_slug(
-    module_slug: &str,
-    manifest: &RuntimeModulesManifest,
-) -> Result<Option<RuntimeModuleDescriptor>, ServerFnError> {
-    for module_root in runtime_module_roots(manifest)? {
-        let package_manifest: RuntimeModulePackageManifest =
-            load_toml_file(&module_root.join("rustok-module.toml"))?;
-        if package_manifest.module.slug == module_slug {
-            let cargo_manifest: RuntimeCargoManifest =
-                load_toml_file(&module_root.join("Cargo.toml"))?;
-            return Ok(Some(RuntimeModuleDescriptor {
-                root: module_root,
-                package_manifest,
-                cargo_manifest,
-            }));
-        }
-    }
-
-    Ok(None)
-}
-
-#[cfg(feature = "ssr")]
-async fn save_manifest_and_enqueue_build(
-    app_ctx: &loco_rs::app::AppContext,
-    expected_revision: i64,
-    manifest: &RuntimeModulesManifest,
-    requested_by: &str,
-    reason: String,
-    summary: String,
-) -> Result<BuildJob, ServerFnError> {
-    use sea_orm::{ConnectionTrait, Statement, TransactionTrait};
-
-    let backend = app_ctx.db.get_database_backend();
-    let next_revision = expected_revision + 1;
-    let manifest_hash = runtime_manifest_hash(manifest);
-    let manifest_snapshot = serde_json::to_value(manifest)
-        .map_err(|err| server_error(format!("failed to encode platform manifest: {err}")))?;
-    let now = chrono::Utc::now();
-    let update = Statement::from_sql_and_values(
-        backend,
-        platform_state_update_sql(backend),
-        vec![
-            next_revision.into(),
-            manifest_snapshot.clone().into(),
-            manifest_hash.clone().into(),
-            requested_by.to_string().into(),
-            now.into(),
-            "active".into(),
-            expected_revision.into(),
-        ],
-    );
-    let txn = app_ctx.db.begin().await.map_err(|err| {
-        server_error(format!("failed to begin manifest/build transaction: {err}"))
-    })?;
-
-    let update_result = txn
-        .execute(update)
-        .await
-        .map_err(|err| server_error(format!("failed to update platform_state: {err}")))?;
-    if update_result.rows_affected() != 1 {
-        return Err(server_error(format!(
-            "Platform composition revision conflict: expected {expected_revision}"
-        )));
-    }
-
-    let build_id = rustok_core::generate_id();
-    let insert = Statement::from_sql_and_values(
-        backend,
-        runtime_build_job_insert_sql(backend),
-        vec![
-            build_id.into(),
-            "queued".into(),
-            "pending".into(),
-            0.into(),
-            runtime_deployment_profile(manifest).into(),
-            format!("platform_state:{next_revision}").into(),
-            manifest_hash.into(),
-            next_revision.into(),
-            manifest_snapshot.into(),
-            runtime_modules_delta_json(manifest, summary).into(),
-            requested_by.to_string().into(),
-            reason.into(),
-            now.into(),
-            now.into(),
-        ],
-    );
-
-    txn.execute(insert).await.map_err(|err| {
-        server_error(format!(
-            "failed to enqueue build after manifest update: {err}"
-        ))
-    })?;
-
-    let select = Statement::from_sql_and_values(
-        backend,
-        runtime_build_job_select_sql(backend),
-        vec![build_id.into()],
-    );
-
-    let build = txn
-        .query_one(select)
-        .await
-        .map_err(|err| server_error(err.to_string()))?
-        .map(map_build_job_row)
-        .transpose()?
-        .ok_or_else(|| server_error("build record missing after enqueue"))?;
-
-    txn.commit().await.map_err(|err| {
-        server_error(format!(
-            "failed to commit manifest/build transaction: {err}"
-        ))
-    })?;
-
-    Ok(build)
-}
-
-#[cfg(feature = "ssr")]
 fn runtime_setting_value_matches_type(value_type: &str, value: &serde_json::Value) -> bool {
     match value_type {
         "string" => value.is_string(),
