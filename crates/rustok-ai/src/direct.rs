@@ -21,9 +21,11 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::model::{
-    AiAlloyOperation, AiAlloyTaskInput, AiBlogDraftTaskInput, AiImageAssetTaskInput,
-    AiProductCopyTaskInput, AiProviderConfig, ChatMessage, ChatMessageRole, DirectExecutionTarget,
-    ProviderChatRequest, ProviderImageRequest, ProviderStreamEmitter, ToolTrace,
+    AiAlloyOperation, AiAlloyTaskInput, AiBlogDraftTaskInput, AiContentModerationTaskInput,
+    AiImageAssetTaskInput, AiOrderAnalyticsTaskInput, AiOrderOpsAssistantTaskInput,
+    AiProductAttributesTaskInput, AiProductCopyTaskInput, AiProviderConfig, ChatMessage,
+    ChatMessageRole, DirectExecutionTarget, ProviderChatRequest, ProviderImageRequest,
+    ProviderStreamEmitter, ToolTrace,
 };
 use crate::provider::ModelProvider;
 use crate::service::AiOperatorContext;
@@ -72,6 +74,10 @@ impl DirectExecutionRegistry {
         registry.register(Arc::new(MediaImageAssetHandler));
         registry.register(Arc::new(ProductCopyHandler));
         registry.register(Arc::new(BlogDraftHandler));
+        registry.register(Arc::new(ContentModerationHandler));
+        registry.register(Arc::new(ProductAttributesHandler));
+        registry.register(Arc::new(OrderAnalyticsHandler));
+        registry.register(Arc::new(OrderOpsAssistantHandler));
         registry
     }
 
@@ -316,6 +322,10 @@ pub struct MediaImageAssetHandler;
 pub struct ProductCopyHandler;
 
 pub struct BlogDraftHandler;
+pub struct ContentModerationHandler;
+pub struct ProductAttributesHandler;
+pub struct OrderAnalyticsHandler;
+pub struct OrderOpsAssistantHandler;
 
 #[async_trait]
 impl DirectTaskHandler for MediaImageAssetHandler {
@@ -879,6 +889,86 @@ impl DirectTaskHandler for BlogDraftHandler {
                 "operation": if input.post_id.is_some() { "update_translation" } else { "create_draft" },
             }),
         })
+    }
+}
+
+#[async_trait]
+impl DirectTaskHandler for ContentModerationHandler {
+    fn task_slug(&self) -> &'static str {
+        "content_moderation"
+    }
+
+    async fn execute(
+        &self,
+        _app_ctx: &AppContext,
+        _operator: &AiOperatorContext,
+        request: DirectExecutionRequest,
+    ) -> AiResult<DirectExecutionResult> {
+        let _input: AiContentModerationTaskInput =
+            serde_json::from_value(request.task_input_json).map_err(AiError::Json)?;
+        Err(AiError::Validation(
+            "content_moderation direct handler is not implemented yet".to_string(),
+        ))
+    }
+}
+
+#[async_trait]
+impl DirectTaskHandler for ProductAttributesHandler {
+    fn task_slug(&self) -> &'static str {
+        "product_attributes"
+    }
+
+    async fn execute(
+        &self,
+        _app_ctx: &AppContext,
+        _operator: &AiOperatorContext,
+        request: DirectExecutionRequest,
+    ) -> AiResult<DirectExecutionResult> {
+        let _input: AiProductAttributesTaskInput =
+            serde_json::from_value(request.task_input_json).map_err(AiError::Json)?;
+        Err(AiError::Validation(
+            "product_attributes direct handler is not implemented yet".to_string(),
+        ))
+    }
+}
+
+#[async_trait]
+impl DirectTaskHandler for OrderAnalyticsHandler {
+    fn task_slug(&self) -> &'static str {
+        "order_analytics"
+    }
+
+    async fn execute(
+        &self,
+        _app_ctx: &AppContext,
+        _operator: &AiOperatorContext,
+        request: DirectExecutionRequest,
+    ) -> AiResult<DirectExecutionResult> {
+        let _input: AiOrderAnalyticsTaskInput =
+            serde_json::from_value(request.task_input_json).map_err(AiError::Json)?;
+        Err(AiError::Validation(
+            "order_analytics direct handler is not implemented yet".to_string(),
+        ))
+    }
+}
+
+#[async_trait]
+impl DirectTaskHandler for OrderOpsAssistantHandler {
+    fn task_slug(&self) -> &'static str {
+        "order_ops_assistant"
+    }
+
+    async fn execute(
+        &self,
+        _app_ctx: &AppContext,
+        _operator: &AiOperatorContext,
+        request: DirectExecutionRequest,
+    ) -> AiResult<DirectExecutionResult> {
+        let _input: AiOrderOpsAssistantTaskInput =
+            serde_json::from_value(request.task_input_json).map_err(AiError::Json)?;
+        Err(AiError::Validation(
+            "order_ops_assistant direct handler is not implemented yet".to_string(),
+        ))
     }
 }
 
