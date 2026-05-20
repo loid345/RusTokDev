@@ -55,9 +55,8 @@ pub fn validate_schema_block(block: &SeoStructuredDataBlock) -> Vec<SchemaValida
                     issues.push(SchemaValidationIssue {
                         code: "invalid_schema_shape",
                         severity: SeoDiagnosticSeverity::Error,
-                        message:
-                            "itemListElement must be an array for BreadcrumbList/ItemList."
-                                .to_string(),
+                        message: "itemListElement must be an array for BreadcrumbList/ItemList."
+                            .to_string(),
                     });
                 }
             }
@@ -129,7 +128,9 @@ mod tests {
             SeoSchemaBlockKind::Product,
             json!({"@type": "Product", "description": "Demo"}),
         ));
-        assert!(issues.iter().any(|i| i.code == "missing_required_schema_field"));
+        assert!(issues
+            .iter()
+            .any(|i| i.code == "missing_required_schema_field"));
         assert_eq!(issues.len(), 1);
     }
 
@@ -174,7 +175,9 @@ mod tests {
             SeoSchemaBlockKind::FAQPage,
             json!({"@type": "FAQPage"}),
         ));
-        assert!(issues.iter().any(|i| i.code == "missing_required_schema_field"));
+        assert!(issues
+            .iter()
+            .any(|i| i.code == "missing_required_schema_field"));
     }
 
     #[test]

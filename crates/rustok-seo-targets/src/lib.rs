@@ -273,7 +273,10 @@ pub fn default_schema_type_for_slug(slug: &SeoTargetSlug) -> Option<&'static str
 
 pub fn default_schema_payload_for_slug(slug: &SeoTargetSlug) -> Option<String> {
     default_schema_type_for_slug(slug).map(|schema_type| {
-        format!(r#"{{"@context":"https://schema.org","@type":"{}"}}"#, schema_type)
+        format!(
+            r#"{{"@context":"https://schema.org","@type":"{}"}}"#,
+            schema_type
+        )
     })
 }
 

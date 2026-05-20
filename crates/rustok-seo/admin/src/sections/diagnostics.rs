@@ -62,7 +62,11 @@ fn DiagnosticsHealthCard(
         "seo.diagnostics.schema_remediation",
         "Schema remediation",
     );
-    let queue_fix_label = t(ui_locale.as_deref(), "seo.diagnostics.queue_fix", "Queue fix");
+    let queue_fix_label = t(
+        ui_locale.as_deref(),
+        "seo.diagnostics.queue_fix",
+        "Queue fix",
+    );
     let affected_targets_template = t(
         ui_locale.as_deref(),
         "seo.diagnostics.affected_targets",

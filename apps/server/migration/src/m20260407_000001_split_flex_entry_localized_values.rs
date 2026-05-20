@@ -169,12 +169,14 @@ WHERE EXISTS (
             manager
                 .get_connection()
                 .execute_unprepared(
-SET data = COALESCE(entry_row.data, '{}'::jsonb) || COALESCE(localized.locales_data, '{}'::jsonb)
+                    r#"
 UPDATE flex_entries AS entry_row
 SET data = COALESCE(entry_row.data, '{}'::jsonb) || COALESCE(localized.locales_data, '{}'::jsonb)
 FROM (
-        jsonb_object_agg(localized_row.locale, localized_row.data) AS locales_data
+    SELECT
         localized_row.entry_id,
+        jsonb_object_agg(localized_row.locale, localized_row.data) AS locales_data
+    FROM flex_entry_localized_values AS localized_row
     GROUP BY localized_row.entry_id
 ) AS localized
 WHERE entry_row.id = localized.entry_id

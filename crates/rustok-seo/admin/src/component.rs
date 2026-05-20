@@ -307,28 +307,36 @@ pub fn SeoAdmin() -> impl IntoView {
         select_tab_query_writer.replace_value(AdminQueryKey::Tab.as_str(), tab.as_str());
     });
 
-    let queue_schema_fix = Callback::new(move |(target_kind, apply_mode, payload): (rustok_seo_targets::SeoTargetSlug, rustok_seo::SeoBulkApplyMode, String)| {
-        let select_tab = select_tab.clone();
-        select_tab.run(SeoAdminTab::Bulk);
-        bulk_action_form.update(|draft| {
-            draft.apply_mode = apply_mode;
-            draft.structured_data.mode = SeoBulkFieldPatchMode::Set;
-            draft.structured_data.value = payload;
-            draft.title.mode = SeoBulkFieldPatchMode::Keep;
-            draft.description.mode = SeoBulkFieldPatchMode::Keep;
-            draft.keywords.mode = SeoBulkFieldPatchMode::Keep;
-            draft.canonical_url.mode = SeoBulkFieldPatchMode::Keep;
-            draft.og_title.mode = SeoBulkFieldPatchMode::Keep;
-            draft.og_description.mode = SeoBulkFieldPatchMode::Keep;
-            draft.og_image.mode = SeoBulkFieldPatchMode::Keep;
-            draft.noindex.mode = SeoBulkFieldPatchMode::Keep;
-            draft.nofollow.mode = SeoBulkFieldPatchMode::Keep;
-        });
-        bulk_filter_form.update(|draft| {
-            draft.target_kind = target_kind;
-        });
-        status_message.set(Some("Pre-filled bulk action for schema fix. Review and click Queue apply.".to_string()));
-    });
+    let queue_schema_fix = Callback::new(
+        move |(target_kind, apply_mode, payload): (
+            rustok_seo_targets::SeoTargetSlug,
+            rustok_seo::SeoBulkApplyMode,
+            String,
+        )| {
+            let select_tab = select_tab.clone();
+            select_tab.run(SeoAdminTab::Bulk);
+            bulk_action_form.update(|draft| {
+                draft.apply_mode = apply_mode;
+                draft.structured_data.mode = SeoBulkFieldPatchMode::Set;
+                draft.structured_data.value = payload;
+                draft.title.mode = SeoBulkFieldPatchMode::Keep;
+                draft.description.mode = SeoBulkFieldPatchMode::Keep;
+                draft.keywords.mode = SeoBulkFieldPatchMode::Keep;
+                draft.canonical_url.mode = SeoBulkFieldPatchMode::Keep;
+                draft.og_title.mode = SeoBulkFieldPatchMode::Keep;
+                draft.og_description.mode = SeoBulkFieldPatchMode::Keep;
+                draft.og_image.mode = SeoBulkFieldPatchMode::Keep;
+                draft.noindex.mode = SeoBulkFieldPatchMode::Keep;
+                draft.nofollow.mode = SeoBulkFieldPatchMode::Keep;
+            });
+            bulk_filter_form.update(|draft| {
+                draft.target_kind = target_kind;
+            });
+            status_message.set(Some(
+                "Pre-filled bulk action for schema fix. Review and click Queue apply.".to_string(),
+            ));
+        },
+    );
 
     view! {
         <div class="space-y-6">
