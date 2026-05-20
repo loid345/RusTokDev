@@ -667,7 +667,7 @@ mod tests {
     use uuid::Uuid;
 
     #[test]
-    fn build_rule_definition_normalizes_predicates() {
+    fn build_rule_definition_returns_normalized_predicates() {
         let channel_id = Uuid::new_v4();
         let (priority, is_active, definition) = build_rule_definition(CreateResolutionRuleRequest {
             priority: 30,
