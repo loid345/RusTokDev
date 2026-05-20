@@ -965,15 +965,70 @@ impl DirectTaskHandler for ProductAttributesHandler {
 
     async fn execute(
         &self,
-        _app_ctx: &AppContext,
-        _operator: &AiOperatorContext,
+        app_ctx: &AppContext,
+        operator: &AiOperatorContext,
         request: DirectExecutionRequest,
     ) -> AiResult<DirectExecutionResult> {
-        let _input: AiProductAttributesTaskInput =
-            serde_json::from_value(request.task_input_json).map_err(AiError::Json)?;
-        Err(AiError::Validation(
-            "product_attributes direct handler is not implemented yet".to_string(),
-        ))
+        let input: AiProductAttributesTaskInput =
+            serde_json::from_value(request.task_input_json.clone()).map_err(AiError::Json)?;
+        let started = std::time::Instant::now();
+        let catalog = CatalogService::new(
+            app_ctx.db.clone(),
+            transactional_event_bus_from_context(app_ctx),
+        );
+        let security = ai_security_context(operator);
+        let product = catalog
+            .get_product(operator.tenant_id, input.product_id, &security)
+            .await
+            .map_err(|err| AiError::Runtime(err.to_string()))?;
+        let generated = generate_product_attributes(
+            &request.provider,
+            &request.provider_config,
+            request.system_prompt.as_deref(),
+            request.resolved_locale.as_str(),
+            &input,
+            &product,
+        )
+        .await?;
+        let operation_payload = serde_json::to_value(&generated).map_err(AiError::Json)?;
+        let summary = format!(
+            "Prepared {} suggested product attributes.",
+            generated.flex_attributes.len()
+        );
+        let trace = ToolTrace {
+            tool_name: "direct.commerce.product_attributes".to_string(),
+            input_payload: request.task_input_json.clone(),
+            output_payload: Some(operation_payload.clone()),
+            status: "completed".to_string(),
+            duration_ms: started.elapsed().as_millis() as i64,
+            sensitive: false,
+            error_message: None,
+            created_at: Utc::now(),
+        };
+        let explanation = explain_result(
+            &request.provider,
+            &request.provider_config,
+            request.system_prompt.as_deref(),
+            request.resolved_locale.as_str(),
+            input.assistant_prompt.as_deref(),
+            &summary,
+            &operation_payload,
+            request.stream_emitter.clone(),
+        )
+        .await;
+
+        Ok(DirectExecutionResult {
+            execution_target: DirectExecutionTarget::Commerce,
+            appended_messages: vec![explanation],
+            traces: vec![trace],
+            metadata: json!({
+                "direct_task": request.task_slug,
+                "requested_locale": request.requested_locale,
+                "resolved_locale": request.resolved_locale,
+                "product_id": input.product_id,
+                "suggested_attributes": operation_payload,
+            }),
+        })
     }
 }
 
@@ -1102,6 +1157,26 @@ struct GeneratedModerationDecision {
     explanation: String,
     requires_human: bool,
     recommended_action: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GeneratedProductAttributes {
+    brand: Option<String>,
+    material: Option<String>,
+    color: Option<String>,
+    size: Option<String>,
+    dimensions: Option<String>,
+    compatibility: Option<String>,
+    care_instructions: Option<String>,
+    hazmat: Option<String>,
+    #[serde(default)]
+    flex_attributes: Vec<GeneratedFlexAttribute>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct GeneratedFlexAttribute {
+    key: String,
+    value: String,
 }
 
 fn resolve_blog_source_content(
@@ -1323,6 +1398,89 @@ async fn generate_content_moderation(
         requires_human: decision.requires_human,
         recommended_action: decision.recommended_action,
     })
+}
+
+async fn generate_product_attributes(
+    provider: &Arc<dyn ModelProvider>,
+    provider_config: &AiProviderConfig,
+    system_prompt: Option<&str>,
+    target_locale: &str,
+    input: &AiProductAttributesTaskInput,
+    product: &rustok_commerce::ProductResponse,
+) -> AiResult<GeneratedProductAttributes> {
+    let locale_instruction = concat!(
+        "Return valid JSON only with keys: `brand`, `material`, `color`, `size`, `dimensions`, ",
+        "`compatibility`, `care_instructions`, `hazmat`, `flex_attributes`. ",
+        "`flex_attributes` must be an array of `{key, value}` objects with non-empty strings."
+    );
+    let system = match system_prompt {
+        Some(system_prompt) if !system_prompt.trim().is_empty() => {
+            format!("{system_prompt}\n\n{locale_instruction}")
+        }
+        _ => locale_instruction.to_string(),
+    };
+    let prompt = json!({
+        "task": "product_attributes",
+        "target_locale": target_locale,
+        "product": {
+            "id": product.id,
+            "title": product.title,
+            "handle": product.handle,
+            "product_type": product.product_type,
+            "vendor": product.vendor,
+            "category_slug": input.category_slug,
+            "source_title": input.source_title,
+            "source_description": input.source_description,
+            "image_urls": input.image_urls,
+            "instructions": input.copy_instructions,
+        }
+    })
+    .to_string();
+    let response = provider
+        .complete(
+            provider_config,
+            ProviderChatRequest {
+                model: provider_config.model.clone(),
+                messages: vec![
+                    ChatMessage {
+                        role: ChatMessageRole::System,
+                        content: Some(system),
+                        name: None,
+                        tool_call_id: None,
+                        tool_calls: Vec::new(),
+                        metadata: json!({"locale": target_locale, "direct_generation": "product_attributes"}),
+                    },
+                    ChatMessage {
+                        role: ChatMessageRole::User,
+                        content: Some(prompt),
+                        name: None,
+                        tool_call_id: None,
+                        tool_calls: Vec::new(),
+                        metadata: json!({"locale": target_locale, "direct_generation": "product_attributes"}),
+                    },
+                ],
+                tools: Vec::new(),
+                temperature: provider_config.temperature,
+                max_tokens: provider_config.max_tokens,
+                locale: Some(target_locale.to_string()),
+            },
+        )
+        .await?;
+    let content = response.assistant_message.content.ok_or_else(|| {
+        AiError::Provider("provider returned empty content for product_attributes".to_string())
+    })?;
+    let parsed = parse_json_object_from_text(&content)?;
+    let generated: GeneratedProductAttributes = serde_json::from_value(parsed).map_err(AiError::Json)?;
+    if generated
+        .flex_attributes
+        .iter()
+        .any(|attr| attr.key.trim().is_empty() || attr.value.trim().is_empty())
+    {
+        return Err(AiError::Validation(
+            "product_attributes flex_attributes must contain non-empty key/value".to_string(),
+        ));
+    }
+    Ok(generated)
 }
 
 #[allow(clippy::too_many_arguments)]
