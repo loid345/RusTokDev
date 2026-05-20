@@ -14,11 +14,10 @@ post-v0 rollout policy lifecycle и runtime integration parity.
 - resolver precedence уже закреплён в `crates/rustok-channel/src/resolution.rs`:
   `explicit selectors -> built-in host slice -> typed policies -> explicit default -> unresolved`;
 - storage и domain слой для policy уже есть (`channel_resolution_policy_sets` +
-  `channel_resolution_policy_rules`), но write lifecycle ограничен create/activate/delete;
-- server transport (`apps/server/src/controllers/channel.rs`) тоже пока даёт только
-  create/activate/delete для policy flows;
-- admin UI (`crates/rustok-channel/admin/src/lib.rs`) покрывает create/activate/add-rule/delete-rule,
-  но не покрывает full operator flow для rule reorder, rule disable/enable и rule edit;
+  `channel_resolution_policy_rules`);
+- server transport (`apps/server/src/controllers/channel.rs`) расширяется вместе с policy lifecycle;
+- admin UI (`crates/rustok-channel/admin/src/lib.rs`) уже покрывает базовые operator flows и
+  rollout rule-level lifecycle;
 - middleware request facts (`apps/server/src/middleware/channel.rs`) пока передаёт
   `oauth_app_id = None` и `locale = None`, из-за чего часть typed predicates работает
   только в synthetic/tests сценариях.
@@ -97,12 +96,13 @@ post-v0 rollout policy lifecycle и runtime integration parity.
 
 - [x] довести policy trace в admin bootstrap/runtime diagnostics;
 - [x] добавить базовые operator flows для policy-set activation и policy-rule authoring/removal;
-- [ ] добавить policy rule update/reorder/disable lifecycle на уровне `ChannelService` и REST transport;
-- [ ] добавить targeted tests на deterministic rule order и inactive-rule exclusion.
+- [x] добавить policy rule update/reorder/disable lifecycle на уровне `ChannelService` и REST transport;
+- [x] добавить targeted tests на deterministic rule order и inactive-rule exclusion.
 
 ### 3. Admin operator UX parity
 
-- [ ] довести `rustok-channel-admin` до полного operator flow для policy rules (reorder/disable/edit);
+- [x] довести `rustok-channel-admin` до operator flow для policy rules (reorder/disable);
+- [ ] добавить полноценный rule edit flow (изменение predicates/action без delete+recreate);
 - [ ] выровнять native-first `#[server]` transport для policy operations с существующими channel CRUD flows;
 - [ ] при добавлении policy edit-selection state закрепить URL query contract через shared `AdminQueryKey`.
 
@@ -122,7 +122,7 @@ post-v0 rollout policy lifecycle и runtime integration parity.
 - `cargo xtask module validate channel`
 - `cargo xtask module test channel`
 - targeted server middleware tests для resolution order, explicit selectors, policy predicates и default semantics
-- targeted admin SSR/lib tests для policy lifecycle flows (`create/update/reorder/disable/delete`)
+- targeted channel service tests для policy lifecycle (`create/update/reorder/disable/delete`)
 
 ## Правила обновления
 
