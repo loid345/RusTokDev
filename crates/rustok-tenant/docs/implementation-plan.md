@@ -26,13 +26,13 @@
 
 ### 2. Domain expansion
 
-- [ ] добавить schema validation для tenant settings;
-- [ ] довести outbox events для `TenantCreated`, `TenantUpdated`, `TenantModuleToggled`;
-- [ ] синхронизировать tenancy contract с RBAC для tenant-scoped admin permissions.
+- [x] добавить schema validation для tenant settings (object-only JSON, depth/key/payload limits);
+- [x] довести outbox events для `TenantCreated`, `TenantUpdated`, `TenantModuleToggled` (через `TransactionalEventBus` в tenant mutation flows);
+- [x] синхронизировать tenancy contract с RBAC для tenant-scoped admin permissions (tenant admin bootstrap + server GraphQL tenant/module read paths выровнены по `modules:(read|list|manage)` и `tenants:(read|list|manage)` checks).
 
 ### 3. Operability
 
-- [ ] довести integration tests для tenant CRUD, module toggles и resolver invariants;
+- [ ] довести integration tests для tenant CRUD, module toggles и resolver invariants (baseline CRUD/module-toggle/outbox tests добавлены; resolver invariants pending);
 - [ ] развить observability для cache hit/miss и active tenant signals;
 - [ ] документировать provisioning/deprovisioning и invalidation guarantees одновременно с изменением runtime contract.
 

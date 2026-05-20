@@ -23,7 +23,7 @@
 - [x] вынести canonical ownership event contracts в отдельный crate;
 - [x] сохранить compatibility path через `rustok-core::events`;
 - [x] покрыть schema registry, validation и roundtrip contract tests;
-- [ ] удерживать sync между event types, registry и consumer imports.
+- [ ] удерживать sync между event types, registry и consumer imports (tenant lifecycle family обновлена: добавлен `tenant.module.toggled`).
 
 ### 2. Release discipline
 

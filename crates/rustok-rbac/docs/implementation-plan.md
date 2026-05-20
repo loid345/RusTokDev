@@ -23,7 +23,7 @@ steady-state hardening и drift-prevention режиме.
 - [x] зафиксировать single-engine runtime contract;
 - [x] перенести policy/evaluator semantics и resolver APIs в модуль;
 - [x] стандартизировать integration events для role-assignment changes;
-- [ ] удерживать sync между runtime contracts, server adapters и module metadata;
+- [ ] удерживать sync между runtime contracts, server adapters и module metadata (tenant module adapters выровнены: `module_registry`/`tenant_modules` и tenant admin bootstrap теперь проверяют tenant-scoped read/list/manage permissions);
 - [ ] контрактные тесты покрывают все публичные use-case для permission resolution, authorization decisions, cache semantics и integration events.
 
 ### 2. Drift prevention
