@@ -351,6 +351,33 @@ gantt
 - Go/No-Go checklist для каждого tenant.
 - Quarterly recalibration модели/политик/порогов.
 
+## Фактическая сверка по коду перед реализацией
+
+Проверка выполнена по текущему коду репозитория (а не только по исследовательским тезисам).
+
+### Что уже есть в коде (confirmed)
+
+- `rustok-ai` уже имеет direct handlers для `alloy_code`, `image_asset`, `product_copy`, `blog_draft`.
+- `DirectExecutionTarget` сейчас ограничен категориями `Alloy`, `Media`, `Commerce`, `Blog`.
+- В GraphQL уже есть `ai_runtime_metrics`, recent runs/events и доступ к tool traces.
+- В order admin уже есть lifecycle operations `markOrderPaid`, `shipOrder`, `deliverOrder`, `cancelOrder`.
+- В persisted control plane уже есть таблицы для `AiApprovalRequests` и `AiToolTraces`.
+
+### Чего ещё нет (gaps to implement)
+
+- Отсутствуют direct vertical handlers: `content_moderation`, `product_attributes`, `order_analytics`, `order_ops_assistant`.
+- В Next admin product form нет `AI Fill`/`Apply Suggested Attributes` и preview-diff для атрибутов.
+- Нет domain-specific launchers/health panels для новых vertical задач в `apps/next-admin/packages/rustok-ai`.
+- Нет formalized rollout-metrics как отдельного acceptance-gate для новых verticals (нужно закрепить как DoD).
+
+### Корректировка приоритета реализации по факту кода
+
+1. **Сначала foundation hardening + observability gates** (переиспользуем существующий control-plane).
+2. **Далее `product_attributes` + product form UX**, так как `product_copy` и catalog-path уже в прод-контуре.
+3. **Потом moderation (shadow → HITL → selective enforce)**.
+4. **Затем order analytics (insights-only)**.
+5. **И только после этого order ops assistant с approval-gated automation**.
+
 ## Проверочный чек-лист по пунктам исследования
 
 - [ ] Секреты и провайдеры изолированы по окружениям.
