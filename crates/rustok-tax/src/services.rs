@@ -385,6 +385,35 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn tax_service_normalizes_channel_provider_id_before_resolution() {
+        let service = super::TaxService::new();
+        let result = service
+            .calculate(TaxCalculationInput {
+                currency_code: "usd".to_string(),
+                channel_id: Some(Uuid::new_v4()),
+                policy: TaxPolicySnapshot {
+                    provider_id: Some("external_tax".to_string()),
+                    channel_provider_id: Some("  REGION_DEFAULT  ".to_string()),
+                    country_code: None,
+                    tax_rate: Decimal::from(10),
+                    tax_included: false,
+                    country_rules: Vec::new(),
+                },
+                taxable_amounts: vec![TaxableAmount {
+                    line_item_id: None,
+                    shipping_option_id: None,
+                    description: Some("line_item".to_string()),
+                    amount: Decimal::from(10),
+                }],
+            })
+            .await
+            .expect("normalized channel provider should be used");
+
+        assert_eq!(result.lines.len(), 1);
+        assert_eq!(result.lines[0].provider_id, REGION_DEFAULT_TAX_PROVIDER_ID);
+    }
+
+    #[tokio::test]
     async fn tax_service_prefers_channel_provider_id_over_region_provider_id() {
         let service = super::TaxService::new();
         let error = service
