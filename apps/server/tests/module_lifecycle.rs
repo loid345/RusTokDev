@@ -425,3 +425,27 @@ async fn dependent_validation_failure_does_not_create_journal_row() {
     assert_eq!(operations[0].status, "done");
     assert!(operations[0].requested_enabled);
 }
+
+#[tokio::test]
+async fn unknown_module_failure_does_not_create_journal_row() {
+    let db = setup_db().await;
+    let tenant_id = uuid::Uuid::new_v4();
+    seed_tenant(&db, tenant_id).await;
+
+    let registry = ModuleRegistry::new().register(TestModule::new("pricing"));
+
+    let err = ModuleLifecycleService::toggle_module(&db, &registry, tenant_id, "unknown", true)
+        .await
+        .expect_err("unknown module should fail");
+    assert!(matches!(err, ToggleModuleError::UnknownModule));
+
+    let operations = module_operations::Entity::find()
+        .filter(module_operations::Column::TenantId.eq(tenant_id))
+        .all(&db)
+        .await
+        .expect("query operations");
+    assert!(
+        operations.is_empty(),
+        "unknown module validation must not create module_operations journal rows",
+    );
+}
