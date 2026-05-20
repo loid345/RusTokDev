@@ -617,6 +617,7 @@ fn combine_native_and_graphql_error(server_err: ServerFnError, graphql_err: ApiE
 mod tests {
     use super::combine_native_and_graphql_error;
     use crate::shared::api::ApiError;
+    use futures::executor::block_on;
     use leptos::server_fn::error::ServerFnError;
 
     #[test]
@@ -634,6 +635,17 @@ mod tests {
             }
             other => panic!("expected graphql error, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn toggle_module_native_is_explicitly_disabled() {
+        let error = block_on(super::toggle_module_native("catalog".to_string(), true))
+            .expect_err("native toggle path must stay disabled");
+        assert!(
+            error
+                .to_string()
+                .contains("native path is disabled; use canonical GraphQL lifecycle entrypoint")
+        );
     }
 }
 
