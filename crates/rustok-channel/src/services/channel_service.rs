@@ -150,8 +150,7 @@ impl ChannelService {
             return Ok(None);
         };
 
-        let detail = self.build_channel_detail(channel_model).await?;
-        let mut detail = detail;
+        let mut detail = self.build_channel_detail(channel_model).await?;
         if let Some(existing) = detail
             .targets
             .iter_mut()
