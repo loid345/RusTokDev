@@ -93,19 +93,23 @@ SELECT
     entry_row.id,
     COALESCE(NULLIF(tenant.default_locale, ''), 'en'),
     entry_row.tenant_id,
-    jsonb_object_agg(localized_key.field_key, entry_row.data -> localized_key.field_key),
+    COALESCE(
+        jsonb_object_agg(localized_key.field_key, entry_row.data -> localized_key.field_key)
+            FILTER (WHERE entry_row.data ? localized_key.field_key),
+        '{}'::jsonb
+    ),
     entry_row.created_at,
     entry_row.updated_at
 FROM flex_entries AS entry_row
 JOIN flex_schemas AS schema_row ON schema_row.id = entry_row.schema_id
 JOIN tenants AS tenant ON tenant.id = entry_row.tenant_id
-JOIN LATERAL (
+LEFT JOIN LATERAL (
     SELECT definition ->> 'field_key' AS field_key
     FROM jsonb_array_elements(schema_row.fields_config) AS definition
     WHERE COALESCE((definition ->> 'is_localized')::boolean, false)
       AND (definition ->> 'field_key') IS NOT NULL
       AND NULLIF(definition ->> 'field_key', '') IS NOT NULL
-) AS localized_key ON entry_row.data ? localized_key.field_key
+) AS localized_key ON TRUE
 GROUP BY
     entry_row.id,
     entry_row.tenant_id,
