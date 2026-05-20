@@ -56,7 +56,7 @@ Support/crate/capability слой может жить рядом с модуле
 - `rustok-module.toml` с корректными `module.slug`, `module.version`, `module.description`, `module.ui_classification`;
 - root `README.md` на английском;
 - local `docs/README.md` и `docs/implementation-plan.md` на русском.
-- для нового module/support crate обязательно добавить строку в [реестр implementation plans](./implementation-plans-registry.md) (`Global board`) с новым `Plan ID`.
+- для нового module/support crate обязательно добавить строку в [реестр implementation plans](./implementation-plans-registry.md) (`Global board`) по формату реестра: минимум `Plan ID`, `Module/Crate`, `Plan doc` и `Status`.
 
 Канон:
 
