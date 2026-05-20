@@ -210,6 +210,9 @@ graph TD
 | `rustok-telemetry` | Observability bootstrap и shared telemetry helpers |
 | `rustok-mcp` | MCP adapter/server tool surface |
 | `rustok-ai` | AI host/orchestrator capability with large operator/admin UI surfaces for Leptos and Next.js hosts |
+| `rustok-ai-content` | Domain-owned AI support crate for content moderation vertical registration and policy seams |
+| `rustok-ai-product` | Domain-owned AI support crate for product vertical registration (`product_copy`, `product_attributes`) |
+| `rustok-ai-order` | Domain-owned AI support crate for order vertical registration (`order_analytics`, `order_ops_assistant`) |
 
 ## Приложения
 

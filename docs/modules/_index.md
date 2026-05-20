@@ -44,6 +44,9 @@
 | `rustok-iggy-connector` | [docs](../../crates/rustok-iggy-connector/docs/README.md) | [plan](../../crates/rustok-iggy-connector/docs/implementation-plan.md) |
 | `rustok-mcp` | [docs](../../crates/rustok-mcp/docs/README.md) | [plan](../../crates/rustok-mcp/docs/implementation-plan.md) |
 | `rustok-ai` | [docs](../../crates/rustok-ai/docs/README.md) | [plan](../../crates/rustok-ai/docs/implementation-plan.md) |
+| `rustok-ai-content` | [docs](../../crates/rustok-ai-content/docs/README.md) | [plan](../../crates/rustok-ai-content/docs/implementation-plan.md) |
+| `rustok-ai-product` | [docs](../../crates/rustok-ai-product/docs/README.md) | [plan](../../crates/rustok-ai-product/docs/implementation-plan.md) |
+| `rustok-ai-order` | [docs](../../crates/rustok-ai-order/docs/README.md) | [plan](../../crates/rustok-ai-order/docs/implementation-plan.md) |
 | `alloy` | [docs](../../crates/alloy/docs/README.md) | [plan](../../crates/alloy/docs/implementation-plan.md) |
 | `flex` | [docs](../../crates/flex/docs/README.md) | [plan](../../crates/flex/docs/implementation-plan.md) |
 | `rustok-commerce-foundation` | [docs](../../crates/rustok-commerce-foundation/docs/README.md) | [plan](../../crates/rustok-commerce-foundation/docs/implementation-plan.md) |

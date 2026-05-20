@@ -10,7 +10,6 @@ default = []
 server = [
   "dep:alloy",
   "dep:bytes",
-  "dep:futures-util",
   "dep:loco-rs",
   "dep:once_cell",
   "dep:rhai",
@@ -36,7 +35,7 @@ alloy = { workspace = true, optional = true }
 base64.workspace = true
 loco-rs = { workspace = true, optional = true }
 once_cell = { workspace = true, optional = true }
-futures-util = { version = "0.3", optional = true }
+futures-util = { version = "0.3" }
 reqwest = { workspace = true, features = ["json", "stream"] }
 rhai = { workspace = true, optional = true }
 rustok-api = { workspace = true, optional = true }

@@ -263,6 +263,8 @@ pub enum DirectExecutionTarget {
     Media,
     Commerce,
     Blog,
+    Moderation,
+    Orders,
 }
 
 impl DirectExecutionTarget {
@@ -272,6 +274,8 @@ impl DirectExecutionTarget {
             Self::Media => "media",
             Self::Commerce => "commerce",
             Self::Blog => "blog",
+            Self::Moderation => "moderation",
+            Self::Orders => "orders",
         }
     }
 }
@@ -392,5 +396,45 @@ pub struct AiBlogDraftTaskInput {
     pub category_id: Option<Uuid>,
     pub featured_image_url: Option<String>,
     pub copy_instructions: Option<String>,
+    pub assistant_prompt: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AiContentModerationTaskInput {
+    pub content_id: Option<Uuid>,
+    pub content_type: Option<String>,
+    pub title: Option<String>,
+    pub body: Option<String>,
+    pub locale: Option<String>,
+    pub assistant_prompt: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AiProductAttributesTaskInput {
+    pub product_id: Uuid,
+    pub category_slug: Option<String>,
+    #[serde(default)]
+    pub image_urls: Vec<String>,
+    pub source_title: Option<String>,
+    pub source_description: Option<String>,
+    pub copy_instructions: Option<String>,
+    pub assistant_prompt: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AiOrderAnalyticsTaskInput {
+    #[serde(default)]
+    pub order_ids: Vec<Uuid>,
+    pub date_from: Option<DateTime<Utc>>,
+    pub date_to: Option<DateTime<Utc>>,
+    pub focus: Option<String>,
+    pub assistant_prompt: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct AiOrderOpsAssistantTaskInput {
+    pub order_id: Uuid,
+    pub recommended_action: Option<String>,
+    pub context: Option<String>,
     pub assistant_prompt: Option<String>,
 }

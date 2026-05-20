@@ -21,14 +21,30 @@ use serde_json::{json, Value};
 use uuid::Uuid;
 
 use crate::model::{
-    AiAlloyOperation, AiAlloyTaskInput, AiBlogDraftTaskInput, AiImageAssetTaskInput,
-    AiProductCopyTaskInput, AiProviderConfig, ChatMessage, ChatMessageRole, DirectExecutionTarget,
-    ProviderChatRequest, ProviderImageRequest, ProviderStreamEmitter, ToolTrace,
+    AiAlloyOperation, AiAlloyTaskInput, AiBlogDraftTaskInput, AiContentModerationTaskInput,
+    AiImageAssetTaskInput, AiProductAttributesTaskInput, AiProductCopyTaskInput, AiProviderConfig,
+    ChatMessage, ChatMessageRole, DirectExecutionTarget, ProviderChatRequest,
+    ProviderImageRequest, ProviderStreamEmitter, ToolTrace,
 };
 use crate::provider::ModelProvider;
 use crate::service::AiOperatorContext;
 use crate::{AiError, AiResult};
 use rustok_core::{SecurityContext, CONTENT_FORMAT_MARKDOWN};
+#[path = "direct_content_moderation.rs"]
+mod direct_content_moderation;
+#[path = "direct_domain_content.rs"]
+mod direct_domain_content;
+#[path = "direct_domain_commerce.rs"]
+mod direct_domain_commerce;
+#[path = "direct_order_tasks.rs"]
+mod direct_order_tasks;
+#[path = "direct_domain_orders.rs"]
+mod direct_domain_orders;
+#[path = "direct_product_attributes.rs"]
+mod direct_product_attributes;
+use direct_domain_content::register_content_direct_handlers;
+use direct_domain_commerce::register_commerce_direct_handlers;
+use direct_domain_orders::register_order_direct_handlers;
 
 pub struct DirectExecutionRequest {
     pub task_slug: String,
@@ -66,12 +82,19 @@ pub struct DirectExecutionRegistry {
 }
 
 impl DirectExecutionRegistry {
-    pub fn with_defaults() -> Self {
+    pub fn with_core_defaults() -> Self {
         let mut registry = Self::default();
         registry.register(Arc::new(AlloyScriptAssistHandler));
         registry.register(Arc::new(MediaImageAssetHandler));
-        registry.register(Arc::new(ProductCopyHandler));
         registry.register(Arc::new(BlogDraftHandler));
+        registry
+    }
+
+    pub fn with_defaults() -> Self {
+        let mut registry = Self::with_core_defaults();
+        register_content_direct_handlers(&mut registry);
+        register_commerce_direct_handlers(&mut registry);
+        register_order_direct_handlers(&mut registry);
         registry
     }
 
@@ -882,6 +905,7 @@ impl DirectTaskHandler for BlogDraftHandler {
     }
 }
 
+
 #[derive(Debug, Clone, Serialize)]
 struct ProductSourceTranslation {
     locale: String,
@@ -956,6 +980,37 @@ struct BlogSourceContent {
     excerpt: Option<String>,
     seo_title: Option<String>,
     seo_description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct GeneratedModerationDecision {
+    decision: String,
+    #[serde(default)]
+    labels: Vec<String>,
+    severity: u8,
+    explanation: String,
+    requires_human: bool,
+    recommended_action: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct GeneratedProductAttributes {
+    brand: Option<String>,
+    material: Option<String>,
+    color: Option<String>,
+    size: Option<String>,
+    dimensions: Option<String>,
+    compatibility: Option<String>,
+    care_instructions: Option<String>,
+    hazmat: Option<String>,
+    #[serde(default)]
+    flex_attributes: Vec<GeneratedFlexAttribute>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub(crate) struct GeneratedFlexAttribute {
+    key: String,
+    value: String,
 }
 
 fn resolve_blog_source_content(
@@ -1076,6 +1131,190 @@ async fn generate_blog_draft(
     serde_json::from_value(parsed).map_err(AiError::Json)
 }
 
+pub(crate) async fn generate_content_moderation(
+    provider: &Arc<dyn ModelProvider>,
+    provider_config: &AiProviderConfig,
+    system_prompt: Option<&str>,
+    target_locale: &str,
+    input: &AiContentModerationTaskInput,
+) -> AiResult<GeneratedModerationDecision> {
+    let title = normalize_optional_text(input.title.clone());
+    let body = normalize_optional_text(input.body.clone());
+    if title.is_none() && body.is_none() {
+        return Err(AiError::Validation(
+            "content_moderation requires title or body".to_string(),
+        ));
+    }
+    let locale_instruction = concat!(
+        "Return valid JSON only with keys `decision`, `labels`, `severity`, `explanation`, ",
+        "`requires_human`, `recommended_action`. ",
+        "`decision` must be one of: allow, review, block. ",
+        "`severity` must be an integer from 0 to 100."
+    );
+    let system = match system_prompt {
+        Some(system_prompt) if !system_prompt.trim().is_empty() => {
+            format!("{system_prompt}\n\n{locale_instruction}")
+        }
+        _ => locale_instruction.to_string(),
+    };
+    let prompt = json!({
+        "task": "content_moderation",
+        "target_locale": target_locale,
+        "content": {
+            "id": input.content_id,
+            "type": input.content_type,
+            "locale": input.locale,
+            "title": title,
+            "body": body,
+        }
+    })
+    .to_string();
+
+    let response = provider
+        .complete(
+            provider_config,
+            ProviderChatRequest {
+                model: provider_config.model.clone(),
+                messages: vec![
+                    ChatMessage {
+                        role: ChatMessageRole::System,
+                        content: Some(system),
+                        name: None,
+                        tool_call_id: None,
+                        tool_calls: Vec::new(),
+                        metadata: json!({
+                            "locale": target_locale,
+                            "direct_generation": "content_moderation",
+                        }),
+                    },
+                    ChatMessage {
+                        role: ChatMessageRole::User,
+                        content: Some(prompt),
+                        name: None,
+                        tool_call_id: None,
+                        tool_calls: Vec::new(),
+                        metadata: json!({
+                            "locale": target_locale,
+                            "direct_generation": "content_moderation",
+                        }),
+                    },
+                ],
+                tools: Vec::new(),
+                temperature: provider_config.temperature,
+                max_tokens: provider_config.max_tokens,
+                locale: Some(target_locale.to_string()),
+            },
+        )
+        .await?;
+
+    let content = response.assistant_message.content.ok_or_else(|| {
+        AiError::Provider("provider returned empty content for content_moderation".to_string())
+    })?;
+    let parsed = parse_json_object_from_text(&content)?;
+    let decision: GeneratedModerationDecision = serde_json::from_value(parsed).map_err(AiError::Json)?;
+
+    let decision_slug = decision.decision.trim().to_ascii_lowercase();
+    if !matches!(decision_slug.as_str(), "allow" | "review" | "block") {
+        return Err(AiError::Validation(
+            "content_moderation decision must be one of: allow, review, block".to_string(),
+        ));
+    }
+    if decision.severity > 100 {
+        return Err(AiError::Validation(
+            "content_moderation severity must be between 0 and 100".to_string(),
+        ));
+    }
+    Ok(GeneratedModerationDecision {
+        decision: decision_slug,
+        labels: decision.labels,
+        severity: decision.severity,
+        explanation: decision.explanation,
+        requires_human: decision.requires_human,
+        recommended_action: decision.recommended_action,
+    })
+}
+
+pub(crate) async fn generate_product_attributes(
+    provider: &Arc<dyn ModelProvider>,
+    provider_config: &AiProviderConfig,
+    system_prompt: Option<&str>,
+    target_locale: &str,
+    input: &AiProductAttributesTaskInput,
+    product: &rustok_commerce::ProductResponse,
+) -> AiResult<GeneratedProductAttributes> {
+    let locale_instruction = concat!(
+        "Return valid JSON only with keys: `brand`, `material`, `color`, `size`, `dimensions`, ",
+        "`compatibility`, `care_instructions`, `hazmat`, `flex_attributes`. ",
+        "`flex_attributes` must be an array of `{key, value}` objects with non-empty strings."
+    );
+    let system = match system_prompt {
+        Some(system_prompt) if !system_prompt.trim().is_empty() => {
+            format!("{system_prompt}\n\n{locale_instruction}")
+        }
+        _ => locale_instruction.to_string(),
+    };
+    let prompt = json!({
+        "task": "product_attributes",
+        "target_locale": target_locale,
+        "product": {
+            "id": product.id,
+            "product_type": product.product_type,
+            "vendor": product.vendor,
+            "category_slug": input.category_slug,
+            "source_title": input.source_title,
+            "source_description": input.source_description,
+            "image_urls": input.image_urls,
+            "instructions": input.copy_instructions,
+        }
+    })
+    .to_string();
+    let response = provider
+        .complete(
+            provider_config,
+            ProviderChatRequest {
+                model: provider_config.model.clone(),
+                messages: vec![
+                    ChatMessage {
+                        role: ChatMessageRole::System,
+                        content: Some(system),
+                        name: None,
+                        tool_call_id: None,
+                        tool_calls: Vec::new(),
+                        metadata: json!({"locale": target_locale, "direct_generation": "product_attributes"}),
+                    },
+                    ChatMessage {
+                        role: ChatMessageRole::User,
+                        content: Some(prompt),
+                        name: None,
+                        tool_call_id: None,
+                        tool_calls: Vec::new(),
+                        metadata: json!({"locale": target_locale, "direct_generation": "product_attributes"}),
+                    },
+                ],
+                tools: Vec::new(),
+                temperature: provider_config.temperature,
+                max_tokens: provider_config.max_tokens,
+                locale: Some(target_locale.to_string()),
+            },
+        )
+        .await?;
+    let content = response.assistant_message.content.ok_or_else(|| {
+        AiError::Provider("provider returned empty content for product_attributes".to_string())
+    })?;
+    let parsed = parse_json_object_from_text(&content)?;
+    let generated: GeneratedProductAttributes = serde_json::from_value(parsed).map_err(AiError::Json)?;
+    if generated
+        .flex_attributes
+        .iter()
+        .any(|attr| attr.key.trim().is_empty() || attr.value.trim().is_empty())
+    {
+        return Err(AiError::Validation(
+            "product_attributes flex_attributes must contain non-empty key/value".to_string(),
+        ));
+    }
+    Ok(generated)
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn generate_product_copy(
     provider: &Arc<dyn ModelProvider>,
@@ -1161,7 +1400,7 @@ fn parse_generated_product_copy(content: &str) -> AiResult<GeneratedProductCopy>
     serde_json::from_value(parsed).map_err(AiError::Json)
 }
 
-fn parse_json_object_from_text(content: &str) -> AiResult<Value> {
+pub(crate) fn parse_json_object_from_text(content: &str) -> AiResult<Value> {
     let trimmed = content.trim();
     if trimmed.is_empty() {
         return Err(AiError::Provider(
@@ -1198,7 +1437,7 @@ fn locale_matches(left: &str, right: &str) -> bool {
         .is_some_and(|(left, right)| left.eq_ignore_ascii_case(&right))
 }
 
-fn ai_security_context(operator: &AiOperatorContext) -> SecurityContext {
+pub(crate) fn ai_security_context(operator: &AiOperatorContext) -> SecurityContext {
     SecurityContext::from_permissions(
         infer_user_role_from_permissions(&operator.permissions),
         Some(operator.user_id),
@@ -1339,7 +1578,7 @@ fn parse_runtime_payload(payload: Option<String>) -> AiResult<serde_json::Map<St
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn explain_result(
+pub(crate) async fn explain_result(
     provider: &Arc<dyn ModelProvider>,
     provider_config: &AiProviderConfig,
     system_prompt: Option<&str>,
@@ -1505,5 +1744,33 @@ mod tests {
             "   ".to_string(),
         ]);
         assert_eq!(normalized, vec!["alpha".to_string(), "beta".to_string()]);
+    }
+
+    #[test]
+    fn core_defaults_do_not_include_domain_handlers() {
+        let registry = super::DirectExecutionRegistry::with_core_defaults();
+        assert!(registry.handler("alloy_code").is_some());
+        assert!(registry.handler("image_asset").is_some());
+        assert!(registry.handler("blog_draft").is_some());
+
+        assert!(registry.handler("content_moderation").is_none());
+        assert!(registry.handler("product_copy").is_none());
+        assert!(registry.handler("product_attributes").is_none());
+        assert!(registry.handler("order_analytics").is_none());
+        assert!(registry.handler("order_ops_assistant").is_none());
+    }
+
+    #[test]
+    fn defaults_include_domain_handlers() {
+        let registry = super::DirectExecutionRegistry::with_defaults();
+        assert!(registry.handler("alloy_code").is_some());
+        assert!(registry.handler("image_asset").is_some());
+        assert!(registry.handler("blog_draft").is_some());
+
+        assert!(registry.handler("content_moderation").is_some());
+        assert!(registry.handler("product_copy").is_some());
+        assert!(registry.handler("product_attributes").is_some());
+        assert!(registry.handler("order_analytics").is_some());
+        assert!(registry.handler("order_ops_assistant").is_some());
     }
 }
