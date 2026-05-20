@@ -673,7 +673,6 @@ pub fn routes() -> Routes {
 mod tests {
     use super::{
         build_rule_definition, build_update_rule_input, CreateResolutionRuleRequest,
-    fn build_rule_definition_returns_normalized_predicates() {
     };
     use rustok_channel::{ResolutionPredicate, TargetSurface};
     use uuid::Uuid;
