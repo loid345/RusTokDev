@@ -10202,14 +10202,12 @@ dependencies = [
 name = "rustok-core"
 version = "0.1.0"
 dependencies = [
- "argon2",
  "async-trait",
  "base64 0.22.1",
  "chrono",
  "email_address",
  "futures",
  "hex",
- "jsonwebtoken 10.4.0",
  "moka",
  "once_cell",
  "proptest",
@@ -11058,6 +11056,7 @@ dependencies = [
  "rustok-api",
  "rustok-core",
  "rustok-seo",
+ "rustok-seo-targets",
  "rustok-tenant",
  "sea-orm",
  "serde",

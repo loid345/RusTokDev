@@ -16,7 +16,10 @@ fn user_role_display_roundtrip() {
 
 #[test]
 fn user_role_parse_roundtrip() {
-    assert_eq!(UserRole::from_str("super_admin").unwrap(), UserRole::SuperAdmin);
+    assert_eq!(
+        UserRole::from_str("super_admin").unwrap(),
+        UserRole::SuperAdmin
+    );
     assert_eq!(UserRole::from_str("admin").unwrap(), UserRole::Admin);
     assert_eq!(UserRole::from_str("manager").unwrap(), UserRole::Manager);
     assert_eq!(UserRole::from_str("customer").unwrap(), UserRole::Customer);

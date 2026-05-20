@@ -269,7 +269,9 @@ impl SeoService {
                         ));
                     }
                     for block in &schema_blocks {
-                        for validation_issue in super::schema_validation::validate_schema_block(block) {
+                        for validation_issue in
+                            super::schema_validation::validate_schema_block(block)
+                        {
                             issues.push(issue(
                                 validation_issue.code,
                                 validation_issue.severity,
