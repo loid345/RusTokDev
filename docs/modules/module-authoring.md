@@ -207,12 +207,12 @@ Module-owned UI package не имеет права invent-ить свою locale
 
 Если агенту или разработчику нужно быстро принять решение, используйте такой порядок:
 
-1. Это platform module или support/capability crate?
-2. Какой у него backend contract: GraphQL, REST, `#[server]`, events, migrations?
-3. Какие данные language-agnostic, а какие localized?
-4. Есть ли у модуля module-owned UI surface?
-5. Как host даёт ему auth, locale, routing и tenant context?
-6. Какие docs и verification gates должны измениться вместе с кодом?
+1. Это platform module или support/capability crate? (см. [overview.md](./overview.md), [modules architecture](../architecture/modules.md))
+2. Какой у него backend contract: GraphQL, REST, `#[server]`, events, migrations? (см. [manifest contract](./manifest.md))
+3. Какие данные language-agnostic, а какие localized? (см. [database schema](../architecture/database.md))
+4. Есть ли у модуля module-owned UI surface? (см. [overview.md](./overview.md))
+5. Как host даёт ему auth, locale, routing и tenant context? (см. [modules architecture](../architecture/modules.md))
+6. Какие docs и verification gates должны измениться вместе с кодом? (см. [PR / Review Checklist](#pr--review-checklist))
 
 ## PR / Review Checklist
 
