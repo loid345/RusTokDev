@@ -1194,6 +1194,17 @@ mod tests {
     }
 
     #[test]
+    fn toggle_error_maps_database_and_policy_to_internal_errors() {
+        let db_err = map_toggle_module_error(ToggleModuleError::Database(sea_orm::DbErr::Custom(
+            "db down".to_string(),
+        )));
+        assert!(!db_err.message.is_empty());
+
+        let policy_err = map_toggle_module_error(ToggleModuleError::Policy("policy".to_string()));
+        assert!(!policy_err.message.is_empty());
+    }
+
+    #[test]
     fn manifest_error_maps_validation_errors_to_user_messages() {
         let err = map_manifest_error(ManifestError::RequiredModule("pages".to_string()));
         assert!(err.message.contains("required"));
