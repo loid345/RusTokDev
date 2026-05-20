@@ -107,9 +107,11 @@ LEFT JOIN LATERAL (
     SELECT
         definition ->> 'field_key' AS field_key,
         entry_row.data -> (definition ->> 'field_key') AS field_value
+        definition ->> 'field_key' AS field_key,
+        entry_row.data -> (definition ->> 'field_key') AS field_value
     FROM jsonb_array_elements(schema_row.fields_config) AS definition
     WHERE COALESCE((definition ->> 'is_localized')::boolean, false)
-      AND (definition ->> 'field_key') IS NOT NULL
+) AS localized_kv ON TRUE
       AND NULLIF(definition ->> 'field_key', '') IS NOT NULL
 ) AS localized_kv ON TRUE
 GROUP BY
@@ -167,14 +169,12 @@ WHERE EXISTS (
             manager
                 .get_connection()
                 .execute_unprepared(
-                    r#"
+SET data = COALESCE(entry_row.data, '{}'::jsonb) || COALESCE(localized.locales_data, '{}'::jsonb)
 UPDATE flex_entries AS entry_row
 SET data = COALESCE(entry_row.data, '{}'::jsonb) || COALESCE(localized.locales_data, '{}'::jsonb)
 FROM (
-    SELECT
-        localized_row.entry_id,
         jsonb_object_agg(localized_row.locale, localized_row.data) AS locales_data
-    FROM flex_entry_localized_values AS localized_row
+        localized_row.entry_id,
     GROUP BY localized_row.entry_id
 ) AS localized
 WHERE entry_row.id = localized.entry_id
