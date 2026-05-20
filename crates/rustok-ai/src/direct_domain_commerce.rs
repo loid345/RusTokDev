@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use super::direct_order_tasks::{OrderAnalyticsHandler, OrderOpsAssistantHandler};
 use super::direct_product_attributes::ProductAttributesHandler;
 use super::{DirectExecutionRegistry, DirectTaskHandler, ProductCopyHandler};
 
@@ -13,6 +12,4 @@ use super::{DirectExecutionRegistry, DirectTaskHandler, ProductCopyHandler};
 pub fn register_commerce_direct_handlers(registry: &mut DirectExecutionRegistry) {
     registry.register(Arc::new(ProductCopyHandler) as Arc<dyn DirectTaskHandler>);
     registry.register(Arc::new(ProductAttributesHandler) as Arc<dyn DirectTaskHandler>);
-    registry.register(Arc::new(OrderAnalyticsHandler) as Arc<dyn DirectTaskHandler>);
-    registry.register(Arc::new(OrderOpsAssistantHandler) as Arc<dyn DirectTaskHandler>);
 }

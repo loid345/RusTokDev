@@ -35,9 +35,11 @@ mod direct_content_moderation;
 mod direct_domain_content;
 mod direct_domain_commerce;
 mod direct_order_tasks;
+mod direct_domain_orders;
 mod direct_product_attributes;
 use direct_domain_content::register_content_direct_handlers;
 use direct_domain_commerce::register_commerce_direct_handlers;
+use direct_domain_orders::register_order_direct_handlers;
 
 pub struct DirectExecutionRequest {
     pub task_slug: String,
@@ -87,6 +89,7 @@ impl DirectExecutionRegistry {
         let mut registry = Self::with_core_defaults();
         register_content_direct_handlers(&mut registry);
         register_commerce_direct_handlers(&mut registry);
+        register_order_direct_handlers(&mut registry);
         registry
     }
 
