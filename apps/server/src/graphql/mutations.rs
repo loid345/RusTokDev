@@ -327,7 +327,7 @@ fn map_toggle_module_error(error: ToggleModuleError) -> FieldError {
             <FieldError as GraphQLError>::internal_error(&err.to_string())
         }
         ToggleModuleError::HookFailed(err) => FieldError::new(format!(
-            "Module lifecycle hook failed, state rolled back: {}",
+            "Module lifecycle hook failed before state commit: {}",
             err
         )),
         ToggleModuleError::Policy(err) => <FieldError as GraphQLError>::internal_error(&err),
@@ -1186,8 +1186,11 @@ mod tests {
     #[test]
     fn toggle_error_maps_hook_failure() {
         let err = map_toggle_module_error(ToggleModuleError::HookFailed("boom".into()));
-        assert!(err.message.contains("Module lifecycle hook failed"));
+        assert!(err
+            .message
+            .contains("Module lifecycle hook failed before state commit"));
         assert!(err.message.contains("boom"));
+        assert!(!err.message.contains("rolled back"));
     }
 
     #[test]
