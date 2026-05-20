@@ -201,6 +201,21 @@ async fn hook_failure_rolls_back_state() {
         !state.enabled,
         "state should be rolled back after hook failure"
     );
+
+    let operation = module_operations::Entity::find()
+        .filter(module_operations::Column::TenantId.eq(tenant_id))
+        .filter(module_operations::Column::ModuleSlug.eq("forum"))
+        .one(&db)
+        .await
+        .expect("load operation")
+        .expect("operation exists");
+
+    assert_eq!(operation.status, "failed");
+    assert!(operation
+        .error_message
+        .as_deref()
+        .unwrap_or_default()
+        .contains("enable failed"));
 }
 
 #[tokio::test]
@@ -259,4 +274,35 @@ async fn successful_toggle_writes_done_module_operation() {
     assert!(operation.error_message.is_none());
     assert!(operation.requested_enabled);
     assert!(!operation.previous_effective_enabled);
+}
+
+#[tokio::test]
+async fn successful_toggle_with_actor_persists_requested_by() {
+    let db = setup_db().await;
+    let tenant_id = uuid::Uuid::new_v4();
+    seed_tenant(&db, tenant_id).await;
+
+    let registry = ModuleRegistry::new().register(TestModule::new("catalog"));
+
+    ModuleLifecycleService::toggle_module_with_actor(
+        &db,
+        &registry,
+        tenant_id,
+        "catalog",
+        true,
+        Some("admin:user-1".to_string()),
+    )
+    .await
+    .expect("enable should succeed");
+
+    let operation = module_operations::Entity::find()
+        .filter(module_operations::Column::TenantId.eq(tenant_id))
+        .filter(module_operations::Column::ModuleSlug.eq("catalog"))
+        .one(&db)
+        .await
+        .expect("load operation")
+        .expect("operation exists");
+
+    assert_eq!(operation.status, "done");
+    assert_eq!(operation.requested_by.as_deref(), Some("admin:user-1"));
 }
