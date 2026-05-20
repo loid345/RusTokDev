@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use serde_json::json;
 
-use crate::direct::{ai_security_context, explain_result, generate_product_attributes, DirectExecutionRequest, DirectExecutionResult, DirectTaskHandler};
+use crate::direct::{explain_result, generate_product_attributes, DirectExecutionRequest, DirectExecutionResult, DirectTaskHandler};
 use crate::model::{AiProductAttributesTaskInput, DirectExecutionTarget, ToolTrace};
 use crate::service::AiOperatorContext;
 use crate::{AiError, AiResult};
@@ -22,8 +22,7 @@ impl DirectTaskHandler for ProductAttributesHandler {
         let input: AiProductAttributesTaskInput = serde_json::from_value(request.task_input_json.clone()).map_err(AiError::Json)?;
         let started = std::time::Instant::now();
         let catalog = CatalogService::new(app_ctx.db.clone(), transactional_event_bus_from_context(app_ctx));
-        let security = ai_security_context(operator);
-        let product = catalog.get_product(operator.tenant_id, input.product_id, &security).await.map_err(|err| AiError::Runtime(err.to_string()))?;
+        let product = catalog.get_product(operator.tenant_id, input.product_id).await.map_err(|err| AiError::Runtime(err.to_string()))?;
         let generated = generate_product_attributes(&request.provider, &request.provider_config, request.system_prompt.as_deref(), request.resolved_locale.as_str(), &input, &product).await?;
         let operation_payload = serde_json::to_value(&generated).map_err(AiError::Json)?;
         let summary = format!("Prepared {} suggested product attributes.", generated.flex_attributes.len());

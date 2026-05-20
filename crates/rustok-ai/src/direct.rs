@@ -22,20 +22,25 @@ use uuid::Uuid;
 
 use crate::model::{
     AiAlloyOperation, AiAlloyTaskInput, AiBlogDraftTaskInput, AiContentModerationTaskInput,
-    AiImageAssetTaskInput, AiOrderAnalyticsTaskInput, AiOrderOpsAssistantTaskInput,
-    AiProductAttributesTaskInput, AiProductCopyTaskInput, AiProviderConfig, ChatMessage,
-    ChatMessageRole, DirectExecutionTarget, ProviderChatRequest, ProviderImageRequest,
-    ProviderStreamEmitter, ToolTrace,
+    AiImageAssetTaskInput, AiProductAttributesTaskInput, AiProductCopyTaskInput, AiProviderConfig,
+    ChatMessage, ChatMessageRole, DirectExecutionTarget, ProviderChatRequest,
+    ProviderImageRequest, ProviderStreamEmitter, ToolTrace,
 };
 use crate::provider::ModelProvider;
 use crate::service::AiOperatorContext;
 use crate::{AiError, AiResult};
 use rustok_core::{SecurityContext, CONTENT_FORMAT_MARKDOWN};
+#[path = "direct_content_moderation.rs"]
 mod direct_content_moderation;
+#[path = "direct_domain_content.rs"]
 mod direct_domain_content;
+#[path = "direct_domain_commerce.rs"]
 mod direct_domain_commerce;
+#[path = "direct_order_tasks.rs"]
 mod direct_order_tasks;
+#[path = "direct_domain_orders.rs"]
 mod direct_domain_orders;
+#[path = "direct_product_attributes.rs"]
 mod direct_product_attributes;
 use direct_domain_content::register_content_direct_handlers;
 use direct_domain_commerce::register_commerce_direct_handlers;
@@ -1253,8 +1258,6 @@ pub(crate) async fn generate_product_attributes(
         "target_locale": target_locale,
         "product": {
             "id": product.id,
-            "title": product.title,
-            "handle": product.handle,
             "product_type": product.product_type,
             "vendor": product.vendor,
             "category_slug": input.category_slug,
@@ -1741,5 +1744,33 @@ mod tests {
             "   ".to_string(),
         ]);
         assert_eq!(normalized, vec!["alpha".to_string(), "beta".to_string()]);
+    }
+
+    #[test]
+    fn core_defaults_do_not_include_domain_handlers() {
+        let registry = super::DirectExecutionRegistry::with_core_defaults();
+        assert!(registry.handler("alloy_code").is_some());
+        assert!(registry.handler("image_asset").is_some());
+        assert!(registry.handler("blog_draft").is_some());
+
+        assert!(registry.handler("content_moderation").is_none());
+        assert!(registry.handler("product_copy").is_none());
+        assert!(registry.handler("product_attributes").is_none());
+        assert!(registry.handler("order_analytics").is_none());
+        assert!(registry.handler("order_ops_assistant").is_none());
+    }
+
+    #[test]
+    fn defaults_include_domain_handlers() {
+        let registry = super::DirectExecutionRegistry::with_defaults();
+        assert!(registry.handler("alloy_code").is_some());
+        assert!(registry.handler("image_asset").is_some());
+        assert!(registry.handler("blog_draft").is_some());
+
+        assert!(registry.handler("content_moderation").is_some());
+        assert!(registry.handler("product_copy").is_some());
+        assert!(registry.handler("product_attributes").is_some());
+        assert!(registry.handler("order_analytics").is_some());
+        assert!(registry.handler("order_ops_assistant").is_some());
     }
 }
