@@ -173,6 +173,19 @@ async fn successful_enable_and_idempotent_retry() {
         .expect("second enable");
     assert!(second.enabled);
     assert_eq!(calls.load(Ordering::SeqCst), 1, "hook should be idempotent");
+
+    let operations = module_operations::Entity::find()
+        .filter(module_operations::Column::TenantId.eq(tenant_id))
+        .filter(module_operations::Column::ModuleSlug.eq("commerce"))
+        .all(&db)
+        .await
+        .expect("load operations");
+
+    assert_eq!(
+        operations.len(),
+        1,
+        "idempotent retry must not create duplicate module_operations journal rows",
+    );
 }
 
 #[tokio::test]
