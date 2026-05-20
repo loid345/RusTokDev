@@ -1087,8 +1087,9 @@ impl RootMutation {
 #[cfg(test)]
 mod tests {
     use super::{
-        map_create_user_error, map_manifest_error, prepare_user_custom_fields_write,
-        validate_custom_fields, AuthLifecycleError, ManifestError,
+        map_create_user_error, map_manifest_error, map_platform_composition_build_error,
+        map_platform_composition_error, prepare_user_custom_fields_write, validate_custom_fields,
+        AuthLifecycleError, ManifestError, PlatformCompositionBuildError, PlatformCompositionError,
     };
     use crate::models::user_field_definitions::ActiveModel as UserFieldDefinitionActiveModel;
     use migration::Migrator;
@@ -1322,4 +1323,24 @@ mod tests {
         );
         assert_eq!(prepared.locale.as_deref(), Some("ru"));
     }
+
+    #[test]
+    fn platform_composition_error_maps_revision_conflict_to_conflict_message() {
+        let err = map_platform_composition_error(PlatformCompositionError::RevisionConflict {
+            expected: 3,
+            current: 5,
+        });
+        assert!(err.message.contains("revision conflict"));
+        assert!(err.message.contains("expected 3"));
+        assert!(err.message.contains("current 5"));
+    }
+
+    #[test]
+    fn platform_composition_build_error_maps_enqueue_failures_to_internal_error() {
+        let err = map_platform_composition_build_error(PlatformCompositionBuildError::Build(
+            "queue unavailable".to_string(),
+        ));
+        assert!(err.message.to_lowercase().contains("internal"));
+    }
+
 }
