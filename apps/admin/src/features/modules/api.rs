@@ -641,11 +641,9 @@ mod tests {
     fn toggle_module_native_is_explicitly_disabled() {
         let error = block_on(super::toggle_module_native("catalog".to_string(), true))
             .expect_err("native toggle path must stay disabled");
-        assert!(
-            error
-                .to_string()
-                .contains("native path is disabled; use canonical GraphQL lifecycle entrypoint")
-        );
+        assert!(error
+            .to_string()
+            .contains("native path is disabled; use canonical GraphQL lifecycle entrypoint"));
     }
 }
 
@@ -1138,13 +1136,130 @@ fn runtime_deployment_profile(manifest: &RuntimeModulesManifest) -> String {
 
 #[cfg(feature = "ssr")]
 fn runtime_manifest_hash(manifest: &RuntimeModulesManifest) -> String {
-    use sha2::{Digest, Sha256};
-
     let snapshot = serde_json::to_value(manifest).unwrap_or(serde_json::Value::Null);
-    let serialized = serde_json::to_string(&snapshot).unwrap_or_default();
-    let mut hasher = Sha256::new();
-    hasher.update(serialized.as_bytes());
-    hex::encode(hasher.finalize())
+    runtime_manifest_snapshot_hash(&snapshot)
+}
+
+#[cfg(feature = "ssr")]
+fn runtime_manifest_snapshot_hash(snapshot: &serde_json::Value) -> String {
+    rustok_api::manifest_hash::hash_manifest_snapshot(snapshot)
+}
+
+#[cfg(all(test, feature = "ssr"))]
+mod runtime_manifest_hash_tests {
+    use super::{
+        runtime_manifest_hash, runtime_manifest_snapshot_hash,
+        RuntimeBuildConfig, RuntimeManifestModuleSpec, RuntimeModulesManifest,
+        RuntimeSettingsManifest,
+    };
+    use std::collections::HashMap;
+
+    fn sample_manifest() -> RuntimeModulesManifest {
+        let mut modules = HashMap::new();
+        modules.insert(
+            "catalog".to_string(),
+            RuntimeManifestModuleSpec {
+                source: "git".to_string(),
+                crate_name: "rustok-catalog".to_string(),
+                path: Some("crates/rustok-catalog".to_string()),
+                version: Some("1.0.0".to_string()),
+                git: Some("https://example.invalid/catalog.git".to_string()),
+                rev: Some("abc123".to_string()),
+                required: false,
+                depends_on: vec!["pricing".to_string()],
+            },
+        );
+        RuntimeModulesManifest {
+            schema: 1,
+            app: "rustok".to_string(),
+            build: RuntimeBuildConfig {
+                profile: "release".to_string(),
+                ..Default::default()
+            },
+            modules,
+            settings: RuntimeSettingsManifest {
+                default_enabled: vec!["catalog".to_string()],
+            },
+        }
+    }
+
+    #[test]
+    fn manifest_snapshot_hash_is_sha256_hex() {
+        let hash = runtime_manifest_snapshot_hash(&serde_json::json!({
+            "modules": {"catalog": {"enabled": true}}
+        }));
+        assert_eq!(hash.len(), 64);
+        assert!(hash.chars().all(|ch| ch.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn manifest_snapshot_hash_is_stable_for_key_order() {
+        let left = runtime_manifest_snapshot_hash(&serde_json::json!({
+            "modules": {"catalog": {"enabled": true}, "pricing": {"enabled": false}},
+            "profile": "default",
+            "settings": {"b": 1, "a": 2}
+        }));
+        let right = runtime_manifest_snapshot_hash(&serde_json::json!({
+            "settings": {"a": 2, "b": 1},
+            "profile": "default",
+            "modules": {"pricing": {"enabled": false}, "catalog": {"enabled": true}}
+        }));
+
+        assert_eq!(left, right);
+    }
+
+    #[test]
+    fn manifest_snapshot_hash_changes_for_meaningful_change() {
+        let left = runtime_manifest_snapshot_hash(&serde_json::json!({"settings": {"locale": "en"}}));
+        let right = runtime_manifest_snapshot_hash(&serde_json::json!({"settings": {"locale": "ru"}}));
+
+        assert_ne!(left, right);
+    }
+
+    #[test]
+    fn manifest_snapshot_hash_matches_known_sha256_vector() {
+        let hash = runtime_manifest_snapshot_hash(&serde_json::json!({"b": 2, "a": 1}));
+        assert_eq!(
+            hash,
+            "43258cff783fe7036d8a43033f830adfc60ec037382473548ac742b888292777"
+        );
+    }
+
+    #[test]
+    fn runtime_manifest_hash_changes_when_profile_changes() {
+        let left = sample_manifest();
+        let mut right = left.clone();
+        right.build.profile = "debug".to_string();
+
+        assert_ne!(runtime_manifest_hash(&left), runtime_manifest_hash(&right));
+    }
+
+    #[test]
+    fn runtime_manifest_hash_changes_when_dependency_metadata_changes() {
+        let left = sample_manifest();
+        let mut right = left.clone();
+        right
+            .modules
+            .get_mut("catalog")
+            .expect("catalog module exists")
+            .depends_on
+            .push("inventory".to_string());
+
+        assert_ne!(runtime_manifest_hash(&left), runtime_manifest_hash(&right));
+    }
+
+    #[test]
+    fn runtime_manifest_hash_changes_when_source_pin_changes() {
+        let left = sample_manifest();
+        let mut right = left.clone();
+        right
+            .modules
+            .get_mut("catalog")
+            .expect("catalog module exists")
+            .rev = Some("def456".to_string());
+
+        assert_ne!(runtime_manifest_hash(&left), runtime_manifest_hash(&right));
+    }
 }
 
 #[cfg(feature = "ssr")]
