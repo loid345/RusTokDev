@@ -192,4 +192,17 @@ fn graphql_mutations_do_not_reintroduce_duplicate_platform_composition_mapping_t
         !content.contains("\"queue unavailable\""),
         "Obsolete platform composition build error fixture (`queue unavailable`) reintroduced."
     );
+
+    let forbidden_legacy_tests = [
+        "fn platform_composition_error_maps_revision_conflict_to_conflict_message()",
+        "fn platform_composition_build_error_maps_enqueue_failures_to_internal_error()",
+        "fn platform_composition_build_error_maps_composition_conflict_consistently()",
+    ];
+
+    for signature in forbidden_legacy_tests {
+        assert!(
+            !content.contains(signature),
+            "Legacy/duplicate platform composition mapping test signature reintroduced: {signature}"
+        );
+    }
 }
