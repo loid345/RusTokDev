@@ -83,3 +83,32 @@ fn admin_native_toggle_endpoint_is_not_reintroduced() {
         "Forbidden native toggle helper reintroduced in apps/admin modules api."
     );
 }
+
+#[test]
+fn admin_toggle_module_uses_graphql_without_native_fallback() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("workspace root");
+    let admin_modules_api = repo_root.join("apps/admin/src/features/modules/api.rs");
+    let content = fs::read_to_string(&admin_modules_api)
+        .expect("apps/admin modules api source should be readable");
+
+    let fn_start = content
+        .find("pub async fn toggle_module(")
+        .expect("toggle_module function must exist");
+    let fn_body = &content[fn_start..];
+    let fn_end = fn_body
+        .find("\npub async fn update_module_settings(")
+        .expect("toggle_module should be immediately followed by update_module_settings");
+    let toggle_fn = &fn_body[..fn_end];
+
+    assert!(
+        !toggle_fn.contains("combine_native_and_graphql_error"),
+        "toggle_module must not compose native+graphql fallback errors; canonical GraphQL path only."
+    );
+    assert!(
+        toggle_fn.contains("request("),
+        "toggle_module must call GraphQL request path."
+    );
+}
