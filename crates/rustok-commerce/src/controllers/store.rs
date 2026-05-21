@@ -4905,6 +4905,134 @@ mod tests {
         );
     }
 
+
+    #[tokio::test]
+    async fn store_checkout_transport_rejects_payment_collection_for_completed_cart() {
+        let db = setup_test_db().await;
+        support::ensure_commerce_schema(&db).await;
+        let tenant_id = Uuid::new_v4();
+        seed_store_tenant_context(&db, tenant_id).await;
+        let tenant = TenantContext {
+            id: tenant_id,
+            name: "Store Test Tenant".to_string(),
+            slug: format!("store-test-{tenant_id}"),
+            domain: None,
+            settings: json!({}),
+            default_locale: "en".to_string(),
+            is_active: true,
+        };
+        let app = commerce_transport_router(test_app_context(db.clone()), tenant);
+
+        let create_cart_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/store/carts")
+                    .header("content-type", "application/json")
+                    .header("X-Tenant-ID", tenant_id.to_string())
+                    .body(Body::from(
+                        json!({
+                            "email": "guest@example.com",
+                            "currency_code": "eur",
+                            "locale": "de"
+                        })
+                        .to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("create cart request should succeed");
+        assert_eq!(create_cart_response.status(), StatusCode::CREATED);
+        let create_cart_body = to_bytes(create_cart_response.into_body(), usize::MAX)
+            .await
+            .expect("create cart body should read");
+        let created_cart: serde_json::Value =
+            serde_json::from_slice(&create_cart_body).expect("create cart response should be JSON");
+        let cart_id = created_cart["cart"]["id"]
+            .as_str()
+            .expect("cart id should be returned");
+
+        let actor_id = Uuid::new_v4();
+        let mut product_input = storefront_product_input();
+        product_input.variants[0].inventory_quantity = 5;
+        let catalog = CatalogService::new(db.clone(), mock_transactional_event_bus());
+        let created = catalog
+            .create_product(tenant_id, actor_id, product_input)
+            .await
+            .expect("product should be created");
+        let published = catalog
+            .publish_product(tenant_id, actor_id, created.id)
+            .await
+            .expect("product should be published");
+        let variant = published
+            .variants
+            .first()
+            .expect("published product must include variant");
+
+        let add_line_item_response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/store/carts/{cart_id}/line-items"))
+                    .header("content-type", "application/json")
+                    .header("X-Tenant-ID", tenant_id.to_string())
+                    .body(Body::from(
+                        json!({
+                            "variant_id": variant.id,
+                            "quantity": 1,
+                            "metadata": { "source": "completed-cart-payment-guard" }
+                        })
+                        .to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("add line item request should succeed");
+        assert_eq!(add_line_item_response.status(), StatusCode::OK);
+
+        let cart_service = CartService::new(db.clone());
+        let cart_uuid = Uuid::parse_str(cart_id).expect("cart id should be valid uuid");
+        let completed = cart_service
+            .complete_cart(tenant_id, cart_uuid)
+            .await
+            .expect("cart should transition to completed");
+        assert_eq!(completed.status, "completed");
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/store/payment-collections")
+                    .header("content-type", "application/json")
+                    .header("X-Tenant-ID", tenant_id.to_string())
+                    .body(Body::from(
+                        json!({
+                            "cart_id": cart_id,
+                            "metadata": { "source": "completed-cart-payment-guard" }
+                        })
+                        .to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("payment collection request should complete");
+
+        let status = response.status();
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("payment collection body should read");
+        assert_eq!(status, StatusCode::BAD_REQUEST);
+        let payload = String::from_utf8_lossy(&body);
+        assert!(
+            payload.contains("completed") || payload.contains("Invalid transition"),
+            "unexpected error payload: {}",
+            payload
+        );
+    }
+
     #[tokio::test]
     async fn store_checkout_transport_carries_cart_channel_snapshot_into_order() {
         let db = setup_test_db().await;
