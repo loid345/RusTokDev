@@ -631,8 +631,12 @@ mod tests {
         ];
 
         let summary = summarize_inventory(&variants);
+        let healthy_count = variants
+            .iter()
+            .filter(|variant| inventory_health_state(variant) == InventoryHealthState::Healthy)
+            .count();
         let covered = summarize_inventory_health_counts(&variants).non_healthy_total();
-        assert_eq!(covered, summary.variant_count - 1);
+        assert_eq!(covered, summary.variant_count - healthy_count);
         assert_eq!(covered, summary.low_stock + summary.out_of_stock + summary.backorder);
     }
 
@@ -654,10 +658,17 @@ mod tests {
 
         let counts = summarize_inventory_health_counts(&variants);
         let summary = summarize_inventory(&variants);
+        let healthy_count = variants
+            .iter()
+            .filter(|variant| inventory_health_state(variant) == InventoryHealthState::Healthy)
+            .count();
         assert_eq!(counts.low_stock, summary.low_stock);
         assert_eq!(counts.out_of_stock, summary.out_of_stock);
         assert_eq!(counts.backorder, summary.backorder);
-        assert_eq!(counts.non_healthy_total(), summary.variant_count - 1);
+        assert_eq!(
+            counts.non_healthy_total(),
+            summary.variant_count - healthy_count
+        );
     }
 }
 
