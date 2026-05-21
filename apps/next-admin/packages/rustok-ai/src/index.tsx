@@ -623,6 +623,16 @@ export function AiAdminPage(props: AiAdminPageProps) {
       }));
     }
 
+    const url = new URL(window.location.href);
+    url.searchParams.delete('task');
+    url.searchParams.delete('productId');
+    url.searchParams.delete('locale');
+    url.searchParams.delete('sourceLocale');
+    url.searchParams.delete('sourceTitle');
+    url.searchParams.delete('sourceDescription');
+    url.searchParams.delete('categorySlug');
+    window.history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
+
     productAttributesPrefillAppliedRef.current = true;
   }, [productAttributesTaskProfile]);
 
