@@ -670,6 +670,21 @@ mod tests {
             summary.variant_count - healthy_count
         );
     }
+
+    #[test]
+    fn summary_total_quantity_is_independent_from_health_partition() {
+        let variants = vec![
+            variant(true, "deny", 7),
+            variant(true, "deny", -2),
+            variant(false, "deny", 0),
+            variant(false, "continue", -5),
+        ];
+
+        let summary = summarize_inventory(&variants);
+        assert_eq!(summary.total_quantity, 0);
+        assert_eq!(summary.variant_count, 4);
+        assert_eq!(summary.low_stock + summary.out_of_stock + summary.backorder, 3);
+    }
 }
 
 fn inventory_translation_for_locale<'a>(
