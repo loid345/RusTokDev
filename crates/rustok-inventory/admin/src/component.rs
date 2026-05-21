@@ -354,7 +354,7 @@ pub fn InventoryAdmin() -> impl IntoView {
                                     </div>
                                 </div>
 
-                                <div class="grid gap-4 md:grid-cols-4">
+                                <div class="grid gap-4 md:grid-cols-6">
                                     <StatCard
                                         title=t(ui_locale_for_detail.as_deref(), "inventory.stat.variants", "Variants")
                                         value=summary.variant_count.to_string()
@@ -374,6 +374,16 @@ pub fn InventoryAdmin() -> impl IntoView {
                                         title=t(ui_locale_for_detail.as_deref(), "inventory.stat.backorder", "Backorder")
                                         value=summary.backorder.to_string()
                                         hint=t(ui_locale_for_detail.as_deref(), "inventory.stat.backorderHint", "Variants that continue selling below zero.")
+                                    />
+                                    <StatCard
+                                        title=t(ui_locale_for_detail.as_deref(), "inventory.stat.outOfStock", "Out of stock")
+                                        value=summary.out_of_stock.to_string()
+                                        hint=t(ui_locale_for_detail.as_deref(), "inventory.stat.outOfStockHint", "Variants currently unavailable for immediate sale.")
+                                    />
+                                    <StatCard
+                                        title=t(ui_locale_for_detail.as_deref(), "inventory.stat.healthy", "Healthy")
+                                        value=summary.healthy.to_string()
+                                        hint=t(ui_locale_for_detail.as_deref(), "inventory.stat.healthyHint", "Variants with sufficient stock and no backorder handling.")
                                     />
                                 </div>
 
@@ -455,23 +465,411 @@ struct InventorySummary {
     total_quantity: i32,
     low_stock: usize,
     backorder: usize,
+    out_of_stock: usize,
+    healthy: usize,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum InventoryHealthState {
+    Healthy,
+    LowStock,
+    OutOfStock,
+    Backorder,
 }
 
 fn summarize_inventory(variants: &[InventoryVariant]) -> InventorySummary {
+    let health_counts = summarize_inventory_health_counts(variants);
+    let non_healthy_total = health_counts.non_healthy_total();
+    let healthy_total = variants.len().saturating_sub(non_healthy_total);
+    let total_quantity = variants.iter().map(|variant| variant.inventory_quantity).sum();
+
+    debug_assert_eq!(
+        non_healthy_total + healthy_total,
+        variants.len(),
+        "inventory health partition must cover every variant exactly once"
+    );
+
     InventorySummary {
         variant_count: variants.len(),
-        total_quantity: variants
+        total_quantity,
+        low_stock: health_counts.low_stock,
+        backorder: health_counts.backorder,
+        out_of_stock: health_counts.out_of_stock,
+        healthy: healthy_total,
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+struct InventoryHealthCounts {
+    low_stock: usize,
+    backorder: usize,
+    out_of_stock: usize,
+}
+
+impl InventoryHealthCounts {
+    fn non_healthy_total(self) -> usize {
+        self.low_stock + self.backorder + self.out_of_stock
+    }
+}
+
+fn summarize_inventory_health_counts(variants: &[InventoryVariant]) -> InventoryHealthCounts {
+    variants
+        .iter()
+        .fold(InventoryHealthCounts::default(), |mut counts, variant| {
+            match inventory_health_state(variant) {
+                InventoryHealthState::LowStock => counts.low_stock += 1,
+                InventoryHealthState::Backorder => counts.backorder += 1,
+                InventoryHealthState::OutOfStock => counts.out_of_stock += 1,
+                InventoryHealthState::Healthy => {}
+            }
+            counts
+        })
+}
+
+fn is_backorder_enabled(variant: &InventoryVariant) -> bool {
+    variant.inventory_policy.eq_ignore_ascii_case("continue")
+}
+
+fn inventory_health_state(variant: &InventoryVariant) -> InventoryHealthState {
+    if is_backorder_enabled(variant) {
+        InventoryHealthState::Backorder
+    } else if !variant.in_stock {
+        InventoryHealthState::OutOfStock
+    } else if variant.inventory_quantity <= LOW_STOCK_THRESHOLD {
+        InventoryHealthState::LowStock
+    } else {
+        InventoryHealthState::Healthy
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::InventoryVariant;
+
+    fn variant(in_stock: bool, inventory_policy: &str, inventory_quantity: i32) -> InventoryVariant {
+        InventoryVariant {
+            id: "v".to_string(),
+            sku: None,
+            barcode: None,
+            shipping_profile_slug: None,
+            title: "Variant".to_string(),
+            option1: None,
+            option2: None,
+            option3: None,
+            prices: Vec::new(),
+            inventory_quantity,
+            inventory_policy: inventory_policy.to_string(),
+            in_stock,
+        }
+    }
+
+    fn healthy_count(variants: &[InventoryVariant]) -> usize {
+        variants
             .iter()
-            .map(|variant| variant.inventory_quantity)
-            .sum(),
-        low_stock: variants
+            .filter(|variant| inventory_health_state(variant) == InventoryHealthState::Healthy)
+            .count()
+    }
+
+    #[test]
+    fn summary_keeps_low_stock_out_of_stock_and_backorder_disjoint() {
+        let variants = vec![
+            variant(true, "deny", 2),
+            variant(false, "deny", 0),
+            variant(true, "continue", 0),
+            variant(false, "continue", -3),
+        ];
+
+        let summary = summarize_inventory(&variants);
+        assert_eq!(summary.variant_count, 4);
+        assert_eq!(summary.low_stock, 1);
+        assert_eq!(summary.out_of_stock, 1);
+        assert_eq!(summary.backorder, 2);
+    }
+
+    #[test]
+    fn health_label_and_badge_follow_backorder_precedence() {
+        let variant = variant(false, "continue", -1);
+
+        let label = inventory_health_label(None, &variant);
+        let badge = inventory_health_badge(&variant);
+
+        assert_eq!(label, "Backorder");
+        assert_eq!(badge, "border-sky-200 bg-sky-50 text-sky-700");
+    }
+
+    #[test]
+    fn health_label_and_badge_mark_out_of_stock_when_backorder_disabled() {
+        let variant = variant(false, "deny", 0);
+
+        let label = inventory_health_label(None, &variant);
+        let badge = inventory_health_badge(&variant);
+
+        assert_eq!(label, "Out of stock");
+        assert_eq!(badge, "border-rose-200 bg-rose-50 text-rose-700");
+    }
+
+    #[test]
+    fn summary_and_health_treat_backorder_policy_case_insensitively() {
+        let backorder_upper = variant(false, "CONTINUE", -2);
+        let low_stock_regular = variant(true, "deny", LOW_STOCK_THRESHOLD);
+        let healthy = variant(true, "deny", LOW_STOCK_THRESHOLD + 1);
+        let variants = vec![
+            backorder_upper.clone(),
+            low_stock_regular.clone(),
+            healthy.clone(),
+        ];
+
+        let summary = summarize_inventory(&variants);
+        assert_eq!(summary.backorder, 1);
+        assert_eq!(summary.out_of_stock, 0);
+        assert_eq!(summary.low_stock, 1);
+
+        assert_eq!(inventory_health_label(None, &backorder_upper), "Backorder");
+        assert_eq!(
+            inventory_health_label(None, &low_stock_regular),
+            "Low stock"
+        );
+        assert_eq!(inventory_health_label(None, &healthy), "Healthy");
+    }
+
+    #[test]
+    fn summary_counts_are_partitioned_by_health_state() {
+        let variants = vec![
+            variant(true, "deny", LOW_STOCK_THRESHOLD + 5),
+            variant(true, "deny", LOW_STOCK_THRESHOLD),
+            variant(false, "deny", 0),
+            variant(true, "continue", -1),
+        ];
+
+        let summary = summarize_inventory(&variants);
+        let healthy_count = healthy_count(&variants);
+        let covered = summarize_inventory_health_counts(&variants).non_healthy_total();
+        assert_eq!(covered, summary.variant_count - healthy_count);
+        assert_eq!(covered, summary.low_stock + summary.out_of_stock + summary.backorder);
+    }
+
+    #[test]
+    fn health_counts_empty_input_is_zeroed() {
+        let counts = summarize_inventory_health_counts(&[]);
+        assert_eq!(counts, InventoryHealthCounts::default());
+    }
+
+    #[test]
+    fn summary_empty_input_is_zeroed() {
+        let summary = summarize_inventory(&[]);
+        assert_eq!(summary.variant_count, 0);
+        assert_eq!(summary.total_quantity, 0);
+        assert_eq!(summary.low_stock, 0);
+        assert_eq!(summary.out_of_stock, 0);
+        assert_eq!(summary.backorder, 0);
+        assert_eq!(summary.healthy, 0);
+    }
+
+    #[test]
+    fn health_counts_and_summary_stay_consistent_for_mixed_variants() {
+        let variants = vec![
+            variant(true, "deny", LOW_STOCK_THRESHOLD - 1),
+            variant(true, "deny", LOW_STOCK_THRESHOLD + 3),
+            variant(false, "deny", 0),
+            variant(false, "continue", -2),
+            variant(true, "CONTINUE", -1),
+        ];
+
+        let counts = summarize_inventory_health_counts(&variants);
+        let summary = summarize_inventory(&variants);
+        let healthy_count = healthy_count(&variants);
+        assert_eq!(counts.low_stock, summary.low_stock);
+        assert_eq!(counts.out_of_stock, summary.out_of_stock);
+        assert_eq!(counts.backorder, summary.backorder);
+        assert_eq!(
+            counts.non_healthy_total(),
+            summary.variant_count - healthy_count
+        );
+    }
+
+    #[test]
+    fn summary_total_quantity_is_independent_from_health_partition() {
+        let variants = vec![
+            variant(true, "deny", 7),
+            variant(true, "deny", -2),
+            variant(false, "deny", 0),
+            variant(false, "continue", -5),
+        ];
+
+        let summary = summarize_inventory(&variants);
+        assert_eq!(summary.total_quantity, 0);
+        assert_eq!(summary.variant_count, 4);
+        assert_eq!(summary.low_stock + summary.out_of_stock + summary.backorder, 3);
+    }
+
+    #[test]
+    fn healthy_count_matches_variant_count_minus_non_healthy_total() {
+        let variants = vec![
+            variant(true, "deny", 12),
+            variant(true, "deny", 2),
+            variant(false, "deny", 0),
+            variant(true, "continue", -3),
+            variant(false, "continue", -4),
+        ];
+
+        let counts = summarize_inventory_health_counts(&variants);
+        let healthy_count = healthy_count(&variants);
+        assert_eq!(
+            healthy_count,
+            variants.len().saturating_sub(counts.non_healthy_total())
+        );
+        let summary = summarize_inventory(&variants);
+        assert_eq!(summary.healthy, healthy_count);
+    }
+
+    #[test]
+    fn health_state_label_and_badge_are_consistent_for_each_state() {
+        let healthy = variant(true, "deny", LOW_STOCK_THRESHOLD + 3);
+        let low_stock = variant(true, "deny", LOW_STOCK_THRESHOLD);
+        let out_of_stock = variant(false, "deny", 0);
+        let backorder = variant(false, "continue", -2);
+
+        assert_eq!(inventory_health_state(&healthy), InventoryHealthState::Healthy);
+        assert_eq!(inventory_health_label(None, &healthy), "Healthy");
+        assert_eq!(
+            inventory_health_badge(&healthy),
+            "border-emerald-200 bg-emerald-50 text-emerald-700"
+        );
+
+        assert_eq!(inventory_health_state(&low_stock), InventoryHealthState::LowStock);
+        assert_eq!(inventory_health_label(None, &low_stock), "Low stock");
+        assert_eq!(
+            inventory_health_badge(&low_stock),
+            "border-amber-200 bg-amber-50 text-amber-700"
+        );
+
+        assert_eq!(
+            inventory_health_state(&out_of_stock),
+            InventoryHealthState::OutOfStock
+        );
+        assert_eq!(inventory_health_label(None, &out_of_stock), "Out of stock");
+        assert_eq!(
+            inventory_health_badge(&out_of_stock),
+            "border-rose-200 bg-rose-50 text-rose-700"
+        );
+
+        assert_eq!(
+            inventory_health_state(&backorder),
+            InventoryHealthState::Backorder
+        );
+        assert_eq!(inventory_health_label(None, &backorder), "Backorder");
+        assert_eq!(
+            inventory_health_badge(&backorder),
+            "border-sky-200 bg-sky-50 text-sky-700"
+        );
+    }
+
+    #[test]
+    fn summary_partition_is_complete_including_healthy_bucket() {
+        let variants = vec![
+            variant(true, "deny", LOW_STOCK_THRESHOLD + 3),
+            variant(true, "deny", LOW_STOCK_THRESHOLD),
+            variant(false, "deny", 0),
+            variant(true, "continue", -1),
+        ];
+
+        let summary = summarize_inventory(&variants);
+        let partition_total =
+            summary.healthy + summary.low_stock + summary.out_of_stock + summary.backorder;
+        assert_eq!(partition_total, summary.variant_count);
+    }
+
+    #[test]
+    fn summary_partition_matches_health_count_helper_totals() {
+        let variants = vec![
+            variant(true, "deny", LOW_STOCK_THRESHOLD + 10),
+            variant(true, "deny", LOW_STOCK_THRESHOLD - 1),
+            variant(false, "deny", 0),
+            variant(true, "continue", -1),
+            variant(false, "continue", -2),
+        ];
+
+        let counts = summarize_inventory_health_counts(&variants);
+        let summary = summarize_inventory(&variants);
+
+        assert_eq!(summary.low_stock, counts.low_stock);
+        assert_eq!(summary.out_of_stock, counts.out_of_stock);
+        assert_eq!(summary.backorder, counts.backorder);
+        assert_eq!(summary.healthy, variants.len() - counts.non_healthy_total());
+        assert_eq!(
+            summary.healthy + counts.non_healthy_total(),
+            summary.variant_count
+        );
+    }
+
+    #[test]
+    fn summary_healthy_bucket_matches_healthy_state_projection() {
+        let variants = vec![
+            variant(true, "deny", LOW_STOCK_THRESHOLD + 2),
+            variant(true, "deny", LOW_STOCK_THRESHOLD + 20),
+            variant(true, "deny", LOW_STOCK_THRESHOLD),
+            variant(false, "deny", 0),
+            variant(true, "continue", -1),
+        ];
+
+        let summary = summarize_inventory(&variants);
+        let projected_healthy = variants
             .iter()
-            .filter(|variant| variant.inventory_quantity <= LOW_STOCK_THRESHOLD)
-            .count(),
-        backorder: variants
-            .iter()
-            .filter(|variant| variant.inventory_policy.eq_ignore_ascii_case("continue"))
-            .count(),
+            .filter(|variant| inventory_health_state(variant) == InventoryHealthState::Healthy)
+            .count();
+        assert_eq!(summary.healthy, projected_healthy);
+    }
+
+    #[test]
+    fn summary_variant_count_matches_input_length() {
+        let variants = vec![
+            variant(true, "deny", LOW_STOCK_THRESHOLD + 1),
+            variant(true, "deny", LOW_STOCK_THRESHOLD),
+            variant(false, "deny", 0),
+            variant(true, "continue", -1),
+            variant(false, "continue", -2),
+            variant(true, "deny", 42),
+        ];
+
+        let summary = summarize_inventory(&variants);
+        assert_eq!(summary.variant_count, variants.len());
+    }
+
+    #[test]
+    fn state_label_helper_matches_variant_label_projection() {
+        let variants = vec![
+            variant(true, "deny", LOW_STOCK_THRESHOLD + 3),
+            variant(true, "deny", LOW_STOCK_THRESHOLD),
+            variant(false, "deny", 0),
+            variant(false, "continue", -2),
+        ];
+
+        for variant in variants {
+            let state = inventory_health_state(&variant);
+            assert_eq!(
+                inventory_health_label_for_state(None, state),
+                inventory_health_label(None, &variant)
+            );
+        }
+    }
+
+    #[test]
+    fn state_badge_helper_matches_variant_badge_projection() {
+        let variants = vec![
+            variant(true, "deny", LOW_STOCK_THRESHOLD + 3),
+            variant(true, "deny", LOW_STOCK_THRESHOLD),
+            variant(false, "deny", 0),
+            variant(false, "continue", -2),
+        ];
+
+        for variant in variants {
+            let state = inventory_health_state(&variant);
+            assert_eq!(
+                inventory_health_badge_for_state(state),
+                inventory_health_badge(&variant)
+            );
+        }
     }
 }
 
@@ -537,26 +935,28 @@ fn format_variant_price(locale: Option<&str>, variant: &InventoryVariant) -> Str
 }
 
 fn inventory_health_label(locale: Option<&str>, variant: &InventoryVariant) -> String {
-    if !variant.in_stock {
-        t(locale, "inventory.health.outOfStock", "Out of stock")
-    } else if variant.inventory_policy.eq_ignore_ascii_case("continue") {
-        t(locale, "inventory.health.backorder", "Backorder")
-    } else if variant.inventory_quantity <= LOW_STOCK_THRESHOLD {
-        t(locale, "inventory.health.lowStock", "Low stock")
-    } else {
-        t(locale, "inventory.health.healthy", "Healthy")
-    }
+    inventory_health_label_for_state(locale, inventory_health_state(variant))
 }
 
 fn inventory_health_badge(variant: &InventoryVariant) -> &'static str {
-    if !variant.in_stock {
-        "border-rose-200 bg-rose-50 text-rose-700"
-    } else if variant.inventory_policy.eq_ignore_ascii_case("continue") {
-        "border-sky-200 bg-sky-50 text-sky-700"
-    } else if variant.inventory_quantity <= LOW_STOCK_THRESHOLD {
-        "border-amber-200 bg-amber-50 text-amber-700"
-    } else {
-        "border-emerald-200 bg-emerald-50 text-emerald-700"
+    inventory_health_badge_for_state(inventory_health_state(variant))
+}
+
+fn inventory_health_label_for_state(locale: Option<&str>, state: InventoryHealthState) -> String {
+    match state {
+        InventoryHealthState::Backorder => t(locale, "inventory.health.backorder", "Backorder"),
+        InventoryHealthState::OutOfStock => t(locale, "inventory.health.outOfStock", "Out of stock"),
+        InventoryHealthState::LowStock => t(locale, "inventory.health.lowStock", "Low stock"),
+        InventoryHealthState::Healthy => t(locale, "inventory.health.healthy", "Healthy"),
+    }
+}
+
+fn inventory_health_badge_for_state(state: InventoryHealthState) -> &'static str {
+    match state {
+        InventoryHealthState::Backorder => "border-sky-200 bg-sky-50 text-sky-700",
+        InventoryHealthState::OutOfStock => "border-rose-200 bg-rose-50 text-rose-700",
+        InventoryHealthState::LowStock => "border-amber-200 bg-amber-50 text-amber-700",
+        InventoryHealthState::Healthy => "border-emerald-200 bg-emerald-50 text-emerald-700",
     }
 }
 
