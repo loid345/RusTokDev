@@ -79,6 +79,17 @@ pub fn get_graphql_ws_url() -> String {
 
 pub type ApiError = GraphqlHttpError;
 
+pub fn combine_native_and_graphql_error(
+    server_err: leptos::prelude::ServerFnError,
+    graphql_err: ApiError,
+) -> ApiError {
+    let native_message = server_err.to_string();
+    let graphql_message = graphql_err.to_string();
+    ApiError::Graphql(format!(
+        "dual-path failure [native={native_message}] [graphql={graphql_message}]"
+    ))
+}
+
 /// Read the admin UI locale from LocalStorage.
 /// Returns None in non-WASM environments or if the key is absent.
 pub fn get_stored_locale() -> Option<String> {
@@ -162,7 +173,9 @@ fn normalize_server_fn_error_message(message: &str) -> ApiError {
 
 #[cfg(all(test, not(all(target_arch = "wasm32", feature = "csr", not(feature = "hydrate")))))]
 mod map_server_fn_error_tests {
-    use super::{map_server_fn_error, normalize_server_fn_error_message};
+    use super::{
+        combine_native_and_graphql_error, map_server_fn_error, normalize_server_fn_error_message,
+    };
     use leptos::prelude::ServerFnError;
     use leptos_graphql::GraphqlHttpError;
 
@@ -196,6 +209,18 @@ mod map_server_fn_error_tests {
     fn unknown_server_errors_fallback_to_graphql_variant() {
         let mapped = normalize_server_fn_error_message("internal adapter panic");
         assert!(matches!(mapped, GraphqlHttpError::Graphql(message) if message == "internal adapter panic"));
+    }
+
+    #[test]
+    fn combined_error_keeps_structured_dual_path_and_taxonomy() {
+        let combined = combine_native_and_graphql_error(
+            ServerFnError::new("native disabled"),
+            GraphqlHttpError::Graphql("MODULE_HAS_DEPENDENTS".to_string()),
+        );
+        assert!(matches!(combined, GraphqlHttpError::Graphql(message)
+            if message.contains("dual-path failure")
+            && message.contains("[native=native disabled]")
+            && message.contains("[graphql=MODULE_HAS_DEPENDENTS]")));
     }
 }
 

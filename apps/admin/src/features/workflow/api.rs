@@ -7,7 +7,7 @@ use crate::entities::workflow::{
     ExecutionStatus, OnError, StepExecution, StepType, WorkflowStatus, WorkflowStep,
 };
 use crate::entities::workflow::{WorkflowDetail, WorkflowExecution, WorkflowSummary};
-use crate::shared::api::{request, ApiError};
+use crate::shared::api::{combine_native_and_graphql_error, request, ApiError};
 
 pub const WORKFLOWS_QUERY: &str =
     "query Workflows { workflows { id tenantId name status failureCount createdAt updatedAt } }";
@@ -136,37 +136,6 @@ pub struct AddStepResponse {
 #[cfg(feature = "ssr")]
 fn server_error(message: impl Into<String>) -> ServerFnError {
     ServerFnError::ServerError(message.into())
-}
-
-fn combine_native_and_graphql_error(server_err: ServerFnError, graphql_err: ApiError) -> ApiError {
-    let native_message = server_err.to_string();
-    let graphql_message = graphql_err.to_string();
-    ApiError::Graphql(format!(
-        "dual-path failure [native={native_message}] [graphql={graphql_message}]"
-    ))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::combine_native_and_graphql_error;
-    use crate::shared::api::ApiError;
-    use leptos::server_fn::error::ServerFnError;
-
-    #[test]
-    fn combine_error_uses_structured_dual_path_format() {
-        let combined = combine_native_and_graphql_error(
-            ServerFnError::new("native timeout"),
-            ApiError::Graphql("WORKFLOW_POLICY_DENIED".to_string()),
-        );
-        match combined {
-            ApiError::Graphql(message) => {
-                assert!(message.contains("dual-path failure"));
-                assert!(message.contains("[native=native timeout]"));
-                assert!(message.contains("[graphql=WORKFLOW_POLICY_DENIED]"));
-            }
-            other => panic!("expected graphql error, got {other:?}"),
-        }
-    }
 }
 
 #[cfg(feature = "ssr")]
