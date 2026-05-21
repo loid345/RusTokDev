@@ -5,6 +5,11 @@
 
 Связанный концептуальный документ: [Fluid Backend Architecture для RusTok](./fluid-backend-architecture.md).
 
+
+**RU (killer feature):** Связка [Fluid Frontend Architecture (FFA)](./fluid-frontend-architecture.md) + [Fluid Backend Architecture (FBA)](./fluid-backend-architecture.md) даёт RusTok переносимость модулей между embedded и headless/remote профилями без переписывания core-логики.
+
+**EN (killer feature):** The combination of [Fluid Frontend Architecture (FFA)](./fluid-frontend-architecture.md) + [Fluid Backend Architecture (FBA)](./fluid-backend-architecture.md) gives RusTok topology portability (embedded ↔ headless/remote) without rewriting core module logic.
+
 ---
 
 ## 1) Цель и границы
