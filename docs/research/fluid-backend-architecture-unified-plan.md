@@ -1,301 +1,244 @@
-# Консолидированный план реализации Fluid Backend Architecture (FBA)
+# Единый план реализации Fluid Backend Architecture (FBA) для RusTok
 
-Этот документ объединяет:
+Этот документ — **единственный актуальный план внедрения FBA** в RusTok.
+Он заменяет разрозненные плановые материалы и задаёт обязательную последовательность этапов.
 
-- внутренние материалы RusTok по FBA;
-- существующий implementation plan;
-- практический migration path «монолит → модульный монолит → выборочные сервисы».
-
-Цель: дать единый исполнимый план, по которому команда может последовательно переводить отдельные module boundaries в remote profile **без переписывания domain/application-логики**.
+Связанный концептуальный документ: [Fluid Backend Architecture для RusTok](./fluid-backend-architecture.md).
 
 ---
 
-## 0. Стратегические рамки (что считаем успехом)
+## 1) Цель и границы
 
-### 0.1. Целевой принцип
+## 1.1 Цель
 
-FBA в RusTok — это **не** microservices-first. Это transport/topology-fluid подход:
+Переводить отдельные module boundaries в remote execution profile (например, gRPC/async worker) **без переписывания domain/application-логики**.
 
-- module identity и ownership стабильны;
-- service contract стабилен;
-- runtime topology может меняться (embedded/remote/hybrid);
-- transport (gRPC/events) — адаптер, а не владелец бизнес-правил.
+## 1.2 Архитектурный инвариант FBA
 
-### 0.2. Что не делаем
+Во всех этапах сохраняется:
 
-- Не извлекаем каждый crate в отдельный сервис.
-- Не начинаем с service-owned DB как первого шага.
-- Не дублируем доменную логику в разных transport handlers.
-- Не превращаем `rustok-commerce` в domain microservice (это orchestration/facade слой).
+- `module identity` (slug/ownership/область ответственности);
+- `service contract` (команды, query, события);
+- `domain rules` и policy semantics.
 
-### 0.3. KPI миграции
+Меняется только `runtime topology`: embedded / remote / hybrid.
 
-Успешная фаза считается завершённой, если:
+## 1.3 Что запрещено
 
-1. Контракты портов одинаково проходят contract tests в in-process и remote профилях.
-2. Для write-path соблюдается idempotency/retry safety.
-3. Метрики и трассировка сопоставимы между topology-профилями.
-4. Нет прямого доступа к чужим таблицам вне owner boundary.
+- «Каждый crate = микросервис».
+- Дублирование бизнес-логики по transport handlers.
+- Прямой доступ к чужим таблицам после формализации портов.
+- Ранний переход на service-owned DB до зрелости портов/событий/наблюдаемости.
 
 ---
 
-## 1. Аудит текущего состояния (Stage A)
+## 2) Структура этапов (обязательный порядок)
 
-### 1.1. Инвентаризация модулей
+1. **Этап A — Аудит и готовность модулей**
+2. **Этап B — Базовые контракты FBA (до транспорта)**
+3. **Этап C — Событийная дисциплина и contract testing**
+4. **Этап D — Пилот 1 (async/read-boundary)**
+5. **Этап E — Пилот 2 (Inventory Reservation)**
+6. **Этап F — Пилот 3 (Payment/Fulfillment/Product read/Pricing)**
+7. **Этап G — Выборочная storage-decomposition и write extraction**
 
-Собрать таблицу по всем целевым модулям (минимум ecommerce family):
-
-- slug;
-- владелец;
-- owned storage;
-- публичные команды/запросы;
-- входящие/исходящие события;
-- зависимости (Cargo + module graph);
-- текущая роль: facade/orchestrator, write-model owner, read-model provider, supporting service.
-
-### 1.2. Карта связности и «долгов»
-
-Для каждого модуля отметить:
-
-- прямые вызовы чужой доменной логики;
-- прямой SQL к чужим таблицам;
-- отсутствие idempotency keys на мутациях;
-- отсутствие deadline/timeout semantics;
-- event gaps (нет outbox, неversioned payload, неявная replay policy).
-
-### 1.3. FBA readiness score
-
-Оценивать модуль по 3 уровням:
-
-- **High**: явный порт + слабая связность + события/контракты готовы;
-- **Medium**: есть порт/контракт, но остались прямые зависимости;
-- **Low**: фасад/плотный монолитный узел, не кандидат на ранний remote.
-
-### 1.4. Формализация решений
-
-Каждый перевод модуля в remote profile фиксировать отдельным ADR:
-
-- почему выносим;
-- почему сейчас;
-- какие риски консистентности/latency;
-- rollback strategy.
+Переход к следующему этапу допускается только после выполнения Exit Criteria текущего.
 
 ---
 
-## 2. Stage 0–3: общие контракты до транспорта
+## 3) Этап A — Аудит и readiness matrix
 
-## 2.1. Единый FBA context contract
+## 3.1 Обязательные артефакты
 
-Ввести канонический `FbaContext`, который обязательно проходит через каждый порт:
+- `Module Inventory Table` (по каждому целевому модулю):
+  - slug, owner, owned storage, публичные use-cases;
+  - входящие/исходящие события;
+  - зависимости (Cargo + modules graph);
+  - роль: orchestrator/facade, write-model owner, read-model provider, support service.
+- `Coupling Debt Register`:
+  - прямые вызовы соседних доменов;
+  - прямой SQL к чужим таблицам;
+  - отсутствие idempotency/deadline;
+  - event gaps (нет outbox/versioning/replay policy).
+- `Readiness Matrix`: High / Medium / Low.
+
+## 3.2 Критерии готовности этапа A
+
+- Все модули в целевом скоупе имеют заполненную inventory-строку.
+- Для каждого Medium/Low модуля зафиксирован remediation backlog.
+- Для каждого кандидата на remote есть ADR-черновик с рисками и rollback-подходом.
+
+---
+
+## 4) Этап B — Базовые FBA-контракты (Ports before transports)
+
+## 4.1 Единый `FbaContext`
+
+Обязательные поля:
 
 - tenant;
 - actor/service identity;
 - claims/role;
-- channel;
-- locale;
-- correlation/causation;
-- trace/span context;
-- idempotency key (для write);
+- channel + locale;
+- correlation/causation + trace context;
+- idempotency key (write);
 - deadline/timeout/cancellation.
 
-Правило: context передаётся явно параметром порта, а не ad-hoc заголовками.
+Правило: передаётся явным параметром каждого порта.
 
-### 2.2. Unified error model
+## 4.2 Unified error model
 
-Согласовать общий доменный error taxonomy:
+Единый набор доменных ошибок (validation/not_found/conflict/forbidden/unavailable/timeout/invariant violation) + предсказуемый mapping в REST/GraphQL/gRPC.
 
-- validation;
-- not_found;
-- conflict;
-- unauthorized/forbidden;
-- unavailable/timeout;
-- invariant_violation.
+## 4.3 Портовый слой
 
-И закрепить маппинг в REST/GraphQL/gRPC, чтобы UI и orchestration слой получали предсказуемое поведение.
+Минимальный целевой набор портов:
 
-### 2.3. Ports before transports
+- `ProductPort`, `PricingPort`, `InventoryPort`, `CartPort`,
+- `OrderPort`, `PaymentPort`, `FulfillmentPort`, `TaxPort`.
 
-Для модулей определить transport-agnostic порты (trait/contract):
+Требование: сначала in-process impl, потом remote adapters.
 
-- `ProductPort`;
-- `PricingPort`;
-- `InventoryPort`;
-- `CartPort`;
-- `OrderPort`;
-- `PaymentPort`;
-- `FulfillmentPort`;
-- `TaxPort`.
+## 4.4 Data ownership policy
 
-Сначала сделать **in-process implementation**, затем remote adapters.
+- Модуль пишет/читает только свой storage.
+- Межмодульный data access — только через порт/snapshot DTO/read model.
 
-### 2.4. Policy: no foreign-table access
+## 4.5 Критерии готовности этапа B
 
-Жёстко закрепить:
-
-- модуль читает/пишет только свои таблицы;
-- межмодульное чтение — только через порт или snapshot DTO/read model.
-
-### 2.5. Outbox и словарь событий
-
-Для всех write owners:
-
-- outbox write в одной транзакции с domain state;
-- versioned event contracts;
-- обязательные поля: tenant, aggregate_id, schema_version, correlation/causation, idempotency semantics.
-
-Consumer side:
-
-- idempotent handlers;
-- replay safety;
-- out-of-order tolerance policy.
-
-### 2.6. Contract testing baseline
-
-На каждый порт:
-
-- общий test suite;
-- запуск против in-process impl;
-- запуск против remote adapter.
-
-Цель: отличаться должны только latency/failure mode, а не бизнес-результат.
+- Все целевые порты определены в transport-agnostic виде.
+- `FbaContext` и error model используются во всех новых/обновлённых портовых вызовах.
+- Новые прямые foreign-table доступы не допускаются.
 
 ---
 
-## 3. Пилотная дорожная карта
+## 5) Этап C — События, outbox и контрактное тестирование
 
-## 3.1. Пилот 1 (низкий риск): async/read-oriented сервис
+## 5.1 Event vocabulary
 
-Кандидаты:
+Для критичных доменов задать versioned vocabulary (например: `ProductPublished`, `PriceChanged`, `InventoryReserved`, `OrderPlaced`, `PaymentAuthorized`).
+
+Каждое событие обязано иметь: tenant, aggregate id, schema version, correlation/causation, idempotency semantics.
+
+## 5.2 Outbox discipline
+
+- Запись domain state + outbox в одной транзакции.
+- Публикация через worker/dispatcher.
+- Consumer-ы idempotent + replay-safe + tolerant к out-of-order.
+
+## 5.3 Contract tests
+
+Для каждого порта один и тот же набор тестов запускается:
+
+- против in-process impl;
+- против remote adapter.
+
+Бизнес-результат должен совпадать, отличия допустимы только по latency/failure envelope.
+
+## 5.4 Критерии готовности этапа C
+
+- Outbox включён для всех write owners в пилотном скоупе.
+- Contract tests есть для всех портов пилотного скоупа.
+- Есть сценарии replay/idempotency/out-of-order в тестах.
+
+---
+
+## 6) Этап D — Пилот 1 (async/read-boundary)
+
+## 6.1 Кандидаты
 
 - search/indexing;
-- AI-enrichment/recommendations.
+- AI enrichment/recommendations.
 
-Шаги:
+## 6.2 Шаги
 
-1. Оформить порт + remote-capable adapter (gRPC или async worker).
-2. Переключить вызовы фасада/host на порт.
-3. Включить feature/config toggle between embedded/remote.
-4. Сравнить SLO: latency, error rate, throughput.
-5. Проверить event pipeline (обновления каталога/цен доходят до read-side).
+1. Вынести boundary в порт и адаптер (gRPC либо async worker — по характеру use-case).
+2. Подключить переключение embedded/remote через runtime config.
+3. Перевести вызовы host/facade на порт.
+4. Проверить SLO: latency, error rate, throughput, retry behavior.
 
-## 3.2. Пилот 2 (core domain): Inventory Reservation Service
+## 6.3 Exit Criteria
 
-Шаги:
-
-1. Ввести reservation model (`reservation`, TTL/expiry, idempotency key).
-2. Зафиксировать события: `InventoryReserved`, `InventoryReservationReleased`, `InventoryAdjusted`.
-3. Реализовать `InventoryPort` server/client для remote profile.
-4. Добавить компенсации в checkout saga (`release_reservation`).
-5. Провести нагрузочный профиль (cart peak/checkout spike).
-
-## 3.3. Commerce orchestrator и checkout saga
-
-`rustok-commerce` остаётся orchestration/facade слоем:
-
-- нормализует `FbaContext`;
-- выбирает in-process vs remote adapters;
-- координирует checkout steps;
-- управляет компенсациями.
-
-Checkout saga должна иметь формализованные:
-
-- шаги success-path;
-- таблицу компенсаций по каждому шагу;
-- ограничения retry/idempotency;
-- разделение sync RPC и async post-processing (email/analytics/search updates).
-
-## 3.4. Пилот 3: Payment/Fulfillment/Pricing/Product read-side
-
-Порядок:
-
-1. `PaymentPort` и `FulfillmentPort` как remote adapters к внешним провайдерам.
-2. `ProductPort` read-side snapshots (`get_product_snapshot`, `list_publishable_catalog_page`).
-3. `PricingPort` после стабилизации product snapshots.
-4. `TaxPort` как explicit support boundary (дальше выбрать embedded/stateless remote/provider adapter).
+- Функциональный паритет с embedded профилем подтверждён.
+- Метрики и трассировка стабильны минимум на согласованном окне наблюдения.
 
 ---
 
-## 4. Поздние стадии: storage decoupling и write-model extraction
+## 7) Этап E — Пилот 2 (Inventory Reservation)
 
-### 4.1. Поддерживаемые режимы хранения
+## 7.1 Шаги
 
-Для каждого remote-capable модуля явно выбрать профиль:
+1. Ввести `reservation` модель: idempotency key, TTL/expiration, статусный lifecycle.
+2. Закрепить события: `InventoryReserved`, `InventoryReservationReleased`, `InventoryAdjusted`.
+3. Реализовать `InventoryPort` remote server/client.
+4. Встроить компенсации в checkout saga (`release_reservation`).
+5. Провести нагрузочные тесты на пиковых checkout-сценариях.
+
+## 7.2 Exit Criteria
+
+- Reservation команды retry-safe.
+- Компенсации корректно отрабатывают на контролируемых сбоях.
+- Нагрузочный профиль не деградирует ниже согласованных порогов.
+
+---
+
+## 8) Этап F — Пилот 3 (Payment/Fulfillment/Product read/Pricing)
+
+Порядок обязателен:
+
+1. `PaymentPort` и `FulfillmentPort` как remote adapters (внешние провайдеры).
+2. `ProductPort` read-side snapshots (`get_product_snapshot`, `list_publishable_catalog_page`).
+3. `PricingPort` после стабилизации product read contracts.
+4. `TaxPort` как explicit support boundary (embedded/stateless remote/provider adapter — решается ADR).
+
+## 8.1 Exit Criteria
+
+- Нет прямого чтения product internals из pricing.
+- Checkout orchestration работает через порты с теми же бизнес-результатами.
+- Synchronous path и async post-processing разделены архитектурно.
+
+---
+
+## 9) Этап G — Поздние стадии (storage и write extraction)
+
+Разрешённые режимы хранения:
 
 1. shared DB + in-process;
 2. shared DB + remote process;
 3. service-owned DB;
 4. read-model replica/projection.
 
-### 4.2. Правило очередности
-
-Сначала контракты/контекст/события/observability, затем topology switch.
-
-Service-owned DB — только после того, как модуль стабильно работает как remote boundary и имеет зрелую saga/outbox модель.
-
-### 4.3. Где лучше read-model replica
-
-Для high-read сценариев (поиск/аналитика/витринные read APIs) приоритетнее событийные проекции, чем ранний разрез transactional write model.
+Правило: переход к `service-owned DB` только после стабильной remote работы модуля, зрелой saga/outbox модели и утверждённого ADR.
 
 ---
 
-## 5. Definition of Ready для перевода модуля в remote
+## 10) Единый Definition of Ready для перевода модуля в remote
 
-Модуль может перейти в remote profile только если выполнены все пункты:
+Модуль можно переводить в remote profile только при выполнении **всех** условий:
 
-1. **Stable port contract**: transport-agnostic интерфейс, контракт-тесты на 2 профилях.
-2. **Context completeness**: все обязательные поля `FbaContext` валидируются на входе.
-3. **Outbox/event maturity**: транзакционная публикация, versioning, replay-safe consumers.
-4. **Data ownership purity**: отсутствует direct foreign-table access.
-5. **Idempotency/deadlines**: все write команды retry-safe, с явными timeout/deadline.
-6. **Observability parity**: health/readiness, latency/error metrics, trace propagation.
-7. **ADR approved**: решение и риски зафиксированы архитектурно.
-
----
-
-## 6. Исполнимый roadmap по кварталам (пример)
-
-### Q1
-
-- Закрыть аудит и readiness matrix.
-- Ввести `FbaContext` + unified errors.
-- Добить портовый слой и базовые contract tests.
-- Зафиксировать event vocabulary + outbox baseline.
-
-### Q2
-
-- Провести Пилот 1 (async/read).
-- Включить observability parity dashboards/alerts.
-- Доработать компенсации checkout.
-
-### Q3
-
-- Провести Пилот 2 (Inventory Reservation).
-- Нагрузочные испытания и стабилизация retry semantics.
-- Подготовить Product read-side snapshots.
-
-### Q4
-
-- Пилот 3: Payment/Fulfillment adapters + Pricing read/compute boundary.
-- Решения по selective storage decoupling (только там, где доказан выигрыш).
+1. Stable transport-agnostic port + contract tests (in-process/remote).
+2. Полный `FbaContext` на всех командах/запросах.
+3. Outbox + versioned events + replay/idempotency policy.
+4. Отсутствие foreign-table доступа вне owner boundary.
+5. Write методы имеют idempotency key и deadline semantics.
+6. Health/readiness/metrics/tracing parity между профилями.
+7. Отдельный ADR с причинами, рисками, rollback и ownership impact.
 
 ---
 
-## 7. Короткие практические правила для команды
+## 11) Минимальный квартальный rollout (шаблон)
 
-1. Сначала стабилизируем границы, потом переносим процессы.
-2. Каждое remote-решение должно иметь измеримую operational причину.
-3. Orchestration и domain ownership не смешиваем.
-4. Для write-path не допускаем «best-effort без idempotency».
-5. Любой cross-module read оформляем через порт/snapshot, а не прямой SQL.
+- **Q1:** Этапы A+B.
+- **Q2:** Этап C + Пилот 1.
+- **Q3:** Пилот 2.
+- **Q4:** Пилот 3 + решения по selective storage evolution.
+
+Если Exit Criteria этапа не выполнены, следующий квартальный шаг не стартует.
 
 ---
 
-## 8. Результат консолидации
+## 12) Управление изменениями документа
 
-Этот план объединяет архитектурные принципы FBA и пошаговую delivery-дорожку:
-
-- от текущего modular monolith;
-- через портовую и событийную дисциплину;
-- к выборочному remote execution там, где это оправдано.
-
-Главный инвариант: **service contract стабилен, topology изменяема**.
+- Этот документ — каноничный implementation plan по FBA.
+- Изменения в sequence/criteria вносятся только вместе с обновлением связанных ADR.
+- Новые «параллельные планы FBA» не создаются; расширения добавляются сюда.
