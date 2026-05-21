@@ -3173,6 +3173,51 @@ mod tests {
         assert!(result.is_err());
     }
 
+
+    #[test]
+    fn product_attributes_payload_normalizes_category_slug() {
+        let payload = product_attributes_task_payload(
+            uuid::Uuid::new_v4().to_string(),
+            Some("  Electronics / Audio  ".to_string()),
+            Some("en".to_string()),
+            Some("Title".to_string()),
+            None,
+            "https://example.com/a.jpg".to_string(),
+            None,
+            None,
+        )
+        .expect("payload should be valid");
+
+        let json: serde_json::Value =
+            serde_json::from_str(payload.as_str()).expect("payload must be JSON");
+        assert_eq!(
+            json.get("category_slug").and_then(|value| value.as_str()),
+            Some("electronics / audio")
+        );
+    }
+
+    #[test]
+    fn product_attributes_payload_accepts_multiple_https_urls() {
+        let payload = product_attributes_task_payload(
+            uuid::Uuid::new_v4().to_string(),
+            Some("electronics".to_string()),
+            Some("en".to_string()),
+            Some("Title".to_string()),
+            None,
+            "https://example.com/a.jpg, https://cdn.example.com/b.webp".to_string(),
+            None,
+            None,
+        )
+        .expect("payload should be valid");
+
+        let json: serde_json::Value =
+            serde_json::from_str(payload.as_str()).expect("payload must be JSON");
+        let urls = json
+            .get("image_urls")
+            .and_then(|value| value.as_array())
+            .expect("image_urls must be array");
+        assert_eq!(urls.len(), 2);
+    }
     #[test]
     fn product_attributes_payload_rejects_non_http_urls() {
         let result = product_attributes_task_payload(
