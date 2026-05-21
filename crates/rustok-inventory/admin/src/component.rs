@@ -804,6 +804,24 @@ mod tests {
     }
 
     #[test]
+    fn summary_healthy_bucket_matches_healthy_state_projection() {
+        let variants = vec![
+            variant(true, "deny", LOW_STOCK_THRESHOLD + 2),
+            variant(true, "deny", LOW_STOCK_THRESHOLD + 20),
+            variant(true, "deny", LOW_STOCK_THRESHOLD),
+            variant(false, "deny", 0),
+            variant(true, "continue", -1),
+        ];
+
+        let summary = summarize_inventory(&variants);
+        let projected_healthy = variants
+            .iter()
+            .filter(|variant| inventory_health_state(variant) == InventoryHealthState::Healthy)
+            .count();
+        assert_eq!(summary.healthy, projected_healthy);
+    }
+
+    #[test]
     fn state_label_helper_matches_variant_label_projection() {
         let variants = vec![
             variant(true, "deny", LOW_STOCK_THRESHOLD + 3),
