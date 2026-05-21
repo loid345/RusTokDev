@@ -635,7 +635,6 @@ mod tests {
             other => panic!("expected graphql error, got {other:?}"),
         }
     }
-
 }
 
 #[cfg(feature = "ssr")]
