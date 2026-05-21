@@ -2434,6 +2434,8 @@ mod tests {
         assert_eq!(data.len(), 1);
         assert_eq!(data[0]["id"], json!(second_order.id));
         assert_eq!(data[0]["status"], json!("cancelled"));
+        assert_eq!(data[0]["subtotal_amount"], json!("20"));
+        assert_eq!(data[0]["total_amount"], json!("22"));
         assert_eq!(data[0]["tax_total"], json!("2"));
         assert_eq!(data[0]["tax_included"], json!(false));
         assert_eq!(data[0]["tax_lines"][0]["provider_id"], json!("region_default"));
