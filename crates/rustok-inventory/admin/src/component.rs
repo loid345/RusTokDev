@@ -482,7 +482,12 @@ fn summarize_inventory(variants: &[InventoryVariant]) -> InventorySummary {
             .iter()
             .filter(|variant| variant.inventory_policy.eq_ignore_ascii_case("continue"))
             .count(),
-        out_of_stock: variants.iter().filter(|variant| !variant.in_stock).count(),
+        out_of_stock: variants
+            .iter()
+            .filter(|variant| {
+                !variant.in_stock && !variant.inventory_policy.eq_ignore_ascii_case("continue")
+            })
+            .count(),
     }
 }
 
@@ -509,18 +514,19 @@ mod tests {
     }
 
     #[test]
-    fn summary_does_not_mix_out_of_stock_or_backorder_into_low_stock() {
+    fn summary_keeps_low_stock_out_of_stock_and_backorder_disjoint() {
         let variants = vec![
             variant(true, "deny", 2),
             variant(false, "deny", 0),
             variant(true, "continue", 0),
+            variant(false, "continue", -3),
         ];
 
         let summary = summarize_inventory(&variants);
-        assert_eq!(summary.variant_count, 3);
+        assert_eq!(summary.variant_count, 4);
         assert_eq!(summary.low_stock, 1);
         assert_eq!(summary.out_of_stock, 1);
-        assert_eq!(summary.backorder, 1);
+        assert_eq!(summary.backorder, 2);
     }
 }
 
