@@ -6,9 +6,35 @@
 Связанный концептуальный документ: [Fluid Backend Architecture для RusTok](./fluid-backend-architecture.md).
 
 
-**RU (killer feature):** Связка [Fluid Frontend Architecture (FFA)](./fluid-frontend-architecture.md) + [Fluid Backend Architecture (FBA)](./fluid-backend-architecture.md) даёт RusTok переносимость модулей между embedded и headless/remote профилями без переписывания core-логики.
+Связка [Fluid Frontend Architecture (FFA)](./fluid-frontend-architecture.md) и [Fluid Backend Architecture (FBA)](./fluid-backend-architecture.md) даёт RusTok переносимость модулей между embedded и headless/remote профилями без переписывания core-логики.
 
-**EN (killer feature):** The combination of [Fluid Frontend Architecture (FFA)](./fluid-frontend-architecture.md) + [Fluid Backend Architecture (FBA)](./fluid-backend-architecture.md) gives RusTok topology portability (embedded ↔ headless/remote) without rewriting core module logic.
+The combination of [Fluid Frontend Architecture (FFA)](./fluid-frontend-architecture.md) and [Fluid Backend Architecture (FBA)](./fluid-backend-architecture.md) gives RusTok topology portability (embedded ↔ headless/remote) without rewriting core module logic.
+
+
+
+## 0) Визуальный контекст админок (UI parity)
+
+Ниже — иллюстрации двух runtime-вариантов админки, которые должны сохранять одинаковую
+бизнес-семантику и навигационный контракт в рамках FFA+FBA.
+
+### Leptos-вариант (SSR-first)
+
+![Leptos Admin Dashboard](https://github.com/user-attachments/assets/leptos-admin-dashboard)
+
+*Описание:* тёмная SSR-first админка с блоками `Total users / Content nodes / Orders / Revenue snapshot`,
+блоком `Recent activity` и виджетом `Enabled modules`. Это референс для Leptos-host профиля
+(`apps/admin`) и module-owned UI route contract.
+
+### Next-вариант (headless/runtime parity)
+
+![Next Admin Dashboard](https://github.com/user-attachments/assets/next-admin-dashboard)
+
+*Описание:* Next-host вариант с тем же смысловым набором: дашборд метрик, активность,
+операторские действия и модульная навигация. Это референс для `apps/next-admin`, где должен
+сохраняться parity с Leptos-вариантом по данным, ролям и сценариям.
+
+> Примечание: визуальный стиль может отличаться, но контракт FFA+FBA требует стабильности
+> доменных сценариев, прав доступа, route/query semantics и backend orchestration behavior.
 
 ---
 
