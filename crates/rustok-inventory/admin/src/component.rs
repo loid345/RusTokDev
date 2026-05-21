@@ -354,7 +354,7 @@ pub fn InventoryAdmin() -> impl IntoView {
                                     </div>
                                 </div>
 
-                                <div class="grid gap-4 md:grid-cols-4">
+                                <div class="grid gap-4 md:grid-cols-5">
                                     <StatCard
                                         title=t(ui_locale_for_detail.as_deref(), "inventory.stat.variants", "Variants")
                                         value=summary.variant_count.to_string()
@@ -374,6 +374,11 @@ pub fn InventoryAdmin() -> impl IntoView {
                                         title=t(ui_locale_for_detail.as_deref(), "inventory.stat.backorder", "Backorder")
                                         value=summary.backorder.to_string()
                                         hint=t(ui_locale_for_detail.as_deref(), "inventory.stat.backorderHint", "Variants that continue selling below zero.")
+                                    />
+                                    <StatCard
+                                        title=t(ui_locale_for_detail.as_deref(), "inventory.stat.outOfStock", "Out of stock")
+                                        value=summary.out_of_stock.to_string()
+                                        hint=t(ui_locale_for_detail.as_deref(), "inventory.stat.outOfStockHint", "Variants currently unavailable for immediate sale.")
                                     />
                                 </div>
 
@@ -455,6 +460,7 @@ struct InventorySummary {
     total_quantity: i32,
     low_stock: usize,
     backorder: usize,
+    out_of_stock: usize,
 }
 
 fn summarize_inventory(variants: &[InventoryVariant]) -> InventorySummary {
@@ -466,12 +472,63 @@ fn summarize_inventory(variants: &[InventoryVariant]) -> InventorySummary {
             .sum(),
         low_stock: variants
             .iter()
-            .filter(|variant| variant.inventory_quantity <= LOW_STOCK_THRESHOLD)
+            .filter(|variant| {
+                variant.in_stock
+                    && !is_backorder_enabled(variant)
+                    && variant.inventory_quantity <= LOW_STOCK_THRESHOLD
+            })
             .count(),
         backorder: variants
             .iter()
-            .filter(|variant| variant.inventory_policy.eq_ignore_ascii_case("continue"))
+            .filter(|variant| is_backorder_enabled(variant))
             .count(),
+        out_of_stock: variants
+            .iter()
+            .filter(|variant| !variant.in_stock && !is_backorder_enabled(variant))
+            .count(),
+    }
+}
+
+fn is_backorder_enabled(variant: &InventoryVariant) -> bool {
+    variant.inventory_policy.eq_ignore_ascii_case("continue")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::InventoryVariant;
+
+    fn variant(in_stock: bool, inventory_policy: &str, inventory_quantity: i32) -> InventoryVariant {
+        InventoryVariant {
+            id: "v".to_string(),
+            sku: None,
+            barcode: None,
+            shipping_profile_slug: None,
+            title: "Variant".to_string(),
+            option1: None,
+            option2: None,
+            option3: None,
+            prices: Vec::new(),
+            inventory_quantity,
+            inventory_policy: inventory_policy.to_string(),
+            in_stock,
+        }
+    }
+
+    #[test]
+    fn summary_keeps_low_stock_out_of_stock_and_backorder_disjoint() {
+        let variants = vec![
+            variant(true, "deny", 2),
+            variant(false, "deny", 0),
+            variant(true, "continue", 0),
+            variant(false, "continue", -3),
+        ];
+
+        let summary = summarize_inventory(&variants);
+        assert_eq!(summary.variant_count, 4);
+        assert_eq!(summary.low_stock, 1);
+        assert_eq!(summary.out_of_stock, 1);
+        assert_eq!(summary.backorder, 2);
     }
 }
 
@@ -537,10 +594,10 @@ fn format_variant_price(locale: Option<&str>, variant: &InventoryVariant) -> Str
 }
 
 fn inventory_health_label(locale: Option<&str>, variant: &InventoryVariant) -> String {
-    if !variant.in_stock {
-        t(locale, "inventory.health.outOfStock", "Out of stock")
-    } else if variant.inventory_policy.eq_ignore_ascii_case("continue") {
+    if is_backorder_enabled(variant) {
         t(locale, "inventory.health.backorder", "Backorder")
+    } else if !variant.in_stock {
+        t(locale, "inventory.health.outOfStock", "Out of stock")
     } else if variant.inventory_quantity <= LOW_STOCK_THRESHOLD {
         t(locale, "inventory.health.lowStock", "Low stock")
     } else {
@@ -549,10 +606,10 @@ fn inventory_health_label(locale: Option<&str>, variant: &InventoryVariant) -> S
 }
 
 fn inventory_health_badge(variant: &InventoryVariant) -> &'static str {
-    if !variant.in_stock {
-        "border-rose-200 bg-rose-50 text-rose-700"
-    } else if variant.inventory_policy.eq_ignore_ascii_case("continue") {
+    if is_backorder_enabled(variant) {
         "border-sky-200 bg-sky-50 text-sky-700"
+    } else if !variant.in_stock {
+        "border-rose-200 bg-rose-50 text-rose-700"
     } else if variant.inventory_quantity <= LOW_STOCK_THRESHOLD {
         "border-amber-200 bg-amber-50 text-amber-700"
     } else {
