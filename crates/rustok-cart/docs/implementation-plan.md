@@ -6,11 +6,11 @@ context snapshot, а orchestration над checkout живёт в umbrella `rusto
 ## Execution checkpoint
 
 - Current phase: plan_sync
-- Last checkpoint: Checkout hardening coverage now explicitly includes mutation guards for `checking_out` carts (`set_adjustments` + typed `apply_percentage_promotion`).
-- Next step: Добавить coverage для recovery/versioning semantics вокруг `checking_out` и checkout release/complete transitions.
+- Last checkpoint: Recovery/versioning coverage around checkout lifecycle now includes `checking_out` re-entry guardrails, release/complete transition semantics, and completed-cart mutation fences for both typed promotions and generic adjustment writes.
+- Next step: Зафиксировать эти recovery/versioning guarantees в umbrella `rustok-commerce` docs и расширить transport-level regression checks, чтобы release/complete guards оставались видимыми вне cart service unit layer.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок.
-- Last updated at (UTC): 2026-05-21T09:45:00Z
+- Last updated at (UTC): 2026-05-21T12:30:00Z
 
 ## Область работ
 
@@ -51,9 +51,9 @@ context snapshot, а orchestration над checkout живёт в umbrella `rusto
 
 ### 3. Checkout hardening
 
-- [ ] удерживать `checking_out`/recovery semantics совместимыми с payment/order orchestration;
+- [x] удерживать `checking_out`/recovery semantics совместимыми с payment/order orchestration;
 - [x] покрывать stale snapshot, shipping selection и multi-group edge-cases targeted tests;
-- [ ] развивать cart state только через explicit snapshot/versioning semantics.
+- [x] развивать cart state только через explicit snapshot/versioning semantics.
 
 ### 4. Operability
 
