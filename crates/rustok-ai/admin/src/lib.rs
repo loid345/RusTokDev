@@ -1192,7 +1192,7 @@ pub fn AiAdmin() -> impl IntoView {
 
         set_feedback.set(None);
         set_error.set(None);
-        let product_completed_template = product_attributes_completed_template.clone();
+        let product_completed_template = product_completed_template.clone();
         let product_session_query_writer = product_session_query_writer.clone();
         spawn_local(async move {
             let result = api::run_task_job(
@@ -1247,7 +1247,7 @@ pub fn AiAdmin() -> impl IntoView {
 
         set_feedback.set(None);
         set_error.set(None);
-        let product_completed_template = product_completed_template.clone();
+        let product_completed_template = product_attributes_completed_template.clone();
         let product_attributes_session_query_writer = product_attributes_session_query_writer.clone();
         spawn_local(async move {
             let result = api::run_task_job(
@@ -1981,7 +1981,7 @@ pub fn AiAdmin() -> impl IntoView {
                                         <TextField label=t(ui_locale_product.as_deref(), "ai.field.assistantPrompt", "Assistant prompt") value=product_assistant_prompt />
                                         <div class="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">
                                             {move || direct_transport_summary(
-                                                product_attributes_transport_locale.as_deref(),
+                                                product_transport_locale.as_deref(),
                                                 selected_provider.get().as_str(),
                                                 selected_task_profile.get().as_str(),
                                             )}
@@ -2023,7 +2023,7 @@ pub fn AiAdmin() -> impl IntoView {
                                         <TextField label=t(ui_locale_product_attributes.as_deref(), "ai.field.assistantPrompt", "Assistant prompt") value=product_attributes_assistant_prompt />
                                         <div class="rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">
                                             {move || direct_transport_summary(
-                                                product_transport_locale.as_deref(),
+                                                product_attributes_transport_locale.as_deref(),
                                                 selected_provider.get().as_str(),
                                                 selected_task_profile.get().as_str(),
                                             )}
