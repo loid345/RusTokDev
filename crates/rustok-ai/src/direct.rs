@@ -22,9 +22,10 @@ use uuid::Uuid;
 
 use crate::model::{
     AiAlloyOperation, AiAlloyTaskInput, AiBlogDraftTaskInput, AiContentModerationTaskInput,
-    AiImageAssetTaskInput, AiProductAttributesTaskInput, AiProductCopyTaskInput, AiProviderConfig,
-    ChatMessage, ChatMessageRole, DirectExecutionTarget, ProviderChatRequest,
-    ProviderImageRequest, ProviderStreamEmitter, ToolTrace,
+    AiImageAssetTaskInput, AiOrderAnalyticsTaskInput, AiOrderOpsAssistantTaskInput,
+    AiProductAttributesTaskInput, AiProductCopyTaskInput, AiProviderConfig, ChatMessage,
+    ChatMessageRole, DirectExecutionTarget, ProviderChatRequest, ProviderImageRequest,
+    ProviderStreamEmitter, ToolTrace,
 };
 use crate::provider::ModelProvider;
 use crate::service::AiOperatorContext;
@@ -32,19 +33,22 @@ use crate::{AiError, AiResult};
 use rustok_core::{SecurityContext, CONTENT_FORMAT_MARKDOWN};
 #[path = "direct_content_moderation.rs"]
 mod direct_content_moderation;
-#[path = "direct_domain_content.rs"]
-mod direct_domain_content;
 #[path = "direct_domain_commerce.rs"]
 mod direct_domain_commerce;
-#[path = "direct_order_tasks.rs"]
-mod direct_order_tasks;
+#[path = "direct_domain_content.rs"]
+mod direct_domain_content;
 #[path = "direct_domain_orders.rs"]
 mod direct_domain_orders;
+#[path = "direct_order_generation.rs"]
+mod direct_order_generation;
+#[path = "direct_order_tasks.rs"]
+mod direct_order_tasks;
 #[path = "direct_product_attributes.rs"]
 mod direct_product_attributes;
-use direct_domain_content::register_content_direct_handlers;
 use direct_domain_commerce::register_commerce_direct_handlers;
+use direct_domain_content::register_content_direct_handlers;
 use direct_domain_orders::register_order_direct_handlers;
+pub(crate) use direct_order_generation::{generate_order_analytics, generate_order_ops_assistant};
 
 pub struct DirectExecutionRequest {
     pub task_slug: String,
@@ -905,7 +909,6 @@ impl DirectTaskHandler for BlogDraftHandler {
     }
 }
 
-
 #[derive(Debug, Clone, Serialize)]
 struct ProductSourceTranslation {
     locale: String,
@@ -1211,7 +1214,8 @@ pub(crate) async fn generate_content_moderation(
         AiError::Provider("provider returned empty content for content_moderation".to_string())
     })?;
     let parsed = parse_json_object_from_text(&content)?;
-    let decision: GeneratedModerationDecision = serde_json::from_value(parsed).map_err(AiError::Json)?;
+    let decision: GeneratedModerationDecision =
+        serde_json::from_value(parsed).map_err(AiError::Json)?;
 
     let decision_slug = decision.decision.trim().to_ascii_lowercase();
     if !matches!(decision_slug.as_str(), "allow" | "review" | "block") {
@@ -1302,7 +1306,8 @@ pub(crate) async fn generate_product_attributes(
         AiError::Provider("provider returned empty content for product_attributes".to_string())
     })?;
     let parsed = parse_json_object_from_text(&content)?;
-    let generated: GeneratedProductAttributes = serde_json::from_value(parsed).map_err(AiError::Json)?;
+    let generated: GeneratedProductAttributes =
+        serde_json::from_value(parsed).map_err(AiError::Json)?;
     if generated
         .flex_attributes
         .iter()

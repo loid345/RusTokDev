@@ -18,6 +18,13 @@
 
 - `register_order_ai_verticals`
 
+
+## Dependency boundary (re-verified)
+
+- `rustok-ai-order` intentionally depends only on `serde`/`serde_json` and owns pure domain contracts.
+- Provider calls, model runtime, and direct handler execution remain in `rustok-ai` (server runtime crate).
+- Integration with `rustok-order` / `rustok-commerce` is currently **contract-level** through runtime flows, not direct compile-time coupling in this crate.
+
 ## Docs
 
 - [Module docs](./docs/README.md)
