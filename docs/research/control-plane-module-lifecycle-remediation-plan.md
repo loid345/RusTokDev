@@ -344,7 +344,7 @@ rollback-стратегии и Definition of Done по итерациям.
 
 - [x] Явный “unsafe for migrations/tests only” contract для low-level toggle API.
 - [x] Repo-guard (test/script), блокирующий production references bypass API.
-- [ ] Unified parity tests: GraphQL vs Leptos SSR.
+- [~] Unified parity tests: GraphQL vs Leptos SSR (repo-guard уже фиксирует GraphQL-only toggle contract в Leptos admin; остаётся закрыть end-to-end parity matrix по runtime error taxonomy и journal metadata).
 
 **Негативные сценарии, обязательные до merge.**
 
