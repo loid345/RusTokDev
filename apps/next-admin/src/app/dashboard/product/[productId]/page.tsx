@@ -44,6 +44,20 @@ function buildProductAttributesTaskInput(product: NonNullable<Awaited<ReturnType
   );
 }
 
+function buildProductAttributesHref(product: NonNullable<Awaited<ReturnType<typeof getProduct>>>, translation: { title: string; description: string | null; locale: string }) {
+  const params = new URLSearchParams({
+    task: 'product_attributes',
+    productId: product.id,
+    sourceLocale: translation.locale,
+    sourceTitle: translation.title,
+    categorySlug: product.productType ?? ''
+  });
+  if (translation.description) {
+    params.set('sourceDescription', translation.description);
+  }
+  return `/dashboard/ai?${params.toString()}`;
+}
+
 function formatDate(value: string | null): string {
   return value ? new Date(value).toLocaleString() : '-';
 }
@@ -193,7 +207,7 @@ export default async function ProductDetailPage({ params }: PageProps) {
 {buildProductAttributesTaskInput(product, primaryTranslation ?? { title: '', description: null, locale: 'en' })}
               </pre>
               <Button asChild variant='outline' size='sm'>
-                <Link href='/dashboard/ai'>Open AI task runner</Link>
+                <Link href={buildProductAttributesHref(product, primaryTranslation ?? { title: '', description: null, locale: 'en' })}>Open AI task runner</Link>
               </Button>
             </CardContent>
           </Card>

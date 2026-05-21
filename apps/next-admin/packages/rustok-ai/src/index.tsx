@@ -521,6 +521,19 @@ export function AiAdminPage(props: AiAdminPageProps) {
     copyInstructions: '',
     assistantPrompt: ''
   });
+  const [productAttributesForm, setProductAttributesForm] = React.useState({
+    title: 'Product Attributes',
+    locale: '',
+    productId: '',
+    categorySlug: '',
+    sourceLocale: '',
+    sourceTitle: '',
+    sourceDescription: '',
+    imageUrls: '',
+    copyInstructions:
+      'Сформируй только подтверждаемые атрибуты и пометь неподтверждаемые как not_specified.',
+    assistantPrompt: ''
+  });
   const [blogForm, setBlogForm] = React.useState({
     title: 'Blog Draft',
     locale: '',
@@ -568,6 +581,29 @@ export function AiAdminPage(props: AiAdminPageProps) {
       setLoading(false);
     }
   }, [props]);
+
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const task = params.get('task');
+    if (task !== 'product_attributes') return;
+
+    setProductAttributesForm((current) => ({
+      ...current,
+      productId: params.get('productId') ?? current.productId,
+      sourceLocale: params.get('sourceLocale') ?? current.sourceLocale,
+      sourceTitle: params.get('sourceTitle') ?? current.sourceTitle,
+      sourceDescription:
+        params.get('sourceDescription') ?? current.sourceDescription,
+      categorySlug: params.get('categorySlug') ?? current.categorySlug
+    }));
+
+    const taskProfile = taskProfiles.find((profile) => profile.slug === task);
+    if (taskProfile) {
+      setSessionForm((current) => ({ ...current, taskProfileId: taskProfile.id }));
+    }
+  }, [taskProfiles]);
 
   const resetProviderForm = React.useCallback(() => {
     setProviderForm({
@@ -2079,6 +2115,191 @@ export function AiAdminPage(props: AiAdminPageProps) {
                     type='submit'
                   >
                     Generate product copy
+                  </button>
+                </form>
+              </Card>
+            ) : null}
+
+
+            {!diagnosticsOnly ? (
+              <Card title='Product Attributes'>
+                <form
+                  className='space-y-3'
+                  onSubmit={async (event) => {
+                    event.preventDefault();
+                    if (!sessionForm.taskProfileId) {
+                      setError(
+                        'Select the `product_attributes` task profile before generating product attributes.'
+                      );
+                      return;
+                    }
+                    const normalizedProductId = productAttributesForm.productId.trim();
+                    if (!normalizedProductId) {
+                      setError('Product id is required.');
+                      return;
+                    }
+                    const taskInputJson = JSON.stringify({
+                      product_id: normalizedProductId,
+                      category_slug: productAttributesForm.categorySlug || null,
+                      source_locale: productAttributesForm.sourceLocale || null,
+                      source_title: productAttributesForm.sourceTitle || null,
+                      source_description:
+                        productAttributesForm.sourceDescription || null,
+                      image_urls: splitCsv(productAttributesForm.imageUrls),
+                      copy_instructions:
+                        productAttributesForm.copyInstructions || null,
+                      assistant_prompt:
+                        productAttributesForm.assistantPrompt || null
+                    });
+                    const started = await gql<
+                      {
+                        runAiTaskJob: {
+                          session: { session: { id: string; title: string } };
+                        };
+                      },
+                      { input: Record<string, unknown> }
+                    >(
+                      RUN_TASK_JOB_MUTATION,
+                      {
+                        input: {
+                          title: productAttributesForm.title,
+                          providerProfileId:
+                            sessionForm.providerProfileId || null,
+                          taskProfileId: sessionForm.taskProfileId,
+                          executionMode: 'DIRECT',
+                          locale: productAttributesForm.locale || null,
+                          taskInputJson,
+                          metadata: '{}'
+                        }
+                      },
+                      props
+                    ).catch((err: Error) => {
+                      setError(err.message);
+                      return null;
+                    });
+                    if (!started) return;
+                    const id = started.runAiTaskJob.session.session.id;
+                    setFeedback(
+                      `Product attributes job \`${started.runAiTaskJob.session.session.title}\` completed.`
+                    );
+                    await loadBootstrap();
+                    await loadSession(id);
+                  }}
+                >
+                  <Input
+                    label='Job title'
+                    value={productAttributesForm.title}
+                    onChange={(title) =>
+                      setProductAttributesForm((current) => ({
+                        ...current,
+                        title
+                      }))
+                    }
+                  />
+                  <Input
+                    label='Locale'
+                    placeholder='auto (request locale -> tenant default -> en)'
+                    value={productAttributesForm.locale}
+                    onChange={(locale) =>
+                      setProductAttributesForm((current) => ({
+                        ...current,
+                        locale
+                      }))
+                    }
+                  />
+                  <Input
+                    label='Product id'
+                    value={productAttributesForm.productId}
+                    onChange={(productId) =>
+                      setProductAttributesForm((current) => ({
+                        ...current,
+                        productId
+                      }))
+                    }
+                  />
+                  <Input
+                    label='Category slug'
+                    value={productAttributesForm.categorySlug}
+                    onChange={(categorySlug) =>
+                      setProductAttributesForm((current) => ({
+                        ...current,
+                        categorySlug
+                      }))
+                    }
+                  />
+                  <Input
+                    label='Source locale'
+                    value={productAttributesForm.sourceLocale}
+                    onChange={(sourceLocale) =>
+                      setProductAttributesForm((current) => ({
+                        ...current,
+                        sourceLocale
+                      }))
+                    }
+                  />
+                  <Input
+                    label='Source title override'
+                    value={productAttributesForm.sourceTitle}
+                    onChange={(sourceTitle) =>
+                      setProductAttributesForm((current) => ({
+                        ...current,
+                        sourceTitle
+                      }))
+                    }
+                  />
+                  <Input
+                    label='Source description override'
+                    value={productAttributesForm.sourceDescription}
+                    onChange={(sourceDescription) =>
+                      setProductAttributesForm((current) => ({
+                        ...current,
+                        sourceDescription
+                      }))
+                    }
+                  />
+                  <Input
+                    label='Image URLs (csv)'
+                    value={productAttributesForm.imageUrls}
+                    onChange={(imageUrls) =>
+                      setProductAttributesForm((current) => ({
+                        ...current,
+                        imageUrls
+                      }))
+                    }
+                  />
+                  <Input
+                    label='Copy instructions'
+                    value={productAttributesForm.copyInstructions}
+                    onChange={(copyInstructions) =>
+                      setProductAttributesForm((current) => ({
+                        ...current,
+                        copyInstructions
+                      }))
+                    }
+                  />
+                  <Input
+                    label='Assistant prompt'
+                    value={productAttributesForm.assistantPrompt}
+                    onChange={(assistantPrompt) =>
+                      setProductAttributesForm((current) => ({
+                        ...current,
+                        assistantPrompt
+                      }))
+                    }
+                  />
+                  <div className='border-border text-muted-foreground rounded-lg border px-3 py-2 text-sm'>
+                    Provider: {sessionForm.providerProfileId || 'optional'}
+                    <br />
+                    Task profile:{' '}
+                    {sessionForm.taskProfileId || 'select product_attributes'}
+                    <br />
+                    Mode: direct
+                  </div>
+                  <button
+                    className='bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium'
+                    type='submit'
+                  >
+                    Generate product attributes
                   </button>
                 </form>
               </Card>
