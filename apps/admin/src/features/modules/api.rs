@@ -12,7 +12,7 @@ use crate::entities::module::{
     BuildJob, InstalledModule, MarketplaceModule, ModuleInfo, ReleaseInfo, TenantModule,
     ToggleModuleResult,
 };
-use crate::shared::api::{request, ApiError};
+use crate::shared::api::{combine_native_and_graphql_error, request, ApiError};
 
 pub const ENABLED_MODULES_QUERY: &str = "query EnabledModules { enabledModules }";
 pub const MODULE_REGISTRY_QUERY: &str = "query ModuleRegistry { moduleRegistry { moduleSlug name description version kind dependencies enabled ownership trustLevel recommendedAdminSurfaces showcaseAdminSurfaces } }";
@@ -604,37 +604,6 @@ fn default_module_ownership() -> String {
 #[cfg(feature = "ssr")]
 fn default_module_trust_level() -> String {
     "unverified".to_string()
-}
-
-fn combine_native_and_graphql_error(server_err: ServerFnError, graphql_err: ApiError) -> ApiError {
-    ApiError::Graphql(format!(
-        "native path failed: {}; graphql path failed: {}",
-        server_err, graphql_err
-    ))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::combine_native_and_graphql_error;
-    use crate::shared::api::ApiError;
-    use leptos::server_fn::error::ServerFnError;
-
-    #[test]
-    fn combine_error_mentions_native_and_graphql_paths() {
-        let combined = combine_native_and_graphql_error(
-            ServerFnError::new("native disabled"),
-            ApiError::Graphql("unknown module".to_string()),
-        );
-        match combined {
-            ApiError::Graphql(message) => {
-                assert!(message.contains("native path failed"));
-                assert!(message.contains("graphql path failed"));
-                assert!(message.contains("native disabled"));
-                assert!(message.contains("unknown module"));
-            }
-            other => panic!("expected graphql error, got {other:?}"),
-        }
-    }
 }
 
 #[cfg(feature = "ssr")]

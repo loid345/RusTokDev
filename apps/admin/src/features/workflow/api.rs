@@ -7,7 +7,7 @@ use crate::entities::workflow::{
     ExecutionStatus, OnError, StepExecution, StepType, WorkflowStatus, WorkflowStep,
 };
 use crate::entities::workflow::{WorkflowDetail, WorkflowExecution, WorkflowSummary};
-use crate::shared::api::{request, ApiError};
+use crate::shared::api::{combine_native_and_graphql_error, request, ApiError};
 
 pub const WORKFLOWS_QUERY: &str =
     "query Workflows { workflows { id tenantId name status failureCount createdAt updatedAt } }";
@@ -136,13 +136,6 @@ pub struct AddStepResponse {
 #[cfg(feature = "ssr")]
 fn server_error(message: impl Into<String>) -> ServerFnError {
     ServerFnError::ServerError(message.into())
-}
-
-fn combine_native_and_graphql_error(server_err: ServerFnError, graphql_err: ApiError) -> ApiError {
-    ApiError::Graphql(format!(
-        "native path failed: {}; graphql path failed: {}",
-        server_err, graphql_err
-    ))
 }
 
 #[cfg(feature = "ssr")]
