@@ -32,6 +32,8 @@
   "inventory.stat.backorderHint": "Варианты, которые продолжают продаваться ниже нуля.",
   "inventory.stat.outOfStock": "Нет в наличии",
   "inventory.stat.outOfStockHint": "Варианты, которые сейчас недоступны для мгновенной продажи.",
+  "inventory.stat.healthy": "Норма",
+  "inventory.stat.healthyHint": "Варианты с достаточным остатком и без backorder-обработки.",
   "inventory.stat.lowStock": "Малый остаток",
   "inventory.stat.lowStockHint": "Варианты на пороге low-stock threshold или ниже.",
   "inventory.stat.totalQuantity": "Остаток",

@@ -32,6 +32,8 @@
   "inventory.stat.backorderHint": "Variants that continue selling below zero.",
   "inventory.stat.outOfStock": "Out of stock",
   "inventory.stat.outOfStockHint": "Variants currently unavailable for immediate sale.",
+  "inventory.stat.healthy": "Healthy",
+  "inventory.stat.healthyHint": "Variants with sufficient stock and no backorder handling.",
   "inventory.stat.lowStock": "Low stock",
   "inventory.stat.lowStockHint": "Variants at or below the low-stock threshold.",
   "inventory.stat.totalQuantity": "On-hand",

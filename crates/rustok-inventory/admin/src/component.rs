@@ -354,7 +354,7 @@ pub fn InventoryAdmin() -> impl IntoView {
                                     </div>
                                 </div>
 
-                                <div class="grid gap-4 md:grid-cols-5">
+                                <div class="grid gap-4 md:grid-cols-6">
                                     <StatCard
                                         title=t(ui_locale_for_detail.as_deref(), "inventory.stat.variants", "Variants")
                                         value=summary.variant_count.to_string()
@@ -379,6 +379,11 @@ pub fn InventoryAdmin() -> impl IntoView {
                                         title=t(ui_locale_for_detail.as_deref(), "inventory.stat.outOfStock", "Out of stock")
                                         value=summary.out_of_stock.to_string()
                                         hint=t(ui_locale_for_detail.as_deref(), "inventory.stat.outOfStockHint", "Variants currently unavailable for immediate sale.")
+                                    />
+                                    <StatCard
+                                        title=t(ui_locale_for_detail.as_deref(), "inventory.stat.healthy", "Healthy")
+                                        value=summary.healthy.to_string()
+                                        hint=t(ui_locale_for_detail.as_deref(), "inventory.stat.healthyHint", "Variants with sufficient stock and no backorder handling.")
                                     />
                                 </div>
 
@@ -461,6 +466,7 @@ struct InventorySummary {
     low_stock: usize,
     backorder: usize,
     out_of_stock: usize,
+    healthy: usize,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -489,6 +495,7 @@ fn summarize_inventory(variants: &[InventoryVariant]) -> InventorySummary {
         low_stock: health_counts.low_stock,
         backorder: health_counts.backorder,
         out_of_stock: health_counts.out_of_stock,
+        healthy: healthy_total,
     }
 }
 
