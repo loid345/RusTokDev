@@ -307,6 +307,12 @@ async fn update_manifest_stale_revision_conflict_does_not_update_platform_state(
     assert_eq!(state_after.revision, seeded.revision);
     assert_eq!(state_after.manifest_hash, seeded.manifest_hash);
     assert_eq!(state_after.manifest, seeded.manifest);
+
+    let builds = BuildEntity::find().all(&db).await.expect("list builds");
+    assert!(
+        builds.is_empty(),
+        "update_manifest stale revision conflict must not enqueue builds"
+    );
 }
 
 #[tokio::test]
