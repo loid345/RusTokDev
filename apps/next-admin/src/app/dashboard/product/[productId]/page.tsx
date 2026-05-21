@@ -210,9 +210,16 @@ export default async function ProductDetailPage({ params }: PageProps) {
                 <code className='mx-1 rounded bg-muted px-1 py-0.5'>product_attributes</code>
                 and this payload draft based on the current product translation.
               </p>
-              <pre className='overflow-x-auto rounded-md border bg-muted/40 p-3 text-xs'>
-{buildProductAttributesTaskInput(product, primaryTranslation ?? { title: '', description: null, locale: 'en' })}
-              </pre>
+              {hasProductAttributesSeedData(primaryTranslation) ? (
+                <pre className='overflow-x-auto rounded-md border bg-muted/40 p-3 text-xs'>
+{buildProductAttributesTaskInput(product, primaryTranslation!)}
+                </pre>
+              ) : (
+                <p className='text-muted-foreground text-xs'>
+                  Payload preview is unavailable until title or description
+                  translation is provided.
+                </p>
+              )}
               {hasProductAttributesSeedData(primaryTranslation) ? (
                 <Button asChild variant='outline' size='sm'>
                   <Link
