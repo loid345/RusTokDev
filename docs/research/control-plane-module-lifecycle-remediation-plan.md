@@ -337,7 +337,7 @@ rollback-стратегии и Definition of Done по итерациям.
 **Scope.**
 
 - [x] Единственный production entrypoint: `toggle_module_with_actor()`.
-- [ ] Все admin/runtime surfaces используют только canonical lifecycle service.
+- [x] Все admin/runtime surfaces используют только canonical lifecycle service.
 - [x] Bypass API в model-layer недоступен из production кода.
 
 **Deliverables.**
