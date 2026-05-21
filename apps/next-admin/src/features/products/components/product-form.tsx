@@ -130,6 +130,7 @@ export default function ProductForm({
 
   function handleAiFill() {
     const { category, description, name } = form.getValues();
+    const normalizedCategory = category.toLowerCase();
     const source = `${name} ${description}`.toLowerCase();
 
     const categoryDefaults: Record<string, Partial<SuggestedAttributes>> = {
@@ -153,13 +154,13 @@ export default function ProductForm({
     };
 
     setSuggestedAttributes({
-      brand: initialData?.brand || 'AI Suggested Brand',
-      material: source.includes('leather') ? 'leather' : categoryDefaults[category]?.material || 'not specified',
+      brand: 'AI Suggested Brand',
+      material: source.includes('leather') ? 'leather' : categoryDefaults[normalizedCategory]?.material || 'not specified',
       color: source.includes('black') ? 'black' : source.includes('white') ? 'white' : 'not specified',
       size: source.includes('xl') ? 'XL' : 'one size',
       dimensions: source.includes('cm') ? 'from description' : 'not specified',
-      compatibility: categoryDefaults[category]?.compatibility || 'not specified',
-      careInstructions: categoryDefaults[category]?.careInstructions || 'see packaging',
+      compatibility: categoryDefaults[normalizedCategory]?.compatibility || 'not specified',
+      careInstructions: categoryDefaults[normalizedCategory]?.careInstructions || 'see packaging',
       hazmat: source.includes('battery') ? 'battery' : 'none'
     });
   }
