@@ -94,14 +94,8 @@ fn admin_toggle_module_uses_graphql_without_native_fallback() {
     let content = fs::read_to_string(&admin_modules_api)
         .expect("apps/admin modules api source should be readable");
 
-    let fn_start = content
-        .find("pub async fn toggle_module(")
-        .expect("toggle_module function must exist");
-    let fn_body = &content[fn_start..];
-    let fn_end = fn_body
-        .find("\npub async fn update_module_settings(")
-        .expect("toggle_module should be immediately followed by update_module_settings");
-    let toggle_fn = &fn_body[..fn_end];
+    let toggle_fn = extract_function_block(&content, "pub async fn toggle_module(")
+        .expect("toggle_module function block must exist");
 
     assert!(
         !toggle_fn.contains("combine_native_and_graphql_error"),
@@ -111,4 +105,31 @@ fn admin_toggle_module_uses_graphql_without_native_fallback() {
         toggle_fn.contains("request("),
         "toggle_module must call GraphQL request path."
     );
+}
+
+fn extract_function_block<'a>(content: &'a str, signature: &str) -> Option<&'a str> {
+    let start = content.find(signature)?;
+    let rest = &content[start..];
+    let open_rel = rest.find('{')?;
+    let mut depth = 0usize;
+    let mut end_rel = None;
+
+    for (idx, ch) in rest.char_indices().skip(open_rel) {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                if depth == 0 {
+                    return None;
+                }
+                depth -= 1;
+                if depth == 0 {
+                    end_rel = Some(idx + ch.len_utf8());
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    end_rel.map(|end| &rest[..end])
 }
