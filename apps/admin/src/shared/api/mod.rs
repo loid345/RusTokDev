@@ -83,11 +83,12 @@ pub fn combine_native_and_graphql_error(
     server_err: leptos::prelude::ServerFnError,
     graphql_err: ApiError,
 ) -> ApiError {
-    let native_message = server_err.to_string();
-    let graphql_message = graphql_err.to_string();
-    ApiError::Graphql(format!(
-        "dual-path failure [native={native_message}] [graphql={graphql_message}]"
-    ))
+    let payload = serde_json::json!({
+        "kind": "dual_path_failure",
+        "native": server_err.to_string(),
+        "graphql": graphql_err.to_string(),
+    });
+    ApiError::Graphql(format!("dual-path failure {}", payload))
 }
 
 /// Read the admin UI locale from LocalStorage.
@@ -219,8 +220,20 @@ mod map_server_fn_error_tests {
         );
         assert!(matches!(combined, GraphqlHttpError::Graphql(message)
             if message.contains("dual-path failure")
-            && message.contains("[native=native disabled]")
-            && message.contains("[graphql=MODULE_HAS_DEPENDENTS]")));
+            && message.contains("\"kind\":\"dual_path_failure\"")
+            && message.contains("\"native\":\"native disabled\"")
+            && message.contains("\"graphql\":\"MODULE_HAS_DEPENDENTS\"")));
+    }
+
+    #[test]
+    fn combined_error_escapes_special_chars_in_json_payload() {
+        let combined = combine_native_and_graphql_error(
+            ServerFnError::new("native [disabled]"),
+            GraphqlHttpError::Graphql("MODULE_HAS_DEPENDENTS: \"quoted\"".to_string()),
+        );
+        assert!(matches!(combined, GraphqlHttpError::Graphql(message)
+            if message.contains("\"native\":\"native [disabled]\"")
+            && message.contains("\\\"quoted\\\"")));
     }
 }
 
