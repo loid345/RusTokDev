@@ -174,3 +174,33 @@ async fn successful_enqueue_sets_manifest_ref_to_platform_state_revision() {
         .expect("load state after success");
     assert_eq!(state_after.revision, result.snapshot.revision);
 }
+
+
+#[tokio::test]
+async fn successful_enqueue_keeps_hash_parity_between_snapshot_and_build() {
+    let db = setup_db(true).await;
+    let registry = ModuleRegistry::new();
+    let publisher = Arc::new(NoopBuildEventPublisher);
+    let manifest = ModulesManifest::default();
+
+    let seeded = PlatformCompositionService::active_snapshot(&db)
+        .await
+        .expect("seed active snapshot");
+
+    let result = PlatformCompositionBuildService::update_manifest_and_request_build(
+        &db,
+        publisher,
+        &registry,
+        Some(seeded.revision),
+        manifest,
+        ManifestDiff::default(),
+        "test-admin".to_string(),
+        "hash parity case".to_string(),
+    )
+    .await
+    .expect("build request should succeed");
+
+    let expected_hash = PlatformCompositionService::manifest_hash(&result.snapshot.manifest);
+    assert_eq!(result.snapshot.manifest_hash, expected_hash);
+    assert_eq!(result.build.manifest_hash, expected_hash);
+}
