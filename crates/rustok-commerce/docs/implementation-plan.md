@@ -193,6 +193,10 @@ typed shipping-profile registry плюс aggregate cart-promotion operator surfa
 - поверх этого base contract `rustok-cart` уже начал typed shipping-promotion layer: percentage/fixed
   shipping discounts живут в `cart_adjustments` как `scope=shipping`, checkout snapshot'ит их в order,
   а payment collection остаётся привязанным к тому же net total без hidden fallback на старую семантику.
+- cart checkout lifecycle guardrails дополнительно зафиксированы на service coverage: `checking_out` carts
+  отклоняют mutation paths для typed promotions и generic adjustment writes, `release_checkout`
+  восстанавливает допустимые мутации без выставления `completed_at`, а `complete_cart` оставляет
+  cart в финальном `completed` состоянии без повторного checkout/release.
 
 ### Phase 4. Order/payment/fulfillment transport
 
