@@ -1110,6 +1110,41 @@ async fn checkout_lifecycle_uses_checking_out_before_completion() {
 
 
 #[tokio::test]
+async fn completed_checkout_rejects_release_and_reentry() {
+    let service = setup().await;
+    let tenant_id = support::TEST_TENANT_ID;
+
+    let cart = service
+        .create_cart(tenant_id, create_cart_input())
+        .await
+        .unwrap();
+
+    let checking_out = service.begin_checkout(tenant_id, cart.id).await.unwrap();
+    assert_eq!(checking_out.status, "checking_out");
+
+    let completed = service.complete_cart(tenant_id, cart.id).await.unwrap();
+    assert_eq!(completed.status, "completed");
+
+    let err = service.release_checkout(tenant_id, cart.id).await.unwrap_err();
+    match err {
+        CartError::InvalidTransition { from, to } => {
+            assert_eq!(from, "completed");
+            assert_eq!(to, "active");
+        }
+        other => panic!("expected invalid transition, got {other:?}"),
+    }
+
+    let err = service.begin_checkout(tenant_id, cart.id).await.unwrap_err();
+    match err {
+        CartError::InvalidTransition { from, to } => {
+            assert_eq!(from, "completed");
+            assert_eq!(to, "checking_out");
+        }
+        other => panic!("expected invalid transition, got {other:?}"),
+    }
+}
+
+#[tokio::test]
 async fn checkout_transition_guards_reject_invalid_reentry_and_release() {
     let service = setup().await;
     let tenant_id = support::TEST_TENANT_ID;
