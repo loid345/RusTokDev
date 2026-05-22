@@ -340,15 +340,18 @@
 
 ## Трекер статуса (обновлять в каждом docs PR)
 
-- [~] DOC-01 Root docs sanitation (PR: pending)
-- [~] DOC-02 Profiles truth table (PR: pending)
-- [~] DOC-03 Workflow API doc drift cleanup (PR: pending)
-- [~] DOC-04 Changelog normalization (PR: pending)
-- [~] DOC-05 docs/index.md refactor (PR: pending)
-- [~] DOC-06 Registry ↔ manifest sync (PR: pending)
-- [~] DOC-07 Docs CI quality gates (PR: pending)
-- [~] DOC-08 Executable examples hub (PR: pending)
+> Правило консистентности: `pending` не может использоваться со статусом `[~]`.
+> Если открытого PR ещё нет, используем только `[ ]`.
+
+- [ ] DOC-01 Root docs sanitation
+- [ ] DOC-02 Profiles truth table
+- [ ] DOC-03 Workflow API doc drift cleanup
+- [ ] DOC-04 Changelog normalization
+- [ ] DOC-05 docs/index.md refactor
+- [ ] DOC-06 Registry ↔ manifest sync
+- [ ] DOC-07 Docs CI quality gates
+- [ ] DOC-08 Executable examples hub
 - [ ] DOC-09 Конвейер генерации reference-артефактов
-- [~] DOC-10 Language/naming governance (PR: pending)
-- [~] DOC-11 Reviewer checklist + PR template (PR: pending)
-- [~] DOC-12 Code hotspots documentation (PR: pending)
+- [ ] DOC-10 Language/naming governance
+- [ ] DOC-11 Reviewer checklist + PR template
+- [ ] DOC-12 Code hotspots documentation
