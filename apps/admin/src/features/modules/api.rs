@@ -765,7 +765,19 @@ async fn active_runtime_platform_snapshot(
             now.into(),
         ],
     );
-    let _ = db.execute(insert).await;
+    match db.execute(insert).await {
+        Ok(_) => {}
+        Err(err) => {
+            let msg = err.to_string().to_lowercase();
+            let is_duplicate =
+                msg.contains("duplicate") || msg.contains("unique") || msg.contains("already exists");
+            if !is_duplicate {
+                return Err(server_error(format!(
+                    "failed to bootstrap runtime platform state: {err}"
+                )));
+            }
+        }
+    }
     Ok(RuntimePlatformSnapshot {
         revision: 1,
         manifest,
