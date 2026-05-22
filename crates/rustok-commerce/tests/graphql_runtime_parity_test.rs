@@ -4961,6 +4961,69 @@ async fn storefront_graphql_refunds_query_rejects_foreign_customer_order() {
 }
 
 #[tokio::test]
+async fn storefront_graphql_refunds_query_requires_authentication() {
+    let db = setup_test_db().await;
+    support::ensure_commerce_schema(&db).await;
+    let tenant_id = Uuid::new_v4();
+    seed_tenant_context(&db, tenant_id).await;
+
+    let response = build_schema(
+        &db,
+        tenant_context(tenant_id),
+        request_context(tenant_id, "de"),
+        None,
+    )
+    .execute(Request::new(storefront_refunds_query(tenant_id, Uuid::new_v4())))
+    .await;
+
+    assert_eq!(response.errors.len(), 1, "expected unauthenticated error");
+    assert!(
+        response.errors[0].message.to_ascii_lowercase().contains("auth"),
+        "unexpected unauthenticated error: {}",
+        response.errors[0].message
+    );
+}
+
+#[tokio::test]
+async fn storefront_graphql_refunds_query_returns_empty_for_unknown_order() {
+    let db = setup_test_db().await;
+    support::ensure_commerce_schema(&db).await;
+    let tenant_id = Uuid::new_v4();
+    let customer_user_id = Uuid::new_v4();
+    seed_tenant_context(&db, tenant_id).await;
+
+    CustomerService::new(db.clone())
+        .create_customer(
+            tenant_id,
+            CreateCustomerInput {
+                user_id: Some(customer_user_id),
+                email: "refund-empty@example.com".to_string(),
+                first_name: Some("Empty".to_string()),
+                last_name: Some("Refunds".to_string()),
+                phone: None,
+                locale: Some("de".to_string()),
+                metadata: serde_json::json!({ "source": "storefront-graphql-refunds-empty" }),
+            },
+        )
+        .await
+        .expect("customer should be created");
+
+    let response = build_schema(
+        &db,
+        tenant_context(tenant_id),
+        request_context(tenant_id, "de"),
+        Some(customer_auth_context(tenant_id, customer_user_id)),
+    )
+    .execute(Request::new(storefront_refunds_query(tenant_id, Uuid::new_v4())))
+    .await;
+
+    assert!(response.errors.is_empty(), "unexpected errors: {:?}", response.errors);
+    let json = response.data.into_json().expect("response should serialize");
+    assert_eq!(json["storefrontRefunds"]["total"], Value::from(0));
+    assert_eq!(json["storefrontRefunds"]["items"], Value::from(Vec::<Value>::new()));
+}
+
+#[tokio::test]
 async fn storefront_graphql_order_query_exposes_typed_adjustments_and_totals() {
     let db = setup_test_db().await;
     support::ensure_commerce_schema(&db).await;
