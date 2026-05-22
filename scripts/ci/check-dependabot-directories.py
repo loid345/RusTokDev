@@ -24,7 +24,17 @@ def parse_directory_value(raw_value: str) -> str:
     quote = value[0]
     if len(value) < 2:
         return ""
-    closing_index = value.find(quote, 1)
+    closing_index = -1
+    escaped = False
+    for index in range(1, len(value)):
+        ch = value[index]
+        if quote == '"' and ch == "\\" and not escaped:
+            escaped = True
+            continue
+        if ch == quote and not escaped:
+            closing_index = index
+            break
+        escaped = False
     if closing_index == -1:
         return ""
     trailing = value[closing_index + 1 :].strip()

@@ -253,6 +253,29 @@ class DependabotDirectoryCheckTests(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertIn("Dependabot directories contain invalid paths:", result.stderr)
 
+    def test_allows_hash_character_inside_quoted_directory_value(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "apps" / "server#prod").mkdir(parents=True)
+            config = root / ".github" / "dependabot.yml"
+            config.parent.mkdir(parents=True)
+            config.write_text(
+                textwrap.dedent(
+                    """
+                    version: 2
+                    updates:
+                      - package-ecosystem: "cargo"
+                        directory: "/apps/server#prod"
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_script(root, config)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("All Dependabot update directories exist.", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
