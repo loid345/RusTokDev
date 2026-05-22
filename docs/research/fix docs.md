@@ -2,153 +2,182 @@
 
 ## Цель
 
-Превратить аудит документации в исполнимый план работ с приоритетами, владельцами результата и измеримыми критериями приёмки.
+Преобразовать findings из аудита в управляемый execution-план по исправлению документации: с понятными приоритетами, ответственными ролями, трудоёмкостью, зависимостями и проверяемыми критериями приёмки.
 
-## Принципы выполнения
+## Границы и допущения
 
-- Источник истины для API/контрактов — код и автогенерация (rustdoc/OpenAPI/GraphQL schema export), а не ручные списки сигнатур.
-- `docs/index.md` — короткая карта входа, без длинных status-логов и phase-нарратива.
-- Один документ — один язык (для `docs/` основной язык: русский).
-- Любое изменение архитектуры/маршрутизации/API/модулей сопровождается синхронным обновлением docs.
+- Этот документ фиксирует **план работ**, а не финальные архитектурные решения.
+- Источник истины для API-контрактов — код и generated artifacts (rustdoc/OpenAPI/GraphQL schema export).
+- Для `docs/` используется политика «один файл — один язык» (базово русский).
+- `docs/index.md` — короткая карта входа; статусные полотна и roadmaps должны жить в профильных implementation-plan документах.
 
 ---
 
-## Этап P0 (критично, сделать первым)
+## Формат исполнения
 
-### 1) Санировать root docs
+Каждая задача выполняется через отдельный PR с одинаковым шаблоном:
+
+1. **Scope** (какие файлы/разделы меняем);
+2. **Definition of Done** (что считается завершением);
+3. **Verification** (какие проверки/команды подтверждают результат);
+4. **Links updated** (какие ссылки/индексы обновлены дополнительно).
+
+---
+
+## Очередь работ (P0 → P2)
+
+> Оценки — инженерные часы без очереди на ревью.
+
+| ID | Приоритет | Задача | Ответственная роль | Оценка | Зависимости | Критерий приёмки |
+|---|---|---|---|---:|---|---|
+| DOC-01 | P0 | Санировать root docs (`README*`, `CONTRIBUTING`, `CHANGELOG`, quickstart) | Platform docs owner | 14ч | — | Нет mojibake и битых ссылок; команды старта/инструменты согласованы |
+| DOC-02 | P0 | Единая таблица профилей запуска и портов | Platform + DevEx | 8ч | DOC-01 | Одна canonical truth table (`profile → host → ports → owner → source`) |
+| DOC-03 | P0 | Убрать drift ручного API reference (старт с `rustok-workflow/CRATE_API.md`) | Module owner (`rustok-workflow`) | 12ч | — | Ручные сигнатуры убраны/минимизированы; явные ссылки на generated truth |
+| DOC-04 | P0 | Нормализовать `CHANGELOG.md` до release-log формата | Platform docs owner | 6ч | DOC-01 | Структура пригодна для релизов; нет ссылок на отсутствующие файлы |
+| DOC-05 | P1 | Сжать `docs/index.md` до короткой карты | Architecture docs owner | 10ч | DOC-01 | Index компактен и навигационный, без статусной хроники |
+| DOC-06 | P1 | Синхронизировать `docs/modules/*` registry с `modules.toml` | Module platform owner | 10ч | DOC-02 | Нет «призрачных» модулей; capability/support помечены единообразно |
+| DOC-07 | P1 | Ввести docs CI quality gates (lint/link/anchors/fences) | DevEx/CI owner | 12ч | DOC-01 | PR блокируется на broken links/anchors/markdown errors |
+| DOC-08 | P1 | Централизовать executable examples + index | DevRel + module owners | 16ч | DOC-02, DOC-07 | Есть единый каталог примеров и smoke-валидация в CI |
+| DOC-09 | P2 | Generated reference pipeline (rustdoc/OpenAPI/GraphQL) | Platform + API owners | 20ч | DOC-03, DOC-07 | Артефакты публикуются в CI; diff контрактов контролируется |
+| DOC-10 | P2 | Language/naming/review governance | Platform docs owner | 8ч | DOC-05, DOC-07 | Формализованы policy, checklist и процесс ownership-review |
+| DOC-11 | P2 | Docs reviewer checklist + PR template upgrade | DevEx/CI owner | 4ч | DOC-07 | Чеклист обязателен и реально используется в docs PR |
+| DOC-12 | P2 | Документирование code hotspots first | Module owners | 18ч | DOC-09 | Приоритетные узлы закрыты целевыми doc updates |
+
+---
+
+## Детализация задач P0
+
+### DOC-01 — Санировать root docs
 
 **Scope:** `README.md`, `README.ru.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `docs/guides/quickstart.md`.
 
 **Что делаем:**
-- удаляем устаревшие ссылки/URL;
-- выравниваем quickstart, toolchain и команды запуска;
-- убираем битую кодировку и невалидные ссылки в `CHANGELOG.md`;
-- приводим `CHANGELOG.md` к release-log формату (без roadmap-шума).
+- исправляем устаревшие URL/названия;
+- приводим quickstart и toolchain к актуальным шагам;
+- удаляем некорректные/битые фрагменты changelog;
+- нормализуем стиль и повторяемость шагов входа.
 
-**Критерий приёмки:**
-- нет mojibake;
-- нет ссылок на несуществующие документы;
-- quickstart-поток воспроизводим по шагам;
-- структура changelog стабильна для релизов.
+**Verification:**
+- markdownlint/link-check на изменённых файлах;
+- ручной smoke-readme pass по шагам onboarding.
 
-### 2) Зафиксировать единую таблицу профилей запуска
+### DOC-02 — Truth table профилей запуска
 
-**Scope:** `docs/guides/quickstart.md` + ссылка из root README.
+**Scope:** `docs/guides/quickstart.md` + ссылки из root docs.
 
 **Что делаем:**
-- добавляем одну canonical truth table: `profile -> host -> ports -> owner -> canonical doc`;
-- явно разделяем Docker/non-Docker/local SSR/Next-профили;
-- добавляем примечание, как соотносится это с `modules.toml`.
+- добавляем таблицу профилей (Docker, non-Docker, local SSR, Next-hosted);
+- для каждого профиля фиксируем owner и canonical source;
+- объясняем связь с `modules.toml`.
 
-**Критерий приёмки:**
-- у каждого профиля один источник правды по портам;
-- нет противоречий между quickstart, скриптами и root docs.
+**Verification:**
+- таблица проходит peer-review от DevEx и platform;
+- нет конфликтов портов/ролей между quickstart и скриптами.
 
-### 3) Убрать drift ручного API reference (начать с rustok-workflow)
+### DOC-03 — Drift cleanup manual API docs
 
-**Scope:** `crates/rustok-workflow/CRATE_API.md` и связанные ссылки в docs.
+**Scope:** `crates/rustok-workflow/CRATE_API.md` (+ cross-links).
 
 **Что делаем:**
-- либо переписываем документ в curated overview (без ручного перечисления сигнатур),
-- либо заменяем на ссылки на generated reference + короткие сценарии использования;
-- выносим стабильные контракты в разделы «гарантии/инварианты», а не в «список fn».
+- убираем ручные списки сигнатур из markdown;
+- оставляем curated overview: инварианты, границы, сценарии;
+- добавляем ссылки на generated reference.
 
-**Критерий приёмки:**
-- в документе нет противоречий текущему коду;
-- сигнатуры не дублируются вручную там, где возможно автогенерировать;
-- есть явная навигация на источник истины.
+**Verification:**
+- нет утверждений, противоречащих текущему коду;
+- module owner подтверждает, что doc не дублирует rustdoc вручную.
+
+### DOC-04 — Cleanup changelog
+
+**Scope:** `CHANGELOG.md`.
+
+**Что делаем:**
+- приводим к фиксированному release-шаблону;
+- убираем «спринтовый дневник» и stale refs;
+- добавляем единые секции (Added/Changed/Fixed/Deprecated/Security).
+
+**Verification:**
+- changelog читается как release history;
+- нет ссылок на отсутствующие документы.
 
 ---
 
-## Этап P1 (стабилизация структуры)
+## Детализация задач P1
 
-### 4) Сжать `docs/index.md` до короткой карты
+### DOC-05 — Рефакторинг `docs/index.md`
 
-**Что делаем:**
-- переносим volatile status-блоки в профильные implementation-plan документы;
-- оставляем только входные ссылки, правила навигации и обязательные стартовые документы.
+**Результат:** короткая карта входа (navigation-first), ссылки только на актуальные разделы и правила выбора дальнейшей документации.
 
-**Критерий приёмки:**
-- `docs/index.md` остаётся компактной точкой входа;
-- статусные ленты не мешают discoverability.
+### DOC-06 — Синхронизация реестров модулей
 
-### 5) Синхронизировать модульные реестры с manifest
+**Результат:** `docs/modules/registry.md`, `_index.md`, `UI_PACKAGES_INDEX.md` синхронизированы с `modules.toml`, включая capability/support-метки.
 
-**Scope:** `docs/modules/registry.md`, `docs/modules/_index.md`, `docs/modules/UI_PACKAGES_INDEX.md`, `modules.toml`.
+### DOC-07 — Docs quality gates в CI
 
-**Что делаем:**
-- сверяем наличие/тип модулей;
-- маркируем capability/support сущности единообразно;
-- убираем «призрачные» записи, не подтверждённые manifest.
+**Минимальный набор:**
+- markdownlint;
+- link/anchor checker;
+- fenced code block validation;
+- docs build/smoke-джоб.
 
-**Критерий приёмки:**
-- docs registry и manifest не расходятся;
-- владельцы и ответственность модулей читаются однозначно.
+### DOC-08 — Централизация примеров
 
-### 6) Ввести docs CI quality gates
-
-**Что делаем:**
-- добавляем markdownlint;
-- добавляем link/anchor checker;
-- добавляем проверку fenced code blocks;
-- добавляем docs build/smoke-проверку.
-
-**Критерий приёмки:**
-- PR падает на битых ссылках/якорях/форматных ошибках;
-- baseline документации не деградирует.
+**Результат:** единая точка discoverability (`docs/examples/` или `examples/`) + smoke-команды для критичных сценариев.
 
 ---
 
-## Этап P2 (масштабирование качества)
+## Детализация задач P2
 
-### 7) Generated reference pipeline
+### DOC-09 — Generated reference pipeline
 
-**Что делаем:**
-- публикуем артефакты rustdoc/OpenAPI/GraphQL schema в CI;
-- в curated docs оставляем контекст, а не ручной API dump;
-- на PR проверяем diff экспортируемых контрактов.
+- rustdoc artifacts;
+- OpenAPI export;
+- GraphQL schema export;
+- PR diff-check на контрактные изменения.
 
-**Критерий приёмки:**
-- API reference воспроизводим и обновляется автоматически;
-- drift между docs и кодом детектируется до merge.
+### DOC-10/11 — Governance
 
-### 8) Централизовать executable examples
+- reviewer checklist для docs PR;
+- обновлённый PR template;
+- ownership-правила для архитектурных/контрактных разделов.
 
-**Что делаем:**
-- собираем примеры в `docs/examples/` или `examples/`;
-- добавляем smoke-команды в CI;
-- делаем единый index примеров с назначением и expected output.
+### DOC-12 — Hotspots
 
-**Критерий приёмки:**
-- минимум 5 сценариев проверяются автоматически;
-- разработчик быстро находит рабочий пример по задаче.
-
-### 9) Финальная унификация language/naming/review
-
-**Что делаем:**
-- добиваемся policy «один файл — один язык»;
-- фиксируем reviewer checklist для docs PR;
-- вводим ownership-процесс на архитектурные документы.
-
-**Критерий приёмки:**
-- процесс обновления документации повторяемый и предсказуемый;
-- изменения в коде не уходят без отражения в docs.
+- приоритизация по impact/risk;
+- целевые обновления сначала в зонах наибольшего drift.
 
 ---
 
-## План-график (рекомендуемый)
+## Рекомендуемая дорожная карта (4 недели)
 
-- **Неделя 1:** P0 полностью.
-- **Неделя 2:** P1.4 + P1.5 + старт P1.6.
-- **Неделя 3:** завершение P1.6 + P2.7.
-- **Неделя 4:** P2.8 + P2.9.
+- **Неделя 1:** DOC-01, DOC-02, DOC-03, DOC-04.
+- **Неделя 2:** DOC-05, DOC-06, старт DOC-07.
+- **Неделя 3:** завершение DOC-07, DOC-08, старт DOC-09.
+- **Неделя 4:** DOC-09, DOC-10, DOC-11, DOC-12.
 
-## Минимальный «быстрый спринт» (если ресурсов мало)
+## Минимальный спринт (если ограничены ресурсами)
 
-Сделать только 4 пункта:
-1. root docs sanitation;
-2. truth table профилей/портов;
-3. `rustok-workflow/CRATE_API.md` -> curated + generated links;
-4. docs CI (lint + links).
+Сделать только:
+1. DOC-01;
+2. DOC-02;
+3. DOC-03;
+4. DOC-07.
 
-Это даст наибольшее снижение документационного риска за минимальный срок.
+Это даёт максимальное снижение риска документационного drift уже в первом цикле.
+
+---
+
+## Трекер статуса (обновлять в каждом docs PR)
+
+- [ ] DOC-01 Root docs sanitation
+- [ ] DOC-02 Profiles truth table
+- [ ] DOC-03 Workflow API doc drift cleanup
+- [ ] DOC-04 Changelog normalization
+- [ ] DOC-05 docs/index.md refactor
+- [ ] DOC-06 Registry ↔ manifest sync
+- [ ] DOC-07 Docs CI quality gates
+- [ ] DOC-08 Executable examples hub
+- [ ] DOC-09 Generated reference pipeline
+- [ ] DOC-10 Language/naming governance
+- [ ] DOC-11 Reviewer checklist + PR template
+- [ ] DOC-12 Code hotspots documentation
