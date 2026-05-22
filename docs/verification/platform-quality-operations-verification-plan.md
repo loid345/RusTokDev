@@ -124,3 +124,41 @@
 - [Performance baseline](../architecture/performance-baseline.md)
 - [Runtime guardrails](../guides/runtime-guardrails.md)
 - [Контракт `rustok-module.toml`](../modules/manifest.md)
+
+
+## Docs quality gates (DOC-07 baseline)
+
+Цель этого блока — зафиксировать минимальные docs quality gates, которые
+должны выполняться для PR с изменениями документации.
+
+### Минимальные gates
+
+1. Markdown lint на изменённых файлах:
+
+```bash
+npx --yes markdownlint-cli <changed-files>
+```
+
+2. Link-check на изменённых файлах:
+
+```bash
+lychee --no-progress <changed-files>
+```
+
+3. Ручная проверка изменённых ссылок и якорей в `docs/index.md` + затронутых
+   `README.md`/`docs/*.md` секциях.
+
+### Правила статуса
+
+- `pass` — команда завершилась с `exit code 0`;
+- `fail` — команда завершилась с ненулевым `exit code`;
+- `blocked` — команда не может быть выполнена из-за ограничений окружения
+  (например, отсутствует бинарь `lychee`).
+
+Для `fail`/`blocked` в PR обязателен `Verification Evidence` блок с причиной и
+follow-up задачей.
+
+### Границы этого документа
+
+Этот план фиксирует verification-contract и не заменяет CI workflow-файлы.
+Интеграция в CI выполняется отдельным изменением, когда это явно запрошено.
