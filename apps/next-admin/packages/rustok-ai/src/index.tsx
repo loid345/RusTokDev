@@ -574,6 +574,29 @@ export function AiAdminPage(props: AiAdminPageProps) {
     productAttributesForm.productId.trim().length > 0 &&
     hasProductAttributesSeedContent(productAttributesForm) &&
     !hasProductAttributesInvalidImageUrls;
+  const productAttributesRequirementMessages = React.useMemo(() => {
+    const messages: string[] = [];
+    if (!productAttributesTaskProfile) {
+      messages.push('Active task profile `product_attributes` is required.');
+    }
+    if (productAttributesForm.productId.trim().length === 0) {
+      messages.push('Product id is required.');
+    }
+    if (!hasProductAttributesSeedContent(productAttributesForm)) {
+      messages.push('Source title or source description is required.');
+    }
+    if (hasProductAttributesInvalidImageUrls) {
+      messages.push(
+        `Image URLs contain invalid entries: ${productAttributesParsedImageUrls.invalid.join(', ')}`
+      );
+    }
+    return messages;
+  }, [
+    hasProductAttributesInvalidImageUrls,
+    productAttributesForm,
+    productAttributesParsedImageUrls.invalid,
+    productAttributesTaskProfile
+  ]);
 
   const loadBootstrap = React.useCallback(async () => {
     setLoading(true);
@@ -2424,15 +2447,11 @@ export function AiAdminPage(props: AiAdminPageProps) {
                     Mode: direct
                   </div>
                   {!canSubmitProductAttributes ? (
-                    <p className='text-muted-foreground text-xs'>
-                      Active task profile `product_attributes`, product id, and source title or description are required.
-                    </p>
-                  ) : null}
-                  {hasProductAttributesInvalidImageUrls ? (
-                    <p className='text-xs text-amber-700'>
-                      Image URLs contain invalid entries:{' '}
-                      {productAttributesParsedImageUrls.invalid.join(', ')}
-                    </p>
+                    <ul className='text-xs text-amber-700'>
+                      {productAttributesRequirementMessages.map((message) => (
+                        <li key={message}>• {message}</li>
+                      ))}
+                    </ul>
                   ) : null}
                   <button
                     className='bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60'
