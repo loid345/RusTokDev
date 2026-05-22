@@ -1176,11 +1176,19 @@ mod tests {
     fn toggle_error_maps_dependency_errors() {
         let missing =
             map_toggle_module_error(ToggleModuleError::MissingDependencies("pricing".into()));
-        assert!(missing.message.contains("Missing module dependencies"));
+        assert_eq!(
+            missing.message,
+            "Missing module dependencies: pricing",
+            "missing-dependency mapping must keep deterministic user-facing taxonomy"
+        );
 
         let dependents =
             map_toggle_module_error(ToggleModuleError::HasDependents("checkout".into()));
-        assert!(dependents.message.contains("Module is required by"));
+        assert_eq!(
+            dependents.message,
+            "Module is required by: checkout",
+            "dependents mapping must keep deterministic user-facing taxonomy"
+        );
     }
 
     #[test]
