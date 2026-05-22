@@ -47,11 +47,14 @@ function buildProductAttributesTaskInput(product: NonNullable<Awaited<ReturnType
 function buildProductAttributesHref(product: NonNullable<Awaited<ReturnType<typeof getProduct>>>, translation: { title: string; description: string | null; locale: string }) {
   const params = new URLSearchParams({
     task: 'product_attributes',
+    title: `Product Attributes ${product.id}`,
     productId: product.id,
     locale: translation.locale,
     sourceLocale: translation.locale,
     sourceTitle: translation.title,
-    categorySlug: product.productType ?? ''
+    categorySlug: product.productType ?? '',
+    copyInstructions:
+      'Сформируй только подтверждаемые атрибуты и пометь неподтверждаемые как not_specified.'
   });
   if (translation.description) {
     params.set('sourceDescription', translation.description);
