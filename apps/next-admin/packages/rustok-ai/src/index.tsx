@@ -1836,17 +1836,13 @@ export function AiAdminPage(props: AiAdminPageProps) {
                       setError(err.message);
                       return null;
                     });
-                    if (!started) {
-                      setIsSubmittingProductAttributes(false);
-                      return;
-                    }
+                    if (!started) return;
                     const id = started.runAiTaskJob.session.session.id;
                     setFeedback(
                       `Blog draft job \`${started.runAiTaskJob.session.session.title}\` completed.`
                     );
                     await loadBootstrap();
                     await loadSession(id);
-                    setIsSubmittingProductAttributes(false);
                   }}
                 >
                   <Input
@@ -1968,15 +1964,9 @@ export function AiAdminPage(props: AiAdminPageProps) {
                     <br />
                     Mode: direct
                   </div>
-                  {!canSubmitProductAttributes ? (
-                    <p className='text-muted-foreground text-xs'>
-                      Product id and active task profile `product_attributes` are required.
-                    </p>
-                  ) : null}
                   <button
-                    className='bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60'
+                    className='bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium'
                     type='submit'
-                    disabled={!canSubmitProductAttributes || isSubmittingProductAttributes}
                   >
                     Generate blog draft
                   </button>
@@ -2047,17 +2037,13 @@ export function AiAdminPage(props: AiAdminPageProps) {
                       setError(err.message);
                       return null;
                     });
-                    if (!started) {
-                      setIsSubmittingProductAttributes(false);
-                      return;
-                    }
+                    if (!started) return;
                     const id = started.runAiTaskJob.session.session.id;
                     setFeedback(
                       `Product copy job \`${started.runAiTaskJob.session.session.title}\` completed.`
                     );
                     await loadBootstrap();
                     await loadSession(id);
-                    setIsSubmittingProductAttributes(false);
                   }}
                 >
                   <Input
@@ -2265,17 +2251,13 @@ export function AiAdminPage(props: AiAdminPageProps) {
                       setError(err.message);
                       return null;
                     });
-                    if (!started) {
-                      setIsSubmittingProductAttributes(false);
-                      return;
-                    }
+                    if (!started) return;
                     const id = started.runAiTaskJob.session.session.id;
                     setFeedback(
                       `Product attributes job \`${started.runAiTaskJob.session.session.title}\` completed.`
                     );
                     await loadBootstrap();
                     await loadSession(id);
-                    setIsSubmittingProductAttributes(false);
                   }}
                 >
                   <Input
@@ -2550,15 +2532,9 @@ export function AiAdminPage(props: AiAdminPageProps) {
                     <br />
                     Mode: direct
                   </div>
-                  {!canSubmitProductAttributes ? (
-                    <p className='text-muted-foreground text-xs'>
-                      Product id and active task profile `product_attributes` are required.
-                    </p>
-                  ) : null}
                   <button
-                    className='bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60'
+                    className='bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium'
                     type='submit'
-                    disabled={!canSubmitProductAttributes || isSubmittingProductAttributes}
                   >
                     Generate media image
                   </button>
@@ -2613,17 +2589,13 @@ export function AiAdminPage(props: AiAdminPageProps) {
                       setError(err.message);
                       return null;
                     });
-                    if (!started) {
-                      setIsSubmittingProductAttributes(false);
-                      return;
-                    }
+                    if (!started) return;
                     const id = started.runAiTaskJob.session.session.id;
                     setFeedback(
                       `Alloy job \`${started.runAiTaskJob.session.session.title}\` completed.`
                     );
                     await loadBootstrap();
                     await loadSession(id);
-                    setIsSubmittingProductAttributes(false);
                   }}
                 >
                   <Input
@@ -2697,15 +2669,9 @@ export function AiAdminPage(props: AiAdminPageProps) {
                     <br />
                     Mode: direct
                   </div>
-                  {!canSubmitProductAttributes ? (
-                    <p className='text-muted-foreground text-xs'>
-                      Product id and active task profile `product_attributes` are required.
-                    </p>
-                  ) : null}
                   <button
-                    className='bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60'
+                    className='bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium'
                     type='submit'
-                    disabled={!canSubmitProductAttributes || isSubmittingProductAttributes}
                   >
                     Run Alloy job
                   </button>
@@ -2745,17 +2711,13 @@ export function AiAdminPage(props: AiAdminPageProps) {
                       setError(err.message);
                       return null;
                     });
-                    if (!started) {
-                      setIsSubmittingProductAttributes(false);
-                      return;
-                    }
+                    if (!started) return;
                     const id = started.startAiChatSession.session.session.id;
                     setFeedback(
                       `Session \`${started.startAiChatSession.session.session.title}\` started.`
                     );
                     await loadBootstrap();
                     await loadSession(id);
-                    setIsSubmittingProductAttributes(false);
                   }}
                 >
                   <Input
@@ -2790,15 +2752,9 @@ export function AiAdminPage(props: AiAdminPageProps) {
                     <br />
                     Tool profile: {sessionForm.toolProfileId || 'optional'}
                   </div>
-                  {!canSubmitProductAttributes ? (
-                    <p className='text-muted-foreground text-xs'>
-                      Product id and active task profile `product_attributes` are required.
-                    </p>
-                  ) : null}
                   <button
-                    className='bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-60'
+                    className='bg-primary text-primary-foreground rounded-lg px-4 py-2 text-sm font-medium'
                     type='submit'
-                    disabled={!canSubmitProductAttributes || isSubmittingProductAttributes}
                   >
                     Start session
                   </button>
