@@ -500,3 +500,15 @@ Batch считается закрытым только если одноврем
 
 Дописывать одновременно `No automated tests were executed` запрещено,
 поскольку это создаёт дублирующее и противоречивое описание статуса проверок.
+
+### Шаблон причины для статуса blocked
+
+Чтобы `blocked`-отчёты были единообразными, используем формат:
+
+- `reason: <точная stderr/stdout строка или ограничение окружения>`.
+
+Примеры корректных формулировок:
+
+- `reason: /bin/bash: lychee: command not found`;
+- `reason: network disabled in CI job`;
+- `reason: required secret is not available for fork PR`.
