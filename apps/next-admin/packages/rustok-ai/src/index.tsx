@@ -3097,7 +3097,7 @@ function splitCsv(value: string): string[] {
 
 function parseCsvUrls(value: string): { urls: string[]; invalid: string[] } {
   const entries = splitCsv(value);
-  const urls: string[] = [];
+  const urls = new Set<string>();
   const invalid: string[] = [];
 
   for (const entry of entries) {
@@ -3110,11 +3110,11 @@ function parseCsvUrls(value: string): { urls: string[]; invalid: string[] } {
         invalid.push(entry);
         continue;
       }
-      urls.push(url.toString());
+      urls.add(url.toString());
     } catch {
       invalid.push(entry);
     }
   }
 
-  return { urls, invalid };
+  return { urls: Array.from(urls), invalid };
 }
