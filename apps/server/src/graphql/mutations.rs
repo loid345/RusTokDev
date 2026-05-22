@@ -337,10 +337,9 @@ fn map_toggle_module_error(error: ToggleModuleError) -> FieldError {
         ToggleModuleError::Database(err) => {
             <FieldError as GraphQLError>::internal_error(&err.to_string())
         }
-        ToggleModuleError::HookFailed(err) => FieldError::new(format!(
-            "Module lifecycle hook failed before state commit: {}",
-            err
-        )),
+        ToggleModuleError::HookFailed(err) => <FieldError as GraphQLError>::bad_user_input(
+            format!("Module lifecycle hook failed before state commit: {}", err),
+        ),
         ToggleModuleError::Policy(err) => <FieldError as GraphQLError>::internal_error(&err),
     }
 }
@@ -1292,7 +1291,7 @@ mod tests {
         }
 
         let hook = map_toggle_module_error(ToggleModuleError::HookFailed("boom".into())).extend();
-        assert_eq!(error_code(&hook), None);
+        assert_eq!(error_code(&hook).as_deref(), Some("BAD_USER_INPUT"));
 
         let db = map_toggle_module_error(ToggleModuleError::Database(sea_orm::DbErr::Custom(
             "db down".to_string(),
