@@ -78,8 +78,8 @@ fn bypass_toggle_api_is_not_public() {
 
     let crate_scoped_occurrences = content.matches(crate_scoped_signature).count();
     assert_eq!(
-        crate_scoped_occurrences, 1,
-        "Bypass helper must be declared exactly once with crate visibility."
+        crate_scoped_occurrences, 2,
+        "Expected exactly two crate-scoped bypass helper declarations (Entity impl + module-level wrapper)."
     );
 
     assert!(
