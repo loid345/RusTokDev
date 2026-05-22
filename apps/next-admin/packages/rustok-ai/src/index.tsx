@@ -162,6 +162,13 @@ type RunStreamEvent = {
   createdAt: string;
 };
 
+type DirectSubmitKind =
+  | 'blog_draft'
+  | 'product_copy'
+  | 'image_asset'
+  | 'alloy_code'
+  | 'new_session';
+
 const BOOTSTRAP_QUERY = `
   query AiBootstrap {
     aiRuntimeMetrics {
@@ -554,15 +561,21 @@ export function AiAdminPage(props: AiAdminPageProps) {
   const [reply, setReply] = React.useState('');
   const [isSubmittingProductAttributes, setIsSubmittingProductAttributes] =
     React.useState(false);
-  const [activeDirectSubmit, setActiveDirectSubmit] = React.useState<
-    | 'blog_draft'
-    | 'product_copy'
-    | 'image_asset'
-    | 'alloy_code'
-    | 'new_session'
-    | null
-  >(null);
+  const [activeDirectSubmit, setActiveDirectSubmit] =
+    React.useState<DirectSubmitKind | null>(null);
   const isSubmittingDirectJob = activeDirectSubmit !== null;
+  const runDirectSubmit = React.useCallback(
+    async (kind: DirectSubmitKind, job: () => Promise<void>) => {
+      if (isSubmittingDirectJob) return;
+      setActiveDirectSubmit(kind);
+      try {
+        await job();
+      } finally {
+        setActiveDirectSubmit(null);
+      }
+    },
+    [isSubmittingDirectJob]
+  );
   const productAttributesPrefillAppliedRef = React.useRef(false);
 
   const productAttributesTaskProfile = React.useMemo(
@@ -1895,7 +1908,6 @@ export function AiAdminPage(props: AiAdminPageProps) {
                   className='space-y-3'
                   onSubmit={async (event) => {
                     event.preventDefault();
-                    if (isSubmittingDirectJob) return;
                     setError(null);
                     setFeedback(null);
                     if (!sessionForm.taskProfileId) {
@@ -1904,8 +1916,7 @@ export function AiAdminPage(props: AiAdminPageProps) {
                       );
                       return;
                     }
-                    setActiveDirectSubmit('blog_draft');
-                    try {
+                    await runDirectSubmit('blog_draft', async () => {
                       const taskInputJson = JSON.stringify({
                         post_id: blogForm.postId || null,
                         source_locale: blogForm.sourceLocale || null,
@@ -1954,9 +1965,7 @@ export function AiAdminPage(props: AiAdminPageProps) {
                       );
                       await loadBootstrap();
                       await loadSession(id);
-                    } finally {
-                      setActiveDirectSubmit(null);
-                    }
+                    });
                   }}
                 >
                   <Input
@@ -2097,7 +2106,6 @@ export function AiAdminPage(props: AiAdminPageProps) {
                   className='space-y-3'
                   onSubmit={async (event) => {
                     event.preventDefault();
-                    if (isSubmittingDirectJob) return;
                     setError(null);
                     setFeedback(null);
                     if (!sessionForm.taskProfileId) {
@@ -2120,8 +2128,7 @@ export function AiAdminPage(props: AiAdminPageProps) {
                       );
                       return;
                     }
-                    setActiveDirectSubmit('product_copy');
-                    try {
+                    await runDirectSubmit('product_copy', async () => {
                       const taskInputJson = JSON.stringify({
                         product_id: normalizedProductId,
                         source_locale: productForm.sourceLocale || null,
@@ -2167,9 +2174,7 @@ export function AiAdminPage(props: AiAdminPageProps) {
                       );
                       await loadBootstrap();
                       await loadSession(id);
-                    } finally {
-                      setActiveDirectSubmit(null);
-                    }
+                    });
                   }}
                 >
                   <Input
@@ -2627,7 +2632,6 @@ export function AiAdminPage(props: AiAdminPageProps) {
                   className='space-y-3'
                   onSubmit={async (event) => {
                     event.preventDefault();
-                    if (isSubmittingDirectJob) return;
                     setError(null);
                     setFeedback(null);
                     if (!sessionForm.taskProfileId) {
@@ -2636,8 +2640,7 @@ export function AiAdminPage(props: AiAdminPageProps) {
                       );
                       return;
                     }
-                    setActiveDirectSubmit('image_asset');
-                    try {
+                    await runDirectSubmit('image_asset', async () => {
                       const taskInputJson = JSON.stringify({
                         prompt: imageForm.prompt,
                         negative_prompt: imageForm.negativePrompt || null,
@@ -2681,9 +2684,7 @@ export function AiAdminPage(props: AiAdminPageProps) {
                       );
                       await loadBootstrap();
                       await loadSession(id);
-                    } finally {
-                      setActiveDirectSubmit(null);
-                    }
+                    });
                   }}
                 >
                   <Input
@@ -2790,7 +2791,6 @@ export function AiAdminPage(props: AiAdminPageProps) {
                   className='space-y-3'
                   onSubmit={async (event) => {
                     event.preventDefault();
-                    if (isSubmittingDirectJob) return;
                     setError(null);
                     setFeedback(null);
                     if (!sessionForm.taskProfileId) {
@@ -2799,8 +2799,7 @@ export function AiAdminPage(props: AiAdminPageProps) {
                       );
                       return;
                     }
-                    setActiveDirectSubmit('alloy_code');
-                    try {
+                    await runDirectSubmit('alloy_code', async () => {
                       const taskInputJson = JSON.stringify({
                         operation: alloyForm.operation,
                         script_id: alloyForm.scriptId || null,
@@ -2843,9 +2842,7 @@ export function AiAdminPage(props: AiAdminPageProps) {
                       );
                       await loadBootstrap();
                       await loadSession(id);
-                    } finally {
-                      setActiveDirectSubmit(null);
-                    }
+                    });
                   }}
                 >
                   <Input
@@ -2938,11 +2935,9 @@ export function AiAdminPage(props: AiAdminPageProps) {
                   className='space-y-3'
                   onSubmit={async (event) => {
                     event.preventDefault();
-                    if (isSubmittingDirectJob) return;
                     setError(null);
                     setFeedback(null);
-                    setActiveDirectSubmit('new_session');
-                    try {
+                    await runDirectSubmit('new_session', async () => {
                       const started = await gql<
                         {
                           startAiChatSession: {
@@ -2976,9 +2971,7 @@ export function AiAdminPage(props: AiAdminPageProps) {
                       );
                       await loadBootstrap();
                       await loadSession(id);
-                    } finally {
-                      setActiveDirectSubmit(null);
-                    }
+                    });
                   }}
                 >
                   <Input
