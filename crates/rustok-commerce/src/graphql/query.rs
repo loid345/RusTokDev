@@ -381,46 +381,26 @@ impl CommerceQuery {
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let tenant_id = tenant_id.unwrap_or(tenant.id);
         let locale = resolve_commerce_graphql_locale(ctx, None, tenant.default_locale.as_str());
-        let auth = ctx
-            .data::<AuthContext>()
-            .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
-        let customer = CustomerService::new(db.clone())
-            .get_customer_by_user(tenant_id, auth.user_id)
-            .await
-            .map_err(|err| match err {
-                rustok_customer::error::CustomerError::CustomerByUserNotFound(_) => {
-                    <FieldError as GraphQLError>::unauthenticated()
-                }
-                other => async_graphql::Error::new(other.to_string()),
-            })?;
 
-        let order = match OrderService::new(db.clone(), event_bus)
-            .get_order_with_locale_fallback(
-                tenant_id,
-                order_id,
-                locale.as_str(),
-                Some(tenant.default_locale.as_str()),
-            )
-            .await
-        {
-            Ok(order) => order,
-            Err(rustok_order::error::OrderError::OrderNotFound(_)) => {
-                return Ok(GqlRefundList {
-                    items: Vec::new(),
-                    total: 0,
-                    page: 1,
-                    per_page: 20,
-                    has_next: false,
-                })
-            }
-            Err(err) => return Err(err.to_string().into()),
+        let Some(_order) = load_storefront_customer_order(
+            db,
+            event_bus,
+            tenant,
+            ctx,
+            tenant_id,
+            order_id,
+            locale.as_str(),
+        )
+        .await?
+        else {
+            return Ok(GqlRefundList {
+                items: Vec::new(),
+                total: 0,
+                page: 1,
+                per_page: 20,
+                has_next: false,
+            });
         };
-
-        if order.customer_id != Some(customer.id) {
-            return Err(<FieldError as GraphQLError>::permission_denied(
-                "Order does not belong to the current customer",
-            ));
-        }
 
         let filter = filter.unwrap_or(StorefrontRefundsFilter {
             status: None,
@@ -467,39 +447,19 @@ impl CommerceQuery {
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let tenant_id = tenant_id.unwrap_or(tenant.id);
         let locale = resolve_commerce_graphql_locale(ctx, None, tenant.default_locale.as_str());
-        let auth = ctx
-            .data::<AuthContext>()
-            .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
-        let customer = CustomerService::new(db.clone())
-            .get_customer_by_user(tenant_id, auth.user_id)
-            .await
-            .map_err(|err| match err {
-                rustok_customer::error::CustomerError::CustomerByUserNotFound(_) => {
-                    <FieldError as GraphQLError>::unauthenticated()
-                }
-                other => async_graphql::Error::new(other.to_string()),
-            })?;
-        let order = match OrderService::new(db.clone(), event_bus.clone())
-            .get_order_with_locale_fallback(
-                tenant_id,
-                id,
-                locale.as_str(),
-                Some(tenant.default_locale.as_str()),
-            )
-            .await
-        {
-            Ok(order) => order,
-            Err(rustok_order::error::OrderError::OrderNotFound(_)) => return Ok(None),
-            Err(err) => return Err(err.to_string().into()),
-        };
 
-        if order.customer_id != Some(customer.id) {
-            return Err(<FieldError as GraphQLError>::permission_denied(
-                "Order does not belong to the current customer",
-            ));
-        }
+        let order = load_storefront_customer_order(
+            db,
+            event_bus,
+            tenant,
+            ctx,
+            tenant_id,
+            id,
+            locale.as_str(),
+        )
+        .await?;
 
-        Ok(Some(order.into()))
+        Ok(order.map(Into::into))
     }
 
     async fn storefront_cart(
@@ -1354,6 +1314,51 @@ impl CommerceQuery {
             has_next: page * per_page < total,
         })
     }
+}
+
+async fn load_storefront_customer_order(
+    db: &DatabaseConnection,
+    event_bus: &TransactionalEventBus,
+    tenant: &TenantContext,
+    ctx: &Context<'_>,
+    tenant_id: Uuid,
+    order_id: Uuid,
+    locale: &str,
+) -> Result<Option<rustok_order::dto::OrderResponse>> {
+    let auth = ctx
+        .data::<AuthContext>()
+        .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
+    let customer = CustomerService::new(db.clone())
+        .get_customer_by_user(tenant_id, auth.user_id)
+        .await
+        .map_err(|err| match err {
+            rustok_customer::error::CustomerError::CustomerByUserNotFound(_) => {
+                <FieldError as GraphQLError>::unauthenticated()
+            }
+            other => async_graphql::Error::new(other.to_string()),
+        })?;
+
+    let order = match OrderService::new(db.clone(), event_bus.clone())
+        .get_order_with_locale_fallback(
+            tenant_id,
+            order_id,
+            locale,
+            Some(tenant.default_locale.as_str()),
+        )
+        .await
+    {
+        Ok(order) => order,
+        Err(rustok_order::error::OrderError::OrderNotFound(_)) => return Ok(None),
+        Err(err) => return Err(err.to_string().into()),
+    };
+
+    if order.customer_id != Some(customer.id) {
+        return Err(<FieldError as GraphQLError>::permission_denied(
+            "Order does not belong to the current customer",
+        ));
+    }
+
+    Ok(Some(order))
 }
 
 fn normalize_pricing_channel_slug(channel_slug: Option<&str>) -> Option<String> {
