@@ -301,8 +301,8 @@ impl PaymentService {
             query = query.filter(entities::refund::Column::PaymentCollectionId.eq(collection_id));
         }
         if let Some(status) = input.status {
-            validate_refund_status_filter(&status)?;
-            query = query.filter(entities::refund::Column::Status.eq(status));
+            let normalized_status = normalize_refund_status_filter(&status)?;
+            query = query.filter(entities::refund::Column::Status.eq(normalized_status));
         }
 
         let total = query.clone().count(&self.db).await?;
@@ -321,12 +321,13 @@ impl PaymentService {
         ))
     }
 
-fn validate_refund_status_filter(status: &str) -> PaymentResult<()> {
+fn normalize_refund_status_filter(status: &str) -> PaymentResult<String> {
+    let normalized = status.trim().to_ascii_lowercase();
     if matches!(
-        status,
+        normalized.as_str(),
         STATUS_REFUND_PENDING | STATUS_REFUNDED | STATUS_CANCELLED
     ) {
-        return Ok(());
+        return Ok(normalized);
     }
 
     Err(PaymentError::Validation(

@@ -416,3 +416,67 @@ async fn list_refunds_rejects_unknown_status_filter() {
         other => panic!("expected validation error, got {other:?}"),
     }
 }
+
+#[tokio::test]
+async fn list_refunds_accepts_case_insensitive_status_filter() {
+    let service = setup().await;
+    let tenant_id = Uuid::new_v4();
+
+    let created = service
+        .create_collection(tenant_id, create_collection_input())
+        .await
+        .unwrap();
+    service
+        .authorize_collection(
+            tenant_id,
+            created.id,
+            AuthorizePaymentInput {
+                provider_id: None,
+                provider_payment_id: None,
+                amount: Some(Decimal::from_str("20.00").expect("valid decimal")),
+                metadata: serde_json::json!({}),
+            },
+        )
+        .await
+        .unwrap();
+    service
+        .capture_collection(
+            tenant_id,
+            created.id,
+            CapturePaymentInput {
+                amount: Some(Decimal::from_str("20.00").expect("valid decimal")),
+                metadata: serde_json::json!({}),
+            },
+        )
+        .await
+        .unwrap();
+    service
+        .create_refund(
+            tenant_id,
+            created.id,
+            CreateRefundInput {
+                amount: Decimal::from_str("5.00").expect("valid decimal"),
+                reason: Some("normalization".to_string()),
+                metadata: serde_json::json!({}),
+            },
+        )
+        .await
+        .unwrap();
+
+    let (items, total) = service
+        .list_refunds(
+            tenant_id,
+            rustok_payment::dto::ListRefundsInput {
+                page: 1,
+                per_page: 20,
+                payment_collection_id: Some(created.id),
+                status: Some(" PENDING ".to_string()),
+            },
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(total, 1);
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].status, "pending");
+}

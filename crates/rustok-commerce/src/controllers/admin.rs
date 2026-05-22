@@ -3259,6 +3259,104 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn admin_refunds_transport_accepts_case_insensitive_status_filter() {
+        let db = setup_test_db().await;
+        support::ensure_commerce_schema(&db).await;
+        let tenant_id = Uuid::new_v4();
+        let actor_id = Uuid::new_v4();
+        seed_tenant_context(&db, tenant_id).await;
+
+        let order = OrderService::new(db.clone(), mock_transactional_event_bus())
+            .create_order(
+                tenant_id,
+                actor_id,
+                CreateOrderInput {
+                    customer_id: Some(Uuid::new_v4()),
+                    currency_code: "usd".to_string(),
+                    shipping_total: Decimal::ZERO,
+                    line_items: vec![CreateOrderLineItemInput {
+                        product_id: Some(Uuid::new_v4()),
+                        variant_id: Some(Uuid::new_v4()),
+                        shipping_profile_slug: "default".to_string(),
+                        seller_id: None,
+                        sku: Some("REFUND-LIST-UPPER-1".to_string()),
+                        title: "Refund list uppercase".to_string(),
+                        quantity: 1,
+                        unit_price: Decimal::from_str("11.00").expect("valid decimal"),
+                        metadata: json!({ "source": "admin-refund-list-uppercase" }),
+                    }],
+                    adjustments: Vec::new(),
+                    tax_lines: Vec::new(),
+                    metadata: json!({ "source": "admin-refund-list-uppercase" }),
+                },
+            )
+            .await
+            .expect("order should be created");
+
+        let collection = PaymentService::new(db.clone())
+            .create_collection(
+                tenant_id,
+                CreatePaymentCollectionInput {
+                    cart_id: None,
+                    order_id: Some(order.id),
+                    customer_id: order.customer_id,
+                    currency_code: "USD".to_string(),
+                    amount: order.total_amount,
+                    metadata: json!({ "source": "admin-refund-list-uppercase" }),
+                },
+            )
+            .await
+            .expect("collection should be created");
+
+        PaymentService::new(db.clone())
+            .create_refund(
+                tenant_id,
+                collection.id,
+                CreateRefundInput {
+                    amount: Decimal::from_str("3.00").expect("valid decimal"),
+                    reason: Some("test".to_string()),
+                    metadata: json!({ "source": "admin-refund-list-uppercase" }),
+                },
+            )
+            .await
+            .expect("refund should be created");
+
+        let tenant = TenantContext {
+            id: tenant_id,
+            name: "Tenant".to_string(),
+            slug: format!("tenant-{tenant_id}"),
+            domain: None,
+            settings: json!({}),
+            default_locale: "en".to_string(),
+            is_active: true,
+        };
+        let auth = AuthContext {
+            user_id: actor_id,
+            session_id: Uuid::new_v4(),
+            tenant_id,
+            permissions: vec![Permission::PAYMENTS_READ],
+            client_id: None,
+            scopes: vec![],
+            grant_type: "direct".to_string(),
+        };
+
+        let app = admin_transport_router(test_app_context(db), tenant, auth);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("GET")
+                    .uri("/admin/refunds?status=%20PENDING%20")
+                    .header("X-Tenant-ID", tenant_id.to_string())
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("request should succeed");
+
+        assert_eq!(response.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
     async fn admin_shipping_profiles_transport_supports_create_update_and_list() {
         let db = setup_test_db().await;
         support::ensure_commerce_schema(&db).await;
