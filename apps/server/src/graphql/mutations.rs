@@ -1244,85 +1244,89 @@ mod tests {
             .and_then(|value| value.as_str().map(ToOwned::to_owned))
     }
 
-    #[test]
-    fn toggle_error_mapping_sets_expected_error_codes() {
-        let bad_user_input_cases = vec![
-            ToggleModuleError::UnknownModule,
-            ToggleModuleError::CoreModuleCannotBeDisabled("core".into()),
-            ToggleModuleError::MissingDependencies("pricing".into()),
-            ToggleModuleError::HasDependents("checkout".into()),
-        ];
-
-        for error in bad_user_input_cases {
-            let gql = map_toggle_module_error(error).extend();
-            assert_eq!(error_code(&gql).as_deref(), Some("BAD_USER_INPUT"));
-        }
-
-        let hook = map_toggle_module_error(ToggleModuleError::HookFailed("boom".into())).extend();
-        assert_eq!(error_code(&hook).as_deref(), Some("BAD_USER_INPUT"));
-
-        let db = map_toggle_module_error(ToggleModuleError::Database(sea_orm::DbErr::Custom(
-            "db down".to_string(),
-        )))
-        .extend();
-        assert_eq!(error_code(&db).as_deref(), Some("INTERNAL_ERROR"));
-
-        let policy = map_toggle_module_error(ToggleModuleError::Policy("policy".to_string()))
-            .extend();
-        assert_eq!(error_code(&policy).as_deref(), Some("INTERNAL_ERROR"));
+    struct ToggleCase {
+        error: ToggleModuleError,
+        expected_message: String,
+        expected_code: Option<&'static str>,
+        case_name: &'static str,
     }
 
-    #[test]
-    fn toggle_error_mapping_matrix_preserves_message_and_code_contract() {
-        struct ToggleCase {
-            error: ToggleModuleError,
-            expected_message: String,
-            expected_code: Option<&'static str>,
-        }
-
-        let cases = vec![
+    fn toggle_error_contract_cases() -> Vec<ToggleCase> {
+        vec![
             ToggleCase {
                 error: ToggleModuleError::UnknownModule,
                 expected_message: TOGGLE_ERR_UNKNOWN_MODULE.to_string(),
                 expected_code: Some("BAD_USER_INPUT"),
+                case_name: "unknown-module",
             },
             ToggleCase {
                 error: ToggleModuleError::CoreModuleCannotBeDisabled("core".into()),
                 expected_message: toggle_err_core_module_cannot_be_disabled("core"),
                 expected_code: Some("BAD_USER_INPUT"),
+                case_name: "core-disable",
             },
             ToggleCase {
                 error: ToggleModuleError::MissingDependencies("pricing".into()),
                 expected_message: toggle_err_missing_dependencies("pricing"),
                 expected_code: Some("BAD_USER_INPUT"),
+                case_name: "missing-dependencies",
             },
             ToggleCase {
                 error: ToggleModuleError::HasDependents("checkout".into()),
                 expected_message: toggle_err_has_dependents("checkout"),
                 expected_code: Some("BAD_USER_INPUT"),
+                case_name: "has-dependents",
             },
             ToggleCase {
                 error: ToggleModuleError::HookFailed("boom".into()),
                 expected_message: toggle_err_hook_failed("boom"),
                 expected_code: Some("BAD_USER_INPUT"),
+                case_name: "hook-failed",
             },
             ToggleCase {
                 error: ToggleModuleError::Database(sea_orm::DbErr::Custom("db down".to_string())),
                 expected_message: "Internal server error".to_string(),
                 expected_code: Some("INTERNAL_ERROR"),
+                case_name: "database",
             },
             ToggleCase {
                 error: ToggleModuleError::Policy("policy".to_string()),
                 expected_message: "Internal server error".to_string(),
                 expected_code: Some("INTERNAL_ERROR"),
+                case_name: "policy",
             },
-        ];
+        ]
+    }
 
-        for case in cases {
+    #[test]
+    fn toggle_error_mapping_sets_expected_error_codes() {
+        for case in toggle_error_contract_cases() {
+            let gql = map_toggle_module_error(case.error).extend();
+            assert_eq!(
+                error_code(&gql).as_deref(),
+                case.expected_code,
+                "toggle error code drifted for case: {}",
+                case.case_name
+            );
+        }
+    }
+
+    #[test]
+    fn toggle_error_mapping_matrix_preserves_message_and_code_contract() {
+        for case in toggle_error_contract_cases() {
             let mapped = map_toggle_module_error(case.error);
-            assert_eq!(mapped.message, case.expected_message);
+            assert_eq!(
+                mapped.message, case.expected_message,
+                "toggle message drifted for case: {}",
+                case.case_name
+            );
             let gql = mapped.extend();
-            assert_eq!(error_code(&gql).as_deref(), case.expected_code);
+            assert_eq!(
+                error_code(&gql).as_deref(),
+                case.expected_code,
+                "toggle error code drifted for case: {}",
+                case.case_name
+            );
         }
     }
 
