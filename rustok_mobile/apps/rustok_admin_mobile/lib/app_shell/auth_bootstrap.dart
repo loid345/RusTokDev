@@ -64,3 +64,61 @@ final graphQlClientProvider = Provider<GraphQLClient>((ref) {
   final config = ref.watch(graphQlConfigProvider);
   return const GraphQlClientFactory().create(config);
 });
+
+final authBootstrapProbeProvider = FutureProvider<BootstrapProbeResult>((ref) async {
+  final session = await ref.watch(authSessionProvider.future);
+  if (session == null) {
+    return const BootstrapProbeResult.unauthenticated();
+  }
+
+  final client = ref.watch(graphQlClientProvider);
+  const document = r'''
+    query BootstrapProbe {
+      me {
+        id
+        email
+      }
+      currentTenant {
+        id
+        slug
+      }
+    }
+  ''';
+
+  final result = await client.query(
+    QueryOptions(document: gql(document), fetchPolicy: FetchPolicy.networkOnly),
+  );
+  if (result.hasException) {
+    throw result.exception!;
+  }
+
+  final payload = result.data ?? const <String, dynamic>{};
+  return BootstrapProbeResult.authenticated(
+    me: payload['me'] as Map<String, dynamic>?,
+    currentTenant: payload['currentTenant'] as Map<String, dynamic>?,
+  );
+});
+
+class BootstrapProbeResult {
+  const BootstrapProbeResult._({
+    required this.isAuthenticated,
+    this.me,
+    this.currentTenant,
+  });
+
+  const BootstrapProbeResult.unauthenticated()
+    : this._(isAuthenticated: false);
+
+  const BootstrapProbeResult.authenticated({
+    Map<String, dynamic>? me,
+    Map<String, dynamic>? currentTenant,
+  }) : this._(
+         isAuthenticated: true,
+         me: me,
+         currentTenant: currentTenant,
+       );
+
+  final bool isAuthenticated;
+  final Map<String, dynamic>? me;
+  final Map<String, dynamic>? currentTenant;
+}
