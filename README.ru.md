@@ -153,7 +153,6 @@ RusToK по-прежнему ориентирован на agent-assisted раб
 Практические AI-facing точки входа:
 
 - [Карта документации](docs/index.md)
-- [Системный манифест](RUSTOK_MANIFEST.md)
 - [Реестр модулей](docs/modules/registry.md)
 - [Правила агентов](AGENTS.md)
 
@@ -324,7 +323,6 @@ modules.toml
 - [Руководство по тестированию](docs/guides/testing.md)
 - [Как писать модуль в RusToK](docs/modules/module-authoring.md)
 - [Главный план верификации платформы](docs/verification/PLATFORM_VERIFICATION_PLAN.md)
-- [Системный манифест](RUSTOK_MANIFEST.md)
 - [Правила агентов](AGENTS.md)
 
 <a id="development"></a>

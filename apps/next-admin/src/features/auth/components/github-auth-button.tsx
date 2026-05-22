@@ -1,13 +1,9 @@
 'use client';
 
-import { useSearchParams } from 'next/navigation';
 import { Button } from '@/shared/ui/shadcn/button';
 import { Icons } from '@/shared/ui/icons';
 
 export default function GithubSignInButton() {
-  const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get('callbackUrl');
-
   return (
     <Button
       className='w-full'

@@ -10,7 +10,7 @@ import {
   FormMessage
 } from '@/shared/ui/shadcn/form';
 import { BaseFormFieldProps, FileUploadConfig } from '@/types/base-form';
-import { FileUploader, FileUploaderProps } from '@/shared/ui';
+import { FileUploader } from '@/shared/ui';
 
 interface FormFileUploadProps<
   TFieldValues extends FieldValues = FieldValues,
