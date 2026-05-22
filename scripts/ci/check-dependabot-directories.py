@@ -42,6 +42,11 @@ def normalize_directory(directory: str) -> str:
     return trimmed
 
 
+def is_safe_repo_relative_path(directory: str) -> bool:
+    parts = pathlib.PurePosixPath(directory).parts
+    return ".." not in parts
+
+
 def main() -> int:
     args = parse_args()
     root = args.root.resolve()
@@ -53,11 +58,16 @@ def main() -> int:
     missing: list[str] = []
     seen: set[str] = set()
     duplicates: set[str] = set()
+    invalid: set[str] = set()
     for line in config.read_text(encoding="utf-8").splitlines():
         match = DIRECTORY_RE.match(line)
         if not match:
             continue
-        directory = normalize_directory(match.group(1))
+        raw_directory = match.group(1)
+        directory = normalize_directory(raw_directory)
+        if not directory or not is_safe_repo_relative_path(directory):
+            invalid.add(raw_directory)
+            continue
         if directory in seen:
             duplicates.add(directory)
         else:
@@ -65,6 +75,12 @@ def main() -> int:
         path = root / directory.lstrip("/")
         if not path.is_dir():
             missing.append(directory)
+
+    if invalid:
+        print("Dependabot directories contain invalid paths:", file=sys.stderr)
+        for directory in sorted(invalid):
+            print(f"  - {directory}", file=sys.stderr)
+        return 1
 
     if duplicates:
         print("Dependabot directories contain duplicates:", file=sys.stderr)

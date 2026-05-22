@@ -131,6 +131,31 @@ class DependabotDirectoryCheckTests(unittest.TestCase):
             self.assertIn("Dependabot directories contain duplicates:", result.stderr)
             self.assertIn("/apps/server", result.stderr)
 
+    def test_fails_when_directory_path_contains_parent_segment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "apps" / "server").mkdir(parents=True)
+
+            config = root / ".github" / "dependabot.yml"
+            config.parent.mkdir(parents=True)
+            config.write_text(
+                textwrap.dedent(
+                    """
+                    version: 2
+                    updates:
+                      - package-ecosystem: "cargo"
+                        directory: "../outside"
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_script(root, config)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Dependabot directories contain invalid paths:", result.stderr)
+            self.assertIn("../outside", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
