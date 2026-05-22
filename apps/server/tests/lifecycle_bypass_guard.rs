@@ -76,8 +76,6 @@ fn bypass_toggle_api_is_not_public() {
     let entity_impl_anchor = "impl Entity {";
     let entity_method_signature =
         "pub(crate) async fn upsert_flag_without_lifecycle_for_migrations_only(";
-    let module_wrapper_signature =
-        "\n#[allow(dead_code)]\npub(crate) async fn upsert_flag_without_lifecycle_for_migrations_only(";
     let public_signature = "pub async fn upsert_flag_without_lifecycle_for_migrations_only(";
 
     let entity_impl_pos = content
@@ -91,21 +89,51 @@ fn bypass_toggle_api_is_not_public() {
         "Entity bypass helper should be declared inside the Entity impl section."
     );
 
+    let wrapper_signature = "\n#[allow(dead_code)]\npub(crate) async fn upsert_flag_without_lifecycle_for_migrations_only(";
+    let wrapper_block = extract_function_block(&content, wrapper_signature)
+        .expect("module-level bypass wrapper should stay crate-scoped with dead_code annotation");
     assert!(
-        content.contains(module_wrapper_signature),
-        "Module-level bypass wrapper should stay crate-scoped and keep dead_code annotation."
-    );
-    assert!(
-        content.contains(
+        wrapper_block.contains(
             "Entity::upsert_flag_without_lifecycle_for_migrations_only(db, tenant_id, module_slug, enabled)"
         ),
         "Module-level bypass wrapper should delegate to Entity helper, not duplicate lifecycle bypass logic."
+    );
+    assert!(
+        !wrapper_block.contains("Self::find("),
+        "Module-level bypass wrapper must not introduce direct persistence logic."
     );
 
     assert!(
         !content.contains(public_signature),
         "Bypass helper must not be public."
     );
+}
+
+fn extract_function_block<'a>(content: &'a str, signature: &str) -> Option<&'a str> {
+    let start = content.find(signature)?;
+    let rest = &content[start..];
+    let open_rel = rest.find('{')?;
+    let mut depth = 0usize;
+    let mut end_rel = None;
+
+    for (idx, ch) in rest.char_indices().skip(open_rel) {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                if depth == 0 {
+                    return None;
+                }
+                depth -= 1;
+                if depth == 0 {
+                    end_rel = Some(idx + ch.len_utf8());
+                    break;
+                }
+            }
+            _ => {}
+        }
+    }
+
+    end_rel.map(|end| &rest[..end])
 }
 
 #[test]
