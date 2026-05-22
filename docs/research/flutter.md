@@ -68,7 +68,7 @@ RusTok также очень чётко разделяет shared UI и app-loca
 ### Сравнение вариантов
 
 | Вариант | Плюсы | Минусы | Вывод |
-|---|---|---|---|
+|---|---|---|---|---|---|
 | **Provider** | Очень простой, официальный экосистемный базис, мало порога входа | Отлично подходит для небольших приложений, но для крупного package-driven клиента быстро упирается в ручную дисциплину и слабее по ergonomics для async/state contracts | Подходит для MVP, не оптимален как основной фундамент |
 | **BLoC** | Сильное разделение presentation и business logic, хорошие DI/repository widgets | Больше boilerplate, особенно если модулей и экранов много | Хорош для команд, уже живущих в event-driven стиле |
 | **Riverpod** | Compile-safety, async-first ergonomics, test-ready, plain Dart, удобно раскладывается по пакетам | Нужна дисциплина в naming/provider design; команде без опыта понадобится onboarding | **Лучший базовый выбор** |
@@ -870,7 +870,7 @@ class ModulesScreen extends ConsumerWidget {
 Ниже — рекомендуемый набор библиотек для стартового production-scaffold. Версии ниже взяты с официальных страниц библиотек по состоянию на **22 мая 2026 года**. Для state/routing/DI это `flutter_riverpod 3.3.1`, `go_router 17.2.3`, `get_it 9.2.1`, `flutter_bloc 9.1.1`, `provider 6.1.5+1`, `flutter_modular 6.4.1`, `auto_route 11.1.0`; для data/GraphQL — `graphql_flutter 5.3.0`, `graphql_codegen 3.0.1`, `build_runner 2.15.0`, `dio 5.9.2`, `flutter_secure_storage 10.2.0`, `shared_preferences 2.5.5`, `drift 2.33.0`, `isar 3.1.0+1`, `json_serializable 6.14.0`; для UI/testing — `flutter_svg 2.3.0`, `flex_color_scheme 8.4.0`, `skeletonizer 2.1.3`, `mocktail 1.0.5`, `patrol 4.6.0`. Отдельно важно, что `golden_toolkit 0.15.0` на pub.dev помечен как **discontinued**, поэтому для нового проекта я бы его не брал. citeturn6view1turn6view0turn6view6turn16view0turn17view0turn17view1turn17view2turn6view2turn8view5turn8view4turn6view3turn6view4turn6view5turn8view1turn8view0turn8view2turn8view7turn8view8turn8view9turn7view0turn8view10turn6view7
 
 | Категория | Рекомендовано | Почему | Альтернатива | Когда выбрать альтернативу |
-|---|---|---|---|---|
+|---|---|---|---|---|---|
 | State management | **flutter_riverpod** | Лучший баланс async ergonomics, modularity, testability | `flutter_bloc`, `provider` | BLoC — если команда уже на event-driven модели; Provider — для маленького MVP |
 | Routing | **go_router** | Deep links, ShellRoute, query/path params, стабильность | `auto_route`, `flutter_modular` | `auto_route` — если нужна сильная codegen-типизация маршрутов |
 | DI | **Riverpod providers** как primary DI; `get_it` только точечно | Меньше дублирования DI-механизмов | `get_it` | Только для низкоуровневых сервисов без UI-context |
@@ -1106,16 +1106,27 @@ jobs:
 | **Сложный routing state** | В RusTok route/query contract уже строгий | Единый sanitizer и typed route keys package |
 | **Auth/tenant bugs** | У RusTok контекст tenant/auth/locale обязателен | HTTP/WS заголовки и payload собирать централизованно и контрактно тестировать |
 
-### Рекомендуемая миграционная траектория
+### Фазный план реализации (без дубляжа)
 
-| Этап | Что делаем | Критерий завершения |
-|---|---|---|
-| **Foundation** | host app, app shell, theme, auth session, GraphQL client, route contracts | логин, `me`, `currentTenant`, базовый shell работают |
-| **Pilot module** | один модуль с реальной ценностью, например `modules` или `blog` | end-to-end сценарий одного модуля проходит |
-| **Registry-driven wiring** | generated mobile registry из manifest/export | новый модуль подключается без ручной правки host shell |
-| **Parity expansion** | перенос остальных high-value модулей | покрыты основные operator flows |
-| **Hardening** | E2E, performance, analytics, crash reporting, release pipeline | alpha/beta rollout готов |
-| **Offline/advanced sync** | только если подтверждено продуктом | explicit offline requirements закрыты |
+Ниже — единый implementation plan, который **ссылается на уже описанные разделы** документа вместо повторения одних и тех же решений.
+
+
+_Легенда статусов: `⬜ Planned` — не начато, `🟡 In progress` — в работе, `✅ Done` — выполнено._
+
+| Статус | Фаза | Объём работ | На что опираемся в этом документе | Definition of Done |
+|---|---|---|---|---|
+| ⬜ Planned | **Phase 0 — Foundation** | Создать `host app`, app shell, тему, auth session store, GraphQL client factory, route contracts. | [Базовый каркас приложения](#базовый-каркас-приложения), [Маршрутизация](#маршрутизация), [Стандартное подключение GraphQL для RusTok](#стандартное-подключение-graphql-для-rustok), [Авторизация и refresh](#авторизация-и-refresh) | Работают login + `me` + `currentTenant`, есть базовый shell и deep-link вход в защищённый экран. |
+| ⬜ Planned | **Phase 1 — Pilot module** | Внедрить один module-owned пакет (рекомендовано: `modules` или `blog`) с реальным E2E флоу. | [Файловая структура и размещение UI-компонентов](#файловая-структура-и-размещение-ui-компонентов), [DI и registry-driven подключение модулей](#di-и-registry-driven-подключение-модулей), [Шаблоны экранов и виджетов](#шаблоны-экранов-и-виджетов) | Один бизнес-сценарий модуля проходит end-to-end в мобильном host без feature-local transport-клиентов. |
+| ⬜ Planned | **Phase 2 — Registry/codegen** | Подключить generated mobile registry из manifest/export и убрать ручное wiring в host. | [Предлагаемый registry-driven поток подключения модулей](#предлагаемый-registry-driven-поток-подключения-модулей), [Предлагаемые самописные библиотеки и модули](#предлагаемые-самописные-библиотеки-и-модули) | Новый модуль подключается через manifest/codegen без правок в навигационном каркасе host. |
+| ⬜ Planned | **Phase 3 — Parity expansion** | Перенести остальные high-value модули, закрепить route/i18n/permission parity и единые error/loading/empty паттерны. | [Где размещать UI-компоненты и как дублировать UI модулей платформы](#где-размещать-ui-компоненты-и-как-дублировать-ui-модулей-платформы), [Кэширование, обработка ошибок и subscriptions](#кэширование-обработка-ошибок-и-subscriptions) | Покрыты основные operator flows; контракты query keys/locale/permissions не расходятся с web-host правилами. |
+| ⬜ Planned | **Phase 4 — Hardening & release** | E2E, performance, observability, crash reporting, release pipeline (Android/iOS), rollout gates. | [Рекомендуемый pipeline для Flutter](#рекомендуемый-pipeline-для-flutter), [Шаблон GitHub Actions](#шаблон-github-actions), [Риски и митигации](#риски-и-митигации) | Готовы alpha/beta релизы, pipeline стабилен, критичные риски закрыты митигациями. |
+| ⬜ Planned | **Phase 5 — Offline/advanced sync (optional)** | Добавить офлайн-сценарии только после продуктового подтверждения требований. | [Open questions и ограничения](#open-questions-и-ограничения), [Риски и митигации](#риски-и-митигации) | Есть утверждённые offline requirements и реализована целевая стратегия sync/outbox. |
+
+#### Чек-лист anti-duplication для PR
+
+- Не дублировать архитектурные решения в новых docs: ссылаться на разделы этого файла.
+- Новые детали добавлять только там, где им логически место (routing — в routing разделе, GraphQL — в transport разделе).
+- При изменении фаз обновлять только эту таблицу и связанные разделы, а не создавать параллельные «планы-повторы».
 
 ### Open questions и ограничения
 
