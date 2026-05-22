@@ -9,7 +9,25 @@ import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 CONFIG = ROOT / ".github" / "dependabot.yml"
-DIRECTORY_RE = re.compile(r'^\s*directory:\s*["\']?([^"\'\s#]+)')
+DIRECTORY_RE = re.compile(r"^\s*directory:\s*(.+?)\s*$")
+
+
+def parse_directory_value(raw_value: str) -> str:
+    value = raw_value.strip()
+    if not value:
+        return ""
+    # Strip YAML inline comments for unquoted scalars.
+    if value[0] not in {'"', "'"}:
+        value = value.split("#", 1)[0].strip()
+        return value
+
+    quote = value[0]
+    if len(value) < 2:
+        return ""
+    closing_index = value.find(quote, 1)
+    if closing_index == -1:
+        return ""
+    return value[1:closing_index]
 
 
 def parse_args() -> argparse.Namespace:
@@ -63,7 +81,7 @@ def main() -> int:
         match = DIRECTORY_RE.match(line)
         if not match:
             continue
-        raw_directory = match.group(1)
+        raw_directory = parse_directory_value(match.group(1))
         directory = normalize_directory(raw_directory)
         if not directory or not is_safe_repo_relative_path(directory):
             invalid.add(raw_directory)

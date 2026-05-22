@@ -156,6 +156,54 @@ class DependabotDirectoryCheckTests(unittest.TestCase):
             self.assertIn("Dependabot directories contain invalid paths:", result.stderr)
             self.assertIn("../outside", result.stderr)
 
+    def test_allows_quoted_directory_with_inline_comment(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "apps" / "server").mkdir(parents=True)
+
+            config = root / ".github" / "dependabot.yml"
+            config.parent.mkdir(parents=True)
+            config.write_text(
+                textwrap.dedent(
+                    """
+                    version: 2
+                    updates:
+                      - package-ecosystem: "cargo"
+                        directory: "/apps/server" # canonical server path
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_script(root, config)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("All Dependabot update directories exist.", result.stdout)
+
+    def test_fails_on_unterminated_quoted_directory_value(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "apps" / "server").mkdir(parents=True)
+
+            config = root / ".github" / "dependabot.yml"
+            config.parent.mkdir(parents=True)
+            config.write_text(
+                textwrap.dedent(
+                    """
+                    version: 2
+                    updates:
+                      - package-ecosystem: "cargo"
+                        directory: "/apps/server
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_script(root, config)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Dependabot directories contain invalid paths:", result.stderr)
+
 
 if __name__ == "__main__":
     unittest.main()
