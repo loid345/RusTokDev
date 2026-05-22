@@ -4,3 +4,6 @@ version: 0.1.0
 
 environment:
   sdk: ^3.9.0
+
+dependencies:
+  graphql: ^5.2.3
