@@ -404,6 +404,9 @@ Batch считается закрытым только если одноврем
 | Date | Batch | DOC | Status | PR | Notes |
 |---|---|---|---|---|---|
 | YYYY-MM-DD | B6 | DOC-05 | `[~]`/`[x]` | `#1234` | Кратко: что закрыто / что осталось |
+| 2026-05-22 | B6 | DOC-05 | `[x]` | `commit: 1d087a3` | `docs/index.md` переведён в navigation-first, убрана статусная хроника |
+| 2026-05-22 | B7 | DOC-06 | `[x]` | `commit: c9a22f1` | Реестры синхронизированы с `modules.toml` |
+| 2026-05-22 | B8 | DOC-07 | `[x]` | `commit: 1bf7ead` | Зафиксирован baseline quality-gates в verification-планах |
 
 Пример реальной записи после merge:
 
@@ -435,14 +438,14 @@ Batch считается закрытым только если одноврем
 > Правило консистентности: `pending` не может использоваться со статусом `[~]`.
 > Если открытого PR ещё нет, используем только `[ ]`.
 
-- [ ] DOC-01 Root docs sanitation
-- [ ] DOC-02 Profiles truth table
-- [ ] DOC-03 Workflow API doc drift cleanup
-- [ ] DOC-04 Changelog normalization
-- [ ] DOC-05 docs/index.md refactor
-- [ ] DOC-06 Registry ↔ manifest sync
-- [ ] DOC-07 Docs CI quality gates
-- [ ] DOC-08 Executable examples hub
+- [x] DOC-01 Root docs sanitation (commit: aa36e6f, merged: 2026-05-22)
+- [x] DOC-02 Profiles truth table (commit: 0f61cec, merged: 2026-05-22)
+- [x] DOC-03 Workflow API doc drift cleanup (commit: 1baf08e, merged: 2026-05-22)
+- [x] DOC-04 Changelog normalization (commit: 265b332, merged: 2026-05-22)
+- [x] DOC-05 docs/index.md refactor (commit: 1d087a3, merged: 2026-05-22)
+- [x] DOC-06 Registry ↔ manifest sync (commit: c9a22f1, merged: 2026-05-22)
+- [x] DOC-07 Docs CI quality gates (commit: 1bf7ead, merged: 2026-05-22)
+- [x] DOC-08 Executable examples hub (commit: 0f35991, merged: 2026-05-22)
 - [ ] DOC-09 Конвейер генерации reference-артефактов
 - [ ] DOC-10 Language/naming governance
 - [ ] DOC-11 Reviewer checklist + PR template
