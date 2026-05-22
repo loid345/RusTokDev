@@ -45,19 +45,23 @@ function buildProductAttributesTaskInput(product: NonNullable<Awaited<ReturnType
 }
 
 function buildProductAttributesHref(product: NonNullable<Awaited<ReturnType<typeof getProduct>>>, translation: { title: string; description: string | null; locale: string }) {
+  const sourceTitle = translation.title.trim();
+  const sourceDescription = translation.description?.trim() ?? '';
   const params = new URLSearchParams({
     task: 'product_attributes',
     title: `Product Attributes ${product.id}`,
     productId: product.id,
     locale: translation.locale,
     sourceLocale: translation.locale,
-    sourceTitle: translation.title,
     categorySlug: product.productType ?? '',
     copyInstructions:
       'Сформируй только подтверждаемые атрибуты и пометь неподтверждаемые как not_specified.'
   });
-  if (translation.description) {
-    params.set('sourceDescription', translation.description);
+  if (sourceTitle.length > 0) {
+    params.set('sourceTitle', sourceTitle);
+  }
+  if (sourceDescription.length > 0) {
+    params.set('sourceDescription', sourceDescription);
   }
   return `/dashboard/ai?${params.toString()}`;
 }
