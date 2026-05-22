@@ -1296,6 +1296,15 @@ mod tests {
             }),
             "toggle taxonomy contains unsupported error code category"
         );
+
+        let mut seen_case_names = std::collections::BTreeSet::new();
+        for case in &all {
+            assert!(
+                seen_case_names.insert(case.case_name),
+                "toggle taxonomy contains duplicated case_name: {}",
+                case.case_name
+            );
+        }
     }
 
     #[test]

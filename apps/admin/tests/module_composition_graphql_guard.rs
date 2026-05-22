@@ -113,6 +113,11 @@ fn toggle_module_helper_uses_graphql_only_contract() {
         helper_body.contains("TOGGLE_MODULE_MUTATION"),
         "toggle_module must use canonical TOGGLE_MODULE_MUTATION contract"
     );
+    assert_eq!(
+        helper_body.matches("TOGGLE_MODULE_MUTATION").count(),
+        1,
+        "toggle_module must reference TOGGLE_MODULE_MUTATION exactly once"
+    );
     assert!(
         helper_body.contains("request("),
         "toggle_module must call GraphQL request path"
