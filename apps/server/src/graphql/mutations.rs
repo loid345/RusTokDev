@@ -1181,53 +1181,6 @@ mod tests {
     }
 
     #[test]
-    fn toggle_error_maps_unknown_module() {
-        let err = map_toggle_module_error(ToggleModuleError::UnknownModule);
-        assert_eq!(err.message, TOGGLE_ERR_UNKNOWN_MODULE);
-    }
-
-    #[test]
-    fn toggle_error_maps_core_module_disable() {
-        let err =
-            map_toggle_module_error(ToggleModuleError::CoreModuleCannotBeDisabled("core".into()));
-        assert_eq!(
-            err.message,
-            toggle_err_core_module_cannot_be_disabled("core"),
-            "core-module mapping must keep deterministic user-facing taxonomy"
-        );
-    }
-
-    #[test]
-    fn toggle_error_maps_dependency_errors() {
-        let missing =
-            map_toggle_module_error(ToggleModuleError::MissingDependencies("pricing".into()));
-        assert_eq!(
-            missing.message,
-            toggle_err_missing_dependencies("pricing"),
-            "missing-dependency mapping must keep deterministic user-facing taxonomy"
-        );
-
-        let dependents =
-            map_toggle_module_error(ToggleModuleError::HasDependents("checkout".into()));
-        assert_eq!(
-            dependents.message,
-            toggle_err_has_dependents("checkout"),
-            "dependents mapping must keep deterministic user-facing taxonomy"
-        );
-    }
-
-    #[test]
-    fn toggle_error_maps_hook_failure() {
-        let err = map_toggle_module_error(ToggleModuleError::HookFailed("boom".into()));
-        assert_eq!(
-            err.message,
-            toggle_err_hook_failed("boom"),
-            "hook-failure mapping must stay explicit and deterministic"
-        );
-        assert!(!err.message.contains("rolled back"));
-    }
-
-    #[test]
     fn toggle_error_maps_database_and_policy_to_internal_errors() {
         let db_err = map_toggle_module_error(ToggleModuleError::Database(sea_orm::DbErr::Custom(
             "db down".to_string(),
@@ -1273,6 +1226,10 @@ mod tests {
             assert_eq!(
                 field_error.message, expected_message,
                 "toggle error taxonomy drifted for case: {case_name}"
+            );
+            assert!(
+                !field_error.message.contains("rolled back"),
+                "toggle error message unexpectedly references rollback for case: {case_name}"
             );
         }
     }
