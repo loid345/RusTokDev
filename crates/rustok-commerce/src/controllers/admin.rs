@@ -190,6 +190,7 @@ pub struct ListRefundsParams {
     #[serde(flatten)]
     pub pagination: Option<super::common::PaginationParams>,
     pub payment_collection_id: Option<Uuid>,
+    pub order_id: Option<Uuid>,
     pub status: Option<String>,
 }
 
@@ -783,6 +784,7 @@ pub async fn list_refunds(
                 page: pagination.page,
                 per_page: pagination.limit(),
                 payment_collection_id: params.payment_collection_id,
+                order_id: params.order_id,
                 status: params.status,
             },
         )
