@@ -313,15 +313,26 @@ fn map_platform_composition_build_error(error: PlatformCompositionBuildError) ->
 
 fn map_toggle_module_error(error: ToggleModuleError) -> FieldError {
     match error {
-        ToggleModuleError::UnknownModule => FieldError::new("Unknown module"),
+        ToggleModuleError::UnknownModule => {
+            <FieldError as GraphQLError>::bad_user_input("Unknown module")
+        }
         ToggleModuleError::CoreModuleCannotBeDisabled(module_slug) => {
-            FieldError::new(format!("Core module cannot be disabled: {}", module_slug))
+            <FieldError as GraphQLError>::bad_user_input(format!(
+                "Core module cannot be disabled: {}",
+                module_slug
+            ))
         }
         ToggleModuleError::MissingDependencies(missing) => {
-            FieldError::new(format!("Missing module dependencies: {}", missing))
+            <FieldError as GraphQLError>::bad_user_input(format!(
+                "Missing module dependencies: {}",
+                missing
+            ))
         }
         ToggleModuleError::HasDependents(dependents) => {
-            FieldError::new(format!("Module is required by: {}", dependents))
+            <FieldError as GraphQLError>::bad_user_input(format!(
+                "Module is required by: {}",
+                dependents
+            ))
         }
         ToggleModuleError::Database(err) => {
             <FieldError as GraphQLError>::internal_error(&err.to_string())
@@ -1096,6 +1107,7 @@ mod tests {
         validate_custom_fields, AuthLifecycleError, ManifestError, PlatformCompositionBuildError,
         PlatformCompositionError, ToggleModuleError,
     };
+    use async_graphql::ErrorExtensions;
     use crate::models::user_field_definitions::ActiveModel as UserFieldDefinitionActiveModel;
     use migration::Migrator;
     use rustok_test_utils::db::setup_test_db_with_migrations;
@@ -1214,6 +1226,83 @@ mod tests {
 
         let policy_err = map_toggle_module_error(ToggleModuleError::Policy("policy".to_string()));
         assert!(!policy_err.message.is_empty());
+    }
+
+    #[test]
+    fn toggle_error_taxonomy_matrix_stays_stable() {
+        let cases = vec![
+            (
+                ToggleModuleError::UnknownModule,
+                "Unknown module",
+                "unknown-module",
+            ),
+            (
+                ToggleModuleError::CoreModuleCannotBeDisabled("core".into()),
+                "Core module cannot be disabled: core",
+                "core-disable",
+            ),
+            (
+                ToggleModuleError::MissingDependencies("pricing".into()),
+                "Missing module dependencies: pricing",
+                "missing-dependencies",
+            ),
+            (
+                ToggleModuleError::HasDependents("checkout".into()),
+                "Module is required by: checkout",
+                "has-dependents",
+            ),
+            (
+                ToggleModuleError::HookFailed("boom".into()),
+                "Module lifecycle hook failed before state commit: boom",
+                "hook-failed",
+            ),
+        ];
+
+        for (error, expected_message, case_name) in cases {
+            let field_error = map_toggle_module_error(error);
+            assert_eq!(
+                field_error.message, expected_message,
+                "toggle error taxonomy drifted for case: {case_name}"
+            );
+        }
+    }
+
+    fn error_code(error: &async_graphql::Error) -> Option<String> {
+        error
+            .extensions
+            .as_ref()
+            .and_then(|extensions| extensions.get("code"))
+            .cloned()
+            .and_then(|value| value.into_json().ok())
+            .and_then(|value| value.as_str().map(ToOwned::to_owned))
+    }
+
+    #[test]
+    fn toggle_error_mapping_sets_expected_error_codes() {
+        let bad_user_input_cases = vec![
+            ToggleModuleError::UnknownModule,
+            ToggleModuleError::CoreModuleCannotBeDisabled("core".into()),
+            ToggleModuleError::MissingDependencies("pricing".into()),
+            ToggleModuleError::HasDependents("checkout".into()),
+        ];
+
+        for error in bad_user_input_cases {
+            let gql = map_toggle_module_error(error).extend();
+            assert_eq!(error_code(&gql).as_deref(), Some("BAD_USER_INPUT"));
+        }
+
+        let hook = map_toggle_module_error(ToggleModuleError::HookFailed("boom".into())).extend();
+        assert_eq!(error_code(&hook), None);
+
+        let db = map_toggle_module_error(ToggleModuleError::Database(sea_orm::DbErr::Custom(
+            "db down".to_string(),
+        )))
+        .extend();
+        assert_eq!(error_code(&db).as_deref(), Some("INTERNAL_ERROR"));
+
+        let policy = map_toggle_module_error(ToggleModuleError::Policy("policy".to_string()))
+            .extend();
+        assert_eq!(error_code(&policy).as_deref(), Some("INTERNAL_ERROR"));
     }
 
     #[test]
