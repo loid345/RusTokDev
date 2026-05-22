@@ -22,7 +22,6 @@ pub(crate) enum ModuleOperationStatus {
     Failed,
 }
 
-
 impl ModuleOperationStatus {
     pub(crate) const fn as_str(self) -> &'static str {
         match self {
@@ -67,7 +66,6 @@ impl From<ModuleOperationStatus> for String {
         value.as_str().to_string()
     }
 }
-
 
 #[derive(Debug, Error)]
 pub enum ToggleModuleError {
@@ -195,9 +193,9 @@ impl ModuleLifecycleService {
         };
 
         let hook_result = if enabled {
-            module_impl.on_enable(module_ctx).await
+            module_impl.pre_enable(module_ctx).await
         } else {
-            module_impl.on_disable(module_ctx).await
+            module_impl.pre_disable(module_ctx).await
         };
 
         if let Err(err) = hook_result {
@@ -214,6 +212,30 @@ impl ModuleLifecycleService {
 
         let module =
             Self::commit_module_state(db, operation.id, tenant_id, module_slug, enabled).await?;
+
+        let post_settings = Self::current_module_settings(db, tenant_id, module_slug).await?;
+        let post_ctx = ModuleContext {
+            db,
+            tenant_id,
+            config: &post_settings,
+        };
+
+        let post_hook_result = if enabled {
+            module_impl.post_enable(post_ctx).await
+        } else {
+            module_impl.post_disable(post_ctx).await
+        };
+
+        if let Err(err) = post_hook_result {
+            tracing::error!(
+                "Module post-hook failed for {} (enabled={}): {}; tenant state remains committed",
+                module_slug,
+                enabled,
+                err
+            );
+            Self::mark_operation_failed(db, operation.id, &format!("post-hook: {err}")).await?;
+        }
+
         Ok(module)
     }
 
@@ -323,7 +345,8 @@ impl ModuleLifecycleService {
                     .await?
                 {
                     let mut active: module_operations::ActiveModel = model.into();
-                    active.status = sea_orm::ActiveValue::Set(ModuleOperationStatus::Committed.into());
+                    active.status =
+                        sea_orm::ActiveValue::Set(ModuleOperationStatus::Committed.into());
                     active.updated_at = sea_orm::ActiveValue::Set(chrono::Utc::now().into());
                     active.update(txn).await?;
                 }
@@ -452,7 +475,10 @@ impl ModuleLifecycleService {
         db: &DatabaseConnection,
         operation_id: uuid::Uuid,
     ) -> Result<(), DbErr> {
-        if let Some(model) = ModuleOperationsEntity::find_by_id(operation_id).one(db).await? {
+        if let Some(model) = ModuleOperationsEntity::find_by_id(operation_id)
+            .one(db)
+            .await?
+        {
             let mut active: module_operations::ActiveModel = model.into();
             active.status = sea_orm::ActiveValue::Set(ModuleOperationStatus::Running.into());
             active.updated_at = sea_orm::ActiveValue::Set(Utc::now().into());
@@ -496,9 +522,18 @@ mod tests {
             "validated".parse::<ModuleOperationStatus>(),
             Ok(ModuleOperationStatus::Validated)
         );
-        assert_eq!("running".parse::<ModuleOperationStatus>(), Ok(ModuleOperationStatus::Running));
-        assert_eq!("committed".parse::<ModuleOperationStatus>(), Ok(ModuleOperationStatus::Committed));
-        assert_eq!("failed".parse::<ModuleOperationStatus>(), Ok(ModuleOperationStatus::Failed));
+        assert_eq!(
+            "running".parse::<ModuleOperationStatus>(),
+            Ok(ModuleOperationStatus::Running)
+        );
+        assert_eq!(
+            "committed".parse::<ModuleOperationStatus>(),
+            Ok(ModuleOperationStatus::Committed)
+        );
+        assert_eq!(
+            "failed".parse::<ModuleOperationStatus>(),
+            Ok(ModuleOperationStatus::Failed)
+        );
         assert_eq!("unknown".parse::<ModuleOperationStatus>(), Err(()));
         assert_eq!(String::from(ModuleOperationStatus::Validated), "validated");
         assert_eq!(String::from(ModuleOperationStatus::Running), "running");

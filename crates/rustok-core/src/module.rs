@@ -166,11 +166,33 @@ pub trait RusToKModule: Send + Sync + MigrationSource {
 
     fn register_runtime_extensions(&self, _extensions: &mut ModuleRuntimeExtensions) {}
 
+    /// Legacy lifecycle hook kept for backward compatibility.
+    ///
+    /// Runtime now calls `pre_enable` by default before tenant-state commit.
     async fn on_enable(&self, _ctx: ModuleContext<'_>) -> crate::Result<()> {
         Ok(())
     }
 
+    /// Legacy lifecycle hook kept for backward compatibility.
+    ///
+    /// Runtime now calls `pre_disable` by default before tenant-state commit.
     async fn on_disable(&self, _ctx: ModuleContext<'_>) -> crate::Result<()> {
+        Ok(())
+    }
+
+    async fn pre_enable(&self, ctx: ModuleContext<'_>) -> crate::Result<()> {
+        self.on_enable(ctx).await
+    }
+
+    async fn pre_disable(&self, ctx: ModuleContext<'_>) -> crate::Result<()> {
+        self.on_disable(ctx).await
+    }
+
+    async fn post_enable(&self, _ctx: ModuleContext<'_>) -> crate::Result<()> {
+        Ok(())
+    }
+
+    async fn post_disable(&self, _ctx: ModuleContext<'_>) -> crate::Result<()> {
         Ok(())
     }
 
