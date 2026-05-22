@@ -564,17 +564,20 @@ export function AiAdminPage(props: AiAdminPageProps) {
   const [activeDirectSubmit, setActiveDirectSubmit] =
     React.useState<DirectSubmitKind | null>(null);
   const isSubmittingDirectJob = activeDirectSubmit !== null;
+  const directSubmitLockRef = React.useRef(false);
   const runDirectSubmit = React.useCallback(
     async (kind: DirectSubmitKind, job: () => Promise<void>) => {
-      if (isSubmittingDirectJob) return;
+      if (directSubmitLockRef.current) return;
+      directSubmitLockRef.current = true;
       setActiveDirectSubmit(kind);
       try {
         await job();
       } finally {
         setActiveDirectSubmit(null);
+        directSubmitLockRef.current = false;
       }
     },
-    [isSubmittingDirectJob]
+    []
   );
   const productAttributesPrefillAppliedRef = React.useRef(false);
 
