@@ -73,12 +73,17 @@ fn bypass_toggle_api_is_not_public() {
     let tenant_modules_rs = repo_root.join("apps/server/src/models/tenant_modules.rs");
     let content = fs::read_to_string(&tenant_modules_rs).expect("tenant_modules.rs should be readable");
 
-    assert!(
-        content.contains("pub(crate) async fn upsert_flag_without_lifecycle_for_migrations_only("),
-        "Bypass helper must stay crate-scoped for migrations only."
+    let crate_scoped_signature = "pub(crate) async fn upsert_flag_without_lifecycle_for_migrations_only(";
+    let public_signature = "pub async fn upsert_flag_without_lifecycle_for_migrations_only(";
+
+    let crate_scoped_occurrences = content.matches(crate_scoped_signature).count();
+    assert_eq!(
+        crate_scoped_occurrences, 1,
+        "Bypass helper must be declared exactly once with crate visibility."
     );
+
     assert!(
-        !content.contains("pub async fn upsert_flag_without_lifecycle_for_migrations_only("),
+        !content.contains(public_signature),
         "Bypass helper must not be public."
     );
 }
