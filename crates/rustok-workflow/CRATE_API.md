@@ -1,146 +1,80 @@
-# rustok-workflow - Public API
+# rustok-workflow — API overview
 
-## Module registration
+> Этот документ — **curated overview**, а не ручной слепок сигнатур.
+> Канонический reference берётся из кода и сгенерированных артефактов.
 
-```rust
-use rustok_workflow::WorkflowModule;
+## Source of truth
 
-// In apps/server module registry:
-registry.register(Box::new(WorkflowModule));
-```
+- Код crate: `crates/rustok-workflow/src/**`
+- Rustdoc (локально):
+  - `cargo doc -p rustok-workflow --no-deps`
+- Server runtime wiring:
+  - `apps/server/src/modules/workflow.rs`
 
-`WorkflowModule` implements `RusToKModule`:
-- `slug()` -> `"workflow"`
-- `name()` -> `"Workflow"`
-- `kind()` -> `ModuleKind::Optional`
-- `dependencies()` -> `[]`
-- `migrations()` -> `WorkflowsMigration`, `WorkflowPhase4Migration`
-- `permissions()` -> `Workflows::{Create,Read,Update,Delete,List,Execute,Manage}`, `WorkflowExecutions::{Read,List}`
+## Module registration contract
 
-## Public modules
+`WorkflowModule` регистрируется как optional module в module registry и публикует:
 
-`controllers`, `dto`, `entities`, `error`, `graphql`, `services`, `steps`, `templates`.
+- slug/name/kind модуля;
+- миграции workflow bounded context;
+- permissions для workflow authoring/execution read paths.
 
-## Services
+Для точных значений (slug, permissions, migration list) используйте код,
+а не дублирование в markdown.
 
-### `WorkflowService`
+## Public surface map
 
-```rust
-pub struct WorkflowService { /* db: DatabaseConnection */ }
+Публичный API crate разбит на следующие области:
 
-impl WorkflowService {
-    pub fn new(db: DatabaseConnection) -> Self;
+- `controllers` — REST endpoints и route wiring;
+- `graphql` — query/mutation surface для workflow authoring и reads;
+- `services` — доменный orchestration слой (`WorkflowService`, execution/use-case logic);
+- `steps` — runtime step contracts и registries;
+- `templates` — builtin workflow templates и metadata;
+- `dto`/`entities`/`error` — transport contracts, storage model и domain errors.
 
-    // Workflows
-    pub async fn create(&self, tenant_id: Uuid, actor_id: Option<Uuid>, input: CreateWorkflowInput) -> WorkflowResult<Uuid>;
-    pub async fn get(&self, tenant_id: Uuid, id: Uuid) -> WorkflowResult<WorkflowResponse>;
-    pub async fn list(&self, tenant_id: Uuid) -> WorkflowResult<Vec<WorkflowSummary>>;
-    pub async fn update(&self, tenant_id: Uuid, id: Uuid, actor_id: Option<Uuid>, input: UpdateWorkflowInput) -> WorkflowResult<()>;
-    pub async fn delete(&self, tenant_id: Uuid, id: Uuid) -> WorkflowResult<()>;
+## Domain invariants (must-hold)
 
-    // Steps
-    pub async fn add_step(&self, tenant_id: Uuid, workflow_id: Uuid, input: CreateWorkflowStepInput) -> WorkflowResult<Uuid>;
-    pub async fn update_step(&self, tenant_id: Uuid, workflow_id: Uuid, step_id: Uuid, input: UpdateWorkflowStepInput) -> WorkflowResult<()>;
-    pub async fn delete_step(&self, tenant_id: Uuid, workflow_id: Uuid, step_id: Uuid) -> WorkflowResult<()>;
+- Все write/read операции tenant-scoped.
+- Workflow execution path отделён от authoring path.
+- Step execution идёт через типизированный step runtime (`WorkflowStep` contract).
+- Trigger paths (manual/webhook/event/cron) сходятся в единый execution orchestration.
+- Ошибки исполнения и конфигурации должны возвращаться как typed domain errors,
+  без silent fallback.
 
-    // Executions
-    pub async fn trigger_manual(&self, tenant_id: Uuid, workflow_id: Uuid, actor_id: Option<Uuid>, payload: Value, force: bool) -> WorkflowResult<Uuid>;
-    pub async fn list_executions(&self, tenant_id: Uuid, workflow_id: Uuid) -> WorkflowResult<Vec<WorkflowExecutionResponse>>;
-    pub async fn get_execution(&self, tenant_id: Uuid, execution_id: Uuid) -> WorkflowResult<WorkflowExecutionResponse>;
-    pub async fn trigger_by_webhook(&self, tenant_id: Uuid, webhook_slug: &str, payload: Value) -> WorkflowResult<Vec<Uuid>>;
-    pub async fn list_versions(&self, tenant_id: Uuid, workflow_id: Uuid) -> WorkflowResult<Vec<WorkflowVersionSummary>>;
-    pub async fn get_version(&self, tenant_id: Uuid, workflow_id: Uuid, version: i32) -> WorkflowResult<WorkflowVersionDetail>;
-    pub async fn restore_version(&self, tenant_id: Uuid, workflow_id: Uuid, version: i32, actor_id: Option<Uuid>) -> WorkflowResult<()>;
-    pub async fn create_from_template(&self, tenant_id: Uuid, actor_id: Option<Uuid>, template_id: &str, name: String) -> WorkflowResult<Uuid>;
-}
-```
+## Execution model
 
-### `WorkflowEngine`
+- `WorkflowService` отвечает за CRUD и orchestration use-cases.
+- `WorkflowEngine` выполняет шаги и управляет step registry/runtime dispatch.
+- `WorkflowTriggerHandler` интегрирует event-driven trigger path.
+- `WorkflowCronScheduler` закрывает schedule-driven trigger path.
 
-```rust
-pub struct WorkflowEngine { /* db, step registry */ }
+Важно: актуальные методы/сигнатуры смотрим в исходниках и rustdoc.
+Этот документ фиксирует роли и boundaries, а не API-by-hand.
 
-impl WorkflowEngine {
-    pub fn new(db: DatabaseConnection) -> Self;
-    pub fn with_step(mut self, step_type: impl Into<String>, step: Arc<dyn WorkflowStep>) -> Self;
-    pub async fn execute(&self, workflow_id: Uuid, trigger_event_id: Uuid, context: Value) -> WorkflowResult<Uuid>;
-}
-```
+## Extensibility contract
 
-### `WorkflowTriggerHandler`
+Кастомные шаги подключаются через `WorkflowStep` trait и регистрацию
+в engine runtime (`with_step(...)`).
 
-```rust
-pub struct WorkflowTriggerHandler { /* db, engine */ }
+Требования к шагам:
 
-impl WorkflowTriggerHandler {
-    pub fn new(db: DatabaseConnection, engine: Arc<WorkflowEngine>) -> Self;
-    // Implements EventHandler - call from EventBus subscriber loop
-    pub async fn handle(&self, event: &EventEnvelope) -> WorkflowResult<()>;
-}
-```
-
-### `WorkflowCronScheduler`
-
-```rust
-pub struct WorkflowCronScheduler { /* db, engine */ }
-
-impl WorkflowCronScheduler {
-    pub fn new(db: DatabaseConnection, engine: Arc<WorkflowEngine>) -> Self;
-    pub async fn tick(&self) -> WorkflowResult<()>;
-}
-```
-
-## Step extension trait
-
-```rust
-#[async_trait]
-pub trait WorkflowStep: Send + Sync {
-    async fn execute(&self, config: &Value, ctx: &mut StepContext) -> WorkflowResult<()>;
-}
-```
-
-Modules can register custom step types via `WorkflowEngine::with_step(...)`.
-
-## Templates
-
-```rust
-pub static BUILTIN_TEMPLATES: &[WorkflowTemplate];
-
-pub struct WorkflowTemplate {
-    pub id: &'static str,
-    pub name: &'static str,
-    pub description: &'static str,
-    pub category: &'static str,
-    // ...
-}
-```
+- deterministic behavior при одинаковом входном контексте;
+- корректная обработка ошибок через `WorkflowResult`;
+- отсутствие tenant-boundary bypass;
+- отсутствие скрытых side effects вне контракта шага.
 
 ## Transport entry points
 
-- `graphql::WorkflowQuery`
-- `graphql::WorkflowMutation`
-- `controllers::routes()`
-- `controllers::webhook_routes()`
+- GraphQL: workflow query/mutation roots.
+- REST: workflow controllers/routes, включая webhook trigger path.
 
-## Error type
+Точные route/query имена и payload contracts смотреть в source + generated schema.
 
-```rust
-pub enum WorkflowError {
-    NotFound(Uuid),
-    Unauthorized,
-    InvalidConfig(String),
-    StepFailed { step_id: Uuid, reason: String },
-    Database(DbErr),
-}
+## Documentation maintenance rule
 
-pub type WorkflowResult<T> = Result<T, WorkflowError>;
-```
+При изменении workflow transport contract, execution semantics или error model:
 
-## DTOs
-
-Key request/response types (all in `rustok_workflow::dto`):
-
-- `CreateWorkflowInput` / `UpdateWorkflowInput` / `WorkflowResponse` / `WorkflowSummary`
-- `CreateWorkflowStepInput` / `UpdateWorkflowStepInput` / `WorkflowStepResponse`
-- `WorkflowExecutionResponse` / `WorkflowStepExecutionResponse`
-- `WorkflowVersionSummary` / `WorkflowVersionDetail`
+1. Обновить этот overview (роли, инварианты, boundaries).
+2. Не дублировать ручные сигнатуры в markdown.
+3. Добавить/обновить ссылки на generated reference в релевантных docs.

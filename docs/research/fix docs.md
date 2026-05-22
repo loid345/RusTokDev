@@ -2,14 +2,14 @@
 
 ## Цель
 
-Преобразовать findings из аудита в управляемый execution-план по исправлению документации: с понятными приоритетами, ответственными ролями, трудоёмкостью, зависимостями и проверяемыми критериями приёмки.
+Преобразовать результаты аудита в управляемый план исполнения по исправлению документации: с понятными приоритетами, ответственными ролями, трудоёмкостью, зависимостями и проверяемыми критериями приёмки.
 
 ## Границы и допущения
 
 - Этот документ фиксирует **план работ**, а не финальные архитектурные решения.
-- Источник истины для API-контрактов — код и generated artifacts (rustdoc/OpenAPI/GraphQL schema export).
+- Источник истины для API-контрактов — код и генерируемые артефакты (rustdoc/OpenAPI/GraphQL schema export).
 - Для `docs/` используется политика «один файл — один язык» (базово русский).
-- `docs/index.md` — короткая карта входа; статусные полотна и roadmaps должны жить в профильных implementation-plan документах.
+- `docs/index.md` — короткая карта входа; статусные полотна и roadmaps должны жить в профильных документах-планах реализации.
 
 ---
 
@@ -17,12 +17,105 @@
 
 Каждая задача выполняется через отдельный PR с одинаковым шаблоном:
 
-1. **Scope** (какие файлы/разделы меняем);
-2. **Definition of Done** (что считается завершением);
-3. **Verification** (какие проверки/команды подтверждают результат);
-4. **Links updated** (какие ссылки/индексы обновлены дополнительно).
+1. **Область изменений** (какие файлы/разделы меняем);
+2. **Критерии готовности** (что считается завершением);
+3. **Проверка** (какие проверки/команды подтверждают результат);
+4. **Обновлённые ссылки** (какие ссылки/индексы обновлены дополнительно).
 
 ---
+
+
+
+## Операционная модель выполнения (обязательно для каждого PR)
+
+### Шаблон названия PR
+
+`docs: DOC-XX <краткое действие>`
+
+### Шаблон тела PR
+
+- **ID:** `DOC-XX`
+- **Область изменений:** `<файлы и разделы>`
+- **Критерии готовности:** `<проверяемые критерии>`
+- **Проверка:**
+  - `<команда 1>`
+  - `<команда 2>`
+- **Обновлённые ссылки:** `<какие индексы/кросс-ссылки обновлены>`
+- **Риски / Последующие шаги:** `<что не вошло и почему>`
+
+### Минимальные проверки для docs PR
+
+### Правило для text-only правок
+
+Если PR меняет только текст (формулировки, орфографию, заголовки, навигационные
+подписи) и не меняет контракты, команды, примеры команд, code fences и URL-цели,
+отдельные проверки запускать не обязательно. Достаточно ручной вычитки diff и
+проверки открываемости изменённых ссылок.
+
+- `npx --yes markdownlint-cli <changed-files>` (или эквивалентный скрипт репозитория);
+- `lychee --no-progress <changed-files>` (или эквивалентный link-check скрипт репозитория);
+- ручной проход всех изменённых ссылок из `docs/index.md` и локальных `README.md`.
+
+Если в текущем PR нет CI-скрипта под один из пунктов, фиксируем это в разделе **Риски / Последующие шаги** и создаём последующую задачу в DOC-07.
+
+
+
+
+### Требования к окружению для checks
+
+- `markdownlint-cli`: запускается через `npx --yes markdownlint-cli ...`;
+- `lychee`: должен быть установлен в CI/локально как бинарь (`cargo install lychee`
+  или prebuilt release), запуск через `lychee ...`, без `npx`.
+
+### Политика отчёта проверок (anti-fake)
+
+В каждом docs PR раздел **Проверка** обязан содержать фактический результат
+каждой команды:
+
+- `pass` — команда завершилась с `exit code 0`;
+- `fail` — команда завершилась с ненулевым `exit code`;
+- `blocked` — проверка не может быть выполнена из-за ограничений окружения.
+
+Запрещено писать "checks passed", если команда реально падала. Для `fail`/`blocked`
+обязательно указывать причину и последующую задачу (или ссылку на DOC-07).
+
+
+### Подтверждение результатов проверок
+
+Чтобы исключить ложные отчёты, в каждый docs PR добавляем короткий блок
+**Verification Evidence**:
+
+- точная команда (как запускалась);
+- итоговый статус (`pass` / `fail` / `blocked`);
+- короткая выдержка вывода (1-3 строки) или причина блокировки;
+- дата запуска в формате `YYYY-MM-DD`.
+
+Для text-only PR вместо команд допускается запись:
+`text-only: checks skipped by policy` + ссылка на этот раздел.
+
+### Шаблон блока Verification Evidence
+
+```md
+### Verification Evidence
+- 2026-05-22 — `npx --yes markdownlint-cli <changed-files>` — pass
+  - output: `markdownlint-cli vX.Y.Z`
+- 2026-05-22 — `lychee --no-progress <changed-files>` — blocked
+  - reason: `lychee` не установлен в окружении CI job-а
+```
+
+## Следующие 5 PR (готовые батчи)
+
+Чтобы план был исполним «без додумывания», ниже зафиксированы первые батчи, которые можно брать в работу сразу.
+
+| Batch | Закрывает | Область изменений (точно) | Критерии готовности (проверка результата) | Проверка (минимум) |
+|---|---|---|---|---|
+| B1 | DOC-01 (часть 1) | `README.md`, `README.ru.md` | Убраны битые ссылки/устаревшие имена сервисов, согласован onboarding-поток между EN/RU README | `npx --yes markdownlint-cli README.md README.ru.md`; `lychee --no-progress README.md README.ru.md` |
+| B2 | DOC-01 (часть 2) + DOC-04 | `CONTRIBUTING.md`, `CHANGELOG.md` | `CHANGELOG.md` в release-шаблоне, нет stale refs; CONTRIBUTING соответствует текущему workflow | `npx --yes markdownlint-cli CONTRIBUTING.md CHANGELOG.md`; `lychee --no-progress CONTRIBUTING.md CHANGELOG.md` |
+| B3 | DOC-02 | `docs/guides/quickstart.md` + ссылки из root docs | Добавлена canonical truth table профилей запуска с owner/source | `npx --yes markdownlint-cli docs/guides/quickstart.md`; `lychee --no-progress docs/guides/quickstart.md` |
+| B4 | DOC-03 | `crates/rustok-workflow/CRATE_API.md` | Удалены ручные сигнатуры; оставлены инварианты + ссылки на generated reference | `npx --yes markdownlint-cli crates/rustok-workflow/CRATE_API.md`; подтверждение владельца модуля |
+| B5 | DOC-07 (начальный этап) | `.github`/CI docs jobs + `docs/verification/*` (если нужно) | PR падает на broken links/anchors/markdown errors | Технический PR-проверка с намеренно сломанной ссылкой (ожидаемый fail) |
+
+> Рекомендация: вести batches последовательно B1 → B5; параллелить только B4 (независим от B1/B2/B3).
 
 ## Очередь работ (P0 → P2)
 
@@ -38,10 +131,10 @@
 | DOC-06 | P1 | Синхронизировать `docs/modules/*` registry с `modules.toml` | Module platform owner | 10ч | DOC-02 | Нет «призрачных» модулей; capability/support помечены единообразно |
 | DOC-07 | P1 | Ввести docs CI quality gates (lint/link/anchors/fences) | DevEx/CI owner | 12ч | DOC-01 | PR блокируется на broken links/anchors/markdown errors |
 | DOC-08 | P1 | Централизовать executable examples + index | DevRel + module owners | 16ч | DOC-02, DOC-07 | Есть единый каталог примеров и smoke-валидация в CI |
-| DOC-09 | P2 | Generated reference pipeline (rustdoc/OpenAPI/GraphQL) | Platform + API owners | 20ч | DOC-03, DOC-07 | Артефакты публикуются в CI; diff контрактов контролируется |
+| DOC-09 | P2 | Конвейер генерации reference-артефактов (rustdoc/OpenAPI/GraphQL) | Platform + API owners | 20ч | DOC-03, DOC-07 | Артефакты публикуются в CI; diff контрактов контролируется |
 | DOC-10 | P2 | Language/naming/review governance | Platform docs owner | 8ч | DOC-05, DOC-07 | Формализованы policy, checklist и процесс ownership-review |
-| DOC-11 | P2 | Docs reviewer checklist + PR template upgrade | DevEx/CI owner | 4ч | DOC-07 | Чеклист обязателен и реально используется в docs PR |
-| DOC-12 | P2 | Документирование code hotspots first | Module owners | 18ч | DOC-09 | Приоритетные узлы закрыты целевыми doc updates |
+| DOC-11 | P2 | Docs-чеклист ревьюера + обновление PR-шаблона | DevEx/CI owner | 4ч | DOC-07 | Чеклист обязателен и реально используется в docs PR |
+| DOC-12 | P2 | Документирование приоритетных hotspot-зон кода в первую очередь | Module owners | 18ч | DOC-09 | Приоритетные узлы закрыты целевыми doc updates |
 
 ---
 
@@ -49,7 +142,7 @@
 
 ### DOC-01 — Санировать root docs
 
-**Scope:** `README.md`, `README.ru.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `docs/guides/quickstart.md`.
+**Область изменений:** `README.md`, `README.ru.md`, `CONTRIBUTING.md`, `CHANGELOG.md`, `docs/guides/quickstart.md`.
 
 **Что делаем:**
 - исправляем устаревшие URL/названия;
@@ -57,46 +150,46 @@
 - удаляем некорректные/битые фрагменты changelog;
 - нормализуем стиль и повторяемость шагов входа.
 
-**Verification:**
+**Проверка:**
 - markdownlint/link-check на изменённых файлах;
 - ручной smoke-readme pass по шагам onboarding.
 
 ### DOC-02 — Truth table профилей запуска
 
-**Scope:** `docs/guides/quickstart.md` + ссылки из root docs.
+**Область изменений:** `docs/guides/quickstart.md` + ссылки из root docs.
 
 **Что делаем:**
 - добавляем таблицу профилей (Docker, non-Docker, local SSR, Next-hosted);
 - для каждого профиля фиксируем owner и canonical source;
 - объясняем связь с `modules.toml`.
 
-**Verification:**
+**Проверка:**
 - таблица проходит peer-review от DevEx и platform;
 - нет конфликтов портов/ролей между quickstart и скриптами.
 
 ### DOC-03 — Drift cleanup manual API docs
 
-**Scope:** `crates/rustok-workflow/CRATE_API.md` (+ cross-links).
+**Область изменений:** `crates/rustok-workflow/CRATE_API.md` (+ cross-links).
 
 **Что делаем:**
 - убираем ручные списки сигнатур из markdown;
 - оставляем curated overview: инварианты, границы, сценарии;
 - добавляем ссылки на generated reference.
 
-**Verification:**
+**Проверка:**
 - нет утверждений, противоречащих текущему коду;
 - module owner подтверждает, что doc не дублирует rustdoc вручную.
 
 ### DOC-04 — Cleanup changelog
 
-**Scope:** `CHANGELOG.md`.
+**Область изменений:** `CHANGELOG.md`.
 
 **Что делаем:**
 - приводим к фиксированному release-шаблону;
 - убираем «спринтовый дневник» и stale refs;
 - добавляем единые секции (Added/Changed/Fixed/Deprecated/Security).
 
-**Verification:**
+**Проверка:**
 - changelog читается как release history;
 - нет ссылок на отсутствующие документы.
 
@@ -128,7 +221,7 @@
 
 ## Детализация задач P2
 
-### DOC-09 — Generated reference pipeline
+### DOC-09 — Конвейер генерации reference-артефактов
 
 - rustdoc artifacts;
 - OpenAPI export;
@@ -137,7 +230,7 @@
 
 ### DOC-10/11 — Governance
 
-- reviewer checklist для docs PR;
+- чеклист ревьюера для docs PR;
 - обновлённый PR template;
 - ownership-правила для архитектурных/контрактных разделов.
 
@@ -147,6 +240,28 @@
 - целевые обновления сначала в зонах наибольшего drift.
 
 ---
+
+
+## DOC-12: приоритетные hotspot-зоны (first pass)
+
+Ниже — стартовый список зон с максимальным риском документационного drift,
+которые должны обновляться в первую очередь при изменениях кода.
+
+| Приоритет | Зона | Основные файлы/контракты | Почему это hotspot | Владелец | Минимум для PR |
+|---|---|---|---|---|---|
+| H1 | Runtime composition и module manifest | `modules.toml`, `docs/modules/registry.md`, `docs/index.md` | Любой drift ломает навигацию и контракт module ownership | Platform foundation + module platform owner | синхронизация registry/index + ссылка на changed manifest entries |
+| H2 | Installer / bootstrap flow | `docs/guides/quickstart.md`, `apps/server/docs/*`, `DECISIONS/2026-04-26-hybrid-installer-architecture.md` | Быстро устаревает из-за изменений install/preflight/apply цепочки | Platform foundation | обновить runbook + preflight/apply примеры + environment constraints |
+| H3 | Admin/storefront host topology | `CONTRIBUTING.md`, `docs/guides/quickstart.md`, `docs/UI/*` | Частые изменения портов/host wiring и transport contracts | Frontend owners | подтвердить profile matrix + host start commands + transport notes |
+| H4 | Workflow/Public API contracts | `crates/rustok-workflow/CRATE_API.md`, `apps/server/src/modules/workflow.rs` | Высокий риск ручного дублирования сигнатур | Workflow owner | обновить curated overview/invariants без ручных сигнатур |
+| H5 | Release and compatibility communication | `CHANGELOG.md`, `README.md`, `README.ru.md` | Дрейф релизных заметок и root onboarding влияет на весь репозиторий | Platform docs owner | release-log sections + кросс-ссылки на canonical docs |
+
+### Правило DOC-12 для каждого PR в hotspot-зоне
+
+Если PR затрагивает hotspot-зону, в описании PR обязательно добавить блок:
+
+- `Hotspot:` `H1..H5`
+- `Doc contracts updated:` список файлов
+- `Residual drift risk:` что осталось вне scope (если есть)
 
 ## Рекомендуемая дорожная карта (4 недели)
 
@@ -167,17 +282,31 @@
 
 ---
 
+
+## Правила ведения статусов
+
+- `[ ]` — не начато;
+- `[~]` — в работе (есть открытый PR);
+- `[x]` — завершено и вмержено в default branch;
+- у каждого пункта в PR обязательно указывать ссылку на закрывающий PR в комментарии к пункту.
+
+
+
+Формат отметки в трекере:
+- `- [~] DOC-01 ... (PR: #1234)`
+- `- [x] DOC-01 ... (PR: #1234, merged: YYYY-MM-DD)`
+
 ## Трекер статуса (обновлять в каждом docs PR)
 
-- [ ] DOC-01 Root docs sanitation
-- [ ] DOC-02 Profiles truth table
-- [ ] DOC-03 Workflow API doc drift cleanup
-- [ ] DOC-04 Changelog normalization
-- [ ] DOC-05 docs/index.md refactor
-- [ ] DOC-06 Registry ↔ manifest sync
-- [ ] DOC-07 Docs CI quality gates
-- [ ] DOC-08 Executable examples hub
-- [ ] DOC-09 Generated reference pipeline
-- [ ] DOC-10 Language/naming governance
-- [ ] DOC-11 Reviewer checklist + PR template
-- [ ] DOC-12 Code hotspots documentation
+- [~] DOC-01 Root docs sanitation (PR: pending)
+- [~] DOC-02 Profiles truth table (PR: pending)
+- [~] DOC-03 Workflow API doc drift cleanup (PR: pending)
+- [~] DOC-04 Changelog normalization (PR: pending)
+- [~] DOC-05 docs/index.md refactor (PR: pending)
+- [~] DOC-06 Registry ↔ manifest sync (PR: pending)
+- [~] DOC-07 Docs CI quality gates (PR: pending)
+- [~] DOC-08 Executable examples hub (PR: pending)
+- [ ] DOC-09 Конвейер генерации reference-артефактов
+- [~] DOC-10 Language/naming governance (PR: pending)
+- [~] DOC-11 Reviewer checklist + PR template (PR: pending)
+- [~] DOC-12 Code hotspots documentation (PR: pending)

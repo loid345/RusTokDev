@@ -48,10 +48,7 @@ The fastest way to get everything running:
 
 ```bash
 # Start all services (server, admin panels, storefronts)
-make dev-start
-
-# Or use the direct script
-./scripts/dev-start.sh start
+./scripts/dev-start.sh
 ```
 
 This will start:
@@ -61,6 +58,8 @@ This will start:
 - Leptos Admin (http://localhost:3001)
 - Next.js Storefront (http://localhost:3100)
 - Leptos Storefront (http://localhost:3101)
+
+Canonical profile matrix: [`docs/guides/quickstart.md`](docs/guides/quickstart.md).
 
 ### 3. Manual Setup
 
@@ -83,9 +82,10 @@ cd apps/server && cargo loco db migrate
 cargo loco start
 
 # 6. In separate terminals:
-cd apps/admin && npm install && npm run dev
-cd apps/storefront && npm install && npm run dev
-cd apps/next-frontend && npm install && npm run dev
+cd apps/next-admin && bun install && bun run dev
+cd apps/admin && trunk serve --port 3001
+cd apps/next-frontend && bun install && bun run dev
+cd apps/storefront && trunk serve --port 3101
 ```
 
 ### 4. Default Login Credentials
@@ -147,8 +147,8 @@ Update documentation when:
 ### Apps
 
 - **apps/server**: Main backend API (Loco.rs)
-- **apps/admin**: Leptos CSR admin panel
-- **apps/storefront**: Leptos SSR storefront
+- **apps/admin**: Leptos admin host (standalone profile via Trunk, SSR-first contract in docs)
+- **apps/storefront**: Leptos storefront host (standalone profile via Trunk, SSR-first contract in docs)
 - **apps/next-frontend**: Next.js storefront
 - **crates/rustok-mcp**: MCP adapter crate (includes stdio server binary `rustok-mcp-server`)
 

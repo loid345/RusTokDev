@@ -54,7 +54,6 @@ graph TD
         PROFILES["rustok-profiles"]
         REGION["rustok-region"]
         PRICING["rustok-pricing"]
-        TAX["rustok-tax"]
         INVENTORY["rustok-inventory"]
         ORDER["rustok-order"]
         PAYMENT["rustok-payment"]
@@ -101,7 +100,6 @@ graph TD
     SERVER --> PROFILES
     SERVER --> REGION
     SERVER --> PRICING
-    SERVER --> TAX
     SERVER --> INVENTORY
     SERVER --> ORDER
     SERVER --> PAYMENT
@@ -125,7 +123,6 @@ graph TD
     COMMERCE --> ORDER
     COMMERCE --> PAYMENT
     COMMERCE --> FULFILLMENT
-    CART --> TAX
     BLOG --> CONTENT
     BLOG --> COMMENTS
     BLOG --> TAXONOMY
@@ -148,6 +145,8 @@ graph TD
 ```
 
 ## Платформенные модули
+
+Синхронизация с `modules.toml`: актуализировано по manifest-составу на 2026-05-22.
 
 ### Core-модули
 

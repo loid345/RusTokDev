@@ -18,6 +18,7 @@
 - [Верификация API-поверхностей](./platform-api-surfaces-verification-plan.md)
 - [Верификация frontend-поверхностей](./platform-frontend-surfaces-verification-plan.md)
 - [Верификация качества и эксплуатационной готовности](./platform-quality-operations-verification-plan.md)
+  (включая Docs quality gates baseline по DOC-07)
 - [Верификация целостности ядра](./platform-core-integrity-verification-plan.md)
 - [Верификация RBAC, сервера и runtime-модулей](./rbac-server-modules-verification-plan.md)
 - [Верификация Leptos-библиотек](./leptos-libraries-verification-plan.md)
