@@ -31,6 +31,17 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def normalize_directory(directory: str) -> str:
+    trimmed = directory.strip()
+    if not trimmed:
+        return trimmed
+    if not trimmed.startswith("/"):
+        trimmed = f"/{trimmed}"
+    if trimmed != "/":
+        trimmed = trimmed.rstrip("/")
+    return trimmed
+
+
 def main() -> int:
     args = parse_args()
     root = args.root.resolve()
@@ -46,7 +57,7 @@ def main() -> int:
         match = DIRECTORY_RE.match(line)
         if not match:
             continue
-        directory = match.group(1)
+        directory = normalize_directory(match.group(1))
         if directory in seen:
             duplicates.add(directory)
         else:
