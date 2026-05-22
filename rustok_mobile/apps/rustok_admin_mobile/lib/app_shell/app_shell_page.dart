@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'auth_bootstrap.dart';
@@ -20,14 +21,17 @@ class AppShellPage extends ConsumerWidget {
           }
           return Column(
             children: [
-              _AuthContextBanner(data: data),
+              if (kDebugMode) _AuthContextBanner(data: data),
               Expanded(child: child),
             ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (_, _) => _BootstrapErrorView(
-          onRetry: () => ref.invalidate(authBootstrapProbeProvider),
+          onRetry: () {
+            ref.invalidate(authSessionProvider);
+            ref.invalidate(authBootstrapProbeProvider);
+          },
         ),
       ),
     );
