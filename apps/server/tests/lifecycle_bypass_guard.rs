@@ -65,6 +65,25 @@ fn bypass_toggle_api_is_not_used_in_production_paths() {
 }
 
 #[test]
+fn bypass_toggle_api_is_not_public() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("workspace root");
+    let tenant_modules_rs = repo_root.join("apps/server/src/models/tenant_modules.rs");
+    let content = fs::read_to_string(&tenant_modules_rs).expect("tenant_modules.rs should be readable");
+
+    assert!(
+        content.contains("pub(crate) async fn upsert_flag_without_lifecycle_for_migrations_only("),
+        "Bypass helper must stay crate-scoped for migrations only."
+    );
+    assert!(
+        !content.contains("pub async fn upsert_flag_without_lifecycle_for_migrations_only("),
+        "Bypass helper must not be public."
+    );
+}
+
+#[test]
 fn graphql_mutations_do_not_reintroduce_duplicate_platform_composition_mapping_tests() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
