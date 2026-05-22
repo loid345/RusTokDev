@@ -46,13 +46,19 @@
 ### Минимальные проверки для docs PR
 
 - `npx --yes markdownlint-cli <changed-files>` (или эквивалентный скрипт репозитория);
-- `npx --yes lychee --no-progress <changed-files>` (или эквивалентный link-check скрипт репозитория);
+- `lychee --no-progress <changed-files>` (или эквивалентный link-check скрипт репозитория);
 - ручной проход всех изменённых ссылок из `docs/index.md` и локальных `README.md`.
 
 Если в текущем PR нет CI-скрипта под один из пунктов, фиксируем это в разделе **Risks / Follow-ups** и создаём follow-up в DOC-07.
 
 
 
+
+### Требования к окружению для checks
+
+- `markdownlint-cli`: запускается через `npx --yes markdownlint-cli ...`;
+- `lychee`: должен быть установлен в CI/локально как бинарь (`cargo install lychee`
+  или prebuilt release), запуск через `lychee ...`, без `npx`.
 
 ### Политика отчёта проверок (anti-fake)
 
@@ -72,9 +78,9 @@
 
 | Batch | Закрывает | Scope (точно) | DoD (проверка результата) | Verification (минимум) |
 |---|---|---|---|---|
-| B1 | DOC-01 (часть 1) | `README.md`, `README.ru.md` | Убраны битые ссылки/устаревшие имена сервисов, onboarding-consistency между EN/RU README | `npx --yes markdownlint-cli README.md README.ru.md`; `npx --yes lychee --no-progress README.md README.ru.md` |
-| B2 | DOC-01 (часть 2) + DOC-04 | `CONTRIBUTING.md`, `CHANGELOG.md` | `CHANGELOG.md` в release-шаблоне, нет stale refs; CONTRIBUTING соответствует текущему workflow | `npx --yes markdownlint-cli CONTRIBUTING.md CHANGELOG.md`; `npx --yes lychee --no-progress CONTRIBUTING.md CHANGELOG.md` |
-| B3 | DOC-02 | `docs/guides/quickstart.md` + ссылки из root docs | Добавлена canonical truth table профилей запуска с owner/source | `npx --yes markdownlint-cli docs/guides/quickstart.md`; `npx --yes lychee --no-progress docs/guides/quickstart.md` |
+| B1 | DOC-01 (часть 1) | `README.md`, `README.ru.md` | Убраны битые ссылки/устаревшие имена сервисов, onboarding-consistency между EN/RU README | `npx --yes markdownlint-cli README.md README.ru.md`; `lychee --no-progress README.md README.ru.md` |
+| B2 | DOC-01 (часть 2) + DOC-04 | `CONTRIBUTING.md`, `CHANGELOG.md` | `CHANGELOG.md` в release-шаблоне, нет stale refs; CONTRIBUTING соответствует текущему workflow | `npx --yes markdownlint-cli CONTRIBUTING.md CHANGELOG.md`; `lychee --no-progress CONTRIBUTING.md CHANGELOG.md` |
+| B3 | DOC-02 | `docs/guides/quickstart.md` + ссылки из root docs | Добавлена canonical truth table профилей запуска с owner/source | `npx --yes markdownlint-cli docs/guides/quickstart.md`; `lychee --no-progress docs/guides/quickstart.md` |
 | B4 | DOC-03 | `crates/rustok-workflow/CRATE_API.md` | Удалены ручные сигнатуры; оставлены инварианты + ссылки на generated reference | `npx --yes markdownlint-cli crates/rustok-workflow/CRATE_API.md`; owner sign-off |
 | B5 | DOC-07 (bootstrap) | `.github`/CI docs jobs + `docs/verification/*` (если нужно) | PR падает на broken links/anchors/markdown errors | Smoke PR с намеренно сломанной ссылкой (ожидаемый fail) |
 
