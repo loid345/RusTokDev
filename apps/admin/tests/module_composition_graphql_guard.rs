@@ -83,6 +83,18 @@ fn toggle_module_helper_uses_graphql_only_contract() {
         helper_body.contains("request("),
         "toggle_module must call GraphQL request path"
     );
+    assert!(
+        helper_body.contains("ToggleModuleVariables"),
+        "toggle_module must use typed ToggleModuleVariables payload"
+    );
+    assert!(
+        helper_body.contains("module_slug"),
+        "toggle_module must forward module_slug into GraphQL variables"
+    );
+    assert!(
+        helper_body.contains("enabled"),
+        "toggle_module must forward enabled flag into GraphQL variables"
+    );
 }
 
 fn extract_function_block<'a>(content: &'a str, signature: &str) -> Option<&'a str> {
