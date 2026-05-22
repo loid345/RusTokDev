@@ -139,6 +139,38 @@ fn toggle_module_helper_uses_graphql_only_contract() {
     );
 }
 
+#[test]
+fn toggle_module_helper_forwards_auth_context_without_local_overrides() {
+    let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let api_path = crate_root.join("src/features/modules/api.rs");
+    let content = fs::read_to_string(&api_path).expect("read api.rs");
+
+    let helper_body = extract_function_block(&content, "pub async fn toggle_module(")
+        .expect("toggle_module helper signature not found");
+
+    assert_eq!(
+        helper_body.matches("request(").count(),
+        1,
+        "toggle_module must perform exactly one GraphQL request call"
+    );
+    assert!(
+        helper_body.contains("token,"),
+        "toggle_module must forward token to canonical GraphQL request"
+    );
+    assert!(
+        helper_body.contains("tenant_slug,"),
+        "toggle_module must forward tenant_slug to canonical GraphQL request"
+    );
+    assert!(
+        !helper_body.contains("Some("),
+        "toggle_module must not locally override auth context when forwarding request"
+    );
+    assert!(
+        !helper_body.contains("None"),
+        "toggle_module must not locally null auth context when forwarding request"
+    );
+}
+
 fn assert_graphql_only_helper(
     content: &str,
     signature: &str,
