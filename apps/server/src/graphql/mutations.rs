@@ -1217,6 +1217,45 @@ mod tests {
     }
 
     #[test]
+    fn toggle_error_taxonomy_matrix_stays_stable() {
+        let cases = vec![
+            (
+                ToggleModuleError::UnknownModule,
+                "Unknown module",
+                "unknown-module",
+            ),
+            (
+                ToggleModuleError::CoreModuleCannotBeDisabled("core".into()),
+                "Core module cannot be disabled: core",
+                "core-disable",
+            ),
+            (
+                ToggleModuleError::MissingDependencies("pricing".into()),
+                "Missing module dependencies: pricing",
+                "missing-dependencies",
+            ),
+            (
+                ToggleModuleError::HasDependents("checkout".into()),
+                "Module is required by: checkout",
+                "has-dependents",
+            ),
+            (
+                ToggleModuleError::HookFailed("boom".into()),
+                "Module lifecycle hook failed before state commit: boom",
+                "hook-failed",
+            ),
+        ];
+
+        for (error, expected_message, case_name) in cases {
+            let field_error = map_toggle_module_error(error);
+            assert_eq!(
+                field_error.message, expected_message,
+                "toggle error taxonomy drifted for case: {case_name}"
+            );
+        }
+    }
+
+    #[test]
     fn manifest_error_maps_validation_errors_to_user_messages() {
         let err = map_manifest_error(ManifestError::RequiredModule("pages".to_string()));
         assert!(err.message.contains("required"));
