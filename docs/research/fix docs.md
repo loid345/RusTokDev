@@ -241,6 +241,28 @@
 
 ---
 
+
+## DOC-12: приоритетные hotspot-зоны (first pass)
+
+Ниже — стартовый список зон с максимальным риском документационного drift,
+которые должны обновляться в первую очередь при изменениях кода.
+
+| Приоритет | Зона | Основные файлы/контракты | Почему это hotspot | Владелец | Минимум для PR |
+|---|---|---|---|---|---|
+| H1 | Runtime composition и module manifest | `modules.toml`, `docs/modules/registry.md`, `docs/index.md` | Любой drift ломает навигацию и контракт module ownership | Platform foundation + module platform owner | синхронизация registry/index + ссылка на changed manifest entries |
+| H2 | Installer / bootstrap flow | `docs/guides/quickstart.md`, `apps/server/docs/*`, `DECISIONS/2026-04-26-hybrid-installer-architecture.md` | Быстро устаревает из-за изменений install/preflight/apply цепочки | Platform foundation | обновить runbook + preflight/apply примеры + environment constraints |
+| H3 | Admin/storefront host topology | `CONTRIBUTING.md`, `docs/guides/quickstart.md`, `docs/UI/*` | Частые изменения портов/host wiring и transport contracts | Frontend owners | подтвердить profile matrix + host start commands + transport notes |
+| H4 | Workflow/Public API contracts | `crates/rustok-workflow/CRATE_API.md`, `apps/server/src/modules/workflow.rs` | Высокий риск ручного дублирования сигнатур | Workflow owner | обновить curated overview/invariants без ручных сигнатур |
+| H5 | Release and compatibility communication | `CHANGELOG.md`, `README.md`, `README.ru.md` | Дрейф релизных заметок и root onboarding влияет на весь репозиторий | Platform docs owner | release-log sections + кросс-ссылки на canonical docs |
+
+### Правило DOC-12 для каждого PR в hotspot-зоне
+
+Если PR затрагивает hotspot-зону, в описании PR обязательно добавить блок:
+
+- `Hotspot:` `H1..H5`
+- `Doc contracts updated:` список файлов
+- `Residual drift risk:` что осталось вне scope (если есть)
+
 ## Рекомендуемая дорожная карта (4 недели)
 
 - **Неделя 1:** DOC-01, DOC-02, DOC-03, DOC-04.
@@ -287,4 +309,4 @@
 - [ ] DOC-09 Конвейер генерации reference-артефактов
 - [~] DOC-10 Language/naming governance (PR: pending)
 - [~] DOC-11 Reviewer checklist + PR template (PR: pending)
-- [ ] DOC-12 Code hotspots documentation
+- [~] DOC-12 Code hotspots documentation (PR: pending)
