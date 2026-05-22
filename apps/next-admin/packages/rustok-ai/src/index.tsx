@@ -569,6 +569,8 @@ export function AiAdminPage(props: AiAdminPageProps) {
     async (kind: DirectSubmitKind, job: () => Promise<void>) => {
       if (directSubmitLockRef.current) return;
       directSubmitLockRef.current = true;
+      setError(null);
+      setFeedback(null);
       setActiveDirectSubmit(kind);
       try {
         await job();
@@ -1911,8 +1913,6 @@ export function AiAdminPage(props: AiAdminPageProps) {
                   className='space-y-3'
                   onSubmit={async (event) => {
                     event.preventDefault();
-                    setError(null);
-                    setFeedback(null);
                     if (!sessionForm.taskProfileId) {
                       setError(
                         'Select the `blog_draft` task profile before generating blog draft content.'
@@ -2109,8 +2109,6 @@ export function AiAdminPage(props: AiAdminPageProps) {
                   className='space-y-3'
                   onSubmit={async (event) => {
                     event.preventDefault();
-                    setError(null);
-                    setFeedback(null);
                     if (!sessionForm.taskProfileId) {
                       setError(
                         'Select the `product_copy` task profile before generating localized product copy.'
@@ -2635,8 +2633,6 @@ export function AiAdminPage(props: AiAdminPageProps) {
                   className='space-y-3'
                   onSubmit={async (event) => {
                     event.preventDefault();
-                    setError(null);
-                    setFeedback(null);
                     if (!sessionForm.taskProfileId) {
                       setError(
                         'Select the `image_asset` task profile before generating a media image.'
@@ -2794,8 +2790,6 @@ export function AiAdminPage(props: AiAdminPageProps) {
                   className='space-y-3'
                   onSubmit={async (event) => {
                     event.preventDefault();
-                    setError(null);
-                    setFeedback(null);
                     if (!sessionForm.taskProfileId) {
                       setError(
                         'Select the `alloy_code` task profile before running Alloy Assist.'
@@ -2938,8 +2932,6 @@ export function AiAdminPage(props: AiAdminPageProps) {
                   className='space-y-3'
                   onSubmit={async (event) => {
                     event.preventDefault();
-                    setError(null);
-                    setFeedback(null);
                     await runDirectSubmit('new_session', async () => {
                       const started = await gql<
                         {
