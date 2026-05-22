@@ -2188,6 +2188,8 @@ export function AiAdminPage(props: AiAdminPageProps) {
                           ? selectedTaskProfile.id
                           : productAttributesTaskProfile.id;
                       const normalizedProductId = productAttributesForm.productId.trim();
+                      const normalizedTitle = productAttributesForm.title.trim();
+                      const normalizedLocale = productAttributesForm.locale.trim();
                       if (!normalizedProductId) {
                         setError('Product id is required.');
                         return;
@@ -2242,12 +2244,12 @@ export function AiAdminPage(props: AiAdminPageProps) {
                         RUN_TASK_JOB_MUTATION,
                         {
                           input: {
-                            title: productAttributesForm.title,
+                            title: normalizedTitle || 'Product Attributes',
                             providerProfileId:
                               sessionForm.providerProfileId || null,
                             taskProfileId: resolvedTaskProfileId,
                             executionMode: 'DIRECT',
-                            locale: productAttributesForm.locale || null,
+                            locale: normalizedLocale || null,
                             taskInputJson,
                             metadata: '{}'
                           }
