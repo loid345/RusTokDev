@@ -777,39 +777,43 @@ export function AiAdminPage(props: AiAdminPageProps) {
     });
   }, [productAttributesTaskProfile, taskProfiles]);
 
+  const DEFAULT_PROVIDER_FORM = {
+    id: '',
+    slug: '',
+    displayName: '',
+    providerKind: 'OPEN_AI_COMPATIBLE',
+    baseUrl: 'http://localhost:11434',
+    model: 'gpt-4.1-mini',
+    apiKeySecret: '',
+    temperature: '0.2',
+    maxTokens: '1024',
+    capabilities:
+      'TEXT_GENERATION,STRUCTURED_GENERATION,IMAGE_GENERATION,CODE_GENERATION',
+    allowedTaskProfiles: '',
+    deniedTaskProfiles: '',
+    restrictedRoleSlugs: '',
+    isActive: true
+  };
+
+  const DEFAULT_TOOL_FORM = {
+    id: '',
+    slug: '',
+    displayName: '',
+    description: '',
+    allowedTools:
+      'list_modules,query_modules,module_details,mcp_health,mcp_whoami',
+    deniedTools: '',
+    sensitiveTools:
+      'alloy_create_script,alloy_update_script,alloy_delete_script,alloy_apply_module_scaffold',
+    isActive: true
+  };
+
   const resetProviderForm = React.useCallback(() => {
-    setProviderForm({
-      id: '',
-      slug: '',
-      displayName: '',
-      providerKind: 'OPEN_AI_COMPATIBLE',
-      baseUrl: 'http://localhost:11434',
-      model: 'gpt-4.1-mini',
-      apiKeySecret: '',
-      temperature: '0.2',
-      maxTokens: '1024',
-      capabilities:
-        'TEXT_GENERATION,STRUCTURED_GENERATION,IMAGE_GENERATION,CODE_GENERATION',
-      allowedTaskProfiles: '',
-      deniedTaskProfiles: '',
-      restrictedRoleSlugs: '',
-      isActive: true
-    });
+    setProviderForm({ ...DEFAULT_PROVIDER_FORM });
   }, []);
 
   const resetToolForm = React.useCallback(() => {
-    setToolForm({
-      id: '',
-      slug: '',
-      displayName: '',
-      description: '',
-      allowedTools:
-        'list_modules,query_modules,module_details,mcp_health,mcp_whoami',
-      deniedTools: '',
-      sensitiveTools:
-        'alloy_create_script,alloy_update_script,alloy_delete_script,alloy_apply_module_scaffold',
-      isActive: true
-    });
+    setToolForm({ ...DEFAULT_TOOL_FORM });
   }, []);
 
   const resetTaskForm = React.useCallback(() => {
