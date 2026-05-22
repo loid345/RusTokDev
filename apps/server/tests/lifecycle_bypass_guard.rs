@@ -149,6 +149,33 @@ fn extract_function_block<'a>(content: &'a str, signature: &str) -> Option<&'a s
 }
 
 #[test]
+fn extract_function_block_handles_nested_braces() {
+    let source = r#"
+#[allow(dead_code)]
+pub(crate) async fn upsert_flag_without_lifecycle_for_migrations_only() {
+    if true {
+        let nested = || {
+            let map = std::collections::BTreeMap::<String, String>::new();
+            map
+        };
+        let _ = nested();
+    }
+}
+
+pub(crate) async fn other_helper() {}
+"#;
+
+    let extracted = extract_function_block(
+        source,
+        "pub(crate) async fn upsert_flag_without_lifecycle_for_migrations_only()",
+    )
+    .expect("function should be extracted");
+    assert!(extracted.contains("BTreeMap::<String, String>::new()"));
+    assert!(extracted.trim_end().ends_with('}'));
+    assert!(!extracted.contains("pub(crate) async fn other_helper()"));
+}
+
+#[test]
 fn graphql_mutations_do_not_reintroduce_duplicate_platform_composition_mapping_tests() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
