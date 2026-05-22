@@ -40,7 +40,10 @@ def parse_directory_value(raw_value: str) -> str:
     trailing = value[closing_index + 1 :].strip()
     if trailing and not trailing.startswith("#"):
         return ""
-    return value[1:closing_index]
+    parsed = value[1:closing_index]
+    if quote == '"':
+        parsed = parsed.replace(r"\\", "\\").replace(r"\"", '"')
+    return parsed
 
 
 def parse_args() -> argparse.Namespace:

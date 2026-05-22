@@ -276,6 +276,29 @@ class DependabotDirectoryCheckTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("All Dependabot update directories exist.", result.stdout)
 
+    def test_allows_escaped_quote_inside_double_quoted_scalar(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / 'apps' / 'server"prod').mkdir(parents=True)
+            config = root / ".github" / "dependabot.yml"
+            config.parent.mkdir(parents=True)
+            config.write_text(
+                textwrap.dedent(
+                    r"""
+                    version: 2
+                    updates:
+                      - package-ecosystem: "cargo"
+                        directory: "/apps/server\"prod"
+                    """
+                ).strip()
+                + "\n",
+                encoding="utf-8",
+            )
+
+            result = self.run_script(root, config)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("All Dependabot update directories exist.", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
