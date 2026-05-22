@@ -162,6 +162,21 @@ type RunStreamEvent = {
   createdAt: string;
 };
 
+type DirectSubmitKind =
+  | 'blog_draft'
+  | 'product_copy'
+  | 'image_asset'
+  | 'alloy_code'
+  | 'new_session';
+
+const DIRECT_SUBMIT_LOCK_MESSAGE =
+  'Another direct job is already running. Please wait.';
+const DIRECT_SUBMIT_LOCK_REJECTED = 'lock_rejected' as const;
+const DIRECT_SUBMIT_ACCEPTED = 'accepted' as const;
+type DirectSubmitResult =
+  | typeof DIRECT_SUBMIT_ACCEPTED
+  | typeof DIRECT_SUBMIT_LOCK_REJECTED;
+
 const BOOTSTRAP_QUERY = `
   query AiBootstrap {
     aiRuntimeMetrics {
@@ -554,8 +569,33 @@ export function AiAdminPage(props: AiAdminPageProps) {
   const [reply, setReply] = React.useState('');
   const [isSubmittingProductAttributes, setIsSubmittingProductAttributes] =
     React.useState(false);
-  const [isSubmittingDirectJob, setIsSubmittingDirectJob] =
-    React.useState(false);
+  const [activeDirectSubmit, setActiveDirectSubmit] =
+    React.useState<DirectSubmitKind | null>(null);
+  const isSubmittingDirectJob = activeDirectSubmit !== null;
+  const directSubmitLockRef = React.useRef(false);
+  const runDirectSubmit = React.useCallback(
+    async (
+      kind: DirectSubmitKind,
+      job: () => Promise<void>
+    ): Promise<DirectSubmitResult> => {
+      if (directSubmitLockRef.current) return DIRECT_SUBMIT_LOCK_REJECTED;
+      directSubmitLockRef.current = true;
+      setError(null);
+      setFeedback(null);
+      setActiveDirectSubmit(kind);
+      try {
+        await job();
+        return DIRECT_SUBMIT_ACCEPTED;
+      } finally {
+        setActiveDirectSubmit(null);
+        directSubmitLockRef.current = false;
+      }
+    },
+    []
+  );
+  const showDirectSubmitLockRejected = React.useCallback(() => {
+    setError(DIRECT_SUBMIT_LOCK_MESSAGE);
+  }, []);
   const productAttributesPrefillAppliedRef = React.useRef(false);
 
   const productAttributesTaskProfile = React.useMemo(
@@ -1897,58 +1937,63 @@ export function AiAdminPage(props: AiAdminPageProps) {
                       );
                       return;
                     }
-                    setIsSubmittingDirectJob(true);
-                    try {
-                      const taskInputJson = JSON.stringify({
-                        post_id: blogForm.postId || null,
-                        source_locale: blogForm.sourceLocale || null,
-                        source_title: blogForm.sourceTitle || null,
-                        source_body: blogForm.sourceBody || null,
-                        source_excerpt: blogForm.sourceExcerpt || null,
-                        source_seo_title: blogForm.sourceSeoTitle || null,
-                        source_seo_description:
-                          blogForm.sourceSeoDescription || null,
-                        tags: splitCsv(blogForm.tags),
-                        category_id: blogForm.categoryId || null,
-                        featured_image_url: blogForm.featuredImageUrl || null,
-                        copy_instructions: blogForm.copyInstructions || null,
-                        assistant_prompt: blogForm.assistantPrompt || null
-                      });
-                      const started = await gql<
-                        {
-                          runAiTaskJob: {
-                            session: { session: { id: string; title: string } };
-                          };
-                        },
-                        { input: Record<string, unknown> }
-                      >(
-                        RUN_TASK_JOB_MUTATION,
-                        {
-                          input: {
-                            title: blogForm.title,
-                            providerProfileId:
-                              sessionForm.providerProfileId || null,
-                            taskProfileId: sessionForm.taskProfileId,
-                            executionMode: 'DIRECT',
-                            locale: blogForm.locale || null,
-                            taskInputJson,
-                            metadata: '{}'
-                          }
-                        },
-                        props
-                      ).catch((err: Error) => {
-                        setError(err.message);
-                        return null;
-                      });
-                      if (!started) return;
-                      const id = started.runAiTaskJob.session.session.id;
-                      setFeedback(
-                        `Blog draft job \`${started.runAiTaskJob.session.session.title}\` completed.`
-                      );
-                      await loadBootstrap();
-                      await loadSession(id);
-                    } finally {
-                      setIsSubmittingDirectJob(false);
+                    const accepted = await runDirectSubmit(
+                      'blog_draft',
+                      async () => {
+                        const taskInputJson = JSON.stringify({
+                          post_id: blogForm.postId || null,
+                          source_locale: blogForm.sourceLocale || null,
+                          source_title: blogForm.sourceTitle || null,
+                          source_body: blogForm.sourceBody || null,
+                          source_excerpt: blogForm.sourceExcerpt || null,
+                          source_seo_title: blogForm.sourceSeoTitle || null,
+                          source_seo_description:
+                            blogForm.sourceSeoDescription || null,
+                          tags: splitCsv(blogForm.tags),
+                          category_id: blogForm.categoryId || null,
+                          featured_image_url: blogForm.featuredImageUrl || null,
+                          copy_instructions: blogForm.copyInstructions || null,
+                          assistant_prompt: blogForm.assistantPrompt || null
+                        });
+                        const started = await gql<
+                          {
+                            runAiTaskJob: {
+                              session: {
+                                session: { id: string; title: string };
+                              };
+                            };
+                          },
+                          { input: Record<string, unknown> }
+                        >(
+                          RUN_TASK_JOB_MUTATION,
+                          {
+                            input: {
+                              title: blogForm.title,
+                              providerProfileId:
+                                sessionForm.providerProfileId || null,
+                              taskProfileId: sessionForm.taskProfileId,
+                              executionMode: 'DIRECT',
+                              locale: blogForm.locale || null,
+                              taskInputJson,
+                              metadata: '{}'
+                            }
+                          },
+                          props
+                        ).catch((err: Error) => {
+                          setError(err.message);
+                          return null;
+                        });
+                        if (!started) return;
+                        const id = started.runAiTaskJob.session.session.id;
+                        setFeedback(
+                          `Blog draft job \`${started.runAiTaskJob.session.session.title}\` completed.`
+                        );
+                        await loadBootstrap();
+                        await loadSession(id);
+                      }
+                    );
+                    if (accepted === DIRECT_SUBMIT_LOCK_REJECTED) {
+                      showDirectSubmitLockRejected();
                     }
                   }}
                 >
@@ -2076,7 +2121,9 @@ export function AiAdminPage(props: AiAdminPageProps) {
                     type='submit'
                     disabled={isSubmittingDirectJob}
                   >
-                    Generate blog draft
+                    {activeDirectSubmit === 'blog_draft'
+                      ? 'Submitting…'
+                      : 'Generate blog draft'}
                   </button>
                 </form>
               </Card>
@@ -2111,55 +2158,62 @@ export function AiAdminPage(props: AiAdminPageProps) {
                       );
                       return;
                     }
-                    setIsSubmittingDirectJob(true);
-                    try {
-                      const taskInputJson = JSON.stringify({
-                        product_id: normalizedProductId,
-                        source_locale: productForm.sourceLocale || null,
-                        source_title: productForm.sourceTitle || null,
-                        source_description:
-                          productForm.sourceDescription || null,
-                        source_meta_title: productForm.sourceMetaTitle || null,
-                        source_meta_description:
-                          productForm.sourceMetaDescription || null,
-                        copy_instructions: productForm.copyInstructions || null,
-                        assistant_prompt: productForm.assistantPrompt || null
-                      });
-                      const started = await gql<
-                        {
-                          runAiTaskJob: {
-                            session: { session: { id: string; title: string } };
-                          };
-                        },
-                        { input: Record<string, unknown> }
-                      >(
-                        RUN_TASK_JOB_MUTATION,
-                        {
-                          input: {
-                            title: productForm.title,
-                            providerProfileId:
-                              sessionForm.providerProfileId || null,
-                            taskProfileId: sessionForm.taskProfileId,
-                            executionMode: 'DIRECT',
-                            locale: productForm.locale || null,
-                            taskInputJson,
-                            metadata: '{}'
-                          }
-                        },
-                        props
-                      ).catch((err: Error) => {
-                        setError(err.message);
-                        return null;
-                      });
-                      if (!started) return;
-                      const id = started.runAiTaskJob.session.session.id;
-                      setFeedback(
-                        `Product copy job \`${started.runAiTaskJob.session.session.title}\` completed.`
-                      );
-                      await loadBootstrap();
-                      await loadSession(id);
-                    } finally {
-                      setIsSubmittingDirectJob(false);
+                    const accepted = await runDirectSubmit(
+                      'product_copy',
+                      async () => {
+                        const taskInputJson = JSON.stringify({
+                          product_id: normalizedProductId,
+                          source_locale: productForm.sourceLocale || null,
+                          source_title: productForm.sourceTitle || null,
+                          source_description:
+                            productForm.sourceDescription || null,
+                          source_meta_title:
+                            productForm.sourceMetaTitle || null,
+                          source_meta_description:
+                            productForm.sourceMetaDescription || null,
+                          copy_instructions:
+                            productForm.copyInstructions || null,
+                          assistant_prompt: productForm.assistantPrompt || null
+                        });
+                        const started = await gql<
+                          {
+                            runAiTaskJob: {
+                              session: {
+                                session: { id: string; title: string };
+                              };
+                            };
+                          },
+                          { input: Record<string, unknown> }
+                        >(
+                          RUN_TASK_JOB_MUTATION,
+                          {
+                            input: {
+                              title: productForm.title,
+                              providerProfileId:
+                                sessionForm.providerProfileId || null,
+                              taskProfileId: sessionForm.taskProfileId,
+                              executionMode: 'DIRECT',
+                              locale: productForm.locale || null,
+                              taskInputJson,
+                              metadata: '{}'
+                            }
+                          },
+                          props
+                        ).catch((err: Error) => {
+                          setError(err.message);
+                          return null;
+                        });
+                        if (!started) return;
+                        const id = started.runAiTaskJob.session.session.id;
+                        setFeedback(
+                          `Product copy job \`${started.runAiTaskJob.session.session.title}\` completed.`
+                        );
+                        await loadBootstrap();
+                        await loadSession(id);
+                      }
+                    );
+                    if (accepted === DIRECT_SUBMIT_LOCK_REJECTED) {
+                      showDirectSubmitLockRejected();
                     }
                   }}
                 >
@@ -2265,7 +2319,9 @@ export function AiAdminPage(props: AiAdminPageProps) {
                     type='submit'
                     disabled={isSubmittingDirectJob}
                   >
-                    Generate product copy
+                    {activeDirectSubmit === 'product_copy'
+                      ? 'Submitting…'
+                      : 'Generate product copy'}
                   </button>
                 </form>
               </Card>
@@ -2625,53 +2681,58 @@ export function AiAdminPage(props: AiAdminPageProps) {
                       );
                       return;
                     }
-                    setIsSubmittingDirectJob(true);
-                    try {
-                      const taskInputJson = JSON.stringify({
-                        prompt: imageForm.prompt,
-                        negative_prompt: imageForm.negativePrompt || null,
-                        title: imageForm.mediaTitle || null,
-                        alt_text: imageForm.altText || null,
-                        caption: imageForm.caption || null,
-                        file_name: imageForm.fileName || null,
-                        size: imageForm.size || null,
-                        assistant_prompt: imageForm.assistantPrompt || null
-                      });
-                      const started = await gql<
-                        {
-                          runAiTaskJob: {
-                            session: { session: { id: string; title: string } };
-                          };
-                        },
-                        { input: Record<string, unknown> }
-                      >(
-                        RUN_TASK_JOB_MUTATION,
-                        {
-                          input: {
-                            title: imageForm.title,
-                            providerProfileId:
-                              sessionForm.providerProfileId || null,
-                            taskProfileId: sessionForm.taskProfileId,
-                            executionMode: 'DIRECT',
-                            locale: imageForm.locale || null,
-                            taskInputJson,
-                            metadata: '{}'
-                          }
-                        },
-                        props
-                      ).catch((err: Error) => {
-                        setError(err.message);
-                        return null;
-                      });
-                      if (!started) return;
-                      const id = started.runAiTaskJob.session.session.id;
-                      setFeedback(
-                        `Image job \`${started.runAiTaskJob.session.session.title}\` completed.`
-                      );
-                      await loadBootstrap();
-                      await loadSession(id);
-                    } finally {
-                      setIsSubmittingDirectJob(false);
+                    const accepted = await runDirectSubmit(
+                      'image_asset',
+                      async () => {
+                        const taskInputJson = JSON.stringify({
+                          prompt: imageForm.prompt,
+                          negative_prompt: imageForm.negativePrompt || null,
+                          title: imageForm.mediaTitle || null,
+                          alt_text: imageForm.altText || null,
+                          caption: imageForm.caption || null,
+                          file_name: imageForm.fileName || null,
+                          size: imageForm.size || null,
+                          assistant_prompt: imageForm.assistantPrompt || null
+                        });
+                        const started = await gql<
+                          {
+                            runAiTaskJob: {
+                              session: {
+                                session: { id: string; title: string };
+                              };
+                            };
+                          },
+                          { input: Record<string, unknown> }
+                        >(
+                          RUN_TASK_JOB_MUTATION,
+                          {
+                            input: {
+                              title: imageForm.title,
+                              providerProfileId:
+                                sessionForm.providerProfileId || null,
+                              taskProfileId: sessionForm.taskProfileId,
+                              executionMode: 'DIRECT',
+                              locale: imageForm.locale || null,
+                              taskInputJson,
+                              metadata: '{}'
+                            }
+                          },
+                          props
+                        ).catch((err: Error) => {
+                          setError(err.message);
+                          return null;
+                        });
+                        if (!started) return;
+                        const id = started.runAiTaskJob.session.session.id;
+                        setFeedback(
+                          `Image job \`${started.runAiTaskJob.session.session.title}\` completed.`
+                        );
+                        await loadBootstrap();
+                        await loadSession(id);
+                      }
+                    );
+                    if (accepted === DIRECT_SUBMIT_LOCK_REJECTED) {
+                      showDirectSubmitLockRejected();
                     }
                   }}
                 >
@@ -2765,7 +2826,9 @@ export function AiAdminPage(props: AiAdminPageProps) {
                     type='submit'
                     disabled={isSubmittingDirectJob}
                   >
-                    Generate media image
+                    {activeDirectSubmit === 'image_asset'
+                      ? 'Submitting…'
+                      : 'Generate media image'}
                   </button>
                 </form>
               </Card>
@@ -2786,52 +2849,57 @@ export function AiAdminPage(props: AiAdminPageProps) {
                       );
                       return;
                     }
-                    setIsSubmittingDirectJob(true);
-                    try {
-                      const taskInputJson = JSON.stringify({
-                        operation: alloyForm.operation,
-                        script_id: alloyForm.scriptId || null,
-                        script_name: alloyForm.scriptName || null,
-                        script_source: alloyForm.scriptSource || null,
-                        runtime_payload_json:
-                          alloyForm.runtimePayloadJson || null,
-                        assistant_prompt: alloyForm.assistantPrompt || null
-                      });
-                      const started = await gql<
-                        {
-                          runAiTaskJob: {
-                            session: { session: { id: string; title: string } };
-                          };
-                        },
-                        { input: Record<string, unknown> }
-                      >(
-                        RUN_TASK_JOB_MUTATION,
-                        {
-                          input: {
-                            title: alloyForm.title,
-                            providerProfileId:
-                              sessionForm.providerProfileId || null,
-                            taskProfileId: sessionForm.taskProfileId,
-                            executionMode: 'DIRECT',
-                            locale: alloyForm.locale || null,
-                            taskInputJson,
-                            metadata: '{}'
-                          }
-                        },
-                        props
-                      ).catch((err: Error) => {
-                        setError(err.message);
-                        return null;
-                      });
-                      if (!started) return;
-                      const id = started.runAiTaskJob.session.session.id;
-                      setFeedback(
-                        `Alloy job \`${started.runAiTaskJob.session.session.title}\` completed.`
-                      );
-                      await loadBootstrap();
-                      await loadSession(id);
-                    } finally {
-                      setIsSubmittingDirectJob(false);
+                    const accepted = await runDirectSubmit(
+                      'alloy_code',
+                      async () => {
+                        const taskInputJson = JSON.stringify({
+                          operation: alloyForm.operation,
+                          script_id: alloyForm.scriptId || null,
+                          script_name: alloyForm.scriptName || null,
+                          script_source: alloyForm.scriptSource || null,
+                          runtime_payload_json:
+                            alloyForm.runtimePayloadJson || null,
+                          assistant_prompt: alloyForm.assistantPrompt || null
+                        });
+                        const started = await gql<
+                          {
+                            runAiTaskJob: {
+                              session: {
+                                session: { id: string; title: string };
+                              };
+                            };
+                          },
+                          { input: Record<string, unknown> }
+                        >(
+                          RUN_TASK_JOB_MUTATION,
+                          {
+                            input: {
+                              title: alloyForm.title,
+                              providerProfileId:
+                                sessionForm.providerProfileId || null,
+                              taskProfileId: sessionForm.taskProfileId,
+                              executionMode: 'DIRECT',
+                              locale: alloyForm.locale || null,
+                              taskInputJson,
+                              metadata: '{}'
+                            }
+                          },
+                          props
+                        ).catch((err: Error) => {
+                          setError(err.message);
+                          return null;
+                        });
+                        if (!started) return;
+                        const id = started.runAiTaskJob.session.session.id;
+                        setFeedback(
+                          `Alloy job \`${started.runAiTaskJob.session.session.title}\` completed.`
+                        );
+                        await loadBootstrap();
+                        await loadSession(id);
+                      }
+                    );
+                    if (accepted === DIRECT_SUBMIT_LOCK_REJECTED) {
+                      showDirectSubmitLockRejected();
                     }
                   }}
                 >
@@ -2911,7 +2979,9 @@ export function AiAdminPage(props: AiAdminPageProps) {
                     type='submit'
                     disabled={isSubmittingDirectJob}
                   >
-                    Run Alloy job
+                    {activeDirectSubmit === 'alloy_code'
+                      ? 'Submitting…'
+                      : 'Run Alloy job'}
                   </button>
                 </form>
               </Card>
@@ -2923,46 +2993,50 @@ export function AiAdminPage(props: AiAdminPageProps) {
                   className='space-y-3'
                   onSubmit={async (event) => {
                     event.preventDefault();
-                    if (isSubmittingDirectJob) return;
-                    setError(null);
-                    setFeedback(null);
-                    setIsSubmittingDirectJob(true);
-                    try {
-                      const started = await gql<
-                        {
-                          startAiChatSession: {
-                            session: { session: { id: string; title: string } };
-                          };
-                        },
-                        { input: Record<string, unknown> }
-                      >(
-                        START_SESSION_MUTATION,
-                        {
-                          input: {
-                            title: sessionForm.title,
-                            providerProfileId:
-                              sessionForm.providerProfileId || null,
-                            taskProfileId: sessionForm.taskProfileId || null,
-                            toolProfileId: sessionForm.toolProfileId || null,
-                            locale: sessionForm.locale || null,
-                            initialMessage: sessionForm.initialMessage || null,
-                            metadata: '{}'
-                          }
-                        },
-                        props
-                      ).catch((err: Error) => {
-                        setError(err.message);
-                        return null;
-                      });
-                      if (!started) return;
-                      const id = started.startAiChatSession.session.session.id;
-                      setFeedback(
-                        `Session \`${started.startAiChatSession.session.session.title}\` started.`
-                      );
-                      await loadBootstrap();
-                      await loadSession(id);
-                    } finally {
-                      setIsSubmittingDirectJob(false);
+                    const accepted = await runDirectSubmit(
+                      'new_session',
+                      async () => {
+                        const started = await gql<
+                          {
+                            startAiChatSession: {
+                              session: {
+                                session: { id: string; title: string };
+                              };
+                            };
+                          },
+                          { input: Record<string, unknown> }
+                        >(
+                          START_SESSION_MUTATION,
+                          {
+                            input: {
+                              title: sessionForm.title,
+                              providerProfileId:
+                                sessionForm.providerProfileId || null,
+                              taskProfileId: sessionForm.taskProfileId || null,
+                              toolProfileId: sessionForm.toolProfileId || null,
+                              locale: sessionForm.locale || null,
+                              initialMessage:
+                                sessionForm.initialMessage || null,
+                              metadata: '{}'
+                            }
+                          },
+                          props
+                        ).catch((err: Error) => {
+                          setError(err.message);
+                          return null;
+                        });
+                        if (!started) return;
+                        const id =
+                          started.startAiChatSession.session.session.id;
+                        setFeedback(
+                          `Session \`${started.startAiChatSession.session.session.title}\` started.`
+                        );
+                        await loadBootstrap();
+                        await loadSession(id);
+                      }
+                    );
+                    if (accepted === DIRECT_SUBMIT_LOCK_REJECTED) {
+                      showDirectSubmitLockRejected();
                     }
                   }}
                 >
@@ -3003,7 +3077,9 @@ export function AiAdminPage(props: AiAdminPageProps) {
                     type='submit'
                     disabled={isSubmittingDirectJob}
                   >
-                    Start session
+                    {activeDirectSubmit === 'new_session'
+                      ? 'Submitting…'
+                      : 'Start session'}
                   </button>
                 </form>
               </Card>
