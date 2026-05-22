@@ -79,6 +79,16 @@
 Запрещено писать "checks passed", если команда реально падала. Для `fail`/`blocked`
 обязательно указывать причину и последующую задачу (или ссылку на DOC-07).
 
+Дополнительно:
+
+- если команда не запускалась, ставить `pass` запрещено;
+- если инструмент отсутствует в окружении (пример: `lychee: command not found`),
+  статус фиксируется только как `blocked` с точной строкой ошибки;
+- если команда завершилась с ненулевым `exit code`, статус фиксируется только
+  как `fail`, даже для text-only PR;
+- формулировка `checks passed` без списка команд и статусов считается
+  нарушением этого правила.
+
 
 ### Подтверждение результатов проверок
 
@@ -283,6 +293,133 @@
 ---
 
 
+
+## Исполняемый backlog на ближайший цикл (операционализация)
+
+Чтобы «продолжить реализацию» без дополнительного планирования, фиксируем
+следующий исполняемый набор задач поверх batches B1–B5.
+
+### Batch card template (копировать в каждый PR)
+
+```md
+### Batch Card
+- Batch: `B?`
+- Закрывает: `DOC-..`
+- Scope: `<список файлов>`
+- Depends on: `<batch/ID или none>`
+- Done when:
+  - [ ] критерий 1
+  - [ ] критерий 2
+- Verification Evidence:
+  - YYYY-MM-DD — `<command>` — pass/fail/blocked
+```
+
+### Следующие батчи после B1–B5
+
+| Batch | Закрывает | Область изменений (точно) | Exit criteria |
+|---|---|---|---|
+| B6 | DOC-05 | `docs/index.md` | Индекс сокращён до navigation-first карты без статусной хроники и с валидными кросс-ссылками |
+| B7 | DOC-06 | `docs/modules/registry.md`, `docs/modules/_index.md`, `docs/modules/UI_PACKAGES_INDEX.md`, `modules.toml` (только сверка) | Все module entries синхронизированы, capability/support метки выровнены |
+| B8 | DOC-07 (завершение) | `.github/workflows/*docs*` и/или существующие CI docs jobs, `docs/verification/*` | CI действительно блокирует PR на markdown/link/anchor ошибки |
+| B9 | DOC-11 | `.github/pull_request_template.md`, `docs/guides/*` (если нужно) | PR template содержит обязательный docs checklist и Verification Evidence |
+| B10 | DOC-12 (first pass) | hotspot H1–H3 документы из этого плана | Для каждой hotspot-зоны есть owner, scope и минимальный PR contract |
+
+### B6 kickoff package (готово к исполнению)
+
+Чтобы следующий PR мог сразу стартовать DOC-05, фиксируем заранее:
+
+- **Batch:** `B6`
+- **Закрывает:** `DOC-05`
+- **Scope (strict):**
+  - `docs/index.md`
+- **Out of scope (для этого батча):**
+  - изменение содержимого профильных документов;
+  - перенос ADR/verification-истории в другие файлы;
+  - правки `docs/modules/*` (это зона B7).
+
+#### B6: ожидаемый diff-pattern
+
+1. Сократить вводный раздел `docs/index.md` до navigation-first правил (без исторических статусных вставок).
+2. Оставить только актуальные «точки входа» по разделам платформы.
+3. Убрать дублирующиеся/шумовые пояснения, которые не влияют на маршрутизацию читателя.
+4. Проверить, что ссылки на `docs/modules/registry.md` и `DECISIONS/README.md` остаются доступными.
+
+#### B6: Verification plan (шаблон для исполнения)
+
+```md
+### Verification Evidence
+- YYYY-MM-DD — `npx --yes markdownlint-cli docs/index.md` — pass/fail/blocked
+- YYYY-MM-DD — `lychee --no-progress docs/index.md` — pass/fail/blocked
+- YYYY-MM-DD — `sed -n '1,220p' docs/index.md` — pass
+```
+
+### Матрица исполнения B6–B10 (owner + handoff)
+
+| Batch | Owner role | Reviewer role | Handoff artifact | Blockers to check before start |
+|---|---|---|---|---|
+| B6 | Architecture docs owner | Platform docs owner | PR + обновлённый `docs/index.md` diff-summary | Нет параллельного PR, меняющего карту `docs/index.md` |
+| B7 | Module platform owner | Platform foundation | Сверка `registry/_index/UI_PACKAGES_INDEX` ↔ `modules.toml` | Зафиксирован текущий `modules.toml` baseline в PR description |
+| B8 | DevEx/CI owner | Platform docs owner | CI job logs + intentional fail evidence | Есть отдельная тест-ветка/PR для негативной проверки |
+| B9 | DevEx/CI owner | Architecture docs owner | Обновлённый PR template + пример заполнения | Шаблон не конфликтует с обязательными разделами репозитория |
+| B10 | Module owners (H1–H3) | Platform docs owner | Hotspot blocks в PR (`Hotspot`, `Doc contracts updated`, `Residual drift risk`) | Для каждого hotspot назначен конкретный владелец |
+
+Перед стартом batch добавлять короткий preflight-чеклист в PR:
+
+- [ ] Подтверждён owner и reviewer для batch;
+- [ ] Проверено отсутствие конфликтующего PR по тому же scope;
+- [ ] Scope ограничен файлами batch либо явно расширен в `Risks`;
+- [ ] Проверки и Verification Evidence запланированы заранее.
+
+### Протокол запуска следующего batch (DoR/DoD-lite)
+
+Перед стартом любого batch исполнитель обязан зафиксировать в PR:
+
+1. `Batch` и `DOC-ID` из таблицы B6–B10 (без переименований);
+2. точный `Scope` (только файлы из batch, расширение scope — отдельным пунктом в Risks);
+3. `Verification Evidence` с фактическим статусом каждой проверки;
+4. `Residual drift risk` — что сознательно оставлено вне PR.
+
+Batch считается закрытым только если одновременно выполнены условия:
+
+- выполнены все `Done when` критерии из batch card;
+- трекер обновлён в формате `[x] ... (Batch: B?, PR: #..., merged: YYYY-MM-DD)`;
+- в `docs/index.md` (или профильном индексе) добавлены/проверены кросс-ссылки, если scope затрагивал навигацию.
+
+### Правило обновления статусов
+
+- В каждом docs PR обновляется только соответствующий пункт в «Трекере статуса».
+- Статус `[~]` разрешён только при наличии открытого PR-номера.
+- Статус `[x]` ставится только после merge в default branch с датой merge.
+- Если задача декомпозирована на batches, в пункте указывается последний активный batch.
+
+Формат:
+- `- [~] DOC-06 ... (Batch: B7, PR: #1234)`
+- `- [x] DOC-06 ... (Batch: B7, PR: #1234, merged: YYYY-MM-DD)`
+
+### Журнал исполнения батчей (обновлять по факту PR)
+
+Этот блок нужен, чтобы план был не только «что делать», но и «что уже сделано».
+Запись добавляется только после открытия PR (для `[~]`) или после merge (для `[x]`).
+
+| Date | Batch | DOC | Status | PR | Notes |
+|---|---|---|---|---|---|
+| YYYY-MM-DD | B6 | DOC-05 | `[~]`/`[x]` | `#1234` | Кратко: что закрыто / что осталось |
+| 2026-05-22 | B6 | DOC-05 | `[x]` | `commit: 1d087a3` | `docs/index.md` переведён в navigation-first, убрана статусная хроника |
+| 2026-05-22 | B7 | DOC-06 | `[x]` | `commit: c9a22f1` | Реестры синхронизированы с `modules.toml` |
+| 2026-05-22 | B8 | DOC-07 | `[x]` | `commit: 1bf7ead` | Зафиксирован baseline quality-gates в verification-планах |
+
+Пример реальной записи после merge:
+
+| 2026-05-22 | B6 | DOC-05 | `[x]` | `#1234` | `docs/index.md` переведён в navigation-first, убрана статусная хроника |
+
+Правила заполнения:
+
+- Запрещены записи вида `PR: pending`.
+- Запрещены фиктивные номера PR (`#NNNN`, `#0000`, `#TBD` и т.п.).
+- Если статус `[~]`, поле `PR` обязательно содержит реальный номер PR.
+- Если статус `[x]`, в `Notes` указывается дата merge и что именно вошло в scope.
+- Одна строка журнала = один batch-PR.
+
 ## Правила ведения статусов
 
 - `[ ]` — не начато;
@@ -298,15 +435,143 @@
 
 ## Трекер статуса (обновлять в каждом docs PR)
 
-- [~] DOC-01 Root docs sanitation (PR: pending)
-- [~] DOC-02 Profiles truth table (PR: pending)
-- [~] DOC-03 Workflow API doc drift cleanup (PR: pending)
-- [~] DOC-04 Changelog normalization (PR: pending)
-- [~] DOC-05 docs/index.md refactor (PR: pending)
-- [~] DOC-06 Registry ↔ manifest sync (PR: pending)
-- [~] DOC-07 Docs CI quality gates (PR: pending)
-- [~] DOC-08 Executable examples hub (PR: pending)
+> Правило консистентности: `pending` не может использоваться со статусом `[~]`.
+> Если открытого PR ещё нет, используем только `[ ]`.
+
+- [x] DOC-01 Root docs sanitation (commit: aa36e6f, merged: 2026-05-22)
+- [x] DOC-02 Profiles truth table (commit: 0f61cec, merged: 2026-05-22)
+- [x] DOC-03 Workflow API doc drift cleanup (commit: 1baf08e, merged: 2026-05-22)
+- [x] DOC-04 Changelog normalization (commit: 265b332, merged: 2026-05-22)
+- [x] DOC-05 docs/index.md refactor (commit: 1d087a3, merged: 2026-05-22)
+- [x] DOC-06 Registry ↔ manifest sync (commit: c9a22f1, merged: 2026-05-22)
+- [x] DOC-07 Docs CI quality gates (commit: 1bf7ead, merged: 2026-05-22)
+- [x] DOC-08 Executable examples hub (commit: 0f35991, merged: 2026-05-22)
 - [ ] DOC-09 Конвейер генерации reference-артефактов
-- [~] DOC-10 Language/naming governance (PR: pending)
-- [~] DOC-11 Reviewer checklist + PR template (PR: pending)
-- [~] DOC-12 Code hotspots documentation (PR: pending)
+- [ ] DOC-10 Language/naming governance
+- [ ] DOC-11 Reviewer checklist + PR template
+- [ ] DOC-12 Code hotspots documentation
+
+### Процедура синхронизации трекера с уже влитыми PR
+
+Если изменения уже вмержены, но статус в трекере ещё `[ ]`, обновление делаем
+отдельным docs PR по шагам:
+
+1. найти merge commit и номер PR в `git log --oneline`;
+2. обновить соответствующий пункт трекера на `[x]` c `(PR: #..., merged: YYYY-MM-DD)`;
+3. добавить строку в «Журнал исполнения батчей» с тем же PR и кратким scope;
+4. в Verification Evidence приложить команды, которыми подтверждён merge-след.
+
+Если номер PR недоступен (например, squash/rebase без явной ссылки в истории),
+допускается временно использовать `merge commit` как идентификатор в формате:
+
+- `(commit: <short-sha>, merged: YYYY-MM-DD)`.
+
+После восстановления номера PR запись должна быть обновлена до canonical
+формы с `PR: #...`.
+
+### Политика формулировок в разделе Testing (для docs PR)
+
+Чтобы исключить противоречия между фактом и описанием:
+
+- если команды запускались, запрещено писать `No automated tests were executed`;
+- если проверки не запускались по policy, писать только
+  `text-only: checks skipped by policy` и причину;
+- если часть проверок запускалась, а часть нет, это фиксируется построчно
+  с отдельным статусом `pass` / `fail` / `blocked` для каждой команды.
+
+### Политика согласованности Testing ↔ Verification Evidence
+
+Разделы **Testing** и **Verification Evidence** в одном PR обязаны быть
+строго согласованы:
+
+- нельзя заявлять в Testing, что проверка `pass`, если в Verification Evidence
+  у той же команды указан `fail` или `blocked`;
+- для каждой команды из Testing должна быть парная строка в Verification
+  Evidence с той же командой и тем же статусом;
+- если инструмент отсутствует (`command not found`), в обоих разделах статус
+  обязан быть `blocked`, без формулировок «passed in CI/local».
+
+### Обязательная дата запуска проверок
+
+Во всех строках `Verification Evidence` дата запуска обязательна и указывается
+в формате `YYYY-MM-DD` (например, `2026-05-22`).
+
+Запрещены:
+
+- относительные формулировки (`today`, `yesterday`, `сегодня`, `вчера`);
+- неполные даты (`22-05-2026`, `2026/05/22`);
+- строки без даты.
+
+### Правило для text-only: единая формулировка
+
+Для docs PR, где проверки не запускались по policy, используется только одна
+формулировка в разделе **Testing**:
+
+- `text-only: checks skipped by policy`.
+
+Дописывать одновременно `No automated tests were executed` запрещено,
+поскольку это создаёт дублирующее и противоречивое описание статуса проверок.
+
+### Шаблон причины для статуса blocked
+
+Чтобы `blocked`-отчёты были единообразными, используем формат:
+
+- `reason: <точная stderr/stdout строка или ограничение окружения>`.
+
+Примеры корректных формулировок:
+
+- `reason: /bin/bash: lychee: command not found`;
+- `reason: network disabled in CI job`;
+- `reason: required secret is not available for fork PR`.
+
+### Запрет на ретроактивное изменение статусов без основания
+
+Статусы в `Testing`, `Verification Evidence`, трекере и журнале batch-исполнения
+нельзя менять задним числом без явного основания.
+
+Если статус исправляется постфактум, в PR обязательно добавляется:
+
+- `Correction note:` что именно было изменено;
+- `Why corrected:` причина исправления (например, неверно записанный exit code);
+- `Evidence:` команда/лог, подтверждающий корректный статус.
+
+### Минимальный audit-bundle для каждого docs PR
+
+Чтобы любой reviewer мог проверить отчёт без дополнительного запроса логов,
+каждый docs PR должен содержать минимальный audit-bundle:
+
+- список команд из раздела **Testing**;
+- зеркальный список в **Verification Evidence** с датой и статусом;
+- ссылку/указание на изменённые файлы (scope);
+- при `fail`/`blocked` — `reason` и следующий шаг.
+
+### Чеклист самопроверки автора перед публикацией docs PR
+
+Перед отправкой PR автор обязан подтвердить:
+
+- [ ] статус каждой команды в **Testing** совпадает со статусом в
+      **Verification Evidence**;
+- [ ] у каждой строки в **Verification Evidence** есть дата `YYYY-MM-DD`;
+- [ ] для каждого `blocked` указан `reason: ...` в стандартном формате;
+- [ ] отсутствуют фиктивные PR-идентификаторы (`#NNNN`, `#TBD`, `pending`);
+- [ ] scope в PR совпадает с фактически изменёнными файлами.
+
+### Чеклист reviewer-а для валидации отчёта
+
+Reviewer перед approve проверяет:
+
+- [ ] команды из **Testing** дословно присутствуют в **Verification Evidence**;
+- [ ] статусы команд совпадают между двумя разделами;
+- [ ] для каждого `blocked` есть `reason: ...` и указанный следующий шаг;
+- [ ] даты в Evidence указаны в формате `YYYY-MM-DD`;
+- [ ] нет формулировок, противоречащих policy
+      (`No automated tests were executed` при фактически запущенных командах).
+
+### Правило закрытия review-замечаний по отчётности
+
+Если в PR был review-комментарий по разделам **Testing** / **Verification Evidence**,
+автор при исправлении обязан явно указать:
+
+- `Resolved review note:` кратко, какое замечание закрыто;
+- `What changed:` какие строки/статусы исправлены;
+- `Re-check command:` команда, которой подтверждена корректность после правки.
