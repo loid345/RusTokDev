@@ -14,9 +14,9 @@ use crate::services::effective_module_policy::EffectiveModulePolicyService;
 
 pub struct ModuleLifecycleService;
 
-const MODULE_OPERATION_STATUS_RUNNING: &str = "running";
-const MODULE_OPERATION_STATUS_COMMITTED: &str = "committed";
-const MODULE_OPERATION_STATUS_FAILED: &str = "failed";
+pub(crate) const MODULE_OPERATION_STATUS_RUNNING: &str = "running";
+pub(crate) const MODULE_OPERATION_STATUS_COMMITTED: &str = "committed";
+pub(crate) const MODULE_OPERATION_STATUS_FAILED: &str = "failed";
 
 #[derive(Debug, Error)]
 pub enum ToggleModuleError {
