@@ -893,8 +893,9 @@ async fn post_disable_failure_keeps_committed_state_and_marks_failed_operation()
         .await
         .expect("enable should succeed");
 
-    let failing_registry =
-        ModuleRegistry::new().register(TestModule::new("search").with_post_disable_failure());
+    let failing_module = TestModule::new("search").with_post_disable_failure();
+    let post_disable_calls = failing_module.post_disable_calls.clone();
+    let failing_registry = ModuleRegistry::new().register(failing_module);
     let err = ModuleLifecycleService::toggle_module_with_actor(
         &db,
         &failing_registry,
@@ -976,5 +977,10 @@ async fn post_disable_failure_keeps_committed_state_and_marks_failed_operation()
         operations_after_retry.len(),
         2,
         "idempotent retry after committed post-disable failure must not create extra journal rows",
+    );
+    assert_eq!(
+        post_disable_calls.load(Ordering::SeqCst),
+        1,
+        "idempotent retry after committed post-disable failure must not invoke post-disable hook again",
     );
 }
