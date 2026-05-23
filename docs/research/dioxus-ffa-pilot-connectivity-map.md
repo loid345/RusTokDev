@@ -158,6 +158,7 @@
 - `rustok-pages` slice #12: admin table total-count label placeholder rendering moved to core (`count_label`).
 - `rustok-pages` slice #13: storefront published-pages total count placeholder rendering moved to core (`count_label`).
 - `rustok-pages` slice #14: admin editing-banner `{id}` placeholder rendering moved to core (`label_with_id`).
+- `rustok-pages` slice #15: storefront open-link label composition moved to core (`open_link_label`).
 
 
 ### Перепроверка после slices #2-#8 (rustok-pages/admin)

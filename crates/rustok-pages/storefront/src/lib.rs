@@ -218,7 +218,10 @@ fn PublishedPagesList(items: Vec<PageListItem>, total: u64) -> impl IntoView {
                                     })}
                                 </h4>
                                 <a class="mt-2 inline-flex text-sm text-primary hover:underline" href=href>
-                                    {format!("{} {slug}", t(locale.as_deref(), "pages.list.open", "Open"))}
+                                    {core::open_link_label(
+                                    &t(locale.as_deref(), "pages.list.open", "Open"),
+                                    slug.as_str(),
+                                )}
                                 </a>
                                 <p class="mt-3 text-xs text-muted-foreground">
                                     {format!(
@@ -258,6 +261,12 @@ mod tests {
     use super::{core, PageBlock, PageDetail};
     use crate::model::PageBody;
 
+
+
+    #[test]
+    fn open_link_label_joins_prefix_and_slug() {
+        assert_eq!(core::open_link_label("Open", "home"), "Open home");
+    }
 
     #[test]
     fn count_label_replaces_placeholder() {
