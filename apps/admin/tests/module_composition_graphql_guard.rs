@@ -301,6 +301,57 @@ fn module_composition_mutation_constants_are_declared_once() {
 }
 
 #[test]
+fn module_composition_helpers_reference_single_canonical_mutation_and_request_call() {
+    let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let api_path = crate_root.join("src/features/modules/api.rs");
+    let content = fs::read_to_string(&api_path).expect("read api.rs");
+
+    let cases = [
+        (
+            "pub async fn install_module(",
+            "INSTALL_MODULE_MUTATION",
+            ["UNINSTALL_MODULE_MUTATION", "UPGRADE_MODULE_MUTATION"],
+        ),
+        (
+            "pub async fn uninstall_module(",
+            "UNINSTALL_MODULE_MUTATION",
+            ["INSTALL_MODULE_MUTATION", "UPGRADE_MODULE_MUTATION"],
+        ),
+        (
+            "pub async fn upgrade_module(",
+            "UPGRADE_MODULE_MUTATION",
+            ["INSTALL_MODULE_MUTATION", "UNINSTALL_MODULE_MUTATION"],
+        ),
+    ];
+
+    for (signature, canonical_mutation, foreign_mutations) in cases {
+        let helper_body = extract_function_block(&content, signature)
+            .unwrap_or_else(|| panic!("helper signature not found: {signature}"));
+
+        assert_eq!(
+            helper_body.matches("request(").count(),
+            1,
+            "{signature} must call request exactly once"
+        );
+        assert_eq!(
+            helper_body.matches(canonical_mutation).count(),
+            1,
+            "{signature} must reference canonical mutation constant exactly once"
+        );
+        for foreign in foreign_mutations {
+            assert!(
+                !helper_body.contains(foreign),
+                "{signature} must not reference foreign mutation constant `{foreign}`"
+            );
+        }
+        assert!(
+            !helper_body.to_lowercase().contains("rolled back"),
+            "{signature} must not encode rollback semantics in helper-level contracts"
+        );
+    }
+}
+
+#[test]
 fn toggle_module_helper_uses_graphql_only_contract() {
     let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let api_path = crate_root.join("src/features/modules/api.rs");
