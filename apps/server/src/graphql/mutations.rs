@@ -1415,6 +1415,12 @@ mod tests {
             err.message,
             "Platform composition revision conflict: expected 3, current 5"
         );
+        let gql = err.extend();
+        assert_eq!(
+            error_code(&gql).as_deref(),
+            Some("BAD_USER_INPUT"),
+            "revision conflict must stay in user-facing conflict taxonomy"
+        );
     }
 
     #[test]
@@ -1423,6 +1429,12 @@ mod tests {
             sea_orm::DbErr::Custom("enqueue failed".to_string()),
         ));
         assert!(!err.message.is_empty());
+        let gql = err.extend();
+        assert_eq!(
+            error_code(&gql).as_deref(),
+            Some("INTERNAL_SERVER_ERROR"),
+            "build enqueue failure must stay internal in GraphQL taxonomy"
+        );
     }
 
     #[test]
@@ -1433,6 +1445,12 @@ mod tests {
             )),
         ));
         assert!(err.message.contains("required"));
+        let gql = err.extend();
+        assert_eq!(
+            error_code(&gql).as_deref(),
+            Some("BAD_USER_INPUT"),
+            "manifest validation failure must stay user-facing in GraphQL taxonomy"
+        );
     }
 
     #[test]
@@ -1446,6 +1464,12 @@ mod tests {
         assert_eq!(
             err.message,
             "Platform composition revision conflict: expected 11, current 13"
+        );
+        let gql = err.extend();
+        assert_eq!(
+            error_code(&gql).as_deref(),
+            Some("BAD_USER_INPUT"),
+            "build path revision conflict must stay user-facing in GraphQL taxonomy"
         );
     }
 
