@@ -78,6 +78,10 @@ mod tests {
             snippet_or_fallback(None, "fallback"),
             "fallback".to_string()
         );
+        assert_eq!(
+            error_with_context("load failed", "timeout"),
+            "load failed: timeout"
+        );
     }
 }
 
@@ -87,4 +91,8 @@ pub fn entity_source_label(entity_type: &str, source_module: &str) -> String {
 
 pub fn source_entity_status_label(source_module: &str, entity_type: &str, status: &str) -> String {
     format!("{}/{} ({})", source_module, entity_type, status)
+}
+
+pub fn error_with_context(context: &str, error: &str) -> String {
+    format!("{}: {}", context, error)
 }

@@ -239,9 +239,10 @@ pub fn SearchAdmin() -> impl IntoView {
                 .await
                 {
                     Ok(result) => set_preview.set(Some(result)),
-                    Err(err) => {
-                        set_preview_error.set(Some(format!("{}: {err}", preview_error_label)))
-                    }
+                    Err(err) => set_preview_error.set(Some(core::error_with_context(
+                        preview_error_label.as_str(),
+                        &err.to_string(),
+                    ))),
                 }
                 set_busy.set(false);
             }
@@ -280,8 +281,10 @@ pub fn SearchAdmin() -> impl IntoView {
                         ));
                         set_refresh_nonce.update(|value| *value += 1);
                     }
-                    Err(err) => set_rebuild_feedback
-                        .set(Some(format!("{}: {err}", queue_rebuild_error_label))),
+                    Err(err) => set_rebuild_feedback.set(Some(core::error_with_context(
+                        queue_rebuild_error_label.as_str(),
+                        &err.to_string(),
+                    ))),
                 }
                 set_rebuild_busy.set(false);
             }
@@ -497,7 +500,7 @@ pub fn SearchAdmin() -> impl IntoView {
                         }
                         Err(err) => view! {
                             <div class="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                                {format!("{}: {err}", load_bootstrap_error)}
+                                {core::error_with_context(load_bootstrap_error.as_str(), &err.to_string())}
                             </div>
                         }.into_any(),
                     })

@@ -194,7 +194,7 @@ pub fn SearchView() -> impl IntoView {
                                 <PresetChips presets selected_preset set_selected_preset query=search_input.get() />
                             }.into_any(),
                             Ok(_) => ().into_any(),
-                            Err(err) => view! { <div class="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">{format!("{}: {err}", load_presets_error.clone())}</div> }.into_any(),
+                            Err(err) => view! { <div class="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">{core::error_with_context(load_presets_error.as_str(), &err.to_string())}</div> }.into_any(),
                         })}
                     </Suspense>
                     <p class="mt-3 text-xs text-muted-foreground">
@@ -225,7 +225,7 @@ pub fn SearchView() -> impl IntoView {
                                 }.into_any(),
                                 Err(err) => view! {
                                     <div class="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                                        {format!("{}: {err}", load_suggestions_error.clone())}
+                                        {core::error_with_context(load_suggestions_error.as_str(), &err.to_string())}
                                     </div>
                                 }.into_any(),
                             }
@@ -263,7 +263,7 @@ pub fn SearchView() -> impl IntoView {
                                 }.into_any(),
                                 Err(err) => view! {
                                     <div class="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                                        {format!("{}: {err}", load_results_error.clone())}
+                                        {core::error_with_context(load_results_error.as_str(), &err.to_string())}
                                     </div>
                                 }.into_any(),
                             }
