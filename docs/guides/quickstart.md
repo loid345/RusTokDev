@@ -2,6 +2,16 @@
 
 Быстрый старт для локальной разработки с двумя админками (Next.js + Leptos) и двумя витринами.
 
+## Docs PR reporting contract
+
+Для docs-изменений в этом документе используйте PR-шаблон репозитория и
+обязательные секции **Testing** + **Verification Evidence**:
+
+- шаблон: `.github/pull_request_template.md`;
+- правила и anti-fake политика: `docs/research/fix docs.md`;
+- для text-only правок используйте ровно формулировку
+  `text-only: checks skipped by policy`.
+
 
 ## Матрица профилей запуска (canonical truth table)
 

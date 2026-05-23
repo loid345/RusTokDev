@@ -651,7 +651,7 @@ Reviewer перед approve проверяет:
 ### Трекер статуса (рабочий порядок закрытия хвоста)
 
 - [~] DOC-09 Конвейер генерации reference-артефактов (Batch: B11, commit: 4bafe23)
-- [ ] DOC-10 Language/naming governance (Batch: B13)
+- [~] DOC-10 Language/naming governance (Batch: B13, commit: 6c7a53f)
 - [~] DOC-11 Reviewer checklist + PR template (Batch: B13, commit: 4e3ead8)
 - [ ] DOC-12 Code hotspots documentation (Batch: B14)
 
