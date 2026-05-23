@@ -326,6 +326,8 @@ Guardrail против использования lifecycle bypass helper в pro
 ---
 ### `verify-all.sh`
 **Master runner** — запуск всех `verify-*.sh` и ключевых `verify-*.mjs` с итоговым отчётом.
+В non-verbose режиме раннер пытается показывать compact summary, а при падении печатает
+явные `error/failed/violation` строки (с fallback на tail вывода), чтобы ошибки не терялись.
 
 ```
 ╔══════════════════════════════════════════════╗

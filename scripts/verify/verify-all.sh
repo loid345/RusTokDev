@@ -128,8 +128,11 @@ for entry in "${SCRIPTS[@]}"; do
     else
         output=$("${runner[@]}" 2>&1)
         exit_code=$?
-        # Show only the summary line
-        echo "$output" | grep -E "━━━|error|warning|passed|✗" | tail -5
+        # Show compact summary lines when possible
+        summary_lines="$(echo "$output" | grep -Ei "━━━|error|warning|passed|failed|✗|✔|summary" | tail -5 || true)"
+        if [[ -n "$summary_lines" ]]; then
+            echo "$summary_lines"
+        fi
     fi
 
     if [[ $exit_code -eq 0 ]]; then
@@ -140,7 +143,13 @@ for entry in "${SCRIPTS[@]}"; do
         TOTAL_FAILED=$((TOTAL_FAILED + 1))
         # In non-verbose mode, show errors
         if [[ $VERBOSE -eq 0 ]]; then
-            echo "$output" | grep "✗" | head -5
+            fail_lines="$(echo "$output" | grep -Ei "✗|error|failed|violation" | head -10 || true)"
+            if [[ -n "$fail_lines" ]]; then
+                echo "$fail_lines"
+            else
+                # Fallback: print the tail so failures without standard markers are still visible.
+                echo "$output" | tail -20
+            fi
         fi
     fi
 
