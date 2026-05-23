@@ -475,15 +475,17 @@ fn SearchResults(
                             </div>
                             <h3 class="mt-2 text-xl font-semibold text-foreground">{query}</h3>
                             <p class="mt-2 text-sm text-muted-foreground">
-                                {results_summary_template
-                                    .replace("{count}", total.to_string().as_str())
-                                    .replace("{took_ms}", took_ms.to_string().as_str())
-                                    .replace("{engine}", engine.as_str())
-                                    .replace("{ranking_profile}", ranking_profile.as_str())}
+                                {core::render_results_summary(
+                                    results_summary_template.as_str(),
+                                    total,
+                                    took_ms,
+                                    engine.as_str(),
+                                    ranking_profile.as_str(),
+                                )}
                             </p>
                             <p class="mt-2 text-xs text-muted-foreground">
-                                {preset_template.replace(
-                                    "{preset}",
+                                {core::render_preset_label(
+                                    preset_template.as_str(),
                                     core::applied_preset_or_selected(
                                         applied_preset_key,
                                         selected_preset.as_str(),
@@ -494,7 +496,7 @@ fn SearchResults(
                             </p>
                         </div>
                         <div class="rounded-xl border border-border bg-muted/20 px-4 py-3 text-sm text-card-foreground">
-                            {locale_template.replace("{locale}", locale.as_str())}
+                            {core::render_locale_label(locale_template.as_str(), locale.as_str())}
                         </div>
                     </div>
                 </article>

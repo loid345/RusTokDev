@@ -154,6 +154,24 @@ mod tests {
             applied_preset_or_selected(None, "", "none"),
             "none".to_string()
         );
+        assert_eq!(
+            render_results_summary(
+                "{count} results in {took_ms}ms via {engine}/{ranking_profile}",
+                10,
+                34,
+                "pg",
+                "default",
+            ),
+            "10 results in 34ms via pg/default".to_string()
+        );
+        assert_eq!(
+            render_locale_label("locale: {locale}", "ru"),
+            "locale: ru".to_string()
+        );
+        assert_eq!(
+            render_preset_label("preset: {preset}", "featured"),
+            "preset: featured".to_string()
+        );
     }
 }
 
@@ -211,4 +229,26 @@ pub fn applied_preset_or_selected(
                 selected_preset.to_string()
             }
         })
+}
+
+pub fn render_results_summary(
+    template: &str,
+    count: u64,
+    took_ms: u64,
+    engine: &str,
+    ranking_profile: &str,
+) -> String {
+    template
+        .replace("{count}", count.to_string().as_str())
+        .replace("{took_ms}", took_ms.to_string().as_str())
+        .replace("{engine}", engine)
+        .replace("{ranking_profile}", ranking_profile)
+}
+
+pub fn render_locale_label(template: &str, locale: &str) -> String {
+    template.replace("{locale}", locale)
+}
+
+pub fn render_preset_label(template: &str, preset: &str) -> String {
+    template.replace("{preset}", preset)
 }
