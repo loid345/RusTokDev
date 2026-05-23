@@ -120,6 +120,28 @@ mod tests {
             }
         );
     }
+
+    #[test]
+    fn query_normalization_helpers_are_consistent() {
+        assert_eq!(normalized_search_query("   "), None);
+        assert_eq!(
+            normalized_search_query("  phone  "),
+            Some("phone".to_string())
+        );
+        assert_eq!(suggestion_query(" a ", 2), None);
+        assert_eq!(
+            suggestion_query("  rustok ", 2),
+            Some("rustok".to_string())
+        );
+        assert_eq!(
+            suggestion_kind_with_locale("document", Some("ru")),
+            "document • ru".to_string()
+        );
+        assert_eq!(
+            suggestion_kind_with_locale("query", None),
+            "query".to_string()
+        );
+    }
 }
 
 pub fn entity_source_label(entity_type: &str, source_module: &str) -> String {
@@ -132,4 +154,28 @@ pub fn source_entity_status_label(source_module: &str, entity_type: &str, status
 
 pub fn error_with_context(context: &str, error: &str) -> String {
     format!("{}: {}", context, error)
+}
+
+pub fn normalized_search_query(query: &str) -> Option<String> {
+    let trimmed = query.trim();
+    if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+pub fn suggestion_query(query: &str, min_len: usize) -> Option<String> {
+    let trimmed = query.trim();
+    if trimmed.len() < min_len {
+        None
+    } else {
+        Some(trimmed.to_string())
+    }
+}
+
+pub fn suggestion_kind_with_locale(kind: &str, locale: Option<&str>) -> String {
+    locale
+        .map(|locale| format!("{kind} • {locale}"))
+        .unwrap_or_else(|| kind.to_string())
 }

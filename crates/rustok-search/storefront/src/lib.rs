@@ -110,7 +110,7 @@ pub fn SearchView() -> impl IntoView {
         move |(query, locale, filters)| {
             let preset_key = preset_for_resource.clone();
             async move {
-                if query.trim().is_empty() {
+                if core::normalized_search_query(&query).is_none() {
                     Ok(None)
                 } else {
                     api::fetch_storefront_search(
@@ -128,11 +128,9 @@ pub fn SearchView() -> impl IntoView {
     let suggestions = Resource::new(
         move || (search_input.get(), locale_for_suggestions.clone()),
         move |(query, locale)| async move {
-            let trimmed = query.trim().to_string();
-            if trimmed.len() < 2 {
-                Ok(Vec::new())
-            } else {
-                api::fetch_storefront_suggestions(trimmed, locale).await
+            match core::suggestion_query(&query, 2) {
+                Some(trimmed) => api::fetch_storefront_suggestions(trimmed, locale).await,
+                None => Ok(Vec::new()),
             }
         },
     );
@@ -315,13 +313,9 @@ fn SearchSuggestionList(suggestions: Vec<SearchSuggestion>) -> impl IntoView {
                                         {suggestion_text.clone()}
                                     </span>
                                     <span class="mt-1 block text-xs uppercase tracking-[0.16em] text-muted-foreground">
-                                        {format!(
-                                            "{}{}",
-                                            suggestion_kind,
-                                            suggestion_locale
-                                                .as_deref()
-                                                .map(|locale| format!(" • {locale}"))
-                                                .unwrap_or_default()
+                                        {core::suggestion_kind_with_locale(
+                                            suggestion_kind.as_str(),
+                                            suggestion_locale.as_deref(),
                                         )}
                                     </span>
                                 </span>
@@ -667,10 +661,10 @@ fn navigate_to_search_query(query: &str, preset_key: Option<String>) {
         return;
     };
 
-    if query.trim().is_empty() {
-        url.search_params().delete("q");
+    if let Some(normalized_query) = core::normalized_search_query(query) {
+        url.search_params().set("q", normalized_query.as_str());
     } else {
-        url.search_params().set("q", query.trim());
+        url.search_params().delete("q");
     }
 
     match preset_key
