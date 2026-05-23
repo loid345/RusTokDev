@@ -1,4 +1,5 @@
 mod api;
+mod core;
 mod i18n;
 mod model;
 
@@ -215,7 +216,10 @@ pub fn PagesAdmin() -> impl IntoView {
                         set_publish_now,
                         default_locale.as_str(),
                     );
-                    set_submit_error.set(Some(format!("Failed to load page: {err}")));
+                    set_submit_error.set(Some(core::error_with_context(
+                        "Failed to load page",
+                        &err.to_string(),
+                    )));
                 }
             }
             set_busy_key.set(None);
@@ -249,7 +253,7 @@ pub fn PagesAdmin() -> impl IntoView {
             slug: slug.get_untracked().trim().to_string(),
             body: body.get_untracked().trim().to_string(),
             template: Some("default".to_string()),
-            channel_slugs: parse_channel_slugs(&channel_slugs_text.get_untracked()),
+            channel_slugs: core::parse_channel_slugs(&channel_slugs_text.get_untracked()),
             publish: publish_now.get_untracked(),
         };
 
@@ -287,7 +291,10 @@ pub fn PagesAdmin() -> impl IntoView {
                     submit_query_writer.replace_value(AdminQueryKey::PageId.as_str(), page_id);
                 }
                 Err(err) => {
-                    set_submit_error.set(Some(format!("Failed to save page: {err}")));
+                    set_submit_error.set(Some(core::error_with_context(
+                        "Failed to save page",
+                        &err.to_string(),
+                    )));
                 }
             }
 
@@ -316,7 +323,10 @@ pub fn PagesAdmin() -> impl IntoView {
                     set_refresh_nonce.update(|value| *value += 1);
                 }
                 Err(err) => {
-                    set_submit_error.set(Some(format!("Failed to update page status: {err}")));
+                    set_submit_error.set(Some(core::error_with_context(
+                        "Failed to update page status",
+                        &err.to_string(),
+                    )));
                 }
             }
 
@@ -345,7 +355,10 @@ pub fn PagesAdmin() -> impl IntoView {
                     set_submit_error.set(Some("Delete page returned false.".to_string()));
                 }
                 Err(err) => {
-                    set_submit_error.set(Some(format!("Failed to delete page: {err}")));
+                    set_submit_error.set(Some(core::error_with_context(
+                        "Failed to delete page",
+                        &err.to_string(),
+                    )));
                 }
             }
             set_busy_key.set(None);
@@ -463,7 +476,7 @@ pub fn PagesAdmin() -> impl IntoView {
                                 on:input=move |ev| {
                                     let value = event_target_value(&ev);
                                     if slug.get_untracked().trim().is_empty() {
-                                        set_slug.set(slugify(value.as_str()));
+                                        set_slug.set(core::slugify(value.as_str()));
                                     }
                                     set_title.set(value);
                                 }
@@ -774,34 +787,6 @@ fn StatusBadge(status: String) -> impl IntoView {
             {status}
         </span>
     }
-}
-
-fn slugify(value: &str) -> String {
-    value
-        .chars()
-        .map(|ch| {
-            if ch.is_ascii_alphanumeric() {
-                ch.to_ascii_lowercase()
-            } else {
-                '-'
-            }
-        })
-        .collect::<String>()
-        .split('-')
-        .filter(|segment| !segment.is_empty())
-        .collect::<Vec<_>>()
-        .join("-")
-}
-
-fn parse_channel_slugs(value: &str) -> Vec<String> {
-    let mut items = value
-        .split(',')
-        .map(|item| item.trim().to_ascii_lowercase())
-        .filter(|item| !item.is_empty())
-        .collect::<Vec<_>>();
-    items.sort();
-    items.dedup();
-    items
 }
 
 #[allow(clippy::too_many_arguments)]
