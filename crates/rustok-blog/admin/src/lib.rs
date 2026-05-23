@@ -132,7 +132,7 @@ pub fn BlogAdmin() -> impl IntoView {
         let ui_locale = edit_post_locale.clone();
         let default_locale = edit_post_default_locale.clone();
         set_submit_error.set(None);
-        set_busy_key.set(Some(format!("edit:{post_id}")));
+        set_busy_key.set(Some(core::busy_key_for_edit(post_id.as_str())));
 
         spawn_local(async move {
             match api::fetch_post(
@@ -189,13 +189,13 @@ pub fn BlogAdmin() -> impl IntoView {
                         set_publish_now,
                         default_locale.as_str(),
                     );
-                    set_submit_error.set(Some(format!(
-                        "{}: {err}",
-                        t(
+                    set_submit_error.set(Some(core::error_with_context(
+                        &t(
                             ui_locale.as_deref(),
                             "blog.error.loadPost",
-                            "Failed to load post"
-                        )
+                            "Failed to load post",
+                        ),
+                        &err.to_string(),
                     )));
                 }
             }
@@ -254,11 +254,7 @@ pub fn BlogAdmin() -> impl IntoView {
         let token_value = token.get_untracked();
         let tenant_value = tenant.get_untracked();
         let editing_post = editing_post_id.get_untracked();
-        set_busy_key.set(Some(if let Some(post_id) = editing_post.as_ref() {
-            format!("save:{post_id}")
-        } else {
-            "create".to_string()
-        }));
+        set_busy_key.set(Some(core::busy_key_for_save(editing_post.as_deref())));
 
         spawn_local(async move {
             let result = match editing_post {
@@ -285,13 +281,13 @@ pub fn BlogAdmin() -> impl IntoView {
                     submit_query_writer.replace_value(AdminQueryKey::PostId.as_str(), post_id);
                 }
                 Err(err) => {
-                    set_submit_error.set(Some(format!(
-                        "{}: {err}",
-                        t(
+                    set_submit_error.set(Some(core::error_with_context(
+                        &t(
                             submit_ui_locale.as_deref(),
                             "blog.error.savePost",
                             "Failed to save post",
-                        )
+                        ),
+                        &err.to_string(),
                     )));
                 }
             }
@@ -307,7 +303,7 @@ pub fn BlogAdmin() -> impl IntoView {
             let tenant_value = tenant.get_untracked();
             let ui_locale = toggle_publish_locale.clone();
             set_submit_error.set(None);
-            set_busy_key.set(Some(format!("publish:{post_id}")));
+            set_busy_key.set(Some(core::busy_key_for_publish(post_id.as_str())));
 
             spawn_local(async move {
                 let result = if publish {
@@ -347,13 +343,13 @@ pub fn BlogAdmin() -> impl IntoView {
                         set_refresh_nonce.update(|value| *value += 1);
                     }
                     Err(err) => {
-                        set_submit_error.set(Some(format!(
-                            "{}: {err}",
-                            t(
+                        set_submit_error.set(Some(core::error_with_context(
+                            &t(
                                 ui_locale.as_deref(),
                                 "blog.error.updateStatus",
-                                "Failed to update post status"
-                            )
+                                "Failed to update post status",
+                            ),
+                            &err.to_string(),
                         )));
                     }
                 }
@@ -369,7 +365,7 @@ pub fn BlogAdmin() -> impl IntoView {
         let tenant_value = tenant.get_untracked();
         let ui_locale = archive_post_locale.clone();
         set_submit_error.set(None);
-        set_busy_key.set(Some(format!("archive:{post_id}")));
+        set_busy_key.set(Some(core::busy_key_for_archive(post_id.as_str())));
 
         spawn_local(async move {
             match api::archive_post(
@@ -398,13 +394,13 @@ pub fn BlogAdmin() -> impl IntoView {
                     set_refresh_nonce.update(|value| *value += 1);
                 }
                 Err(err) => {
-                    set_submit_error.set(Some(format!(
-                        "{}: {err}",
-                        t(
+                    set_submit_error.set(Some(core::error_with_context(
+                        &t(
                             ui_locale.as_deref(),
                             "blog.error.archivePost",
-                            "Failed to archive post"
-                        )
+                            "Failed to archive post",
+                        ),
+                        &err.to_string(),
                     )));
                 }
             }
@@ -423,7 +419,7 @@ pub fn BlogAdmin() -> impl IntoView {
         let default_locale = delete_post_default_locale.clone();
         let delete_query_writer = delete_query_writer.clone();
         set_submit_error.set(None);
-        set_busy_key.set(Some(format!("delete:{post_id}")));
+        set_busy_key.set(Some(core::busy_key_for_delete(post_id.as_str())));
 
         spawn_local(async move {
             match api::delete_post(token_value, tenant_value, post_id.clone()).await {
@@ -453,13 +449,13 @@ pub fn BlogAdmin() -> impl IntoView {
                     )));
                 }
                 Err(err) => {
-                    set_submit_error.set(Some(format!(
-                        "{}: {err}",
-                        t(
+                    set_submit_error.set(Some(core::error_with_context(
+                        &t(
                             ui_locale.as_deref(),
                             "blog.error.deletePost",
-                            "Failed to delete post"
-                        )
+                            "Failed to delete post",
+                        ),
+                        &err.to_string(),
                     )));
                 }
             }
@@ -716,21 +712,11 @@ pub fn BlogAdmin() -> impl IntoView {
                             type="submit"
                             class="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
                             disabled=move || {
-                                busy_key.get().as_deref() == Some("create")
-                                    || busy_key
-                                        .get()
-                                        .as_deref()
-                                        .map(|key| key.starts_with("save:"))
-                                        .unwrap_or(false)
+                                core::is_save_busy(busy_key.get().as_deref())
                             }
                         >
                             {move || {
-                                if busy_key.get().as_deref() == Some("create")
-                                    || busy_key
-                                        .get()
-                                        .as_deref()
-                                        .map(|key| key.starts_with("save:"))
-                                        .unwrap_or(false)
+                                if core::is_save_busy(busy_key.get().as_deref())
                                 {
                                     t(ui_locale.as_deref(), "blog.form.saving", "Saving...")
                                 } else if editing_post_id.get().is_some() {
