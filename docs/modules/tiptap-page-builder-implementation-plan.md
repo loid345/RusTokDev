@@ -6,6 +6,8 @@
 
 Важно: `pages` здесь рассматривается как **модульный контур Page Builder первого класса** (а не как побочный UI-трек). Основной source of truth по модулю и его rollout-деталям — `crates/rustok-pages/docs/implementation-plan.md` (раздел `Dedicated page-builder track`), а этот документ фиксирует кросс-модульные зависимости и release-gate на уровне платформы.
 
+В контексте перехода на FBA этот трек должен использоваться как **референсный “ideal FBA module”**: все новые шаги по `PageBuilder` проектируются в FBA-модели (capability contracts, composable lifecycle, tenant/module feature controls, observability-first), без возврата к legacy module-схеме, кроме явно помеченных compatibility-слоёв.
+
 ## 1. Цель и критерии готовности
 
 Цель: безопасно перевести rich-text admin UX blog/forum на `rt_json_v1` и довести `GrapesJS`-based `PageBuilder` для pages без деградации RBAC, publish-пайплайна, индексации и storefront-rendering.
@@ -87,6 +89,7 @@ Parity-план между `apps/next-admin` и `apps/admin` закреплён 
 - [ ] Подготовить матрицу включения/исключения по tenant и модулю.
 - [ ] Согласовать операционный runbook переключений.
 - [ ] Зафиксировать baseline-only rollout: OSS GrapesJS + vendor-neutral `grapesjs_v1` contract без расширения platform-контракта под вендор-специфику.
+- [ ] Зафиксировать FBA governance-профиль для `rustok-pages` как reference-модуля: capability boundaries, control-plane hooks, module health contract, ownership SLA.
 
 **DoD фазы:** controlled rollout возможен без redeploy.
 
@@ -147,3 +150,13 @@ Parity-план между `apps/next-admin` и `apps/admin` закреплён 
 - `blog/forum` в этом плане — rich-text consumers (`rt_json_v1`), а не владельцы визуального builder-домена.
 - Визуальный builder-домен принадлежит `pages` и должен сопровождаться как модуль `rustok-pages` (данные, publish lifecycle, compatibility c `blocks/body`, storefront-rendering, observability).
 - Любой следующий phase-gate по builder (`feature flags`, `pilot`, `default-on`) считается незавершённым без явного статуса по `rustok-pages` module track.
+
+## 6. FBA reference-module policy для `rustok-pages`
+
+Чтобы не продолжать реализацию “по старой схеме”, `rustok-pages` фиксируется как эталонный модуль перехода на FBA:
+
+- **FBA-first delivery:** новые изменения в Page Builder сначала проектируются в терминах FBA contracts/capabilities и только затем отображаются в конкретные host/runtime реализации.
+- **Explicit compatibility perimeter:** legacy (`markdown`, block-driven pages) поддерживается только как временный compatibility layer с явным sunset-планом и метриками снятия зависимости.
+- **Control-plane alignment:** rollout, enable/disable, retry/compensation и health-check сценарии должны идти через стандартные lifecycle/mechanism-практики FBA, а не через ad-hoc module toggles.
+- **Parity by contract, not by framework:** parity между Next/Leptos/Flutter контролируется через единый capability contract (`grapesjs_v1` + publish semantics), а не требованием UI 1:1.
+- **Reference outcome:** после стабилизации этот модуль используется как шаблон для остальных FBA-миграций (content-подобные и layout-driven домены).
