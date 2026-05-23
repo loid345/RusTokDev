@@ -146,6 +146,14 @@ fn toggle_module_helper_uses_graphql_only_contract() {
         helper_body.contains("Ok(response.toggle_module)"),
         "toggle_module must return GraphQL toggle payload directly without native fallback mapping"
     );
+    assert!(
+        !helper_body.contains(".map_err("),
+        "toggle_module must not remap canonical GraphQL ApiError taxonomy"
+    );
+    assert!(
+        !helper_body.contains("ApiError::"),
+        "toggle_module must not synthesize local ApiError variants and must preserve server taxonomy"
+    );
 }
 
 #[test]
