@@ -807,6 +807,18 @@ async fn post_enable_failure_keeps_committed_state_and_marks_failed_operation() 
         .expect("failed operation must have correlation id");
     let parsed = uuid::Uuid::parse_str(correlation_id).expect("correlation id must be uuid");
     assert_eq!(parsed.get_version_num(), 4);
+
+    let operations = module_operations::Entity::find()
+        .filter(module_operations::Column::TenantId.eq(tenant_id))
+        .filter(module_operations::Column::ModuleSlug.eq("search"))
+        .all(&db)
+        .await
+        .expect("load search operations");
+    assert_eq!(
+        operations.len(),
+        1,
+        "single post-enable failure attempt must produce exactly one journal row",
+    );
 }
 
 #[tokio::test]
@@ -875,4 +887,16 @@ async fn post_disable_failure_keeps_committed_state_and_marks_failed_operation()
         .expect("failed operation must have correlation id");
     let parsed = uuid::Uuid::parse_str(correlation_id).expect("correlation id must be uuid");
     assert_eq!(parsed.get_version_num(), 4);
+
+    let operations = module_operations::Entity::find()
+        .filter(module_operations::Column::TenantId.eq(tenant_id))
+        .filter(module_operations::Column::ModuleSlug.eq("search"))
+        .all(&db)
+        .await
+        .expect("load search operations");
+    assert_eq!(
+        operations.len(),
+        2,
+        "enable + failed disable must produce exactly two lifecycle journal rows",
+    );
 }
