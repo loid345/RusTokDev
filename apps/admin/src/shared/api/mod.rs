@@ -273,6 +273,18 @@ mod map_server_fn_error_tests {
     }
 
     #[test]
+    fn plain_lifecycle_payload_with_network_word_stays_graphql_variant() {
+        let mapped = map_server_fn_error(ServerFnError::new(
+            "MODULE_HOOK_FAILED: Network dependency probe failed in post-hook",
+        ));
+        assert!(
+            matches!(mapped, GraphqlHttpError::Graphql(message)
+                if message == "MODULE_HOOK_FAILED: Network dependency probe failed in post-hook"),
+            "non-transport lifecycle payload containing Network must not be normalized to transport Network variant"
+        );
+    }
+
+    #[test]
     fn maps_http_prefix_and_preserves_payload() {
         let mapped = normalize_server_fn_error_message("Http error: 409 conflict");
         assert!(matches!(mapped, GraphqlHttpError::Http(message) if message == "409 conflict"));
