@@ -326,7 +326,7 @@ impl PaymentService {
             query = query.filter(entities::refund::Column::PaymentCollectionId.is_in(collection_ids));
         }
         if let Some(status) = input.status {
-            let normalized_status = normalize_refund_status_filter(&status)?;
+            let normalized_status = Self::normalize_refund_status_filter(&status)?;
             query = query.filter(entities::refund::Column::Status.eq(normalized_status));
         }
 
@@ -361,19 +361,20 @@ impl PaymentService {
         Ok(count > 0)
     }
 
-fn normalize_refund_status_filter(status: &str) -> PaymentResult<String> {
-    let normalized = status.trim().to_ascii_lowercase();
-    if matches!(
-        normalized.as_str(),
-        STATUS_REFUND_PENDING | STATUS_REFUNDED | STATUS_REFUND_CANCELLED
-    ) {
-        return Ok(normalized);
-    }
+    fn normalize_refund_status_filter(status: &str) -> PaymentResult<String> {
+        let normalized = status.trim().to_ascii_lowercase();
+        if matches!(
+            normalized.as_str(),
+            STATUS_REFUND_PENDING | STATUS_REFUNDED | STATUS_REFUND_CANCELLED
+        ) {
+            return Ok(normalized);
+        }
 
-    Err(PaymentError::Validation(
-        "invalid refund status filter: expected one of pending, refunded, cancelled".to_string(),
-    ))
-}
+        Err(PaymentError::Validation(
+            "invalid refund status filter: expected one of pending, refunded, cancelled"
+                .to_string(),
+        ))
+    }
 
     pub async fn complete_refund(
         &self,
@@ -827,5 +828,38 @@ fn merge_metadata(current: serde_json::Value, patch: serde_json::Value) -> serde
             serde_json::Value::Object(current)
         }
         (_, patch) => patch,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn normalize_refund_status_filter_accepts_supported_values() {
+        assert_eq!(
+            PaymentService::normalize_refund_status_filter("pending").expect("pending status"),
+            "pending"
+        );
+        assert_eq!(
+            PaymentService::normalize_refund_status_filter("  ReFuNdEd  ")
+                .expect("refunded status"),
+            "refunded"
+        );
+        assert_eq!(
+            PaymentService::normalize_refund_status_filter("CANCELLED")
+                .expect("cancelled status"),
+            "cancelled"
+        );
+    }
+
+    #[test]
+    fn normalize_refund_status_filter_rejects_unknown_values() {
+        let error = PaymentService::normalize_refund_status_filter("processing")
+            .expect_err("unknown status must fail validation");
+        assert!(
+            matches!(error, PaymentError::Validation(ref message) if message.contains("invalid refund status filter")),
+            "expected validation error for unknown refund status, got: {error:?}"
+        );
     }
 }
