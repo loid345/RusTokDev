@@ -128,3 +128,5 @@
 - добавлены `crates/rustok-search/storefront/src/core.rs` и `crates/rustok-search/admin/src/core.rs`;
 - в storefront/admin UI удалены локальные дубли `parse_csv`/`optional_text` и подключены `core::*`;
 - dual-path transport (`native #[server]` + GraphQL fallback) не изменялся.
+
+- `rustok-search` slice #2: facet name normalization вынесена в core для storefront/admin (`facet_display_name`).

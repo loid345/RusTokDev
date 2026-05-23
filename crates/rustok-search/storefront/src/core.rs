@@ -15,3 +15,7 @@ pub fn optional_text(value: &str) -> Option<String> {
         Some(trimmed.to_string())
     }
 }
+
+pub fn facet_display_name(raw_name: &str) -> String {
+    raw_name.replace('_', " ")
+}

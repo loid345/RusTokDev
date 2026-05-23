@@ -78,3 +78,5 @@
 - [x] Admin surface checked/updated for the same use-case.
 - [x] GraphQL fallback parity confirmed (no contract regression): transport path not modified in this slice.
 - [ ] Double documentation verification completed.
+
+- [x] Slice 2: storefront/admin facet display normalization moved to core (`facet_display_name`).

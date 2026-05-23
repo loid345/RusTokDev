@@ -638,7 +638,7 @@ fn FacetCard(facet: SearchFacetGroup) -> impl IntoView {
     view! {
         <article class="rounded-2xl border border-border bg-background p-5">
             <div class="text-sm font-semibold capitalize text-card-foreground">
-                {facet.name.replace('_', " ")}
+                {core::facet_display_name(&facet.name)}
             </div>
             <div class="mt-3 flex flex-wrap gap-2">
                 {facet.buckets.into_iter().map(|bucket| view! {

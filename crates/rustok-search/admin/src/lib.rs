@@ -1785,7 +1785,7 @@ where
 
 #[component]
 fn FacetCard(facet: SearchFacetGroup) -> impl IntoView {
-    view! { <article class="rounded-xl border border-border bg-background p-4"><div class="text-sm font-semibold capitalize text-card-foreground">{facet.name.replace('_', " ")}</div><div class="mt-3 flex flex-wrap gap-2">{facet.buckets.into_iter().map(|bucket| view! { <span class="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground">{format!("{} ({})", bucket.value, bucket.count)}</span> }).collect_view()}</div></article> }
+    view! { <article class="rounded-xl border border-border bg-background p-4"><div class="text-sm font-semibold capitalize text-card-foreground">{core::facet_display_name(&facet.name)}</div><div class="mt-3 flex flex-wrap gap-2">{facet.buckets.into_iter().map(|bucket| view! { <span class="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground">{format!("{} ({})", bucket.value, bucket.count)}</span> }).collect_view()}</div></article> }
 }
 
 fn pretty_json_string(value: &str) -> String {
