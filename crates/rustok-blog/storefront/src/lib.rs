@@ -1,4 +1,5 @@
 mod api;
+mod core;
 mod i18n;
 mod model;
 
@@ -110,48 +111,43 @@ fn SelectedPostCard(post: Option<BlogPostDetail>) -> impl IntoView {
 
     let title = post.title;
     let effective_locale = post.effective_locale;
-    let slug = post.slug.unwrap_or_else(|| {
-        t(
-            locale.as_deref(),
-            "blog.selected.missingSlug",
-            "missing-slug",
-        )
-    });
-    let excerpt = post.excerpt.unwrap_or_else(|| {
-        t(
-            locale.as_deref(),
-            "blog.selected.noExcerpt",
-            "No excerpt yet.",
-        )
-    });
-    let published_at = post.published_at.unwrap_or_else(|| {
-        t(
-            locale.as_deref(),
-            "blog.selected.unscheduled",
-            "Unscheduled",
-        )
-    });
+    let slug = core::fallback_text(
+        post.slug,
+        &t(locale.as_deref(), "blog.selected.missingSlug", "missing-slug"),
+    );
+    let excerpt = core::fallback_text(
+        post.excerpt,
+        &t(locale.as_deref(), "blog.selected.noExcerpt", "No excerpt yet."),
+    );
+    let published_at = core::fallback_text(
+        post.published_at,
+        &t(locale.as_deref(), "blog.selected.unscheduled", "Unscheduled"),
+    );
     let tags = post.tags;
     let body_format = post.body_format;
     let body = post
         .body
-        .map(|body| summarize_content(locale.as_deref(), body.as_str(), body_format.as_str()))
-        .unwrap_or_else(|| {
-            t(
-                locale.as_deref(),
-                "blog.selected.noBody",
-                "No body content yet.",
+        .map(|body| {
+            core::summarize_content(
+                body.as_str(),
+                body_format.as_str(),
+                &t(
+                    locale.as_deref(),
+                    "blog.body.rawFormat",
+                    "Stored in `{format}` format. Raw body length: {count} characters.",
+                ),
             )
-        });
+        })
+        .unwrap_or_else(|| t(locale.as_deref(), "blog.selected.noBody", "No body content yet."));
 
     view! {
         <article class="rounded-2xl border border-border bg-background p-6">
             <div class="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
-                <span>{format!("{}: {slug}", t(locale.as_deref(), "blog.selected.slugLabel", "slug"))}</span>
+                <span>{core::label_value_pair(&t(locale.as_deref(), "blog.selected.slugLabel", "slug"), slug.as_str())}</span>
                 <span>"В·"</span>
-                <span>{format!("{}: {effective_locale}", t(locale.as_deref(), "blog.selected.localeLabel", "locale"))}</span>
+                <span>{core::label_value_pair(&t(locale.as_deref(), "blog.selected.localeLabel", "locale"), effective_locale.as_str())}</span>
                 <span>"В·"</span>
-                <span>{format!("{}: {published_at}", t(locale.as_deref(), "blog.selected.publishedLabel", "published"))}</span>
+                <span>{core::label_value_pair(&t(locale.as_deref(), "blog.selected.publishedLabel", "published"), published_at.as_str())}</span>
             </div>
             <h3 class="mt-3 text-2xl font-semibold text-foreground">{title}</h3>
             <p class="mt-3 text-sm text-muted-foreground">{excerpt}</p>
@@ -209,7 +205,7 @@ fn PublishedPostsList(items: Vec<BlogPostListItem>, total: u64) -> impl IntoView
                     {t(locale.as_deref(), "blog.list.title", "Published posts")}
                 </h3>
                 <span class="text-sm text-muted-foreground">
-                    {format!("{total} {}", t(locale.as_deref(), "blog.list.total", "total"))}
+                    {core::count_label(total, &t(locale.as_deref(), "blog.list.total", "total"))}
                 </span>
             </div>
             <div class="grid gap-3 md:grid-cols-2">
@@ -232,10 +228,10 @@ fn PublishedPostsList(items: Vec<BlogPostListItem>, total: u64) -> impl IntoView
                                     {post.excerpt.unwrap_or_else(|| t(locale.as_deref(), "blog.list.noExcerpt", "No excerpt yet."))}
                                 </p>
                                 <a class="mt-3 inline-flex text-sm text-primary hover:underline" href=href>
-                                    {format!("{} {slug}", t(locale.as_deref(), "blog.list.open", "Open"))}
+                                    {core::open_link_label(&t(locale.as_deref(), "blog.list.open", "Open"), slug.as_str())}
                                 </a>
                                 <p class="mt-3 text-xs text-muted-foreground">
-                                    {format!("{}: {}", t(locale.as_deref(), "blog.list.localeLabel", "locale"), post.effective_locale)}
+                                    {core::label_value_pair(&t(locale.as_deref(), "blog.list.localeLabel", "locale"), post.effective_locale.as_str())}
                                 </p>
                             </article>
                         }
@@ -245,18 +241,4 @@ fn PublishedPostsList(items: Vec<BlogPostListItem>, total: u64) -> impl IntoView
         </div>
     }
     .into_any()
-}
-
-fn summarize_content(locale: Option<&str>, content: &str, format: &str) -> String {
-    if format.eq_ignore_ascii_case("markdown") {
-        return content.trim().to_string();
-    }
-
-    t(
-        locale,
-        "blog.body.rawFormat",
-        "Stored in `{format}` format. Raw body length: {count} characters.",
-    )
-    .replace("{format}", format)
-    .replace("{count}", &content.chars().count().to_string())
 }
