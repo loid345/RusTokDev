@@ -105,19 +105,26 @@
 
 ### Scope matrix для `rustok-search` (чтобы ничего не пропустить)
 
-- [ ] `crates/rustok-search/storefront` (Leptos storefront UI package)
-  - [ ] выделен первый `core` use-case;
-  - [ ] UI-слой не вызывает transport напрямую для выбранного use-case.
-- [ ] `crates/rustok-search/admin` (Leptos admin UI package)
-  - [ ] проверен impact того же use-case;
-  - [ ] если use-case общий, применён тот же `core`-подход без расхождения контракта.
+- [x] `crates/rustok-search/storefront` (Leptos storefront UI package)
+  - [x] выделен первый `core` use-case (query/filter input normalization: `parse_csv`, `optional_text`);
+  - [x] выбранный use-case вынесен в `storefront/src/core.rs` и используется UI-слоем.
+- [x] `crates/rustok-search/admin` (Leptos admin UI package)
+  - [x] impact того же use-case проверен;
+  - [x] тот же `core`-подход применён в `admin/src/core.rs` без расхождения контракта.
 - [ ] Headless parity (Next/mobile/external)
   - [ ] подтверждено, что GraphQL fallback path не деградировал;
   - [ ] route/query/i18n contract не получил drift относительно host expectations.
 
 ### Evidence чек перед закрытием итерации `rustok-search`
 
-- [ ] `cargo xtask module validate search`
-- [ ] `cargo xtask module test search`
+- [ ] `cargo xtask module validate search` (запланировано после завершения следующего slice с transport assertions)
+- [ ] `cargo xtask module test search` (запланировано после завершения следующего slice с transport assertions)
 - [ ] docs double-check pass #1 (code/docs consistency)
 - [ ] docs double-check pass #2 (cleanup stale wording)
+
+
+### Выполнено в текущей итерации (`rustok-search`, slice #1)
+
+- добавлены `crates/rustok-search/storefront/src/core.rs` и `crates/rustok-search/admin/src/core.rs`;
+- в storefront/admin UI удалены локальные дубли `parse_csv`/`optional_text` и подключены `core::*`;
+- dual-path transport (`native #[server]` + GraphQL fallback) не изменялся.

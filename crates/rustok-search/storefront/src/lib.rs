@@ -1,4 +1,5 @@
 mod api;
+mod core;
 mod i18n;
 mod model;
 
@@ -81,17 +82,17 @@ pub fn SearchView() -> impl IntoView {
         "search.error.loadResults",
         "Failed to load storefront search results",
     );
-    let entity_types = parse_csv(
+    let entity_types = core::parse_csv(
         read_route_query_value(&route_context, "entity_types")
             .as_deref()
             .unwrap_or(""),
     );
-    let source_modules = parse_csv(
+    let source_modules = core::parse_csv(
         read_route_query_value(&route_context, "source_modules")
             .as_deref()
             .unwrap_or(""),
     );
-    let statuses = parse_csv(
+    let statuses = core::parse_csv(
         read_route_query_value(&route_context, "statuses")
             .as_deref()
             .unwrap_or(""),
@@ -125,7 +126,7 @@ pub fn SearchView() -> impl IntoView {
                     api::fetch_storefront_search(
                         query,
                         locale,
-                        (!preset_key.is_empty()).then_some(preset_key.clone()),
+                        core::optional_text(&preset_key),
                         filters,
                     )
                     .await
@@ -658,15 +659,6 @@ fn EmptyState(title: String, body: String) -> impl IntoView {
             <p class="mt-2 text-sm text-muted-foreground">{body}</p>
         </article>
     }
-}
-
-fn parse_csv(value: &str) -> Vec<String> {
-    value
-        .split(',')
-        .map(str::trim)
-        .filter(|segment| !segment.is_empty())
-        .map(ToOwned::to_owned)
-        .collect()
 }
 
 fn submit_search(ev: SubmitEvent, query: String, preset_key: String) {

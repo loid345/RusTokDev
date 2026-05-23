@@ -1,4 +1,5 @@
 mod api;
+mod core;
 mod i18n;
 mod model;
 
@@ -206,16 +207,16 @@ pub fn SearchAdmin() -> impl IntoView {
         set_preview_error.set(None);
         set_busy.set(true);
         let filters = SearchPreviewFilters {
-            entity_types: parse_csv(entity_types.get_untracked()),
-            source_modules: parse_csv(source_modules.get_untracked()),
-            statuses: parse_csv(statuses.get_untracked()),
+            entity_types: core::parse_csv(&entity_types.get_untracked()),
+            source_modules: core::parse_csv(&source_modules.get_untracked()),
+            statuses: core::parse_csv(&statuses.get_untracked()),
         };
         spawn_local({
             let token_value = token.get_untracked();
             let tenant_value = tenant.get_untracked();
             let query_value = query.get_untracked();
             let ranking_profile_value = ranking_profile.get_untracked();
-            let preset_key_value = optional_text(preset_key.get_untracked());
+            let preset_key_value = core::optional_text(preset_key.get_untracked());
             let locale_value = initial_locale.clone();
             let preview_error_label = preview_error_label.clone();
             let preview_query_writer = preview_query_writer.clone();
@@ -231,7 +232,7 @@ pub fn SearchAdmin() -> impl IntoView {
                     tenant_value,
                     query_value,
                     locale_value,
-                    optional_text(ranking_profile_value),
+                    core::optional_text(ranking_profile_value),
                     preset_key_value,
                     filters,
                 )
@@ -254,7 +255,7 @@ pub fn SearchAdmin() -> impl IntoView {
             let token_value = token.get_untracked();
             let tenant_value = tenant.get_untracked();
             let target_type = rebuild_target_type.get_untracked();
-            let target_id = optional_text(rebuild_target_id.get_untracked());
+            let target_id = core::optional_text(rebuild_target_id.get_untracked());
             let rebuild_queued_template = rebuild_queued_template.clone();
             let queue_rebuild_error_label = queue_rebuild_error_label.clone();
             async move {
@@ -1402,7 +1403,7 @@ fn DictionariesView() -> impl IntoView {
 
     let submit_pin_rule = Callback::new(move |ev: SubmitEvent| {
         ev.prevent_default();
-        let pinned_position = match optional_text(pin_position.get_untracked()) {
+        let pinned_position = match core::optional_text(pin_position.get_untracked()) {
             Some(value) => match value.parse::<i32>() {
                 Ok(parsed) => Some(parsed),
                 Err(_) => {
@@ -1785,24 +1786,6 @@ where
 #[component]
 fn FacetCard(facet: SearchFacetGroup) -> impl IntoView {
     view! { <article class="rounded-xl border border-border bg-background p-4"><div class="text-sm font-semibold capitalize text-card-foreground">{facet.name.replace('_', " ")}</div><div class="mt-3 flex flex-wrap gap-2">{facet.buckets.into_iter().map(|bucket| view! { <span class="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground">{format!("{} ({})", bucket.value, bucket.count)}</span> }).collect_view()}</div></article> }
-}
-
-fn parse_csv(value: String) -> Vec<String> {
-    value
-        .split(',')
-        .map(str::trim)
-        .filter(|segment| !segment.is_empty())
-        .map(ToOwned::to_owned)
-        .collect()
-}
-
-fn optional_text(value: String) -> Option<String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
 }
 
 fn pretty_json_string(value: &str) -> String {

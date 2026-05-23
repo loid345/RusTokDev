@@ -73,8 +73,8 @@
 
 ## FFA pilot migration tracker (rustok-search)
 
-- [ ] Slice 1 scope locked (single use-case).
-- [ ] Storefront surface updated.
-- [ ] Admin surface checked/updated for the same use-case.
-- [ ] GraphQL fallback parity confirmed (no contract regression).
+- [x] Slice 1 scope locked (single use-case): query/filter input normalization (`parse_csv`, `optional_text`).
+- [x] Storefront surface updated.
+- [x] Admin surface checked/updated for the same use-case.
+- [x] GraphQL fallback parity confirmed (no contract regression): transport path not modified in this slice.
 - [ ] Double documentation verification completed.
