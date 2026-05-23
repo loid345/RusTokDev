@@ -79,7 +79,7 @@
 
 - [x] `rustok-pages` — выполнен первый slice декомпозиции: в `storefront` выделен `core` слой
   для selected-page presentation logic; Leptos UI делегирует эту логику в `core`.
-- [ ] `rustok-search` — в очереди на первый code slice Phase B.
+- [x] `rustok-search` — slices #1-#9 выполнены по storefront/admin core extraction plan.
 
 ### Что уже сделано в `rustok-pages`
 
@@ -98,9 +98,8 @@
 
 ### Следующий модуль (новая итерация)
 
-- [ ] Стартуем `rustok-search` как следующий pilot slice Phase B.
-- [ ] Цель итерации: выделить первый `core` use-case в `crates/rustok-search/storefront`
-      без изменения продуктового transport-контракта.
+- [x] Стартовали и завершили текущий набор `rustok-search` pilot slices (#1-#9).
+- [x] Цель итерации достигнута: core use-cases последовательно выделены в `crates/rustok-search/storefront` и синхронизированы с `admin` surface без изменения продуктового transport-контракта.
 
 
 ### Scope matrix для `rustok-search` (чтобы ничего не пропустить)
@@ -139,3 +138,12 @@
 - `rustok-search` slice #9: score rendering unified across storefront/admin to direct core helpers, removing template/trim coupling in UI.
 
 - `rustok-pages` slice #2: admin form helpers (`slugify`, `parse_channel_slugs`, error composition) вынесены в `admin/src/core.rs`.
+
+
+### Pages completion checklist (Phase B pilot)
+
+- [x] `rustok-pages/storefront` core slice #1 (`selected_page_*`, `summarize_page_content`)
+- [x] `rustok-pages/admin` core slice #2 (`slugify`, `parse_channel_slugs`, `error_with_context`)
+- [x] `cargo xtask module validate pages`
+- [ ] `cargo xtask module test pages` (долгий прогон, выполнить до phase close)
+- [ ] docs double-check pass #1/#2 for pages

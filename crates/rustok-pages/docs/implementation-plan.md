@@ -10,7 +10,7 @@
 - Next step: Закрыть sync-точки с `docs/modules/tiptap-page-builder-implementation-plan.md` и `docs/research/flutter.md` перед расширением mobile page-builder surfaces.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок и явно фиксировать, какие шаги Flutter/mobile ещё заблокированы текущим pages backend/parity статусом.
-- Last updated at (UTC): 2026-05-22T00:00:00Z
+- Last updated at (UTC): 2026-05-23T00:00:00Z
 
 ## Область работ
 
@@ -67,3 +67,13 @@
 - [ ] Актуализировать покрытие тестами по ключевым сценариям модуля.
 - [ ] Проверить полноту и актуальность `README.md` и локальных docs.
 - [ ] Зафиксировать/обновить verification gates для текущего состояния модуля.
+
+
+## FFA pilot migration tracker (rustok-pages)
+
+- [x] Slice 1: storefront selected-page core extraction (`selected_page_title/slug/effective_locale`, `summarize_page_content`).
+- [x] Slice 2: admin form helper extraction (`slugify`, `parse_channel_slugs`, `error_with_context`).
+- [x] Storefront + admin surfaces updated for selected slices.
+- [x] `cargo xtask module validate pages` passed.
+- [ ] `cargo xtask module test pages` full run evidence attached.
+- [ ] Double documentation verification completed.
