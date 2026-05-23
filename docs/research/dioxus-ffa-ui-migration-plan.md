@@ -51,6 +51,7 @@
 
 - Зафиксировать текущие GraphQL/native surfaces и smoke-скрипты.
 - Добавить checklist parity: SSR native path, GraphQL fallback, headless path.
+- Базовый checklist закреплён в `docs/verification/ffa-ui-parity-checklist.md` и обязателен для phase-gate evidence.
 
 ## Phase B — FFA-декомпозиция в пилотах (2–4 недели)
 
