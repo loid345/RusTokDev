@@ -785,6 +785,16 @@ async fn post_enable_failure_keeps_committed_state_and_marks_failed_operation() 
         .as_deref()
         .unwrap_or_default()
         .contains("post-hook"));
+    assert!(
+        failed_operation.correlation_id.is_some(),
+        "post-hook failure operation must keep correlation id for retry/audit tracing",
+    );
+    let correlation_id = failed_operation
+        .correlation_id
+        .as_deref()
+        .expect("failed operation must have correlation id");
+    let parsed = uuid::Uuid::parse_str(correlation_id).expect("correlation id must be uuid");
+    assert_eq!(parsed.get_version_num(), 4);
 }
 
 #[tokio::test]
@@ -831,4 +841,14 @@ async fn post_disable_failure_keeps_committed_state_and_marks_failed_operation()
         .as_deref()
         .unwrap_or_default()
         .contains("post-hook"));
+    assert!(
+        failed_operation.correlation_id.is_some(),
+        "post-hook failure operation must keep correlation id for retry/audit tracing",
+    );
+    let correlation_id = failed_operation
+        .correlation_id
+        .as_deref()
+        .expect("failed operation must have correlation id");
+    let parsed = uuid::Uuid::parse_str(correlation_id).expect("correlation id must be uuid");
+    assert_eq!(parsed.get_version_num(), 4);
 }
