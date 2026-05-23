@@ -201,6 +201,54 @@ mod map_server_fn_error_tests {
     }
 
     #[test]
+    fn lifecycle_runtime_taxonomy_matrix_is_forwarded_without_remapping() {
+        let cases = [
+            "UNKNOWN_MODULE: module 'ghost' not found",
+            "CORE_MODULE: module 'core' cannot be disabled",
+            "MISSING_DEPENDENCIES: module 'checkout' requires 'catalog'",
+            "HAS_DEPENDENTS: module 'catalog' required by 'checkout'",
+            "MODULE_HOOK_FAILED: post-disable hook failed",
+        ];
+
+        for case in cases {
+            let mapped = map_server_fn_error(ServerFnError::new(format!("GraphQL error: {case}")));
+            assert!(
+                matches!(mapped, GraphqlHttpError::Graphql(message) if message == case),
+                "expected runtime taxonomy message to be forwarded unchanged for case {case}"
+            );
+        }
+    }
+
+    #[test]
+    fn lifecycle_journal_metadata_fragments_are_forwarded_without_parsing() {
+        let payload = "GraphQL error: MODULE_HOOK_FAILED {\"extensions\":{\"code\":\"MODULE_HOOK_FAILED\",\"correlation_id\":\"9d7987b8-0740-45ea-bf2f-8b3329e1733e\",\"requested_by\":\"admin:user-77\",\"status\":\"failed\",\"previous_effective_enabled\":true}}";
+        let mapped = map_server_fn_error(ServerFnError::new(payload));
+
+        assert!(
+            matches!(mapped, GraphqlHttpError::Graphql(message)
+                if message.contains("correlation_id")
+                && message.contains("requested_by")
+                && message.contains("previous_effective_enabled")
+                && message.contains("\"status\":\"failed\"")),
+            "expected server-owned journal metadata fragments to pass through unchanged"
+        );
+    }
+
+    #[test]
+    fn lifecycle_taxonomy_extensions_are_forwarded_without_local_normalization() {
+        let payload = "GraphQL error: MISSING_DEPENDENCIES {\"extensions\":{\"code\":\"MISSING_DEPENDENCIES\",\"reason_code\":\"dependency_missing\",\"requested_by\":\"admin:user-2\"}}";
+        let mapped = map_server_fn_error(ServerFnError::new(payload));
+
+        assert!(
+            matches!(mapped, GraphqlHttpError::Graphql(message)
+                if message.contains("\"code\":\"MISSING_DEPENDENCIES\"")
+                && message.contains("\"reason_code\":\"dependency_missing\"")
+                && message.contains("\"requested_by\":\"admin:user-2\"")),
+            "expected extensions payload to be forwarded unchanged without local normalization"
+        );
+    }
+
+    #[test]
     fn maps_http_prefix_and_preserves_payload() {
         let mapped = normalize_server_fn_error_message("Http error: 409 conflict");
         assert!(matches!(mapped, GraphqlHttpError::Http(message) if message == "409 conflict"));
