@@ -126,6 +126,10 @@ mod tests {
         assert_eq!(busy_key_with_id("edit", "p_1"), "edit:p_1");
         assert_eq!(busy_key_for_save(Some("p_2")), "save:p_2");
         assert_eq!(busy_key_for_save(None), "create");
+        assert_eq!(
+            status_badge_css("published"),
+            "inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+        );
     }
 
     #[test]
@@ -155,4 +159,11 @@ mod tests {
         assert_eq!(seed.channel_slugs_text, "web, mobile");
         assert!(seed.publish_now);
     }
+}
+
+pub fn status_badge_css(status: &str) -> String {
+    format!(
+        "inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold {}",
+        status_badge_class(status)
+    )
 }

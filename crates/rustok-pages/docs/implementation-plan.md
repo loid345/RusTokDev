@@ -81,3 +81,4 @@
 - [x] Slice 4: admin busy-key composition moved to core (`busy_key_with_id`, `busy_key_for_save`).
 - [x] Slice 5: admin edit-form seed mapping moved to core (`edit_form_seed_from_page`).
 - [x] Slice 6: admin list-load error rendering switched to core error composition (`error_with_context`).
+- [x] Slice 7: admin status badge css composition moved to core (`status_badge_css`).

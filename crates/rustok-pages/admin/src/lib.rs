@@ -746,10 +746,10 @@ fn PagesTable(
 
 #[component]
 fn StatusBadge(status: String) -> impl IntoView {
-    let class_name = core::status_badge_class(&status);
+    let class_name = core::status_badge_css(&status);
 
     view! {
-        <span class=format!("inline-flex rounded-full px-2.5 py-0.5 text-xs font-semibold {class_name}")>
+        <span class=class_name>
             {status}
         </span>
     }
