@@ -31,3 +31,47 @@ pub fn snippet_or_fallback(snippet: Option<String>, fallback: &str) -> String {
 pub fn score_label(score: f64) -> String {
     format!("score {:.3}", score)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_csv_trims_and_skips_empty_segments() {
+        assert_eq!(
+            parse_csv(" products, blog ,, pages "),
+            vec![
+                "products".to_string(),
+                "blog".to_string(),
+                "pages".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn optional_text_returns_none_for_blank() {
+        assert_eq!(
+            optional_text(
+                "   
+	"
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn optional_text_returns_trimmed_value() {
+        assert_eq!(optional_text("  abc  "), Some("abc".to_string()));
+    }
+
+    #[test]
+    fn formatting_helpers_are_stable() {
+        assert_eq!(facet_display_name("source_module"), "source module");
+        assert_eq!(facet_bucket_label("product", 42), "product (42)");
+        assert_eq!(score_label(0.12345), "score 0.123");
+        assert_eq!(
+            snippet_or_fallback(None, "fallback"),
+            "fallback".to_string()
+        );
+    }
+}
