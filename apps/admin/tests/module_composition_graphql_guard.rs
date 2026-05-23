@@ -90,6 +90,14 @@ fn module_composition_helpers_use_graphql_contract_payloads() {
         &["slug,", "version,"],
         "Ok(response.upgrade_module)",
     );
+    assert_graphql_only_helper(
+        &content,
+        "pub async fn toggle_module(",
+        "TOGGLE_MODULE_MUTATION",
+        "ToggleModuleVariables {",
+        &["module_slug,", "enabled,"],
+        "Ok(response.toggle_module)",
+    );
 }
 
 
@@ -103,6 +111,7 @@ fn module_composition_helpers_forward_auth_context_without_local_overrides() {
         "pub async fn install_module(",
         "pub async fn uninstall_module(",
         "pub async fn upgrade_module(",
+        "pub async fn toggle_module(",
     ] {
         let helper_body = extract_function_block(&content, signature)
             .unwrap_or_else(|| panic!("helper signature not found: {signature}"));
@@ -145,6 +154,7 @@ fn module_composition_helpers_do_not_branch_on_runtime_error_taxonomy() {
         "pub async fn install_module(",
         "pub async fn uninstall_module(",
         "pub async fn upgrade_module(",
+        "pub async fn toggle_module(",
     ] {
         let helper_body = extract_function_block(&content, signature)
             .unwrap_or_else(|| panic!("helper signature not found: {signature}"));
@@ -203,6 +213,15 @@ fn module_composition_helpers_do_not_cross_wire_foreign_mutation_contracts() {
                 "TOGGLE_MODULE_MUTATION",
             ],
         ),
+        (
+            "pub async fn toggle_module(",
+            "TOGGLE_MODULE_MUTATION",
+            [
+                "INSTALL_MODULE_MUTATION",
+                "UNINSTALL_MODULE_MUTATION",
+                "UPGRADE_MODULE_MUTATION",
+            ],
+        ),
     ];
 
     for (signature, required, forbidden_list) in cases {
@@ -256,6 +275,16 @@ fn module_composition_helpers_use_typed_responses_and_direct_payload_returns() {
                 "response.install_module",
                 "response.uninstall_module",
                 "response.toggle_module",
+            ],
+        ),
+        (
+            "pub async fn toggle_module(",
+            "let response: ToggleModuleResponse",
+            "Ok(response.toggle_module)",
+            [
+                "response.install_module",
+                "response.uninstall_module",
+                "response.upgrade_module",
             ],
         ),
     ];
@@ -888,6 +917,7 @@ fn module_composition_helper_signatures_are_unique() {
         "pub async fn install_module(",
         "pub async fn uninstall_module(",
         "pub async fn upgrade_module(",
+        "pub async fn toggle_module(",
     ] {
         let occurrences = content.matches(signature).count();
         assert_eq!(
