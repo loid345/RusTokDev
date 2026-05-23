@@ -157,7 +157,7 @@ pub fn PagesAdmin() -> impl IntoView {
         let tenant_value = tenant.get_untracked();
         let default_locale = edit_default_locale.clone();
         set_submit_error.set(None);
-        set_busy_key.set(Some(format!("edit:{page_id}")));
+        set_busy_key.set(Some(core::busy_key_with_id("edit", &page_id)));
 
         spawn_local(async move {
             match api::fetch_page(token_value, tenant_value, page_id.clone()).await {
@@ -267,11 +267,7 @@ pub fn PagesAdmin() -> impl IntoView {
         let token_value = token.get_untracked();
         let tenant_value = tenant.get_untracked();
         let editing_page = editing_page_id.get_untracked();
-        set_busy_key.set(Some(if let Some(page_id) = editing_page.as_ref() {
-            format!("save:{page_id}")
-        } else {
-            "create".to_string()
-        }));
+        set_busy_key.set(Some(core::busy_key_for_save(editing_page.as_deref())));
 
         spawn_local(async move {
             let result = match editing_page {
@@ -306,7 +302,7 @@ pub fn PagesAdmin() -> impl IntoView {
         let token_value = token.get_untracked();
         let tenant_value = tenant.get_untracked();
         set_submit_error.set(None);
-        set_busy_key.set(Some(format!("publish:{page_id}")));
+        set_busy_key.set(Some(core::busy_key_with_id("publish", &page_id)));
 
         spawn_local(async move {
             let result = if publish {
@@ -340,7 +336,7 @@ pub fn PagesAdmin() -> impl IntoView {
         let tenant_value = tenant.get_untracked();
         let delete_query_writer = delete_query_writer.clone();
         set_submit_error.set(None);
-        set_busy_key.set(Some(format!("delete:{page_id}")));
+        set_busy_key.set(Some(core::busy_key_with_id("delete", &page_id)));
 
         spawn_local(async move {
             match api::delete_page(token_value, tenant_value, page_id.clone()).await {

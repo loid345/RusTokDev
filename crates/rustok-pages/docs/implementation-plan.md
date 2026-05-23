@@ -78,3 +78,4 @@
 - [ ] `cargo xtask module test pages` full run evidence attached.
 - [ ] Double documentation verification completed.
 - [x] Slice 3: admin status badge class mapping moved to core (`status_badge_class`).
+- [x] Slice 4: admin busy-key composition moved to core (`busy_key_with_id`, `busy_key_for_save`).
