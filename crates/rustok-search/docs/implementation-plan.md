@@ -80,3 +80,4 @@
 - [ ] Double documentation verification completed.
 
 - [x] Slice 2: storefront/admin facet display normalization moved to core (`facet_display_name`).
+- [x] Slice 3: storefront/admin facet bucket label formatting moved to core (`facet_bucket_label`).

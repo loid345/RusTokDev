@@ -130,3 +130,4 @@
 - dual-path transport (`native #[server]` + GraphQL fallback) не изменялся.
 
 - `rustok-search` slice #2: facet name normalization вынесена в core для storefront/admin (`facet_display_name`).
+- `rustok-search` slice #3: facet bucket label formatting вынесен в core (`facet_bucket_label`) для storefront/admin.

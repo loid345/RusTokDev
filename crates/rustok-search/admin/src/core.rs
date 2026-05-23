@@ -19,3 +19,7 @@ pub fn optional_text(value: &str) -> Option<String> {
 pub fn facet_display_name(raw_name: &str) -> String {
     raw_name.replace('_', " ")
 }
+
+pub fn facet_bucket_label(value: &str, count: u64) -> String {
+    format!("{} ({})", value, count)
+}

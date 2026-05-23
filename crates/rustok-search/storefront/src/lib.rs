@@ -643,7 +643,7 @@ fn FacetCard(facet: SearchFacetGroup) -> impl IntoView {
             <div class="mt-3 flex flex-wrap gap-2">
                 {facet.buckets.into_iter().map(|bucket| view! {
                     <span class="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground">
-                        {format!("{} ({})", bucket.value, bucket.count)}
+                        {core::facet_bucket_label(&bucket.value, bucket.count)}
                     </span>
                 }).collect_view()}
             </div>
