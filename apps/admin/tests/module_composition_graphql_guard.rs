@@ -433,7 +433,7 @@ fn module_composition_helpers_preserve_canonical_graphql_contract_matrix() {
         mutation: &'a str,
         typed_response: &'a str,
         canonical_return: &'a str,
-        foreign_mutations: [&'a str; 2],
+        foreign_mutations: [&'a str; 3],
         required_payload_fields: &'a [&'a str],
     }
 
@@ -443,7 +443,11 @@ fn module_composition_helpers_preserve_canonical_graphql_contract_matrix() {
             mutation: "INSTALL_MODULE_MUTATION",
             typed_response: "let response: InstallModuleResponse",
             canonical_return: "Ok(response.install_module)",
-            foreign_mutations: ["UNINSTALL_MODULE_MUTATION", "UPGRADE_MODULE_MUTATION"],
+            foreign_mutations: [
+                "UNINSTALL_MODULE_MUTATION",
+                "UPGRADE_MODULE_MUTATION",
+                "TOGGLE_MODULE_MUTATION",
+            ],
             required_payload_fields: &["InstallModuleVariables {", "slug,", "version,", "token,", "tenant_slug,"],
         },
         Case {
@@ -451,7 +455,11 @@ fn module_composition_helpers_preserve_canonical_graphql_contract_matrix() {
             mutation: "UNINSTALL_MODULE_MUTATION",
             typed_response: "let response: UninstallModuleResponse",
             canonical_return: "Ok(response.uninstall_module)",
-            foreign_mutations: ["INSTALL_MODULE_MUTATION", "UPGRADE_MODULE_MUTATION"],
+            foreign_mutations: [
+                "INSTALL_MODULE_MUTATION",
+                "UPGRADE_MODULE_MUTATION",
+                "TOGGLE_MODULE_MUTATION",
+            ],
             required_payload_fields: &["UninstallModuleVariables {", "slug,", "token,", "tenant_slug,"],
         },
         Case {
@@ -459,8 +467,30 @@ fn module_composition_helpers_preserve_canonical_graphql_contract_matrix() {
             mutation: "UPGRADE_MODULE_MUTATION",
             typed_response: "let response: UpgradeModuleResponse",
             canonical_return: "Ok(response.upgrade_module)",
-            foreign_mutations: ["INSTALL_MODULE_MUTATION", "UNINSTALL_MODULE_MUTATION"],
+            foreign_mutations: [
+                "INSTALL_MODULE_MUTATION",
+                "UNINSTALL_MODULE_MUTATION",
+                "TOGGLE_MODULE_MUTATION",
+            ],
             required_payload_fields: &["UpgradeModuleVariables {", "slug,", "version,", "token,", "tenant_slug,"],
+        },
+        Case {
+            signature: "pub async fn toggle_module(",
+            mutation: "TOGGLE_MODULE_MUTATION",
+            typed_response: "let response: ToggleModuleResponse",
+            canonical_return: "Ok(response.toggle_module)",
+            foreign_mutations: [
+                "INSTALL_MODULE_MUTATION",
+                "UNINSTALL_MODULE_MUTATION",
+                "UPGRADE_MODULE_MUTATION",
+            ],
+            required_payload_fields: &[
+                "ToggleModuleVariables {",
+                "module_slug,",
+                "enabled,",
+                "token,",
+                "tenant_slug,",
+            ],
         },
     ];
 
@@ -967,15 +997,35 @@ fn module_composition_helpers_do_not_cross_wire_mutation_constants() {
     let cases = [
         (
             "pub async fn install_module(",
-            ["UNINSTALL_MODULE_MUTATION", "UPGRADE_MODULE_MUTATION"],
+            [
+                "UNINSTALL_MODULE_MUTATION",
+                "UPGRADE_MODULE_MUTATION",
+                "TOGGLE_MODULE_MUTATION",
+            ],
         ),
         (
             "pub async fn uninstall_module(",
-            ["INSTALL_MODULE_MUTATION", "UPGRADE_MODULE_MUTATION"],
+            [
+                "INSTALL_MODULE_MUTATION",
+                "UPGRADE_MODULE_MUTATION",
+                "TOGGLE_MODULE_MUTATION",
+            ],
         ),
         (
             "pub async fn upgrade_module(",
-            ["INSTALL_MODULE_MUTATION", "UNINSTALL_MODULE_MUTATION"],
+            [
+                "INSTALL_MODULE_MUTATION",
+                "UNINSTALL_MODULE_MUTATION",
+                "TOGGLE_MODULE_MUTATION",
+            ],
+        ),
+        (
+            "pub async fn toggle_module(",
+            [
+                "INSTALL_MODULE_MUTATION",
+                "UNINSTALL_MODULE_MUTATION",
+                "UPGRADE_MODULE_MUTATION",
+            ],
         ),
     ];
 
