@@ -57,21 +57,21 @@ fn DiagnosticsHealthCard(
     ui_locale: Option<String>,
     #[prop(into)] on_queue_schema_fix: Callback<(SeoTargetSlug, SeoBulkApplyMode, String)>,
 ) -> impl IntoView {
-    let schema_remediation_label = t(
+    let schema_remediation_label = StoredValue::new(t(
         ui_locale.as_deref(),
         "seo.diagnostics.schema_remediation",
         "Schema remediation",
-    );
-    let queue_fix_label = t(
+    ));
+    let queue_fix_label = StoredValue::new(t(
         ui_locale.as_deref(),
         "seo.diagnostics.queue_fix",
         "Queue fix",
-    );
-    let affected_targets_template = t(
+    ));
+    let affected_targets_template = StoredValue::new(t(
         ui_locale.as_deref(),
         "seo.diagnostics.affected_targets",
         "{} affected targets",
-    );
+    ));
 
     view! {
         <div class="space-y-3 rounded-xl border border-border/80 bg-background/60 p-4">
@@ -80,6 +80,7 @@ fn DiagnosticsHealthCard(
                 {move || match diagnostics.get() {
                     Some(Ok(summary)) => {
                         let issues = summary.issues.clone();
+                        let issues_for_schema = issues.clone();
                         let has_issues = !issues.is_empty();
                         let schema_issue_counts: Vec<_> = summary.issue_counts_by_code.clone().into_iter()
                             .filter(|count| SCHEMA_ISSUE_CODES.contains(&count.key.as_str()))
@@ -100,18 +101,18 @@ fn DiagnosticsHealthCard(
                                 <Show when=move || has_schema_issues>
                                     <div class="space-y-2">
                                         <h4 class="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                                            {schema_remediation_label.clone()}
+                                            {schema_remediation_label.get_value()}
                                         </h4>
                                         <ul class="space-y-2">
                                             {schema_issue_counts.clone().into_iter().map(|count| {
-                                                let first_kind = issues.iter()
+                                                let first_kind = issues_for_schema.iter()
                                                     .find(|issue| issue.code == count.key)
                                                     .map(|issue| issue.target_kind.clone());
                                                 let fix_button = if let Some(kind) = first_kind {
                                                     let payload = default_schema_payload_for_slug(&kind).unwrap_or_default();
                                                     let on_click = on_queue_schema_fix.clone();
                                                     let kind_clone = kind.clone();
-                                                    let queue_fix_label_clone = queue_fix_label.clone();
+                                                    let queue_fix_label_clone = queue_fix_label.get_value();
                                                     view! {
                                                         <button
                                                             type="button"
@@ -124,7 +125,9 @@ fn DiagnosticsHealthCard(
                                                 } else {
                                                     ().into_any()
                                                 };
-                                                let affected_label = affected_targets_template.clone().replace("{}", &count.count.to_string());
+                                                let affected_label = affected_targets_template
+                                                    .get_value()
+                                                    .replace("{}", &count.count.to_string());
                                                 view! {
                                                     <li class="flex items-center justify-between gap-3 rounded-lg border border-border/70 px-3 py-2">
                                                         <div class="min-w-0">

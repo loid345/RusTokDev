@@ -7,9 +7,9 @@ use uuid::Uuid;
 
 use crate::api;
 use crate::model::{
-    SeoAdminTab, SeoBulkActionForm, SeoBulkFieldPatchMode, SeoBulkFilterForm, SeoRedirectForm,
-    SeoSettingsForm,
+    SeoAdminTab, SeoBulkActionForm, SeoBulkFilterForm, SeoRedirectForm, SeoSettingsForm,
 };
+use rustok_seo::SeoBulkFieldPatchMode;
 use crate::sections::{
     SeoAdminHeader, SeoAdminTabs, SeoBulkPane, SeoBusyFooter, SeoDefaultsPane, SeoDiagnosticsPane,
     SeoRedirectsPane, SeoRobotsPane, SeoSitemapsPane,
