@@ -15,6 +15,13 @@
 - интеграционные/e2e проверки и observability release-gate пройдены;
 - feature flag переведён в `default-on` после стабилизации.
 
+### Лицензионная/стоимостная политика Page Builder (обязательное ограничение)
+
+- Базовый production-path для визуального builder в RusTok — **open-source GrapesJS** (self-hosted), без обязательной зависимости от коммерческих Studio/SDK-слоёв.
+- Любое использование платных дополнений допускается только как **опциональный** track с отдельным ADR/согласованием; core rollout не должен блокироваться отсутствием коммерческой лицензии.
+- Контракт `grapesjs_v1` остаётся vendor-neutral: backend/runtime не должен требовать Studio-specific payload или proprietary API.
+- Для Leptos/Flutter в baseline достаточно contract-safe surfaces (preview/tree/properties/publish) поверх общего backend-контракта; 1:1 визуальный клон Next.js builder не является обязательным критерием текущего rollout.
+
 ## 2. Статус фаз
 
 - [x] **Фаза 0 — Контракт и backend-baseline зафиксированы**
@@ -47,12 +54,21 @@
 - [x] Подключить `PageBuilder` в production CRUD-flow pages.
 - [ ] Зафиксировать parity-план для двух стеков: `apps/next-admin` и `apps/admin`.
 - [ ] Выровнять UX-обработку validation/sanitize ошибок в формах.
+- [ ] Синхронизировать milestone-dependency с Flutter registry/codegen планом (`docs/research/flutter.md`, секция anti-drift guardrail), чтобы mobile host не расходился с backend/page-builder rollout.
 
 Текущее состояние `apps/next-admin`: production-формы blog и forum снова используют реальный Tiptap-based editor, а сериализация в write-path идёт в канонический payload `rt_json_v1` (`version` / `locale` / `doc`) без textarea-fallback в основном UX. `PageBuilder` переведён на реальный `GrapesJS` runtime, сохраняет `projectData` в body-формат `grapesjs_v1`, работает с реальным выбором страниц и оставляет legacy `blocks` как отдельную migration-compatible поверхность. Для `pages` compatibility rules теперь зафиксированы явно: `body` считается приоритетным payload для visual-builder consumer-ов, но legacy block-driven pages могут оставаться без `body`, а запись `body` не удаляет старые `blocks` автоматически.
 
 Отдельный детальный план по `pages` как модулю ведётся в `crates/rustok-pages/docs/implementation-plan.md` в секции `Dedicated page-builder track`, чтобы rollout visual builder не смешивался ни с OAuth/app-registration, ни с rich-text задачами blog/forum.
 
 **DoD фазы:** все целевые формы работают через компонентные редакторы, без ручного markdown-only fallback в основном UX.
+
+### Cross-plan dependency note (обязательно для hand-off)
+
+- До завершения backend/parity шагов этой дорожной карты Flutter-команда может делать только contract-safe registry scaffolding.
+- Любые изменения mobile module contracts для page-builder обязаны содержать явное уведомление о зависимостях и блокерах между:
+  - `docs/research/flutter.md`;
+  - текущим документом;
+  - `crates/rustok-pages/docs/implementation-plan.md`.
 
 ### Фаза 2 — Feature flags и стратегия rollout
 
@@ -62,6 +78,7 @@
 - [ ] Определить стратегию включения: internal → pilot → broad rollout.
 - [ ] Подготовить матрицу включения/исключения по tenant и модулю.
 - [ ] Согласовать операционный runbook переключений.
+- [ ] Зафиксировать procurement-free baseline: OSS GrapesJS как mandatory path, коммерческие SDK — только optional расширение без влияния на core DoD.
 
 **DoD фазы:** controlled rollout возможен без redeploy.
 
@@ -116,3 +133,4 @@
 - `apps/admin/docs/implementation-plan.md` — интеграция admin runtime (Leptos).
 - `apps/storefront/docs/implementation-plan.md` и `apps/next-frontend/docs/implementation-plan.md` — rendering parity и rollout storefront.
 - `docs/architecture/api.md` и `docs/standards/rt-json-v1.md` — контракт rich-text/page-builder payload.
+- `DECISIONS/*` (новый ADR при появлении коммерческой зависимости в builder-цепочке).
