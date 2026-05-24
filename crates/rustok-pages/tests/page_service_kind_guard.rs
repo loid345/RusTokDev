@@ -363,6 +363,49 @@ async fn create_and_publish_markdown_is_allowed_when_builder_disabled_but_publis
 }
 
 #[tokio::test]
+async fn create_and_publish_markdown_is_allowed_when_builder_publish_toggle_is_false() {
+    let (db, page_service, _block_service, tenant_id, security) = setup().await;
+    seed_pages_module_settings(
+        &db,
+        tenant_id,
+        "{\"builder\":{\"enabled\":true,\"publish\":{\"enabled\":false}}}",
+    )
+    .await;
+
+    let created = page_service
+        .create(
+            tenant_id,
+            security,
+            CreatePageInput {
+                translations: vec![PageTranslationInput {
+                    locale: "en".to_string(),
+                    title: "Published markdown with publish-off".to_string(),
+                    slug: Some("published-markdown-publish-off".to_string()),
+                    meta_title: None,
+                    meta_description: None,
+                }],
+                template: Some("default".to_string()),
+                body: Some(PageBodyInput {
+                    locale: "en".to_string(),
+                    content: "markdown publish path when builder publish off".to_string(),
+                    format: Some("markdown".to_string()),
+                    content_json: None,
+                }),
+                blocks: None,
+                channel_slugs: None,
+                publish: true,
+            },
+        )
+        .await
+        .expect("markdown publish should remain available when builder.publish is disabled");
+
+    assert_eq!(
+        created.status,
+        rustok_content::entities::node::ContentStatus::Published
+    );
+}
+
+#[tokio::test]
 async fn publish_grapesjs_page_is_blocked_when_builder_disabled_even_if_publish_enabled() {
     let (db, page_service, _block_service, tenant_id, security) = setup().await;
     let draft = page_service
@@ -558,6 +601,62 @@ async fn update_to_published_markdown_is_allowed_when_builder_disabled_but_publi
         )
         .await
         .expect("markdown publish transition should remain available");
+
+    assert_eq!(
+        updated.status,
+        rustok_content::entities::node::ContentStatus::Published
+    );
+}
+
+#[tokio::test]
+async fn update_to_published_markdown_is_allowed_when_builder_publish_toggle_is_false() {
+    let (db, page_service, _block_service, tenant_id, security) = setup().await;
+    let draft = page_service
+        .create(
+            tenant_id,
+            security.clone(),
+            CreatePageInput {
+                translations: vec![PageTranslationInput {
+                    locale: "en".to_string(),
+                    title: "Draft markdown publish-off page".to_string(),
+                    slug: Some("draft-markdown-publish-off".to_string()),
+                    meta_title: None,
+                    meta_description: None,
+                }],
+                template: Some("default".to_string()),
+                body: Some(PageBodyInput {
+                    locale: "en".to_string(),
+                    content: "markdown draft publish-off".to_string(),
+                    format: Some("markdown".to_string()),
+                    content_json: None,
+                }),
+                blocks: None,
+                channel_slugs: None,
+                publish: false,
+            },
+        )
+        .await
+        .expect("must create draft markdown page");
+
+    seed_pages_module_settings(
+        &db,
+        tenant_id,
+        "{\"builder\":{\"enabled\":true,\"publish\":{\"enabled\":false}}}",
+    )
+    .await;
+
+    let updated = page_service
+        .update(
+            tenant_id,
+            security,
+            draft.id,
+            UpdatePageInput {
+                status: Some(rustok_content::entities::node::ContentStatus::Published),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("markdown publish transition should remain available when builder.publish is disabled");
 
     assert_eq!(
         updated.status,
