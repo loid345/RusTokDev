@@ -146,6 +146,14 @@ pub fn has_required_draft_fields(title: &str, body: &str) -> bool {
     !title.is_empty() && !body.is_empty()
 }
 
+pub fn is_markdown_format(value: &str) -> bool {
+    value.trim().eq_ignore_ascii_case("markdown")
+}
+
+pub fn should_show_raw_body_warning(body_format: &str) -> bool {
+    !is_markdown_format(body_format)
+}
+
 pub fn issue_banner_class(kind: WritePathIssueKind) -> &'static str {
     match kind {
         WritePathIssueKind::Validation => {
@@ -279,6 +287,11 @@ mod tests {
         assert!(has_required_draft_fields("Title", "Body"));
         assert!(!has_required_draft_fields("", "Body"));
         assert!(!has_required_draft_fields("Title", ""));
+        assert!(is_markdown_format("markdown"));
+        assert!(is_markdown_format(" Markdown "));
+        assert!(!is_markdown_format("rt_json_v1"));
+        assert!(should_show_raw_body_warning("rt_json_v1"));
+        assert!(!should_show_raw_body_warning("markdown"));
         assert_eq!(
             issue_banner_class(WritePathIssueKind::Validation),
             "rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900"

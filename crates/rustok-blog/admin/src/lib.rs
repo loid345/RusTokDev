@@ -670,7 +670,7 @@ pub fn BlogAdmin() -> impl IntoView {
                             />
                         </label>
 
-                        <Show when=move || body_format.get() != "markdown">
+                        <Show when=move || core::should_show_raw_body_warning(body_format.get().as_str())>
                             <div class="rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                                 {form_raw_warning.clone()}
                             </div>
