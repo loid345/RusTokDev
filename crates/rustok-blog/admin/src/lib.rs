@@ -577,7 +577,7 @@ pub fn BlogAdmin() -> impl IntoView {
                     <div class="space-y-1">
                         <h2 class="text-lg font-semibold text-card-foreground">
                             {move || {
-                                if editing_post_id.get().is_some() {
+                                if core::is_editing_mode(editing_post_id.get().as_deref()) {
                                     form_edit_title.clone()
                                 } else {
                                     form_create_title.clone()
@@ -745,7 +745,7 @@ pub fn BlogAdmin() -> impl IntoView {
                                 if core::is_save_busy(busy_key.get().as_deref())
                                 {
                                     t(ui_locale.as_deref(), "blog.form.saving", "Saving...")
-                                } else if editing_post_id.get().is_some() {
+                                } else if core::is_editing_mode(editing_post_id.get().as_deref()) {
                                     t(ui_locale.as_deref(), "blog.form.update", "Update post")
                                 } else {
                                     t(ui_locale.as_deref(), "blog.form.create", "Create post")
