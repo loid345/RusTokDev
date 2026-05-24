@@ -19,7 +19,7 @@ mod submission_aggregation;
 
 use index_generation::{render_sitemap_file, render_sitemap_index};
 use submission_adapters::{
-    HttpSitemapSubmissionAdapter, SitemapSubmissionAdapter, SitemapSubmitEndpoint,
+    SitemapSubmissionAdapter, SitemapSubmissionRuntime, SitemapSubmitEndpoint,
 };
 use submission_aggregation::{
     push_submission_failure, SitemapSubmissionSummary, SITEMAP_SUBMIT_MAX_ERROR_LEN,
@@ -279,15 +279,11 @@ impl SeoService {
             return Ok(());
         }
         let sitemap_index_url = format!("{}/sitemap.xml", public_base_url(tenant));
-        let client = reqwest::Client::builder()
-            .timeout(std::time::Duration::from_secs(SITEMAP_SUBMIT_TIMEOUT_SECS))
-            .build()
-            .map_err(|error| format!("failed to create sitemap submission client: {error}"))?;
-        let adapter = HttpSitemapSubmissionAdapter { client };
+        let runtime = SitemapSubmissionRuntime::default_with_timeout(SITEMAP_SUBMIT_TIMEOUT_SECS)?;
         self.submit_sitemap_endpoints_with_adapter(
             settings.sitemap_submission_endpoints.as_slice(),
             sitemap_index_url.as_str(),
-            &adapter,
+            runtime.adapter(),
         )
         .await
     }
