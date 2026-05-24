@@ -506,6 +506,13 @@ impl PageService {
         security: SecurityContext,
         page_id: Uuid,
     ) -> PagesResult<PageResponse> {
+        let existing = self.find_page(tenant_id, page_id).await?;
+        enforce_owned_scope(
+            &security,
+            Resource::Pages,
+            Action::Publish,
+            existing.author_id,
+        )?;
         self.ensure_builder_enabled_for_page(tenant_id, page_id).await?;
         self.ensure_builder_publish_enabled(tenant_id).await?;
         self.set_status(
