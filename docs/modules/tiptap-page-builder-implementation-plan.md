@@ -263,6 +263,35 @@ Go/No-Go для перехода в следующую волну:
 
 Перед переводом tenant в следующую волну требуется явное подтверждение от Platform + Pages owner.
 
+
+
+### 7.6 FBA execution plan (next 3 iterations) для `pages` как референсного consumer-а
+
+> Цель блока: продолжить практическую разработку `page builder` в FBA-модели и использовать `rustok-pages` как шаблон переноса legacy module-owned домена в capability-consumer режим.
+
+**Итерация PB-FBA-1 (contract hardening + metadata parity)**
+
+- [ ] Зафиксировать в `rustok-pages` machine-readable матрицу capability fallback (`builder_off`, `preview_off`, `publish_off`) и связать её с runtime error catalog.
+- [ ] Закрыть contract-parity по consumer adapters (Next/Leptos/Flutter) на уровне одинаковых error semantics, без требования UI 1:1.
+- [ ] Зафиксировать anti-drift checks: `contract_version` между provider/consumer должен валидироваться в CI.
+
+**Итерация PB-FBA-2 (operability + fallback verification)**
+
+- [ ] Добавить обязательный fallback regression gate: отключение `builder.enabled` не ломает `list/read/menu` surfaces и не вызывает 5xx.
+- [ ] Привязать tenant-switch операции к control-plane audit trail (before/after snapshots + keep/rollback decision).
+- [ ] Вынести унифицированные SLO threshold checks в release-gate для wave-переходов (`preview p95`, `publish p95`, sanitize failure rate).
+
+**Итерация PB-FBA-3 (pilot execution + sunset discipline)**
+
+- [ ] Провести Wave 0 для `pages` как first consumer с evidence package по каждому toggle profile.
+- [ ] Провести Wave 1 на 1–3 low-traffic tenant c формальным go/no-go протоколом.
+- [ ] Зафиксировать tenant-by-tenant sunset график для legacy blocks bridge (только read/bridge, без расширения write-path).
+
+**Definition of Done для блока 7.6:**
+
+- `rustok-pages` подтверждён как воспроизводимый FBA migration blueprint (contract/ops/rollout), применимый для следующих content/layout модулей.
+- Все wave-переходы и rollback решения подтверждены контрольными артефактами, а не только narrative-описанием.
+
 ## 8. FBA execution roadmap (продолжение разработки Page Builder)
 
 Этот раздел фиксирует, как **продолжать разработку Page Builder уже в FBA-модели**, и как на его примере довести `pages` до production-ready consumer-профиля.

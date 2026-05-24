@@ -8,7 +8,7 @@
 
 - Current phase: phase_b_closed
 - Last checkpoint: Phase B pilot closure зафиксирован (core extraction + validate/test + docs double-check).
-- Next step: Завершить FBA migration handshake с reference builder-модулем (capability ownership + rollout runbook) и затем удерживать `rustok-pages` в maintenance mode без возврата UI helper-логики из core в lib.rs.
+- Next step: Выполнить PB-FBA-1 (typed fallback matrix + error catalog parity + anti-drift CI checks) и подготовить Wave 0 evidence package для tenant toggles.
 - Open blockers: None.
 - Hand-off notes for next agent:
   1. Перед любыми изменениями pages сначала сверить `docs/research/dioxus-ffa-pilot-connectivity-map.md` и этот файл; не открывать новый slice без явной цели в трекере.
@@ -17,6 +17,28 @@
 - Last updated at (UTC): 2026-05-24T00:40:00Z
 - Last updated at (UTC): 2026-05-24T09:15:00Z
 - Latest maintenance update: Leptos admin package now exposes capability surfaces `preview/tree/properties/publish` for `grapesjs_v1` and keeps legacy `blocks` compatibility visible in the same write-path.
+
+
+
+## PB-FBA immediate sprint (продолжение page builder разработки)
+
+### Sprint goal
+
+Перевести `rustok-pages` из статуса “handshake in progress” в проверяемый FBA-consumer baseline, который можно масштабировать на следующие модули по тому же шаблону.
+
+### Sprint scope (must-have)
+
+- [ ] Typed fallback matrix: `builder_off`, `preview_off`, `publish_off` с ожидаемыми runtime/error outcomes.
+- [ ] Unified builder error catalog для `validation/sanitize/runtime/feature-disabled` без расхождения между GraphQL, `#[server]` и UI adapters.
+- [ ] CI fallback gate для профилей `builder.enabled=false` и `builder.publish.enabled=false`.
+- [ ] Wave 0 evidence template: flags snapshot + smoke output + observability snapshot + keep/rollback decision.
+
+### Out of scope (for this sprint)
+
+- Расширение visual editor функционала за пределы capability contract.
+- Любой vendor-specific surface вне `grapesjs_v1`.
+- Изменение ownership boundaries (pages runtime owner vs external builder capability provider).
+
 
 ## Область работ
 

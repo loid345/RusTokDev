@@ -1,5 +1,8 @@
 use rustok_core::{MigrationSource, SecurityContext};
-use rustok_pages::dto::{BlockType, CreateBlockInput, CreatePageInput, PageTranslationInput};
+use rustok_pages::dto::{
+    BlockType, CreateBlockInput, CreatePageInput, PageBodyInput, PageTranslationInput,
+    UpdatePageInput,
+};
 use rustok_pages::error::PagesError;
 use rustok_pages::services::{BlockService, PageService};
 use rustok_pages::PagesModule;
@@ -76,6 +79,37 @@ async fn create_block(
         .expect("failed to create block")
 }
 
+async fn seed_pages_module_settings(
+    db: &DatabaseConnection,
+    tenant_id: Uuid,
+    settings: &str,
+) {
+    db.execute(Statement::from_string(
+        db.get_database_backend(),
+        format!(
+            "CREATE TABLE IF NOT EXISTS tenant_modules (
+                id TEXT PRIMARY KEY,
+                tenant_id TEXT NOT NULL,
+                module_slug TEXT NOT NULL,
+                enabled BOOLEAN NOT NULL DEFAULT TRUE,
+                settings TEXT NOT NULL DEFAULT '{{}}',
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            DELETE FROM tenant_modules
+            WHERE tenant_id = '{}' AND module_slug = 'pages';
+            INSERT INTO tenant_modules (id, tenant_id, module_slug, enabled, settings)
+            VALUES ('{}', '{}', 'pages', 1, '{}');",
+            tenant_id,
+            Uuid::new_v4(),
+            tenant_id,
+            settings
+        ),
+    ))
+    .await
+    .expect("must create and seed tenant_modules");
+}
+
 #[tokio::test]
 async fn publish_returns_page_not_found_for_block_id_and_keeps_page_status() {
     let (_db, page_service, block_service, tenant_id, security) = setup().await;
@@ -136,26 +170,8 @@ async fn delete_returns_page_not_found_for_block_id_and_keeps_page_record() {
 #[tokio::test]
 async fn publish_returns_feature_disabled_when_builder_publish_toggle_is_false() {
     let (db, page_service, _block_service, tenant_id, security) = setup().await;
-    db.execute(Statement::from_string(
-        db.get_database_backend(),
-        format!(
-            "CREATE TABLE IF NOT EXISTS tenant_modules (
-                id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL,
-                module_slug TEXT NOT NULL,
-                enabled BOOLEAN NOT NULL DEFAULT TRUE,
-                settings TEXT NOT NULL DEFAULT '{{}}',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-            INSERT INTO tenant_modules (id, tenant_id, module_slug, enabled, settings)
-            VALUES ('{}', '{}', 'pages', 1, '{{\"builder\":{{\"publish\":{{\"enabled\":false}}}}}}');",
-            Uuid::new_v4(),
-            tenant_id
-        ),
-    ))
-    .await
-    .expect("must create and seed tenant_modules");
+    seed_pages_module_settings(&db, tenant_id, "{\"builder\":{\"publish\":{\"enabled\":false}}}")
+        .await;
 
     let page = create_page(&page_service, tenant_id, security.clone()).await;
     let result = page_service.publish(tenant_id, security, page.id).await;
@@ -163,4 +179,384 @@ async fn publish_returns_feature_disabled_when_builder_publish_toggle_is_false()
         result,
         Err(PagesError::FeatureDisabled { feature }) if feature == "builder.publish.enabled"
     ));
+}
+
+#[tokio::test]
+async fn create_grapesjs_body_returns_feature_disabled_when_builder_toggle_is_false() {
+    let (db, page_service, _block_service, tenant_id, security) = setup().await;
+    seed_pages_module_settings(&db, tenant_id, "{\"builder\":{\"enabled\":false}}").await;
+
+    let result = page_service
+        .create(
+            tenant_id,
+            security,
+            CreatePageInput {
+                translations: vec![PageTranslationInput {
+                    locale: "en".to_string(),
+                    title: "Landing".to_string(),
+                    slug: Some("landing".to_string()),
+                    meta_title: None,
+                    meta_description: None,
+                }],
+                template: Some("default".to_string()),
+                body: Some(PageBodyInput {
+                    locale: "en".to_string(),
+                    content: "".to_string(),
+                    format: Some("grapesjs_v1".to_string()),
+                    content_json: Some(serde_json::json!({
+                        "components": []
+                    })),
+                }),
+                blocks: None,
+                channel_slugs: None,
+                publish: false,
+            },
+        )
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(PagesError::FeatureDisabled { feature }) if feature == "builder.enabled"
+    ));
+}
+
+#[tokio::test]
+async fn update_grapesjs_body_returns_feature_disabled_when_builder_toggle_is_false() {
+    let (db, page_service, _block_service, tenant_id, security) = setup().await;
+    let page = create_page(&page_service, tenant_id, security.clone()).await;
+    seed_pages_module_settings(&db, tenant_id, "{\"builder\":{\"enabled\":false}}").await;
+
+    let result = page_service
+        .update(
+            tenant_id,
+            security,
+            page.id,
+            UpdatePageInput {
+                body: Some(PageBodyInput {
+                    locale: "en".to_string(),
+                    content: "".to_string(),
+                    format: Some("grapesjs_v1".to_string()),
+                    content_json: Some(serde_json::json!({
+                        "components": []
+                    })),
+                }),
+                ..Default::default()
+            },
+        )
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(PagesError::FeatureDisabled { feature }) if feature == "builder.enabled"
+    ));
+}
+
+#[tokio::test]
+async fn create_markdown_body_is_allowed_when_builder_toggle_is_false() {
+    let (db, page_service, _block_service, tenant_id, security) = setup().await;
+    seed_pages_module_settings(&db, tenant_id, "{\"builder\":{\"enabled\":false}}").await;
+
+    let created = page_service
+        .create(
+            tenant_id,
+            security,
+            CreatePageInput {
+                translations: vec![PageTranslationInput {
+                    locale: "en".to_string(),
+                    title: "Markdown page".to_string(),
+                    slug: Some("markdown-page".to_string()),
+                    meta_title: None,
+                    meta_description: None,
+                }],
+                template: Some("default".to_string()),
+                body: Some(PageBodyInput {
+                    locale: "en".to_string(),
+                    content: "# Hello".to_string(),
+                    format: Some("markdown".to_string()),
+                    content_json: None,
+                }),
+                blocks: None,
+                channel_slugs: None,
+                publish: false,
+            },
+        )
+        .await
+        .expect("markdown path should remain available when builder is disabled");
+
+    let body = created.body.expect("body should be present");
+    assert_eq!(body.format, "markdown");
+}
+
+#[tokio::test]
+async fn update_markdown_body_is_allowed_when_builder_toggle_is_false() {
+    let (db, page_service, _block_service, tenant_id, security) = setup().await;
+    let page = create_page(&page_service, tenant_id, security.clone()).await;
+    seed_pages_module_settings(&db, tenant_id, "{\"builder\":{\"enabled\":false}}").await;
+
+    let updated = page_service
+        .update(
+            tenant_id,
+            security,
+            page.id,
+            UpdatePageInput {
+                body: Some(PageBodyInput {
+                    locale: "en".to_string(),
+                    content: "Updated markdown body".to_string(),
+                    format: Some("markdown".to_string()),
+                    content_json: None,
+                }),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("markdown update path should remain available when builder is disabled");
+
+    let body = updated.body.expect("body should be present");
+    assert_eq!(body.format, "markdown");
+}
+
+#[tokio::test]
+async fn create_and_publish_markdown_is_allowed_when_builder_disabled_but_publish_enabled() {
+    let (db, page_service, _block_service, tenant_id, security) = setup().await;
+    seed_pages_module_settings(
+        &db,
+        tenant_id,
+        "{\"builder\":{\"enabled\":false,\"publish\":{\"enabled\":true}}}",
+    )
+    .await;
+
+    let created = page_service
+        .create(
+            tenant_id,
+            security,
+            CreatePageInput {
+                translations: vec![PageTranslationInput {
+                    locale: "en".to_string(),
+                    title: "Published markdown page".to_string(),
+                    slug: Some("published-markdown-page".to_string()),
+                    meta_title: None,
+                    meta_description: None,
+                }],
+                template: Some("default".to_string()),
+                body: Some(PageBodyInput {
+                    locale: "en".to_string(),
+                    content: "publish markdown path".to_string(),
+                    format: Some("markdown".to_string()),
+                    content_json: None,
+                }),
+                blocks: None,
+                channel_slugs: None,
+                publish: true,
+            },
+        )
+        .await
+        .expect("markdown publish should remain available when builder is disabled");
+
+    assert_eq!(
+        created.status,
+        rustok_content::entities::node::ContentStatus::Published
+    );
+}
+
+#[tokio::test]
+async fn publish_grapesjs_page_is_blocked_when_builder_disabled_even_if_publish_enabled() {
+    let (db, page_service, _block_service, tenant_id, security) = setup().await;
+    let draft = page_service
+        .create(
+            tenant_id,
+            security.clone(),
+            CreatePageInput {
+                translations: vec![PageTranslationInput {
+                    locale: "en".to_string(),
+                    title: "Grapes page".to_string(),
+                    slug: Some("grapes-page".to_string()),
+                    meta_title: None,
+                    meta_description: None,
+                }],
+                template: Some("default".to_string()),
+                body: Some(PageBodyInput {
+                    locale: "en".to_string(),
+                    content: "".to_string(),
+                    format: Some("grapesjs_v1".to_string()),
+                    content_json: Some(serde_json::json!({
+                        "components": []
+                    })),
+                }),
+                blocks: None,
+                channel_slugs: None,
+                publish: false,
+            },
+        )
+        .await
+        .expect("draft grapesjs page should be created while builder is enabled");
+
+    seed_pages_module_settings(
+        &db,
+        tenant_id,
+        "{\"builder\":{\"enabled\":false,\"publish\":{\"enabled\":true}}}",
+    )
+    .await;
+
+    let result = page_service.publish(tenant_id, security, draft.id).await;
+    assert!(matches!(
+        result,
+        Err(PagesError::FeatureDisabled { feature }) if feature == "builder.enabled"
+    ));
+}
+
+#[tokio::test]
+async fn publish_with_foreign_page_id_returns_page_not_found_before_builder_toggle_checks() {
+    let (db, page_service, _block_service, tenant_a, security) = setup().await;
+    let page = page_service
+        .create(
+            tenant_a,
+            security.clone(),
+            CreatePageInput {
+                translations: vec![PageTranslationInput {
+                    locale: "en".to_string(),
+                    title: "Tenant A grapes page".to_string(),
+                    slug: Some("tenant-a-grapes".to_string()),
+                    meta_title: None,
+                    meta_description: None,
+                }],
+                template: Some("default".to_string()),
+                body: Some(PageBodyInput {
+                    locale: "en".to_string(),
+                    content: "".to_string(),
+                    format: Some("grapesjs_v1".to_string()),
+                    content_json: Some(serde_json::json!({
+                        "components": []
+                    })),
+                }),
+                blocks: None,
+                channel_slugs: None,
+                publish: false,
+            },
+        )
+        .await
+        .expect("must create page in tenant A");
+
+    let tenant_b = Uuid::new_v4();
+    seed_pages_module_settings(
+        &db,
+        tenant_b,
+        "{\"builder\":{\"enabled\":false,\"publish\":{\"enabled\":true}}}",
+    )
+    .await;
+
+    let result = page_service.publish(tenant_b, security, page.id).await;
+    assert!(matches!(result, Err(PagesError::PageNotFound(id)) if id == page.id));
+}
+
+#[tokio::test]
+async fn update_to_published_is_blocked_for_existing_grapesjs_page_when_builder_is_disabled() {
+    let (db, page_service, _block_service, tenant_id, security) = setup().await;
+    let draft = page_service
+        .create(
+            tenant_id,
+            security.clone(),
+            CreatePageInput {
+                translations: vec![PageTranslationInput {
+                    locale: "en".to_string(),
+                    title: "Draft grapes page".to_string(),
+                    slug: Some("draft-grapes-page".to_string()),
+                    meta_title: None,
+                    meta_description: None,
+                }],
+                template: Some("default".to_string()),
+                body: Some(PageBodyInput {
+                    locale: "en".to_string(),
+                    content: "".to_string(),
+                    format: Some("grapesjs_v1".to_string()),
+                    content_json: Some(serde_json::json!({
+                        "components": []
+                    })),
+                }),
+                blocks: None,
+                channel_slugs: None,
+                publish: false,
+            },
+        )
+        .await
+        .expect("must create draft grapesjs page");
+
+    seed_pages_module_settings(
+        &db,
+        tenant_id,
+        "{\"builder\":{\"enabled\":false,\"publish\":{\"enabled\":true}}}",
+    )
+    .await;
+
+    let result = page_service
+        .update(
+            tenant_id,
+            security,
+            draft.id,
+            UpdatePageInput {
+                status: Some(rustok_content::entities::node::ContentStatus::Published),
+                ..Default::default()
+            },
+        )
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(PagesError::FeatureDisabled { feature }) if feature == "builder.enabled"
+    ));
+}
+
+#[tokio::test]
+async fn update_to_published_markdown_is_allowed_when_builder_disabled_but_publish_enabled() {
+    let (db, page_service, _block_service, tenant_id, security) = setup().await;
+    let draft = page_service
+        .create(
+            tenant_id,
+            security.clone(),
+            CreatePageInput {
+                translations: vec![PageTranslationInput {
+                    locale: "en".to_string(),
+                    title: "Draft markdown page".to_string(),
+                    slug: Some("draft-markdown-page".to_string()),
+                    meta_title: None,
+                    meta_description: None,
+                }],
+                template: Some("default".to_string()),
+                body: Some(PageBodyInput {
+                    locale: "en".to_string(),
+                    content: "markdown draft".to_string(),
+                    format: Some("markdown".to_string()),
+                    content_json: None,
+                }),
+                blocks: None,
+                channel_slugs: None,
+                publish: false,
+            },
+        )
+        .await
+        .expect("must create draft markdown page");
+
+    seed_pages_module_settings(
+        &db,
+        tenant_id,
+        "{\"builder\":{\"enabled\":false,\"publish\":{\"enabled\":true}}}",
+    )
+    .await;
+
+    let updated = page_service
+        .update(
+            tenant_id,
+            security,
+            draft.id,
+            UpdatePageInput {
+                status: Some(rustok_content::entities::node::ContentStatus::Published),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("markdown publish transition should remain available");
+
+    assert_eq!(
+        updated.status,
+        rustok_content::entities::node::ContentStatus::Published
+    );
 }
