@@ -758,3 +758,8 @@ rollback-стратегии и Definition of Done по итерациям.
 
 - `verify-all` теперь поддерживает alias `control-plane-remediation-minimal` для точечного запуска нового bundle без ручного вызова файла runner.
 - Добавлен отдельный smoke-тест `scripts/tests/control_plane_remediation_verify_all_alias_test.sh`, подтверждающий корректный route alias -> runner path.
+
+### Актуализация 2026-05-24 (итерация 54)
+
+- Smoke-тесты для control-plane minimal runner переведены на изолированные fixture-сценарии (`mktemp` + fake `cargo`/`python3`), без зависимости от состояния текущего workspace и без тяжёлой перекомпиляции.
+- Alias-тест `verify-all -> control-plane-remediation-minimal` теперь проверяет полный PASS-path в fixture, включая финальный отчёт `All verification suites passed!`.
