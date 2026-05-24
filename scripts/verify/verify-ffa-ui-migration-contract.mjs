@@ -12,6 +12,7 @@ const requiredDocs = [
   "docs/research/dioxus-ffa-ui-migration-plan.md",
   "docs/research/dioxus-ffa-pilot-connectivity-map.md",
   "docs/verification/ffa-ui-parity-checklist.md",
+  "docs/index.md",
 ];
 
 const requiredPlanHeadings = [
@@ -52,6 +53,12 @@ const requiredChecklistChecks = [
 
 const requiredConnectivityMentions = ["rustok-pages", "rustok-search"];
 
+const requiredIndexRefs = [
+  "dioxus-ffa-ui-migration-plan.md",
+  "dioxus-ffa-pilot-connectivity-map.md",
+  "ffa-ui-parity-checklist.md",
+];
+
 function assertFileExists(relPath) {
   const fullPath = path.join(repoRoot, relPath);
   if (!existsSync(fullPath)) {
@@ -81,16 +88,17 @@ function findLineNumber(content, pattern) {
 }
 
 function readRequiredDocs() {
-  const [planPath, connectivityPath, checklistPath] = requiredDocs.map(assertFileExists);
+  const [planPath, connectivityPath, checklistPath, docsIndexPath] = requiredDocs.map(assertFileExists);
 
   return {
     plan: normalizeMarkdown(readFileSync(planPath, "utf8")),
     connectivity: normalizeMarkdown(readFileSync(connectivityPath, "utf8")),
     checklist: normalizeMarkdown(readFileSync(checklistPath, "utf8")),
+    docsIndex: normalizeMarkdown(readFileSync(docsIndexPath, "utf8")),
   };
 }
 
-function collectValidationErrors({ plan, connectivity, checklist }) {
+function collectValidationErrors({ plan, connectivity, checklist, docsIndex }) {
   const errors = [];
 
   const planHeadingIndex = new Map(
@@ -116,6 +124,12 @@ function collectValidationErrors({ plan, connectivity, checklist }) {
     }
   });
 
+  requiredIndexRefs.forEach((refPath) => {
+    if (!docsIndex.includes(refPath)) {
+      errors.push(`Не найдена обязательная ссылка в docs/index.md: ${refPath}`);
+    }
+  });
+
   if (errors.length === 0) {
     requiredPlanHeadings.forEach((heading) => {
       const line = planHeadingIndex.get(heading);
@@ -125,7 +139,7 @@ function collectValidationErrors({ plan, connectivity, checklist }) {
     });
   }
 
-  return errors;
+  return errors.sort((a, b) => a.localeCompare(b, "ru"));
 }
 
 try {
