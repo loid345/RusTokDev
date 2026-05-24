@@ -49,9 +49,7 @@ pub enum PagesError {
 pub type PagesResult<T> = Result<T, PagesError>;
 
 pub const FEATURE_BUILDER_ENABLED: &str = "builder.enabled";
-#[allow(dead_code)]
 pub const FEATURE_BUILDER_PREVIEW_ENABLED: &str = "builder.preview.enabled";
-#[allow(dead_code)]
 pub const FEATURE_BUILDER_PROPERTIES_ENABLED: &str = "builder.properties.enabled";
 pub const FEATURE_BUILDER_PUBLISH_ENABLED: &str = "builder.publish.enabled";
 
@@ -231,5 +229,16 @@ mod tests {
             rich.fields.get("feature"),
             Some(&FEATURE_BUILDER_PUBLISH_ENABLED.to_string())
         );
+    }
+
+    #[test]
+    fn test_builder_feature_keys_are_stable() {
+        assert_eq!(FEATURE_BUILDER_ENABLED, "builder.enabled");
+        assert_eq!(FEATURE_BUILDER_PREVIEW_ENABLED, "builder.preview.enabled");
+        assert_eq!(
+            FEATURE_BUILDER_PROPERTIES_ENABLED,
+            "builder.properties.enabled"
+        );
+        assert_eq!(FEATURE_BUILDER_PUBLISH_ENABLED, "builder.publish.enabled");
     }
 }
