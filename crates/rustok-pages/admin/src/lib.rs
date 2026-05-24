@@ -206,12 +206,12 @@ pub fn PagesAdmin() -> impl IntoView {
     );
     let legacy_blocks_title = t(
         route_context.locale.as_deref(),
-        "pages.surface.tree.legacyBlocks",
+        "pages.surface.tree.existingBlocks",
         "Existing blocks",
     );
     let no_legacy_blocks_text = t(
         route_context.locale.as_deref(),
-        "pages.surface.tree.noLegacyBlocks",
+        "pages.surface.tree.noExistingBlocks",
         "No existing blocks attached.",
     );
     let body_format_label = t(
@@ -271,7 +271,7 @@ pub fn PagesAdmin() -> impl IntoView {
     );
     let compatibility_legacy_blocks = t(
         route_context.locale.as_deref(),
-        "pages.compat.legacyBlocks",
+        "pages.compat.existingBlocks",
         "Existing blocks remain attached and are not deleted automatically by grapesjs_v1 writes.",
     );
 
