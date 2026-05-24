@@ -69,6 +69,7 @@ def _validate_snapshot_schema(entries: object) -> str | None:
     }
     seen_route_segments: set[str] = set()
     seen_module_slugs: set[str] = set()
+    previous_route_segment: str | None = None
 
     for index, item in enumerate(entries):
         if not isinstance(item, dict):
@@ -98,7 +99,10 @@ def _validate_snapshot_schema(entries: object) -> str | None:
             return f"snapshot entry #{index} route_segment must be snake_case"
         if route_segment in seen_route_segments:
             return f"snapshot entry #{index} duplicates route_segment '{route_segment}'"
+        if previous_route_segment is not None and route_segment < previous_route_segment:
+            return "snapshot entries must be sorted by route_segment"
         seen_route_segments.add(route_segment)
+        previous_route_segment = route_segment
 
         if surface_kind != "admin_mobile":
             return f"snapshot entry #{index} has unsupported surface_kind '{surface_kind}'"
