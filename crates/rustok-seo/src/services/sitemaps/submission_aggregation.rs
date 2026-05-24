@@ -14,6 +14,19 @@ pub(super) struct SitemapSubmissionSummary {
     pub(super) omitted_endpoint_status_count: usize,
 }
 
+impl Default for SitemapSubmissionSummary {
+    fn default() -> Self {
+        Self {
+            success_count: 0,
+            failure_count: 0,
+            failures: Vec::new(),
+            omitted_failure_count: 0,
+            endpoint_statuses: Vec::new(),
+            omitted_endpoint_status_count: 0,
+        }
+    }
+}
+
 impl SitemapSubmissionSummary {
     pub(super) fn into_error(self) -> Option<String> {
         if self.failure_count == 0 {
@@ -30,12 +43,8 @@ impl SitemapSubmissionSummary {
                 self.omitted_failure_count
             ));
         }
-        let mut message = parts.join("; ");
-        if message.len() > SITEMAP_SUBMIT_MAX_ERROR_LEN {
-            message.truncate(SITEMAP_SUBMIT_MAX_ERROR_LEN);
-            message.push_str("...");
-        }
-        Some(message)
+        let message = parts.join("; ");
+        Some(truncate_with_ellipsis(message, SITEMAP_SUBMIT_MAX_ERROR_LEN))
     }
 }
 
