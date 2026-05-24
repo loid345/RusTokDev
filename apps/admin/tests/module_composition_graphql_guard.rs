@@ -215,6 +215,48 @@ fn module_composition_helpers_do_not_implement_local_retry_or_compensation_flows
 }
 
 #[test]
+fn module_composition_helpers_preserve_server_owned_lifecycle_parity_matrix_contract() {
+    let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let api_path = crate_root.join("src/features/modules/api.rs");
+    let content = fs::read_to_string(&api_path).expect("read api.rs");
+
+    let lifecycle_taxonomy_fragments = [
+        "UNKNOWN_MODULE",
+        "CORE_MODULE",
+        "MISSING_DEPENDENCIES",
+        "HAS_DEPENDENTS",
+        "MODULE_HOOK_FAILED",
+    ];
+    let journal_metadata_fragments = [
+        "module_operations",
+        "correlation_id",
+        "requested_by",
+        "previous_effective_enabled",
+        "retryable",
+    ];
+
+    for signature in [
+        "pub async fn install_module(",
+        "pub async fn uninstall_module(",
+        "pub async fn upgrade_module(",
+        "pub async fn toggle_module(",
+    ] {
+        let helper_body = extract_function_block(&content, signature)
+            .unwrap_or_else(|| panic!("helper signature not found: {signature}"));
+
+        for fragment in lifecycle_taxonomy_fragments
+            .iter()
+            .chain(journal_metadata_fragments.iter())
+        {
+            assert!(
+                !helper_body.contains(fragment),
+                "{signature} must keep server-owned parity contract and not parse fragment `{fragment}`"
+            );
+        }
+    }
+}
+
+#[test]
 fn module_composition_helpers_do_not_cross_wire_foreign_mutation_contracts() {
     let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let api_path = crate_root.join("src/features/modules/api.rs");
