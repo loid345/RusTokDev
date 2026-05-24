@@ -377,6 +377,109 @@ async fn create_and_list_order_returns() {
 }
 
 #[tokio::test]
+async fn list_order_returns_ignores_blank_status_filter() {
+    let service = setup().await;
+    let tenant_id = Uuid::new_v4();
+    let actor_id = Uuid::new_v4();
+
+    let order = service
+        .create_order(tenant_id, actor_id, create_order_input())
+        .await
+        .expect("order should be created");
+
+    let created_return = service
+        .create_return(
+            tenant_id,
+            order.id,
+            CreateOrderReturnInput {
+                reason: Some("damaged".to_string()),
+                note: None,
+                metadata: serde_json::json!({ "source": "blank-status-filter-test" }),
+            },
+        )
+        .await
+        .expect("return should be created");
+
+    let (rows, total) = service
+        .list_returns(
+            tenant_id,
+            ListOrderReturnsInput {
+                page: 1,
+                per_page: 20,
+                order_id: Some(order.id),
+                status: Some("   ".to_string()),
+            },
+        )
+        .await
+        .expect("returns list should ignore blank status filter");
+
+    assert_eq!(total, 1);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, created_return.id);
+}
+
+#[tokio::test]
+async fn list_order_returns_applies_status_trim_and_tenant_isolation() {
+    let service = setup().await;
+    let tenant_a = Uuid::new_v4();
+    let tenant_b = Uuid::new_v4();
+    let actor_id = Uuid::new_v4();
+
+    let order_a = service
+        .create_order(tenant_a, actor_id, create_order_input())
+        .await
+        .expect("tenant A order should be created");
+    let order_b = service
+        .create_order(tenant_b, actor_id, create_order_input())
+        .await
+        .expect("tenant B order should be created");
+
+    let return_a = service
+        .create_return(
+            tenant_a,
+            order_a.id,
+            CreateOrderReturnInput {
+                reason: Some("damaged".to_string()),
+                note: None,
+                metadata: serde_json::json!({ "source": "tenant-a" }),
+            },
+        )
+        .await
+        .expect("tenant A return should be created");
+
+    service
+        .create_return(
+            tenant_b,
+            order_b.id,
+            CreateOrderReturnInput {
+                reason: Some("wrong-size".to_string()),
+                note: None,
+                metadata: serde_json::json!({ "source": "tenant-b" }),
+            },
+        )
+        .await
+        .expect("tenant B return should be created");
+
+    let (rows, total) = service
+        .list_returns(
+            tenant_a,
+            ListOrderReturnsInput {
+                page: 1,
+                per_page: 20,
+                order_id: None,
+                status: Some("  PENDING  ".to_string()),
+            },
+        )
+        .await
+        .expect("tenant A filtered returns should load");
+
+    assert_eq!(total, 1);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, return_a.id);
+    assert_eq!(rows[0].order_id, order_a.id);
+}
+
+#[tokio::test]
 async fn localized_order_custom_fields_resolve_from_attached_values() {
     let db = setup_test_db().await;
     support::ensure_order_schema(&db).await;
