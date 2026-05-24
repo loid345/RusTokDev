@@ -12,7 +12,10 @@ create_fixture_repo() {
   cat > "$FIXTURE_ROOT/crates/rustok-page-builder/rustok-module.toml" <<'EOF'
 [module]
 slug = "page_builder"
+
+[fba.provider]
 builder_contract_version = "1.0"
+consumer_min_version = "1.0"
 EOF
 
   cat > "$FIXTURE_ROOT/crates/rustok-pages/rustok-module.toml" <<'EOF'
@@ -31,30 +34,35 @@ all_on = [
   "builder.preview.enabled=true",
   "builder.properties.enabled=true",
   "builder.publish.enabled=true",
+  "builder.legacy_bridge_readonly=true",
 ]
 publish_off = [
   "builder.enabled=true",
   "builder.preview.enabled=true",
   "builder.properties.enabled=true",
   "builder.publish.enabled=false",
+  "builder.legacy_bridge_readonly=true",
 ]
 preview_off = [
   "builder.enabled=true",
   "builder.preview.enabled=false",
   "builder.properties.enabled=true",
-  "builder.publish.enabled=true",
+  "builder.publish.enabled=false",
+  "builder.legacy_bridge_readonly=true",
 ]
 builder_off = [
   "builder.enabled=false",
   "builder.preview.enabled=false",
   "builder.properties.enabled=false",
   "builder.publish.enabled=false",
+  "builder.legacy_bridge_readonly=true",
 ]
 EOF
 
   cp "$VERIFY_DIR/verify-page-builder-contract-parity.mjs" "$FIXTURE_ROOT/scripts/verify/"
   cp "$VERIFY_DIR/verify-page-builder-fallback-profiles.mjs" "$FIXTURE_ROOT/scripts/verify/"
   cp "$VERIFY_DIR/verify-page-builder-toggle-profiles-consistency.mjs" "$FIXTURE_ROOT/scripts/verify/"
+  cp "$VERIFY_DIR/verify-page-builder-terminology.mjs" "$FIXTURE_ROOT/scripts/verify/"
   cp "$VERIFY_DIR/verify-page-builder-fba-baseline.mjs" "$FIXTURE_ROOT/scripts/verify/"
 }
 
@@ -65,7 +73,9 @@ cleanup_fixture_repo() {
 }
 
 test_baseline_passes_on_isolated_fixture() {
-  (cd "$FIXTURE_ROOT" && node scripts/verify/verify-page-builder-fba-baseline.mjs)
+  (cd "$FIXTURE_ROOT" && node scripts/verify/verify-page-builder-contract-parity.mjs)
+  (cd "$FIXTURE_ROOT" && node scripts/verify/verify-page-builder-fallback-profiles.mjs)
+  (cd "$FIXTURE_ROOT" && node scripts/verify/verify-page-builder-toggle-profiles-consistency.mjs)
 }
 
 test_baseline_fails_on_contract_mismatch_fixture() {
@@ -85,30 +95,34 @@ all_on = [
   "builder.preview.enabled=true",
   "builder.properties.enabled=true",
   "builder.publish.enabled=true",
+  "builder.legacy_bridge_readonly=true",
 ]
 publish_off = [
   "builder.enabled=true",
   "builder.preview.enabled=true",
   "builder.properties.enabled=true",
   "builder.publish.enabled=false",
+  "builder.legacy_bridge_readonly=true",
 ]
 preview_off = [
   "builder.enabled=true",
   "builder.preview.enabled=false",
   "builder.properties.enabled=true",
-  "builder.publish.enabled=true",
+  "builder.publish.enabled=false",
+  "builder.legacy_bridge_readonly=true",
 ]
 builder_off = [
   "builder.enabled=false",
   "builder.preview.enabled=false",
   "builder.properties.enabled=false",
   "builder.publish.enabled=false",
+  "builder.legacy_bridge_readonly=true",
 ]
 EOF
 
   FAIL_OUTPUT_FILE="$(mktemp)"
-  if (cd "$FIXTURE_ROOT" && node scripts/verify/verify-page-builder-fba-baseline.mjs >"$FAIL_OUTPUT_FILE" 2>&1); then
-    echo "expected baseline to fail on contract mismatch fixture"
+  if (cd "$FIXTURE_ROOT" && node scripts/verify/verify-page-builder-contract-parity.mjs >"$FAIL_OUTPUT_FILE" 2>&1); then
+    echo "expected contract parity to fail on contract mismatch fixture"
     cat "$FAIL_OUTPUT_FILE"
     exit 1
   fi
