@@ -811,7 +811,7 @@ fn BlogPostsTable(
     on_delete: Callback<String>,
 ) -> impl IntoView {
     let locale = use_context::<UiRouteContext>().unwrap_or_default().locale;
-    if items.is_empty() {
+    if !core::has_items(items.as_slice()) {
         return view! {
             <div class="rounded-xl border border-dashed border-border p-12 text-center">
                 <p class="text-sm text-muted-foreground">

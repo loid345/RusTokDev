@@ -130,6 +130,10 @@ pub fn has_issue(issue: Option<WritePathIssueKind>) -> bool {
     issue.is_some()
 }
 
+pub fn has_items<T>(items: &[T]) -> bool {
+    !items.is_empty()
+}
+
 pub fn edit_action_label(is_editing: bool, editing_label: String, edit_label: String) -> String {
     if is_editing {
         editing_label
@@ -285,6 +289,8 @@ mod tests {
         assert!(!is_editing_mode(None));
         assert!(has_issue(Some(WritePathIssueKind::Runtime)));
         assert!(!has_issue(None));
+        assert!(has_items(&[1, 2, 3]));
+        assert!(!has_items::<u8>(&[]));
         assert_eq!(
             edit_action_label(true, "Editing".to_string(), "Edit".to_string()),
             "Editing".to_string()
