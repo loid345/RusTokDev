@@ -645,8 +645,8 @@ rollback-стратегии и Definition of Done по итерациям.
 
 ### 1) Код/архитектура
 
-- [ ] Нет production-кода, который отдельно обновляет `platform_state` и отдельно enqueue-ит build.
-- [ ] Нет production-вызовов прямого bypass toggle API.
+- [x] Нет production-кода, который отдельно обновляет `platform_state` и отдельно enqueue-ит build (закрыто repo-guard тестом `apps/server/tests/platform_composition_guard.rs`).
+- [x] Нет production-вызовов прямого bypass toggle API (закрыто repo-guard тестом `apps/server/tests/lifecycle_bypass_guard.rs`).
 - [x] Hook pipeline соответствует model `pre -> commit -> post` без частичного rollback.
 
 ### 2) Тесты
