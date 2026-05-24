@@ -74,6 +74,12 @@ function getMarkdownHeadings(content) {
     .filter(Boolean);
 }
 
+function findLineNumber(content, pattern) {
+  const lines = content.split("\n");
+  const index = lines.findIndex((line) => pattern.test(line));
+  return index >= 0 ? index + 1 : null;
+}
+
 function readRequiredDocs() {
   const [planPath, connectivityPath, checklistPath] = requiredDocs.map(assertFileExists);
 
@@ -98,7 +104,8 @@ function collectValidationErrors({ plan, connectivity, checklist }) {
   });
 
   requiredChecklistChecks.forEach(({ label, pattern }) => {
-    if (!pattern.test(checklist)) {
+    const line = findLineNumber(checklist, pattern);
+    if (line === null) {
       errors.push(`Не найден обязательный checklist-паттерн (${label})`);
     }
   });
@@ -108,6 +115,15 @@ function collectValidationErrors({ plan, connectivity, checklist }) {
       errors.push(`Не найден обязательный пилот в connectivity map: ${mention}`);
     }
   });
+
+  if (errors.length === 0) {
+    requiredPlanHeadings.forEach((heading) => {
+      const line = planHeadingIndex.get(heading);
+      if (line != null) {
+        console.log(`[verify-ffa-ui-migration-contract] heading ok: ${heading} (line ${line})`);
+      }
+    });
+  }
 
   return errors;
 }
