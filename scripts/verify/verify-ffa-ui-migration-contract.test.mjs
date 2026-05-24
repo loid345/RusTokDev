@@ -89,12 +89,15 @@ function withFixture({ pipeline, contractCommand, docsCommand }) {
 
 function runVerifier(root, options = {}) {
   const args = [scriptPath];
-  if (options.useRootArg) {
+  if (options.rootArgMode === "equals") {
     args.push(`--root=${root}`);
+  }
+  if (options.rootArgMode === "separate") {
+    args.push("--root", root);
   }
 
   return spawnSync(process.execPath, args, {
-    env: options.useRootArg ? process.env : { ...process.env, RUSTOK_VERIFY_ROOT: root },
+    env: options.rootArgMode ? process.env : { ...process.env, RUSTOK_VERIFY_ROOT: root },
     encoding: "utf8",
   });
 }
@@ -179,8 +182,24 @@ test("passes when root is provided via --root argument", () => {
   });
 
   try {
-    const result = runVerifier(fixture.root, { useRootArg: true });
+    const result = runVerifier(fixture.root, { rootArgMode: "equals" });
     assert.equal(result.status, 0, `Expected --root fixture to succeed:
+${result.stdout}
+${result.stderr}`);
+  } finally {
+    fixture.cleanup();
+  }
+});
+
+
+test("passes when root is provided via --root <path> arguments", () => {
+  const fixture = withFixture({
+    pipeline: "npm run verify:ffa:ui:migration:contract && npm run verify:ffa:ui:migration:docs",
+  });
+
+  try {
+    const result = runVerifier(fixture.root, { rootArgMode: "separate" });
+    assert.equal(result.status, 0, `Expected --root <path> fixture to succeed:
 ${result.stdout}
 ${result.stderr}`);
   } finally {

@@ -8,9 +8,23 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function resolveRepoRoot(argv, env) {
-  const rootArg = argv.find((arg) => arg.startsWith("--root="));
-  if (rootArg) {
-    return path.resolve(rootArg.slice("--root=".length));
+  let cliRoot;
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg.startsWith("--root=")) {
+      cliRoot = arg.slice("--root=".length);
+      continue;
+    }
+
+    if (arg === "--root") {
+      cliRoot = argv[index + 1];
+      index += 1;
+    }
+  }
+
+  if (typeof cliRoot === "string" && cliRoot.trim().length > 0) {
+    return path.resolve(cliRoot);
   }
 
   if (env.RUSTOK_VERIFY_ROOT) {
