@@ -196,6 +196,30 @@ Module-owned UI package не имеет права invent-ить свою locale
 3. `npm run verify:i18n:ui`, если тронуты locale bundles или locale wiring
 4. UI package docs и host docs обновлены, если поменялся surface contract
 
+### 6. Обязательный FFA/FBA status block для модулей с UI
+
+Для каждого module-owned UI пакета (admin/storefront/host-integrated surface) в локальном
+`docs/implementation-plan.md` обязателен status block:
+
+```md
+## FFA/FBA status
+
+- FFA status: `not_started | in_progress | phase_b_ready | parity_verified`
+- FBA status: `not_started | in_progress | boundary_ready | transport_verified`
+- Evidence:
+  - UI/core/transport decomposition status
+  - native `#[server]` + GraphQL parity status
+  - backend boundary status (in-process/remote-ready), если применимо
+- Last verified at (UTC):
+- Owner:
+```
+
+Правила:
+
+1. Если правится UI contract, transport wiring или module boundary — status block обновляется в том же PR.
+2. Если меняется статус локального блока, синхронно обновляется central entry в `docs/modules/registry.md` (раздел FFA/FBA readiness board).
+3. Нельзя выставлять `parity_verified`/`transport_verified` без явного verification evidence в PR и в локальном плане.
+
 ## Что запрещено
 
 При написании модуля нельзя:
