@@ -1208,6 +1208,7 @@ where
 
     Ok(default_locale)
 }
+impl OrderService {
     #[instrument(skip(self, input), fields(tenant_id = %tenant_id, order_id = %order_id))]
     pub async fn create_return(
         &self,
@@ -1252,10 +1253,16 @@ where
             query = query.filter(entities::order_return::Column::OrderId.eq(order_id));
         }
         if let Some(status) = input.status {
-            query = query.filter(entities::order_return::Column::Status.eq(status.trim().to_ascii_lowercase()));
+            query = query.filter(
+                entities::order_return::Column::Status.eq(status.trim().to_ascii_lowercase()),
+            );
         }
         let paginator = query.paginate(&self.db, per_page);
         let total = paginator.num_items().await?;
         let rows = paginator.fetch_page(page.saturating_sub(1)).await?;
-        Ok((rows.into_iter().map(map_order_return_response).collect(), total))
+        Ok((
+            rows.into_iter().map(map_order_return_response).collect(),
+            total,
+        ))
     }
+}

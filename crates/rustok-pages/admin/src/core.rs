@@ -400,7 +400,10 @@ mod tests {
 
     #[test]
     fn label_with_id_replaces_placeholder() {
-        assert_eq!(label_with_id("Editing page {id}", "page_1"), "Editing page page_1");
+        assert_eq!(
+            label_with_id("Editing page {id}", "page_1"),
+            "Editing page page_1"
+        );
     }
 
     #[test]
@@ -456,7 +459,10 @@ mod tests {
         assert_eq!(seed.channel_slugs_text, "web, mobile");
         assert!(seed.publish_now);
         assert_eq!(seed.body_format, GRAPESJS_FORMAT);
-        assert_eq!(seed.body_updated_at.as_deref(), Some("2026-05-23T10:30:00Z"));
+        assert_eq!(
+            seed.body_updated_at.as_deref(),
+            Some("2026-05-23T10:30:00Z")
+        );
         assert_eq!(seed.legacy_blocks.len(), 1);
     }
 

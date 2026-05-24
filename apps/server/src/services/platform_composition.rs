@@ -1,3 +1,4 @@
+use rustok_api::manifest_hash::{hash_manifest, hash_manifest_snapshot};
 use rustok_core::ModuleRegistry;
 use sea_orm::{
     sea_query::Expr, ActiveModelTrait, ColumnTrait, ConnectionTrait, DatabaseConnection, DbErr,
@@ -5,7 +6,6 @@ use sea_orm::{
 };
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
-use rustok_api::manifest_hash::{hash_manifest, hash_manifest_snapshot};
 
 use crate::models::build::Model as Build;
 use crate::models::platform_state::{

@@ -9,7 +9,10 @@ use rustok_order::entities::{order, order_tax_line};
 use rustok_order::error::OrderError;
 use rustok_order::services::OrderService;
 use rustok_test_utils::{db::setup_test_db, mock_transactional_event_bus};
-use sea_orm::{ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait, QueryFilter, Statement};
+use sea_orm::{
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, DbBackend, EntityTrait,
+    QueryFilter, Statement,
+};
 use std::str::FromStr;
 use uuid::Uuid;
 

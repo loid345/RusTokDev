@@ -279,8 +279,7 @@ pub fn PagesAdmin() -> impl IntoView {
     let (editing_page_id, set_editing_page_id) = signal(Option::<String>::None);
     let (title, set_title) = signal(String::new());
     let (slug, set_slug) = signal(String::new());
-    let (project_data_text, set_project_data_text) =
-        signal(core::default_project_data_text(""));
+    let (project_data_text, set_project_data_text) = signal(core::default_project_data_text(""));
     let (channel_slugs_text, set_channel_slugs_text) = signal(String::new());
     let (locale, set_locale) = signal(default_locale.clone());
     let (publish_now, set_publish_now) = signal(false);
@@ -580,7 +579,9 @@ pub fn PagesAdmin() -> impl IntoView {
     let project_parse_error = Signal::derive(move || parsed_project.get().err());
 
     let compatibility_warning = Signal::derive(move || {
-        !body_format.get().eq_ignore_ascii_case(core::GRAPESJS_FORMAT)
+        !body_format
+            .get()
+            .eq_ignore_ascii_case(core::GRAPESJS_FORMAT)
             || !legacy_blocks.get().is_empty()
     });
 

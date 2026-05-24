@@ -70,7 +70,6 @@ mod tests {
     }
 }
 
-
 #[cfg(test)]
 mod serialize_tests {
     use super::hash_manifest;
