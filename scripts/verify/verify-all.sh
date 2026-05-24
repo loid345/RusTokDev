@@ -74,7 +74,7 @@ SCRIPTS=(
     "verify-page-builder-contract-parity.mjs:Page Builder Contract Parity"
     "verify-page-builder-fallback-profiles.mjs:Page Builder Fallback Profiles"
     "verify-page-builder-toggle-profiles-consistency.mjs:Page Builder Toggle Profiles Consistency"
-    "verify-page-builder-fba-baseline.sh:Page Builder FBA Baseline Gate"
+    "verify-page-builder-fba-baseline.mjs:Page Builder FBA Baseline Gate"
 )
 
 # Filter to selected script if specified

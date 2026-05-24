@@ -134,7 +134,7 @@ powershell -ExecutionPolicy Bypass -File scripts/verify/verify-architecture.ps1
 Для трека `page_builder -> pages` обязательный минимальный gate перед продвижением между волнами:
 
 ```bash
-./scripts/verify/verify-page-builder-fba-baseline.sh
+node scripts/verify/verify-page-builder-fba-baseline.mjs
 ```
 
 Состав baseline gate:

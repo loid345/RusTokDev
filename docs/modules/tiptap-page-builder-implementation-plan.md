@@ -555,7 +555,7 @@ Go/No-Go для перехода в следующую волну:
 - dry-run consistency verify report (baseline command: `node scripts/verify/verify-page-builder-toggle-profiles-consistency.mjs`);
 - SLO отчёт (`preview p95`, `publish p95`, sanitize failure rate);
 - подписанный протокол Go/No-Go для pilot tenants.
-- unified baseline gate report (command: `./scripts/verify/verify-page-builder-fba-baseline.sh`).
+- unified baseline gate report (command: `node scripts/verify/verify-page-builder-fba-baseline.mjs`).
 
 ### 12.4 Как масштабировать после `pages` (дальше по плану)
 
