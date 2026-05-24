@@ -107,8 +107,11 @@ pub fn should_autofill_slug(current_slug: &str) -> bool {
     !has_non_empty_text(current_slug)
 }
 
-pub fn should_load_selected_post(post_id: Option<&str>) -> bool {
-    post_id.map(has_non_empty_text).unwrap_or(false)
+pub fn loadable_post_id(post_id: Option<&str>) -> Option<String> {
+    post_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
 }
 
 pub fn trimmed_text(value: &str) -> String {
@@ -331,9 +334,12 @@ mod tests {
         assert!(!has_non_empty_text("   "));
         assert!(should_autofill_slug("   "));
         assert!(!should_autofill_slug("existing-slug"));
-        assert!(should_load_selected_post(Some("post-1")));
-        assert!(!should_load_selected_post(Some("   ")));
-        assert!(!should_load_selected_post(None));
+        assert_eq!(
+            loadable_post_id(Some(" post-1 ")),
+            Some("post-1".to_string())
+        );
+        assert_eq!(loadable_post_id(Some("   ")), None);
+        assert_eq!(loadable_post_id(None), None);
         assert_eq!(trimmed_text(" abc "), "abc".to_string());
         assert_eq!(
             fallback_post_slug(None, "missing-slug"),
