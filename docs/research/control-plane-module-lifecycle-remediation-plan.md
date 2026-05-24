@@ -619,7 +619,7 @@ rollback-стратегии и Definition of Done по итерациям.
 
 **Deliverables.**
 
-- [ ] Общий hash builder для GraphQL, Leptos SSR, BuildService.
+- [x] Общий hash builder для GraphQL, Leptos SSR, BuildService (закрыто shared helper `crates/rustok-api/src/manifest_hash.rs::hash_manifest` + call-site cutover в `apps/server/src/services/platform_composition.rs` и `apps/admin/src/features/modules/api.rs`).
 - [x] Удалён hardcoded dependency match из migrator core.
 - [x] Расширенные tests на determinism ordering и dependency validation.
 
@@ -694,8 +694,8 @@ rollback-стратегии и Definition of Done по итерациям.
 
 ### Batch-2 (следом после Batch-1)
 
-- [ ] Закрыть общий hash builder для GraphQL/Leptos SSR/BuildService и end-to-end test
-  “один manifest -> один hash/ref/snapshot” между surfaces.
+- [x] Закрыть общий hash builder для GraphQL/Leptos SSR/BuildService и end-to-end test
+  “один manifest -> один hash/ref/snapshot” между surfaces (server integration tests `successful_enqueue_keeps_hash_parity_between_snapshot_and_build`, `successful_enqueue_keeps_manifest_snapshot_parity_with_hash`, `same_manifest_keeps_hash_and_snapshot_stable_across_revisions` + shared typed hash helper cutover).
 - [ ] Прогнать минимальный verification-набор плана на ветке и зафиксировать результат в чекбоксах.
 
 ### Definition of Done для пакетного цикла
@@ -703,3 +703,9 @@ rollback-стратегии и Definition of Done по итерациям.
 - [x] Все пункты Batch-1 отмечены `[x]`.
 - [x] Обновлён release-gate checklist (разделы Код/Тесты/Документация/Операционные проверки).
 - [x] В актуализации этого документа добавлен короткий отчёт по факту выполненного пакета.
+
+
+### Актуализация 2026-05-24 (итерация 45)
+
+- Закрыт Batch-2 пункт по общему hash builder: введён shared typed helper `hash_manifest` в `rustok-api` и переведены server/admin call-sites на единый hashing entrypoint без локального дублирования сериализации.
+- Execution backlog и Batch-2 checklist синхронизированы: пункт про end-to-end parity “один manifest -> один hash/ref/snapshot” отмечен как выполненный на основе существующего server integration coverage и нового shared helper contract.

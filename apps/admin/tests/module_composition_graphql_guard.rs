@@ -1145,3 +1145,19 @@ fn extract_function_block_returns_none_when_body_brace_missing() {
     let source = "pub async fn toggle_module() -> Result<(), ()>";
     assert!(extract_function_block(source, "pub async fn toggle_module()").is_none());
 }
+
+
+#[test]
+fn runtime_manifest_hash_uses_shared_typed_hash_helper() {
+    let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let api_path = crate_root.join("src/features/modules/api.rs");
+    let content = fs::read_to_string(&api_path).expect("read api.rs");
+
+    let helper_body = extract_function_block(&content, "fn runtime_manifest_hash(manifest: &RuntimeModulesManifest) -> String")
+        .expect("runtime_manifest_hash helper should exist");
+
+    assert!(
+        helper_body.contains("rustok_api::manifest_hash::hash_manifest(manifest)"),
+        "runtime_manifest_hash must use shared typed hash helper"
+    );
+}
