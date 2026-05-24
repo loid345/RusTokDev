@@ -112,7 +112,7 @@ export default function PostForm({
   const [migrationWarnings, setMigrationWarnings] = useState<string[]>(
     initialData?.body?.trim() && !initialData?.contentJson
       ? [
-          'Legacy markdown detected. Convert it to rt_json_v1 for rich editor features.'
+          'Markdown content detected. Convert it to rt_json_v1 for rich editor features.'
         ]
       : []
   );
@@ -287,8 +287,8 @@ export default function PostForm({
             name='bodyFormat'
             label='Body format'
             options={[
-              { label: 'Markdown (legacy compatibility)', value: 'markdown' },
-              { label: 'RT JSON v1 (default, rich editor)', value: 'rt_json_v1' }
+              { label: 'Markdown', value: 'markdown' },
+              { label: 'RT JSON v1 (rich editor)', value: 'rt_json_v1' }
             ]}
           />
 
@@ -327,7 +327,7 @@ export default function PostForm({
 
           {migrationWarnings.length > 0 && (
             <Alert>
-              <AlertTitle>Legacy content warning</AlertTitle>
+              <AlertTitle>Content format notice</AlertTitle>
               <AlertDescription>
                 <ul className='list-disc pl-4'>
                   {migrationWarnings.map((warning) => (
