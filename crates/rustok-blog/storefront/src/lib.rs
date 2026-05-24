@@ -220,7 +220,7 @@ fn PublishedPostsList(items: Vec<BlogPostListItem>, total: u64) -> impl IntoView
     ) {
         Ok(items) => items,
         Err(empty_message) => {
-            let empty_message = core::published_posts_empty_state_message(empty_message);
+            let (empty_message,) = core::published_posts_empty_state_view(empty_message);
             return view! {
                 <article class="rounded-2xl border border-dashed border-border p-6">
                     <p class="text-sm text-muted-foreground">
