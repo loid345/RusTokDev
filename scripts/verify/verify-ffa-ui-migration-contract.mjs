@@ -77,11 +77,11 @@ const requiredKpiMentions = [
 
 const packageJsonPath = "package.json";
 
-const requiredNpmScripts = [
-  "verify:ffa:ui:migration",
-  "verify:ffa:ui:migration:contract",
-  "verify:ffa:ui:migration:docs",
-];
+const requiredNpmScriptCommands = {
+  "verify:ffa:ui:migration": null,
+  "verify:ffa:ui:migration:contract": "node scripts/verify/verify-ffa-ui-migration-contract.mjs",
+  "verify:ffa:ui:migration:docs": "bash scripts/verify/verify-ffa-ui-doc-patterns.sh",
+};
 
 const requiredMigrationPipelineCommands = [
   "npm run verify:ffa:ui:migration:contract",
@@ -111,7 +111,6 @@ function stripCodeFences(content) {
 function stripHtmlComments(content) {
   return content.replace(/<!--[\s\S]*?-->/g, "");
 }
-
 
 function getMarkdownHeadings(content) {
   return content
@@ -169,7 +168,6 @@ function hasMarkdownLink(content, target) {
   return false;
 }
 
-
 function parsePackageJson() {
   const fullPath = path.join(repoRoot, packageJsonPath);
   if (!existsSync(fullPath)) {
@@ -216,11 +214,18 @@ function collectValidationErrors({ plan, connectivity, checklist, docsIndex, pac
     }
   });
 
-
   const scripts = packageJson?.scripts ?? {};
-  requiredNpmScripts.forEach((scriptName) => {
-    if (typeof scripts[scriptName] !== "string" || scripts[scriptName].trim().length === 0) {
+  Object.entries(requiredNpmScriptCommands).forEach(([scriptName, expectedCommand]) => {
+    const scriptValue = scripts[scriptName];
+    if (typeof scriptValue !== "string" || scriptValue.trim().length === 0) {
       errors.push(`Не найден обязательный npm script в package.json: ${scriptName}`);
+      return;
+    }
+
+    if (expectedCommand !== null && scriptValue.trim() !== expectedCommand) {
+      errors.push(
+        `Скрипт ${scriptName} должен быть равен: ${expectedCommand}; фактически: ${scriptValue.trim()}`,
+      );
     }
   });
 
