@@ -960,6 +960,42 @@ mod tests {
         );
     }
 
+
+    #[tokio::test]
+    async fn submit_sitemap_endpoints_preserves_valid_endpoint_order() {
+        let db = test_db().await;
+        let service = SeoService::new_memory(db);
+        let adapter = TestSitemapSubmissionAdapter::new(HashMap::from([
+            ("https://first.example.com/ping".to_string(), Ok(())),
+            ("https://second.example.com/ping".to_string(), Ok(())),
+            ("https://third.example.com/ping".to_string(), Ok(())),
+        ]));
+
+        let result = service
+            .submit_sitemap_endpoints_with_adapter(
+                &[
+                    "https://first.example.com/ping".to_string(),
+                    "invalid endpoint".to_string(),
+                    "https://second.example.com/ping".to_string(),
+                    "https://third.example.com/ping".to_string(),
+                ],
+                "https://store.example.com/sitemap.xml",
+                &adapter,
+            )
+            .await;
+
+        assert!(result.is_err());
+        let submitted = adapter.submitted_endpoints().await;
+        assert_eq!(
+            submitted,
+            vec![
+                "https://first.example.com/ping".to_string(),
+                "https://second.example.com/ping".to_string(),
+                "https://third.example.com/ping".to_string(),
+            ]
+        );
+    }
+
     #[tokio::test]
     async fn submit_sitemap_endpoints_invalid_endpoint_is_not_submitted() {
         let db = test_db().await;
