@@ -377,6 +377,120 @@ async fn create_and_list_order_returns() {
 }
 
 #[tokio::test]
+async fn list_order_returns_clamps_per_page_upper_bound_to_100() {
+    let service = setup().await;
+    let tenant_id = Uuid::new_v4();
+    let actor_id = Uuid::new_v4();
+
+    let order = service
+        .create_order(tenant_id, actor_id, create_order_input())
+        .await
+        .expect("order should be created");
+
+    for index in 0..101 {
+        service
+            .create_return(
+                tenant_id,
+                order.id,
+                CreateOrderReturnInput {
+                    reason: Some(format!("reason-{index}")),
+                    note: None,
+                    metadata: serde_json::json!({ "source": "per-page-upper-bound-test", "index": index }),
+                },
+            )
+            .await
+            .expect("return should be created");
+    }
+
+    let (rows, total) = service
+        .list_returns(
+            tenant_id,
+            ListOrderReturnsInput {
+                page: 1,
+                per_page: 1_000,
+                order_id: Some(order.id),
+                status: None,
+            },
+        )
+        .await
+        .expect("per_page upper bound should clamp");
+
+    assert_eq!(total, 101);
+    assert_eq!(rows.len(), 100, "per_page > 100 should clamp to 100 rows");
+}
+
+#[tokio::test]
+async fn list_order_returns_clamps_pagination_bounds() {
+    let service = setup().await;
+    let tenant_id = Uuid::new_v4();
+    let actor_id = Uuid::new_v4();
+
+    let order = service
+        .create_order(tenant_id, actor_id, create_order_input())
+        .await
+        .expect("order should be created");
+
+    service
+        .create_return(
+            tenant_id,
+            order.id,
+            CreateOrderReturnInput {
+                reason: Some("damaged".to_string()),
+                note: None,
+                metadata: serde_json::json!({ "source": "pagination-clamp-test-1" }),
+            },
+        )
+        .await
+        .expect("first return should be created");
+
+    service
+        .create_return(
+            tenant_id,
+            order.id,
+            CreateOrderReturnInput {
+                reason: Some("wrong-size".to_string()),
+                note: None,
+                metadata: serde_json::json!({ "source": "pagination-clamp-test-2" }),
+            },
+        )
+        .await
+        .expect("second return should be created");
+
+    let (rows_page1, total_page1) = service
+        .list_returns(
+            tenant_id,
+            ListOrderReturnsInput {
+                page: 0,
+                per_page: 0,
+                order_id: Some(order.id),
+                status: None,
+            },
+        )
+        .await
+        .expect("page/per_page lower bound should clamp");
+
+    assert_eq!(total_page1, 2);
+    assert_eq!(rows_page1.len(), 1, "per_page=0 should clamp to 1");
+
+    let (rows_page2, total_page2) = service
+        .list_returns(
+            tenant_id,
+            ListOrderReturnsInput {
+                page: 2,
+                per_page: 1,
+                order_id: Some(order.id),
+                status: None,
+            },
+        )
+        .await
+        .expect("second page should resolve");
+
+    assert_eq!(total_page2, 2);
+    assert_eq!(rows_page2.len(), 1);
+    assert_ne!(rows_page1[0].id, rows_page2[0].id);
+}
+
+#[tokio::test]
 async fn list_order_returns_ignores_blank_status_filter() {
     let service = setup().await;
     let tenant_id = Uuid::new_v4();
