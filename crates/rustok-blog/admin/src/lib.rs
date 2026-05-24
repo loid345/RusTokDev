@@ -205,22 +205,24 @@ pub fn BlogAdmin() -> impl IntoView {
     });
     let initial_edit_post = edit_post;
     let effect_default_locale = default_locale.clone();
-    Effect::new(move |_| match selected_post_query.get() {
-        Some(post_id) if core::has_non_empty_text(post_id.as_str()) => {
-            initial_edit_post.run((post_id, effect_default_locale.clone()));
+    Effect::new(move |_| {
+        let selected_post_id = selected_post_query.get();
+        if let Some(post_id) = core::selected_post_id_if_loadable(selected_post_id.as_deref()) {
+            initial_edit_post.run((post_id.to_string(), effect_default_locale.clone()));
+        } else {
+            reset_form(
+                set_editing_post_id,
+                set_title,
+                set_slug,
+                set_excerpt,
+                set_body,
+                set_locale,
+                set_body_format,
+                set_tags_input,
+                set_publish_now,
+                effect_default_locale.as_str(),
+            )
         }
-        _ => reset_form(
-            set_editing_post_id,
-            set_title,
-            set_slug,
-            set_excerpt,
-            set_body,
-            set_locale,
-            set_body_format,
-            set_tags_input,
-            set_publish_now,
-            effect_default_locale.as_str(),
-        ),
     });
 
     let submit_ui_locale = ui_locale.clone();
@@ -306,12 +308,12 @@ pub fn BlogAdmin() -> impl IntoView {
             set_busy_key.set(Some(core::busy_key_for_publish(post_id.as_str())));
 
             spawn_local(async move {
-                let result = if publish {
+                let result = if core::should_publish_now(publish) {
                     api::publish_post(
                         token_value,
                         tenant_value,
                         post_id.clone(),
-                        Some(post_locale.clone()),
+                        core::locale_arg(post_locale.as_str()),
                     )
                     .await
                 } else {
@@ -319,7 +321,7 @@ pub fn BlogAdmin() -> impl IntoView {
                         token_value,
                         tenant_value,
                         post_id.clone(),
-                        Some(post_locale),
+                        core::locale_arg(post_locale.as_str()),
                     )
                     .await
                 };
@@ -375,7 +377,7 @@ pub fn BlogAdmin() -> impl IntoView {
                 token_value,
                 tenant_value,
                 post_id.clone(),
-                Some(post_locale),
+                core::locale_arg(post_locale.as_str()),
             )
             .await
             {
@@ -609,7 +611,7 @@ pub fn BlogAdmin() -> impl IntoView {
                                 prop:value=title
                                 on:input=move |ev| {
                                     let value = event_target_value(&ev);
-                                    if !core::has_non_empty_text(slug.get_untracked().as_str()) {
+                                    if core::should_autofill_slug(slug.get_untracked().as_str()) {
                                         set_slug.set(core::slugify(value.as_str()));
                                     }
                                     set_title.set(value);
@@ -719,7 +721,7 @@ pub fn BlogAdmin() -> impl IntoView {
                             }>
                                 {move || {
                                     submit_error.get().map(|issue| {
-                                        let label = core::issue_kind_label(issue.kind);
+                                        let label = core::issue_label_for(&issue);
 
                                         view! {
                                             <span>
@@ -904,7 +906,11 @@ fn BlogPostsTable(
                                                     class="text-xs font-medium text-primary hover:underline"
                                                     disabled=row_busy
                                                     on:click={
-                                                        move |_| on_toggle_publish.run((post_id_publish.clone(), !is_published, post_locale_publish.clone()))
+                                                        move |_| on_toggle_publish.run((
+                                                            post_id_publish.clone(),
+                                                            core::next_publish_state(is_published),
+                                                            post_locale_publish.clone(),
+                                                        ))
                                                     }
                                                 >
                                                     {core::publish_action_label(
@@ -980,11 +986,11 @@ fn apply_post_to_form(
     set_editing_post_id.set(Some(post.id.clone()));
     set_locale.set(post.requested_locale.clone());
     set_title.set(post.title.clone());
-    set_slug.set(post.slug.clone().unwrap_or_default());
-    set_excerpt.set(post.excerpt.clone().unwrap_or_default());
-    set_body.set(post.body.clone().unwrap_or_default());
+    set_slug.set(core::optional_text_or_default(post.slug.clone()));
+    set_excerpt.set(core::optional_text_or_default(post.excerpt.clone()));
+    set_body.set(core::optional_text_or_default(post.body.clone()));
     set_body_format.set(post.body_format.clone());
-    set_tags_input.set(post.tags.join(", "));
+    set_tags_input.set(core::tags_input_value(post.tags.as_slice()));
     set_publish_now.set(core::is_published_status(post.status.as_str()));
 }
 

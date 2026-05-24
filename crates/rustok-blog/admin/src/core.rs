@@ -100,6 +100,18 @@ pub fn has_non_empty_text(value: &str) -> bool {
     !value.trim().is_empty()
 }
 
+pub fn should_autofill_slug(current_slug: &str) -> bool {
+    !has_non_empty_text(current_slug)
+}
+
+pub fn should_load_selected_post(post_id: Option<&str>) -> bool {
+    post_id.map(has_non_empty_text).unwrap_or(false)
+}
+
+pub fn selected_post_id_if_loadable<'a>(post_id: Option<&'a str>) -> Option<&'a str> {
+    post_id.filter(|value| has_non_empty_text(value))
+}
+
 pub fn trimmed_text(value: &str) -> String {
     value.trim().to_string()
 }
@@ -110,6 +122,14 @@ pub fn fallback_post_slug(value: Option<String>, fallback: &str) -> String {
 
 pub fn fallback_post_excerpt(value: Option<String>, fallback: &str) -> String {
     value.unwrap_or_else(|| fallback.to_string())
+}
+
+pub fn optional_text_or_default(value: Option<String>) -> String {
+    value.unwrap_or_default()
+}
+
+pub fn tags_input_value(tags: &[String]) -> String {
+    tags.join(", ")
 }
 
 pub fn row_is_busy_for_post(busy_key: Option<&str>, post_id: &str) -> bool {
@@ -162,6 +182,18 @@ pub fn should_show_archive_action(is_archived: bool) -> bool {
     !is_archived
 }
 
+pub fn next_publish_state(is_published: bool) -> bool {
+    !is_published
+}
+
+pub fn should_publish_now(publish: bool) -> bool {
+    publish
+}
+
+pub fn locale_arg(locale: &str) -> Option<String> {
+    Some(locale.to_string())
+}
+
 pub fn has_required_draft_fields(title: &str, body: &str) -> bool {
     !title.is_empty() && !body.is_empty()
 }
@@ -198,6 +230,10 @@ pub fn issue_kind_label(kind: WritePathIssueKind) -> &'static str {
         WritePathIssueKind::Sanitization => "Sanitize",
         WritePathIssueKind::Runtime => "Runtime",
     }
+}
+
+pub fn issue_label_for(issue: &WritePathIssue) -> &'static str {
+    issue_kind_label(issue.kind)
 }
 
 #[cfg(test)]
@@ -275,6 +311,17 @@ mod tests {
         );
         assert!(has_non_empty_text(" x "));
         assert!(!has_non_empty_text("   "));
+        assert!(should_autofill_slug("   "));
+        assert!(!should_autofill_slug("existing-slug"));
+        assert!(should_load_selected_post(Some("post-1")));
+        assert!(!should_load_selected_post(Some("   ")));
+        assert!(!should_load_selected_post(None));
+        assert_eq!(
+            selected_post_id_if_loadable(Some("post-1")),
+            Some("post-1")
+        );
+        assert_eq!(selected_post_id_if_loadable(Some("   ")), None);
+        assert_eq!(selected_post_id_if_loadable(None), None);
         assert_eq!(trimmed_text(" abc "), "abc".to_string());
         assert_eq!(
             fallback_post_slug(None, "missing-slug"),
@@ -283,6 +330,15 @@ mod tests {
         assert_eq!(
             fallback_post_excerpt(None, "No excerpt"),
             "No excerpt".to_string()
+        );
+        assert_eq!(
+            optional_text_or_default(Some("hello".to_string())),
+            "hello".to_string()
+        );
+        assert_eq!(optional_text_or_default(None), "".to_string());
+        assert_eq!(
+            tags_input_value(&["news".to_string(), "launch".to_string()]),
+            "news, launch".to_string()
         );
         assert!(row_is_busy_for_post(Some("edit:42"), "42"));
         assert!(!row_is_busy_for_post(Some("edit:41"), "42"));
@@ -318,6 +374,11 @@ mod tests {
         );
         assert!(should_show_archive_action(false));
         assert!(!should_show_archive_action(true));
+        assert!(!next_publish_state(true));
+        assert!(next_publish_state(false));
+        assert!(should_publish_now(true));
+        assert!(!should_publish_now(false));
+        assert_eq!(locale_arg("en"), Some("en".to_string()));
         assert!(has_required_draft_fields("Title", "Body"));
         assert!(!has_required_draft_fields("", "Body"));
         assert!(!has_required_draft_fields("Title", ""));
@@ -336,6 +397,10 @@ mod tests {
         );
         assert_eq!(issue_banner_class_or_hidden(None), "hidden");
         assert_eq!(issue_kind_label(WritePathIssueKind::Runtime), "Runtime");
+        assert_eq!(
+            issue_label_for(&WritePathIssue::with_runtime("runtime issue")),
+            "Runtime"
+        );
     }
 }
 use rustok_api::{WritePathIssue, WritePathIssueKind};

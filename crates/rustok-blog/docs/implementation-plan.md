@@ -8,14 +8,14 @@ packages и module metadata синхронизированы.
 ## Execution checkpoint
 
 - Current phase: phase_b_in_progress
-- Last checkpoint: FFA slice #10 completed (admin submit-issue kind mapping moved to `core`, dual-path transport unchanged).
+- Last checkpoint: FFA slice #19 completed (admin tags input formatting moved to `core`, dual-path transport unchanged).
 - Next step: Зафиксировать evidence по parity checklist и выбрать следующий один use-case для admin/storefront core extraction без изменения transport-контракта.
 - Open blockers: None.
 - Hand-off notes for next agent:
   1. Продолжать one-task-per-iteration: один helper/use-case -> storefront/admin -> docs double-check.
   2. Не менять dual-path контракт (`native #[server]` + GraphQL fallback) при FFA-декомпозиции.
   3. После каждого slice обновлять parity evidence (`docs/verification/ffa-ui-parity-checklist.md`).
-- Last updated at (UTC): 2026-05-24T14:20:00Z
+- Last updated at (UTC): 2026-05-24T18:00:00Z
 
 ## Область работ
 
@@ -122,6 +122,15 @@ packages и module metadata синхронизированы.
 - [x] Slice 8: admin submit-issue visibility predicate switched from inline `.is_some()` to `core::has_issue` for consistent helper reuse.
 - [x] Slice 9: admin table empty-state predicate switched from inline `.is_empty()` to `core::has_items` for consistent helper reuse.
 - [x] Slice 10: admin submit-issue kind extraction switched from inline `.map(|issue| issue.kind)` to `core::issue_kind` for consistent helper reuse.
+- [x] Slice 11: admin slug-autofill predicate switched from inline `!has_non_empty_text` to `core::should_autofill_slug` for consistent helper reuse.
+- [x] Slice 12: admin selected-post load predicate switched from inline `Some(post_id) if has_non_empty_text(...)` to `core::should_load_selected_post`.
+- [x] Slice 13: admin selected-post id extraction switched from nested `if let Some(post_id)` to `core::selected_post_id_if_loadable`.
+- [x] Slice 14: admin publish-toggle next-state predicate switched from inline `!is_published` to `core::next_publish_state`.
+- [x] Slice 15: admin publish-path predicate switched from inline `if publish` to `core::should_publish_now`.
+- [x] Slice 16: admin submit-issue label mapping switched from inline `issue_kind_label(issue.kind)` to `core::issue_label_for`.
+- [x] Slice 17: admin locale argument mapping switched from inline `Some(post_locale[..])` to `core::locale_arg`.
+- [x] Slice 18: admin optional text default mapping switched from inline `unwrap_or_default()` to `core::optional_text_or_default`.
+- [x] Slice 19: admin tags input formatting switched from inline `post.tags.join(\", \")` to `core::tags_input_value`.
 - [ ] Sync admin surface for the same helper family where applicable and attach parity evidence.
 - [ ] `cargo xtask module validate blog` / `cargo xtask module test blog` rerun after next slice touching runtime contract.
 
