@@ -39,9 +39,29 @@ exec /usr/bin/python3 "$@"
 SH
 chmod +x "$FIXTURE_ROOT/fakebin/python3"
 
+cat > "$FIXTURE_ROOT/fakebin/flock" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+exec /usr/bin/flock "$@"
+SH
+chmod +x "$FIXTURE_ROOT/fakebin/flock"
+
 RUNNER="$FIXTURE_ROOT/scripts/verify/run-control-plane-remediation-minimal.sh"
 
 bash -n "$RUNNER"
+
+# timeout preflight: timeout requested but binary missing from PATH must fail fast
+NO_TIMEOUT_OUTPUT="$(mktemp)"
+if (cd "$FIXTURE_ROOT" && PATH="$FIXTURE_ROOT/fakebin" RUSTOK_VERIFY_STEP_TIMEOUT=1s "$RUNNER" >"$NO_TIMEOUT_OUTPUT" 2>&1); then
+  echo "runner unexpectedly succeeded without timeout binary" >&2
+  cat "$NO_TIMEOUT_OUTPUT" >&2
+  exit 1
+fi
+if ! rg -q "required tool is missing: timeout" "$NO_TIMEOUT_OUTPUT"; then
+  echo "runner did not report missing timeout preflight error" >&2
+  cat "$NO_TIMEOUT_OUTPUT" >&2
+  exit 1
+fi
 
 # lock guard: pre-acquire lock and assert runner exits with lock message
 LOCK_FILE="$FIXTURE_ROOT/target/.control-plane-remediation-minimal.lock"

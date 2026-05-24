@@ -36,6 +36,11 @@ if ! command -v flock >/dev/null 2>&1; then
   exit 1
 fi
 
+if [[ -n "${RUSTOK_VERIFY_STEP_TIMEOUT:-}" ]] && ! command -v timeout >/dev/null 2>&1; then
+  echo "RUSTOK_VERIFY_STEP_TIMEOUT is set but required tool is missing: timeout" >&2
+  exit 1
+fi
+
 exec 9>"${LOCK_FILE}"
 if ! flock -n 9; then
   echo "Another remediation verification run is already active (lock: ${LOCK_FILE})." >&2
