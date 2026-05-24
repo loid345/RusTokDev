@@ -696,7 +696,7 @@ rollback-стратегии и Definition of Done по итерациям.
 
 - [x] Закрыть общий hash builder для GraphQL/Leptos SSR/BuildService и end-to-end test
   “один manifest -> один hash/ref/snapshot” между surfaces (server integration tests `successful_enqueue_keeps_hash_parity_between_snapshot_and_build`, `successful_enqueue_keeps_manifest_snapshot_parity_with_hash`, `same_manifest_keeps_hash_and_snapshot_stable_across_revisions` + shared typed hash helper cutover).
-- [ ] Прогнать минимальный verification-набор плана на ветке и зафиксировать результат в чекбоксах.
+- [~] Прогнать минимальный verification-набор плана на ветке и зафиксировать результат в чекбоксах (добавлен единый runner `scripts/verify/run-control-plane-remediation-minimal.sh`; нужен зелёный прогон без pre-existing drift).
 
 ### Definition of Done для пакетного цикла
 
