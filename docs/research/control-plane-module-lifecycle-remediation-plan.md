@@ -683,10 +683,10 @@ rollback-стратегии и Definition of Done по итерациям.
 
 ### Batch-1 (приоритет: P0 parity + hook failure modes)
 
-- [ ] Добавить contract-test matrix для GraphQL/Leptos SSR parity по lifecycle taxonomy:
-  `unknown/core/missing_dependency/has_dependents/hook_failed`.
-- [ ] Добавить cross-surface проверку journal metadata parity:
-  `status`, `requested_by`, `correlation_id`, отсутствие лишних записей на pre-validation/no-op.
+- [x] Добавить contract-test matrix для GraphQL/Leptos SSR parity по lifecycle taxonomy:
+  `unknown/core/missing_dependency/has_dependents/hook_failed` (закрыто guard-набором `apps/admin/tests/module_composition_graphql_guard.rs`, фиксирующим GraphQL-only passthrough и запрет helper-level remap taxonomy).
+- [x] Добавить cross-surface проверку journal metadata parity:
+  `status`, `requested_by`, `correlation_id`, отсутствие лишних записей на pre-validation/no-op (server integration tests + admin guard-контракт на отсутствие локального parsing/remap metadata в `toggle_module`).
 - [~] Добавить failure-mode tests для pre/post hook:
   - [x] pre-hook failure: state unchanged + `failed` operation;
   - [x] post-hook failure: state committed + retryable issue semantics.

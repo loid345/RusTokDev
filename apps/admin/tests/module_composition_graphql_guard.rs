@@ -882,6 +882,47 @@ fn module_composition_helpers_preserve_canonical_graphql_contract_matrix() {
     }
 }
 
+
+#[test]
+fn toggle_module_helper_preserves_server_owned_lifecycle_taxonomy_contract() {
+    let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let api_path = crate_root.join("src/features/modules/api.rs");
+    let content = fs::read_to_string(&api_path).expect("read api.rs");
+
+    let helper_body = extract_function_block(&content, "pub async fn toggle_module(")
+        .expect("toggle_module helper signature not found");
+
+    assert!(
+        helper_body.contains("TOGGLE_MODULE_MUTATION"),
+        "toggle_module must call canonical GraphQL mutation"
+    );
+    assert!(
+        helper_body.contains("Ok(response.toggle_module)"),
+        "toggle_module must return GraphQL payload without local remap"
+    );
+
+    for forbidden in [
+        ".map_err(",
+        "combine_native_and_graphql_error",
+        "UNKNOWN_MODULE",
+        "CORE_MODULE",
+        "MISSING_DEPENDENCIES",
+        "HAS_DEPENDENTS",
+        "MODULE_HOOK_FAILED",
+        "MODULE_PRE_HOOK_FAILED",
+        "MODULE_POST_HOOK_FAILED",
+        "module_operations",
+        "requested_by",
+        "correlation_id",
+        "extensions.code",
+    ] {
+        assert!(
+            !helper_body.contains(forbidden),
+            "toggle_module must keep server-owned taxonomy and not parse fragment `{forbidden}`"
+        );
+    }
+}
+
 #[test]
 fn module_graphql_mutation_constants_have_stable_operation_shapes() {
     let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
