@@ -27,9 +27,15 @@ function extractVersion(content, pattern, label) {
 }
 
 function compareSemverLike(left, right) {
-  const parse = (value) => value.split(".").map((chunk) => Number.parseInt(chunk, 10));
-  const l = parse(left);
-  const r = parse(right);
+  const parse = (value, label) =>
+    value.split(".").map((chunk) => {
+      if (!/^\d+$/.test(chunk)) {
+        throw new Error(`invalid numeric version segment in ${label}: '${value}'`);
+      }
+      return Number.parseInt(chunk, 10);
+    });
+  const l = parse(left, "left version");
+  const r = parse(right, "right version");
   const length = Math.max(l.length, r.length);
   for (let index = 0; index < length; index += 1) {
     const lv = Number.isFinite(l[index]) ? l[index] : 0;

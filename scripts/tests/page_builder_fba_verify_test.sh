@@ -118,6 +118,18 @@ EOF
   grep -q "consumer version below provider minimum" "$FAIL_OUTPUT_FILE"
 }
 
+test_baseline_fails_on_invalid_version_format_fixture() {
+  write_pages_manifest "1.0" "1.x"
+
+  FAIL_OUTPUT_FILE="$(mktemp)"
+  if (cd "$FIXTURE_ROOT" && node scripts/verify/verify-page-builder-contract-parity.mjs >"$FAIL_OUTPUT_FILE" 2>&1); then
+    echo "expected contract parity to fail on invalid numeric version segment"
+    cat "$FAIL_OUTPUT_FILE"
+    exit 1
+  fi
+  grep -q "invalid numeric version segment" "$FAIL_OUTPUT_FILE"
+}
+
 test_verify_all_alias_runs_page_builder_baseline() {
   VERIFY_ALL_OUTPUT_FILE="$(mktemp)"
   (cd "$REPO_ROOT" && "$VERIFY_DIR/verify-all.sh" page-builder-fba-baseline >"$VERIFY_ALL_OUTPUT_FILE")
@@ -132,6 +144,9 @@ test_baseline_fails_on_contract_mismatch_fixture
 create_fixture_repo
 copy_verify_scripts
 test_baseline_fails_on_consumer_below_minimum_fixture
+create_fixture_repo
+copy_verify_scripts
+test_baseline_fails_on_invalid_version_format_fixture
 test_verify_all_alias_runs_page_builder_baseline
 
-echo "page_builder_fba_verify_test.sh: PASS (fixture pass/fail mismatch+minimum + repo alias)"
+echo "page_builder_fba_verify_test.sh: PASS (fixture pass/fail mismatch+minimum+invalid-format + repo alias)"
