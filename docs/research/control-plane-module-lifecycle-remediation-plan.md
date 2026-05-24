@@ -776,3 +776,7 @@ rollback-стратегии и Definition of Done по итерациям.
 ### Актуализация 2026-05-24 (итерация 57)
 
 - Timeout smoke-test для minimal runner усилен инвариантом остановки pipeline: при `RUSTOK_VERIFY_STEP_TIMEOUT=1s` выполнение не должно переходить за шаг migration к `module lifecycle tests`.
+
+### Актуализация 2026-05-24 (итерация 58)
+
+- Alias smoke-test для `verify-all` расширен дополнительным селектором по имени файла (`run-control-plane-remediation-minimal.sh`), чтобы фиксировать parity между alias- и direct-selector путями.

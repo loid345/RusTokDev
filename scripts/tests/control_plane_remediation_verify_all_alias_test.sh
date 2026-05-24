@@ -81,4 +81,20 @@ if ! rg -q "All verification suites passed!" "$OUTPUT_FILE"; then
   exit 1
 fi
 
+
+# also support direct script filename selection path
+DIRECT_OUTPUT_FILE="$(mktemp)"
+(cd "$FIXTURE_ROOT" && PATH="$FIXTURE_ROOT/fakebin:$PATH" RUSTOK_VERIFY_SKIP_FMT=1 ./scripts/verify/verify-all.sh -v run-control-plane-remediation-minimal.sh >"$DIRECT_OUTPUT_FILE" 2>&1)
+
+if ! rg -q "Control Plane Remediation Minimal" "$DIRECT_OUTPUT_FILE"; then
+  echo "verify-all did not resolve direct run-control-plane-remediation-minimal.sh selector" >&2
+  cat "$DIRECT_OUTPUT_FILE" >&2
+  exit 1
+fi
+if ! rg -q "All verification suites passed!" "$DIRECT_OUTPUT_FILE"; then
+  echo "verify-all direct selector run did not report success" >&2
+  cat "$DIRECT_OUTPUT_FILE" >&2
+  exit 1
+fi
+
 echo "control_plane_remediation_verify_all_alias_test.sh: PASS"
