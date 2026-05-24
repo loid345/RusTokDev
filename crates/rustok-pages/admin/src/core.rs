@@ -400,7 +400,10 @@ mod tests {
 
     #[test]
     fn label_with_id_replaces_placeholder() {
-        assert_eq!(label_with_id("Editing page {id}", "page_1"), "Editing page page_1");
+        assert_eq!(
+            label_with_id("Editing page {id}", "page_1"),
+            "Editing page page_1"
+        );
     }
 
     #[test]
