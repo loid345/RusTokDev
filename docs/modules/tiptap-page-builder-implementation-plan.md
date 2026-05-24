@@ -90,10 +90,10 @@
 
 **Статус:** [ ] Todo
 
-- [ ] Ввести флаги уровня tenant/module/form.
-- [ ] Определить стратегию включения: internal → pilot → broad rollout.
-- [ ] Подготовить матрицу включения/исключения по tenant и модулю.
-- [ ] Согласовать операционный runbook переключений.
+- [~] Ввести флаги уровня tenant/module/form (baseline-профиль и naming зафиксированы, rollout automation остаётся в бэклоге).
+- [x] Определить стратегию включения: internal → pilot → broad rollout.
+- [x] Подготовить матрицу включения/исключения по tenant и модулю (см. Phase 3.2).
+- [~] Согласовать операционный runbook переключений (процедура и rollback-условия зафиксированы, требуется owner sign-off в execution log).
 - [ ] Зафиксировать baseline-only rollout: OSS GrapesJS + vendor-neutral `grapesjs_v1` contract без расширения platform-контракта под вендор-специфику.
 - [ ] Зафиксировать FBA governance-профиль для `rustok-pages` как reference-модуля: capability boundaries, control-plane hooks, module health contract, ownership SLA.
 
@@ -117,6 +117,21 @@
 3. Для pilot-tenants запрещено включать `builder.publish.enabled=true`, если `builder.preview.enabled=false`.
 
 ### Фаза 3.2 — Матрица rollout по волнам
+
+Ниже — минимально обязательная матрица включений для baseline rollout.
+
+| Волна | Профиль tenant | `builder.enabled` | `preview` | `properties` | `publish` | `legacy_bridge_readonly` | Ключевые проверки |
+|---|---|---:|---:|---:|---:|---:|---|
+| Wave 0 (internal) | platform/synthetic | ✅ | ✅ | ✅ | ❌ | ✅ | parity payload, toggle audit trail, fallback на legacy-read |
+| Wave 1 (pilot) | 1–3 low-traffic tenant | ✅ | ✅ | ✅ | ⚠️ по allowlist | ✅ | publish dry-run, RBAC parity, sanitize error-rate |
+| Wave 2 (broad) | cohort tenants | ✅ | ✅ | ✅ | ✅ | ✅ (до sunset) | SLO/SLI стабильность, отсутствие regressions в routing/indexing |
+| Wave 3 (stabilize) | default cohorts | ✅ (default-on) | ✅ | ✅ | ✅ | ❌ (после sunset) | post-rollout review, закрытие compatibility-debt |
+
+Правила перехода между волнами:
+
+1. Переход в следующую волну запрещён при незакрытых `P1` инцидентах по publish/sanitize/RBAC.
+2. Для каждой волны обязателен signed-off owner list: platform on-call + pages owner + runtime owner (Next/Leptos).
+3. Перед Wave 2 требуется подтверждённая regression-проверка storefront rendering для `grapesjs_v1` payload в `apps/storefront` и `apps/next-frontend`.
 
 ### Фаза 3.3 — Runbook переключений (tenant-by-tenant)
 
