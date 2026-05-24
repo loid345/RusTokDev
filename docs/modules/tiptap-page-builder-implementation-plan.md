@@ -336,3 +336,72 @@ Go/No-Go для перехода в следующую волну:
 - smoke report (`preview/properties/publish(dry)`);
 - observability report (p95 preview/publish, sanitize failures, runtime error-rate);
 - rollback confirmation note с указанием ответственного owner.
+
+
+## 9. Практический backlog “дальше по плану” (Q2–Q3 2026)
+
+Ниже — конкретизированный план продолжения, чтобы команды могли параллельно двигать **reference builder** и `rustok-pages` без размытых ownership-зон.
+
+### 9.1 Итерация A — Capability stabilization (T+2 недели)
+
+**Цель:** довести reference-модуль builder-а до стабильного provider-контракта.
+
+- [ ] Зафиксировать `builder_contract_version` в provider metadata и добавить anti-drift проверку в CI.
+- [ ] Формализовать typed error catalog для `preview/tree/properties/publish` (validation/sanitize/rbac/runtime).
+- [ ] Довести health contract до machine-readable профиля (`ready/degraded/unavailable`) с причиной деградации.
+- [ ] Подготовить SLO-baseline для capability endpoints по pilot-tenant классу нагрузки.
+
+**Выход итерации:** builder-модуль имеет стабильный FBA-provider профиль, пригодный для массового consumer onboarding.
+
+### 9.2 Итерация B — `pages` FBA-consumer hardening (T+2–4 недели)
+
+**Цель:** на примере `pages` зафиксировать канонический migration path module-owned → FBA-consumer.
+
+- [ ] В `rustok-pages` metadata зафиксировать dependency profile на внешний builder provider (без локального ownership fallback).
+- [ ] Внедрить fallback-matrix для admin/storefront сценариев (`builder_off`, `publish_off`, `preview_off`) и подтвердить отсутствие 5xx в read/list.
+- [ ] Добавить publish gating contract: typed runtime error + UX guidance вместо аварийного падения publish flow.
+- [ ] Свести observability correlation: один trace/correlation-id на путь `builder write -> pages publish -> storefront read`.
+
+**Выход итерации:** `pages` подтверждён как эталонный FBA-consumer, пригодный как шаблон для `content`-подобных модулей.
+
+### 9.3 Итерация C — Control-plane rollout readiness (T+4–6 недель)
+
+**Цель:** обеспечить безопасный tenant-by-tenant rollout без redeploy.
+
+- [ ] Автоматизировать atomic toggle change-set (`builder.enabled` + дочерние flags) через control-plane операции.
+- [ ] Внедрить обязательный pre/post snapshot capture и audit trail attachment в runbook-процедуру.
+- [ ] Добавить rollback trigger policy в автоматизированные проверки (error-rate, publish backlog, RBAC regression).
+- [ ] Подготовить unified on-call ownership matrix для Platform / Pages / Builder owners.
+
+**Выход итерации:** rollout-процедура воспроизводима и операционно готова к Wave 1.
+
+### 9.4 Итерация D — Wave 1 pilot и подготовка broad rollout (T+6–8 недель)
+
+**Цель:** валидировать production-поведение на ограниченном наборе tenant-ов.
+
+- [ ] Провести pilot на 1–3 low-traffic tenant с полным журналом toggle evidence.
+- [ ] Зафиксировать результаты parity-проверки между Next/Leptos/Flutter по capability semantics.
+- [ ] Подтвердить, что legacy bridge остаётся read-only и не расширяется новыми write-path.
+- [ ] Подготовить решение Go/No-Go для Wave 2 на основе SLO/SLI и incident review.
+
+**Выход итерации:** решение о broad rollout принимается по объективным данным release-gate.
+
+### 9.5 Definition of Ready для следующих FBA-миграций (после `pages`)
+
+Модуль может идти по “pages-шаблону” только если:
+
+- [ ] external capability-provider обозначен в runtime metadata;
+- [ ] есть fallback contract при частичном/полном disable capability-layer;
+- [ ] rollout toggle semantics поддерживают atomic change-set + rollback;
+- [ ] observability связывает capability write-path и downstream runtime effects;
+- [ ] legacy compatibility имеет sunset-график с tenant-level дедлайнами.
+
+## 10. Критерии завершения трека (обновлённые)
+
+Трек считается завершённым только при выполнении всех условий:
+
+- [ ] reference builder-модуль стабилизирован как независимый FBA-provider;
+- [ ] `rustok-pages` подтверждён как production-ready FBA-consumer reference;
+- [ ] rollout проходит tenant-by-tenant через control-plane без redeploy и без критичных regression;
+- [ ] fallback/rollback сценарии автоматизированы и покрыты CI + runbook evidence;
+- [ ] шаблон migration path опубликован как обязательный baseline для следующих module migrations.
