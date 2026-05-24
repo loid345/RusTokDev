@@ -3,11 +3,11 @@
 ## Execution checkpoint
 
 - Current phase: plan_sync
-- Last checkpoint: Phase 10 decomposed into executable post-order slices (returns, refunds transport parity, order-change groundwork) with explicit checklist for parallel implementation.
-- Next step: Начать первый Phase 10 coding slice — returns foundation (entity + service lifecycle + admin transport parity).
+- Last checkpoint: Добавлен storefront refund read-side transport `GET /store/orders/{id}/refunds` с customer ownership guard и paginated status-filter contract поверх `PaymentService::list_refunds`.
+- Next step: Продолжить Phase 10.1 returns foundation (`rustok-order` entity/service lifecycle + admin REST/GraphQL transport).
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок.
-- Last updated at (UTC): 2026-05-22T16:15:00Z
+- Last updated at (UTC): 2026-05-24T10:40:00Z
 
 ## Статус документа
 
@@ -535,7 +535,7 @@ Deliverables:
 Execution slices (Phase 10):
 
 - [ ] Slice 10.1: returns foundation (`rustok-order` storage + service lifecycle + admin REST/GraphQL read/write transport).
-- [ ] Slice 10.2: refund transport parity expansion (store/customer-safe read-side + ownership/RBAC contract tests).
+- [x] Slice 10.2: refund transport parity expansion (store/customer-safe read-side + ownership/RBAC contract tests).
 - [ ] Slice 10.3: order-change groundwork (draft edit snapshot + preview/apply contract skeleton without host-owned logic).
 - [ ] Slice 10.4: exchanges/claims scope decision + parity matrix update in this plan and module docs.
 

@@ -79,6 +79,7 @@ pub fn routes() -> Routes {
             axum::routing::post(create_payment_collection),
         )
         .add("/orders/{id}", axum::routing::get(get_order))
+        .add("/orders/{id}/refunds", axum::routing::get(list_order_refunds))
         .add("/customers/me", axum::routing::get(get_me))
 }
 
@@ -983,6 +984,71 @@ pub async fn get_order(
     Ok(Json(order))
 }
 
+/// List refunds for the current customer's order
+#[utoipa::path(
+    get,
+    path = "/store/orders/{id}/refunds",
+    tag = "store",
+    params(
+        ("id" = Uuid, Path, description = "Order ID"),
+        PaginationParams,
+        ("status" = Option<String>, Query, description = "Optional refund status filter")
+    ),
+    responses(
+        (status = 200, description = "Order refunds", body = PaginatedResponse<RefundResponse>),
+        (status = 401, description = "Authentication required"),
+        (status = 404, description = "Order not found")
+    )
+)]
+pub async fn list_order_refunds(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    request_context: RequestContext,
+    auth: rustok_api::AuthContext,
+    Path(id): Path<Uuid>,
+    Query(params): Query<StoreOrderRefundsParams>,
+) -> Result<Json<PaginatedResponse<RefundResponse>>> {
+    ensure_storefront_channel_enabled(&ctx, &request_context).await?;
+
+    let customer_id = current_customer_id(&ctx, tenant.id, Some(&auth))
+        .await?
+        .ok_or_else(|| Error::Unauthorized("Customer account required".to_string()))?;
+    let order_service = OrderService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
+    let order = order_service
+        .get_order(tenant.id, id)
+        .await
+        .map_err(|err| Error::BadRequest(err.to_string()))?;
+    if order.customer_id != Some(customer_id) {
+        return Err(Error::Unauthorized(
+            "Order does not belong to the current customer".to_string(),
+        ));
+    }
+
+    let payment_service = PaymentService::new(ctx.db.clone());
+    let (items, total) = payment_service
+        .list_refunds(
+            tenant.id,
+            ListRefundsInput {
+                page: params.pagination.page,
+                per_page: params.pagination.per_page,
+                payment_collection_id: None,
+                order_id: Some(id),
+                status: params.status,
+            },
+        )
+        .await
+        .map_err(|err| Error::BadRequest(err.to_string()))?;
+
+    Ok(Json(PaginatedResponse {
+        data: items,
+        meta: PaginationMeta::new(
+            params.pagination.page,
+            params.pagination.limit(),
+            total,
+        ),
+    }))
+}
+
 async fn resolve_context(
     ctx: &AppContext,
     tenant_id: Uuid,
@@ -1727,6 +1793,13 @@ pub struct StoreListProductsParams {
     pub product_type: Option<String>,
     pub search: Option<String>,
     pub locale: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, IntoParams, ToSchema, Default)]
+pub struct StoreOrderRefundsParams {
+    #[serde(flatten)]
+    pub pagination: PaginationParams,
+    pub status: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, IntoParams, ToSchema, Default)]
