@@ -69,6 +69,7 @@ capability crate-ов и host-приложений в RusToK.
 | `order` | admin | `in_progress` | `in_progress` | `crates/rustok-order/docs/implementation-plan.md` |
 | `payment` | no module-owned UI | `in_progress` | `in_progress` | `crates/rustok-payment/docs/implementation-plan.md` |
 | `fulfillment` | admin | `in_progress` | `in_progress` | `crates/rustok-fulfillment/docs/implementation-plan.md` |
+| `seo` | admin + storefront contracts | `in_progress` | `in_progress` | `crates/rustok-seo/docs/implementation-plan.md` |
 
 ## Hotspot contract (DOC-12 / H1)
 
