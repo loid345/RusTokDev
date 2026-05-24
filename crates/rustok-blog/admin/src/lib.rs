@@ -986,9 +986,9 @@ fn apply_post_to_form(
     set_editing_post_id.set(Some(post.id.clone()));
     set_locale.set(post.requested_locale.clone());
     set_title.set(post.title.clone());
-    set_slug.set(post.slug.clone().unwrap_or_default());
-    set_excerpt.set(post.excerpt.clone().unwrap_or_default());
-    set_body.set(post.body.clone().unwrap_or_default());
+    set_slug.set(core::optional_text_or_default(post.slug.clone()));
+    set_excerpt.set(core::optional_text_or_default(post.excerpt.clone()));
+    set_body.set(core::optional_text_or_default(post.body.clone()));
     set_body_format.set(post.body_format.clone());
     set_tags_input.set(post.tags.join(", "));
     set_publish_now.set(core::is_published_status(post.status.as_str()));

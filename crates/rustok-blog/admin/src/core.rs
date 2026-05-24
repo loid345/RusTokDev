@@ -124,6 +124,10 @@ pub fn fallback_post_excerpt(value: Option<String>, fallback: &str) -> String {
     value.unwrap_or_else(|| fallback.to_string())
 }
 
+pub fn optional_text_or_default(value: Option<String>) -> String {
+    value.unwrap_or_default()
+}
+
 pub fn row_is_busy_for_post(busy_key: Option<&str>, post_id: &str) -> bool {
     busy_key
         .map(|key| key.contains(post_id))
@@ -323,6 +327,11 @@ mod tests {
             fallback_post_excerpt(None, "No excerpt"),
             "No excerpt".to_string()
         );
+        assert_eq!(
+            optional_text_or_default(Some("hello".to_string())),
+            "hello".to_string()
+        );
+        assert_eq!(optional_text_or_default(None), "".to_string());
         assert!(row_is_busy_for_post(Some("edit:42"), "42"));
         assert!(!row_is_busy_for_post(Some("edit:41"), "42"));
         assert!(is_editing_post(Some("42"), "42"));
