@@ -3,7 +3,9 @@ use rustok_pages::dto::{
     BlockType, CreateBlockInput, CreatePageInput, PageBodyInput, PageTranslationInput,
     UpdatePageInput,
 };
-use rustok_pages::error::PagesError;
+use rustok_pages::error::{
+    PagesError, FEATURE_BUILDER_ENABLED, FEATURE_BUILDER_PUBLISH_ENABLED,
+};
 use rustok_pages::services::{BlockService, PageService};
 use rustok_pages::PagesModule;
 use rustok_test_utils::{
@@ -181,7 +183,7 @@ async fn publish_returns_feature_disabled_when_builder_publish_toggle_is_false()
     let result = page_service.publish(tenant_id, security, page.id).await;
     assert!(matches!(
         result,
-        Err(PagesError::FeatureDisabled { feature }) if feature == "builder.publish.enabled"
+        Err(PagesError::FeatureDisabled { feature }) if feature == FEATURE_BUILDER_PUBLISH_ENABLED
     ));
 }
 
@@ -220,7 +222,7 @@ async fn create_grapesjs_body_returns_feature_disabled_when_builder_toggle_is_fa
 
     assert!(matches!(
         result,
-        Err(PagesError::FeatureDisabled { feature }) if feature == "builder.enabled"
+        Err(PagesError::FeatureDisabled { feature }) if feature == FEATURE_BUILDER_ENABLED
     ));
 }
 
@@ -251,7 +253,7 @@ async fn update_grapesjs_body_returns_feature_disabled_when_builder_toggle_is_fa
 
     assert!(matches!(
         result,
-        Err(PagesError::FeatureDisabled { feature }) if feature == "builder.enabled"
+        Err(PagesError::FeatureDisabled { feature }) if feature == FEATURE_BUILDER_ENABLED
     ));
 }
 
@@ -447,7 +449,7 @@ async fn publish_grapesjs_page_is_blocked_when_builder_disabled_even_if_publish_
     let result = page_service.publish(tenant_id, security, draft.id).await;
     assert!(matches!(
         result,
-        Err(PagesError::FeatureDisabled { feature }) if feature == "builder.enabled"
+        Err(PagesError::FeatureDisabled { feature }) if feature == FEATURE_BUILDER_ENABLED
     ));
 }
 
@@ -548,7 +550,7 @@ async fn update_to_published_is_blocked_for_existing_grapesjs_page_when_builder_
 
     assert!(matches!(
         result,
-        Err(PagesError::FeatureDisabled { feature }) if feature == "builder.enabled"
+        Err(PagesError::FeatureDisabled { feature }) if feature == FEATURE_BUILDER_ENABLED
     ));
 }
 
