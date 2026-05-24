@@ -15,6 +15,14 @@ tags = ["cms", "content", "landing-pages"]
 [dependencies]
 content = { version_req = ">=0.1.0" }
 
+[dependencies.page_builder]
+module = "page-builder"
+version_req = ">=0.1.0"
+mode = "capability_provider"
+required_capabilities = ["preview", "tree", "properties", "publish"]
+contract = "grapesjs_v1"
+contract_version = "1.0"
+
 [crate]
 entry_type = "PagesModule"
 
@@ -55,3 +63,40 @@ page_title = "Pages"
 default_locale = "en"
 supported_locales = ["en", "ru"]
 leptos_locales_path = "storefront/locales"
+
+[fba.builder_consumer]
+provider_module = "page-builder"
+contract = "grapesjs_v1"
+contract_version = "1.0"
+capabilities = ["preview", "tree", "properties", "publish"]
+
+[fba.builder_consumer.degraded_modes]
+builder_disabled = "admin_builder_readonly_fallback"
+preview_disabled = "preview_capability_hidden_keep_read_paths"
+publish_disabled = "typed_feature_disabled_error_keep_read_paths"
+
+[fba.builder_consumer.toggle_profiles]
+all_on = [
+  "builder.enabled=true",
+  "builder.preview.enabled=true",
+  "builder.properties.enabled=true",
+  "builder.publish.enabled=true",
+]
+publish_off = [
+  "builder.enabled=true",
+  "builder.preview.enabled=true",
+  "builder.properties.enabled=true",
+  "builder.publish.enabled=false",
+]
+preview_off = [
+  "builder.enabled=true",
+  "builder.preview.enabled=false",
+  "builder.properties.enabled=true",
+  "builder.publish.enabled=true",
+]
+builder_off = [
+  "builder.enabled=false",
+  "builder.preview.enabled=false",
+  "builder.properties.enabled=false",
+  "builder.publish.enabled=false",
+]

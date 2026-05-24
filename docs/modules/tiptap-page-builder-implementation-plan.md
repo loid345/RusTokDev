@@ -273,6 +273,7 @@ Go/No-Go для перехода в следующую волну:
    - зафиксировать в runtime metadata builder-модуля явный provider-profile:
      `preview/tree/properties/publish`, health probes, degradation modes;
    - добавить machine-readable версию capability-контракта для anti-drift проверок.
+   - для `rustok-pages` consumer metadata baseline уже зафиксирован в `crates/rustok-pages/rustok-module.toml` (`dependencies.page_builder`, `fba.builder_consumer`, `degraded_modes`, `toggle_profiles`).
 2. **Control-plane handshake**
    - закрепить единый change-set для `builder.enabled + дочерние flags` как атомарную операцию;
    - синхронизировать retry/compensation поведение lifecycle hooks с control-plane runbook.

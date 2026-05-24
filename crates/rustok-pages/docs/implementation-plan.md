@@ -99,9 +99,9 @@ Rollback trigger:
 
 ### B1. Contract & metadata hardening
 
-- [ ] Обновить runtime metadata/manifest: явно указать внешний `builder capability-provider` и поддерживаемые capability surfaces (`preview/tree/properties/publish`).
-- [ ] Добавить contract-version marker для anti-drift проверок между `pages`, Next/Leptos adapters и reference builder.
-- [ ] Зафиксировать machine-readable degraded modes (`builder.disabled`, `publish.disabled`, `preview.disabled`).
+- [x] Обновить runtime metadata/manifest: явно указать внешний `builder capability-provider` и поддерживаемые capability surfaces (`preview/tree/properties/publish`) — см. `rustok-module.toml` (`dependencies.page_builder`, `fba.builder_consumer`).
+- [x] Добавить contract-version marker для anti-drift проверок между `pages`, Next/Leptos adapters и reference builder (`contract_version = "1.0"` в metadata consumer/provider link).
+- [x] Зафиксировать machine-readable degraded modes (`builder_disabled`, `publish_disabled`, `preview_disabled`) в `fba.builder_consumer.degraded_modes`.
 
 ### B2. Fallback & error semantics
 
