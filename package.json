@@ -8,7 +8,8 @@
     "verify:storefront:routes": "node scripts/verify/verify-storefront-module-routes.mjs",
     "verify:ffa:ui:migration": "npm run verify:ffa:ui:migration:contract && npm run verify:ffa:ui:migration:docs",
     "verify:ffa:ui:migration:contract": "node scripts/verify/verify-ffa-ui-migration-contract.mjs",
-    "verify:ffa:ui:migration:docs": "bash scripts/verify/verify-ffa-ui-doc-patterns.sh"
+    "verify:ffa:ui:migration:docs": "bash scripts/verify/verify-ffa-ui-doc-patterns.sh",
+    "test:verify:ffa:ui:migration": "node scripts/verify/verify-ffa-ui-migration-contract.test.mjs"
   },
   "dependencies": {
     "sharp": "^0.34.5"

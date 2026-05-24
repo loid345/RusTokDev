@@ -6,7 +6,9 @@ import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const repoRoot = path.resolve(__dirname, "../..");
+const repoRoot = process.env.RUSTOK_VERIFY_ROOT
+  ? path.resolve(process.env.RUSTOK_VERIFY_ROOT)
+  : path.resolve(__dirname, "../..");
 
 const requiredDocs = [
   "docs/research/dioxus-ffa-ui-migration-plan.md",
