@@ -277,6 +277,10 @@ pub fn published_posts_empty_state_message(message: String) -> String {
     message
 }
 
+pub fn published_posts_empty_state_view(message: String) -> (String,) {
+    (published_posts_empty_state_message(message),)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -578,6 +582,14 @@ mod tests {
         assert_eq!(
             published_posts_empty_state_message("No items".to_string()),
             "No items".to_string()
+        );
+    }
+
+    #[test]
+    fn published_posts_empty_state_view_wraps_message() {
+        assert_eq!(
+            published_posts_empty_state_view("No items".to_string()),
+            ("No items".to_string(),)
         );
     }
 }
