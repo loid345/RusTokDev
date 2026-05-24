@@ -61,6 +61,8 @@ pub fn routes() -> Routes {
         .add("/orders/{id}/ship", axum::routing::post(ship_order))
         .add("/orders/{id}/deliver", axum::routing::post(deliver_order))
         .add("/orders/{id}/cancel", axum::routing::post(cancel_order))
+        .add("/orders/{id}/returns", axum::routing::post(create_order_return))
+        .add("/returns", axum::routing::get(list_order_returns))
         .add(
             "/payment-collections",
             axum::routing::get(list_payment_collections),
@@ -190,6 +192,15 @@ pub struct ListRefundsParams {
     #[serde(flatten)]
     pub pagination: Option<super::common::PaginationParams>,
     pub payment_collection_id: Option<Uuid>,
+    pub order_id: Option<Uuid>,
+    pub status: Option<String>,
+}
+
+
+#[derive(Debug, Clone, Deserialize, ToSchema, utoipa::IntoParams)]
+pub struct ListOrderReturnsParams {
+    #[serde(flatten)]
+    pub pagination: Option<super::common::PaginationParams>,
     pub order_id: Option<Uuid>,
     pub status: Option<String>,
 }
@@ -717,6 +728,83 @@ pub async fn show_payment_collection(
         .map_err(map_payment_error)?;
 
     Ok(Json(collection))
+}
+
+/// Create admin order return
+#[utoipa::path(
+    post,
+    path = "/admin/orders/{id}/returns",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Order ID")),
+    request_body = CreateOrderReturnInput,
+    responses(
+        (status = 201, description = "Return created", body = OrderReturnResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Order not found")
+    )
+)]
+pub async fn create_order_return(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    Path(id): Path<Uuid>,
+    Json(input): Json<CreateOrderReturnInput>,
+) -> Result<(StatusCode, Json<OrderReturnResponse>)> {
+    ensure_permissions(
+        &auth,
+        &[Permission::ORDERS_UPDATE],
+        "Permission denied: orders:update required",
+    )?;
+
+    let created = OrderService::new(ctx.db.clone())
+        .create_return(tenant.id, id, input)
+        .await
+        .map_err(map_order_error)?;
+
+    Ok((StatusCode::CREATED, Json(created)))
+}
+
+/// List admin order returns
+#[utoipa::path(
+    get,
+    path = "/admin/returns",
+    tag = "admin",
+    params(ListOrderReturnsParams),
+    responses(
+        (status = 200, description = "Returns", body = PaginatedResponse<OrderReturnResponse>),
+        (status = 401, description = "Unauthorized")
+    )
+)]
+pub async fn list_order_returns(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    Query(params): Query<ListOrderReturnsParams>,
+) -> Result<Json<PaginatedResponse<OrderReturnResponse>>> {
+    ensure_permissions(
+        &auth,
+        &[Permission::ORDERS_READ],
+        "Permission denied: orders:read required",
+    )?;
+
+    let pagination = params.pagination.unwrap_or_default();
+    let (items, total) = OrderService::new(ctx.db.clone())
+        .list_returns(
+            tenant.id,
+            ListOrderReturnsInput {
+                page: pagination.page,
+                per_page: pagination.limit(),
+                order_id: params.order_id,
+                status: params.status,
+            },
+        )
+        .await
+        .map_err(map_order_error)?;
+
+    Ok(Json(PaginatedResponse {
+        data: items,
+        meta: super::common::PaginationMeta::new(pagination.page, pagination.limit(), total),
+    }))
 }
 
 /// Create admin refund
