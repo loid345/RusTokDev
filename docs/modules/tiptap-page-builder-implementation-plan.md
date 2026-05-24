@@ -396,6 +396,26 @@ Go/No-Go для перехода в следующую волну:
 - [ ] observability связывает capability write-path и downstream runtime effects;
 - [ ] legacy compatibility имеет sunset-график с tenant-level дедлайнами.
 
+### 9.6 Ближайший execution-sprint (продолжаем по плану)
+
+Чтобы продолжить без повторного пересогласования, ближайший спринт фиксируется как обязательный минимальный пакет:
+
+1. **Builder provider contract freeze (Sprint checkpoint A1)**
+   - [ ] зафиксировать `builder_contract_version` в provider/consumer metadata;
+   - [ ] утвердить typed error semantics для `preview/properties/publish` в одном changelog-entry.
+2. **Pages fallback hardening (Sprint checkpoint B1)**
+   - [ ] подтвердить `builder_off` и `publish_off` сценарии без 5xx на admin list/read;
+   - [ ] добавить явный UX-message для disabled publish capability.
+3. **Control-plane dry run evidence (Sprint checkpoint C1)**
+   - [ ] выполнить dry run профилей `all_on/publish_off/preview_off/builder_off`;
+   - [ ] приложить `before/after` snapshots + rollback decision log.
+4. **Wave 1 readiness packet (Sprint checkpoint D1)**
+   - [ ] собрать минимальный пакет Go/No-Go (`metadata`, `smoke`, `observability`, `rollback note`);
+   - [ ] провести joint review Platform + Pages + Builder owners.
+
+**Exit criteria спринта:** есть единый evidence-пакет для перехода к pilot Wave 1 без расширения scope документа.
+
+
 ## 10. Критерии завершения трека (обновлённые)
 
 Трек считается завершённым только при выполнении всех условий:
