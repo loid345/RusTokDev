@@ -139,8 +139,11 @@ class GenerateMobileManifestTests(unittest.TestCase):
                 ).strip()
             )
 
-            with self.assertRaisesRegex(ValueError, "Duplicate admin_ui.route_segment"):
+
+            with self.assertRaises(ValueError) as ctx:
                 scan_modules(root)
+            self.assertIn("content", str(ctx.exception))
+            self.assertIn("already declared in", str(ctx.exception))
 
     def test_scan_modules_includes_permissions_and_locale_namespace(self):
         with tempfile.TemporaryDirectory() as tmp:

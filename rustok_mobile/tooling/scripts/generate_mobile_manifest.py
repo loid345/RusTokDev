@@ -116,7 +116,7 @@ def _parse_child_pages(admin_ui: dict[str, object]) -> list[dict[str, str]]:
 def scan_modules(repo_root: pathlib.Path) -> list[dict[str, object]]:
     manifests = sorted(repo_root.glob("crates/*/rustok-module.toml"))
     modules: list[dict[str, object]] = []
-    used_segments: set[str] = set()
+    used_segments: dict[str, pathlib.Path] = {}
 
     for manifest in manifests:
         data = tomllib.loads(manifest.read_text(encoding="utf-8"))
@@ -134,9 +134,11 @@ def scan_modules(repo_root: pathlib.Path) -> list[dict[str, object]]:
         route_segment = _normalize_key(route_segment)
         if not route_segment:
             continue
-        if route_segment in used_segments:
+        previous_manifest = used_segments.get(route_segment)
+        if previous_manifest is not None:
             raise ValueError(
-                f"Duplicate admin_ui.route_segment '{route_segment}' in {manifest}"
+                "Duplicate admin_ui.route_segment "
+                f"'{route_segment}' in {manifest}; already declared in {previous_manifest}"
             )
 
         nav_label = str(admin_ui.get("nav_label", module.get("name", slug.title()))).strip()
@@ -155,7 +157,7 @@ def scan_modules(repo_root: pathlib.Path) -> list[dict[str, object]]:
                 "locale_namespace": _parse_locale_namespace(admin_ui, slug),
             }
         )
-        used_segments.add(route_segment)
+        used_segments[route_segment] = manifest
 
     return sorted(modules, key=lambda item: item["route_segment"])
 
