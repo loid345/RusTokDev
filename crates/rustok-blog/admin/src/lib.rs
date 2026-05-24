@@ -120,7 +120,12 @@ pub fn BlogAdmin() -> impl IntoView {
     let posts_resource = local_resource(
         move || (token.get(), tenant.get(), refresh_nonce.get(), locale.get()),
         move |(token_value, tenant_value, _, locale_value)| async move {
-            api::fetch_posts(token_value, tenant_value, Some(locale_value)).await
+            api::fetch_posts(
+                token_value,
+                tenant_value,
+                core::locale_arg(locale_value.as_str()),
+            )
+            .await
         },
     );
 
