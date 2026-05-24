@@ -127,6 +127,38 @@ class VerifyMobileManifestTests(unittest.TestCase):
         self.assertIsNotNone(error)
         self.assertIn("permission #1 is invalid", error)
 
+    def test_validate_snapshot_schema_rejects_non_snake_case_route_segment(self):
+        error = _validate_snapshot_schema(
+            [
+                {
+                    "module_slug": "blog",
+                    "surface_kind": "admin_mobile",
+                    "route_segment": "Blog-Route",
+                    "permissions": [],
+                    "locale_namespace": "blog",
+                    "child_pages": [],
+                }
+            ]
+        )
+        self.assertIsNotNone(error)
+        self.assertIn("route_segment must be snake_case", error)
+
+    def test_validate_snapshot_schema_rejects_non_snake_case_locale_namespace(self):
+        error = _validate_snapshot_schema(
+            [
+                {
+                    "module_slug": "blog",
+                    "surface_kind": "admin_mobile",
+                    "route_segment": "blog",
+                    "permissions": [],
+                    "locale_namespace": "Blog Locale",
+                    "child_pages": [],
+                }
+            ]
+        )
+        self.assertIsNotNone(error)
+        self.assertIn("locale_namespace must be snake_case", error)
+
 
 if __name__ == "__main__":
     unittest.main()

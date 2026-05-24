@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import re
 import sys
 
 if __package__:
@@ -16,6 +17,10 @@ else:
         sys.path.insert(0, str(current_dir))
     from generate_mobile_manifest import render, render_snapshot_json, scan_modules, to_snapshot
 
+
+
+def _is_snake_case(value: str) -> bool:
+    return bool(value) and bool(__import__("re").match(r"^[a-z0-9_]+$", value))
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -75,6 +80,8 @@ def _validate_snapshot_schema(entries: object) -> str | None:
             return f"snapshot entry #{index} has invalid module_slug"
         if not isinstance(route_segment, str) or not route_segment.strip():
             return f"snapshot entry #{index} has invalid route_segment"
+        if not _is_snake_case(route_segment):
+            return f"snapshot entry #{index} route_segment must be snake_case"
         if route_segment in seen_route_segments:
             return f"snapshot entry #{index} duplicates route_segment '{route_segment}'"
         seen_route_segments.add(route_segment)
@@ -83,6 +90,8 @@ def _validate_snapshot_schema(entries: object) -> str | None:
             return f"snapshot entry #{index} has unsupported surface_kind '{surface_kind}'"
         if not isinstance(locale_namespace, str) or not locale_namespace.strip():
             return f"snapshot entry #{index} has invalid locale_namespace"
+        if not _is_snake_case(locale_namespace):
+            return f"snapshot entry #{index} locale_namespace must be snake_case"
         if not isinstance(permissions, list):
             return f"snapshot entry #{index} permissions must be an array"
         seen_permissions: set[str] = set()

@@ -183,6 +183,29 @@ class GenerateMobileManifestTests(unittest.TestCase):
         self.assertIn('"permissions": [', payload)
         self.assertIn('"blog.read"', payload)
 
+    def test_scan_modules_normalizes_locale_namespace_and_sorts_permissions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "crates/mod-a").mkdir(parents=True)
+
+            (root / "crates/mod-a/rustok-module.toml").write_text(
+                textwrap.dedent(
+                    """
+                    [module]
+                    slug = "blog"
+
+                    [provides.admin_ui]
+                    route_segment = "blog"
+                    locale_namespace = "Content Blog"
+                    permissions = ["z.read", "a.read", "z.read"]
+                    """
+                ).strip()
+            )
+
+            modules = scan_modules(root)
+            self.assertEqual(modules[0]["locale_namespace"], "content_blog")
+            self.assertEqual(modules[0]["permissions"], ["a.read", "z.read"])
+
 
 if __name__ == "__main__":
     unittest.main()
