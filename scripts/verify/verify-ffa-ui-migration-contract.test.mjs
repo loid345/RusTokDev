@@ -1,13 +1,20 @@
 #!/usr/bin/env node
 
-import { mkdtempSync, writeFileSync, mkdirSync } from "node:fs";
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import {
+  mkdtempSync,
+  writeFileSync,
+  mkdirSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 
 const scriptPath = path.resolve("scripts/verify/verify-ffa-ui-migration-contract.mjs");
 
-function makeFixture({ pipeline }) {
+function withFixture({ pipeline }) {
   const root = mkdtempSync(path.join(tmpdir(), "rustok-ffa-verify-"));
   mkdirSync(path.join(root, "docs", "research"), { recursive: true });
   mkdirSync(path.join(root, "docs", "verification"), { recursive: true });
@@ -73,40 +80,40 @@ function makeFixture({ pipeline }) {
     ),
   );
 
-  return root;
+  return {
+    root,
+    cleanup: () => rmSync(root, { recursive: true, force: true }),
+  };
 }
 
-function runWithRoot(root) {
+function runVerifier(root) {
   return spawnSync(process.execPath, [scriptPath], {
     env: { ...process.env, RUSTOK_VERIFY_ROOT: root },
     encoding: "utf8",
   });
 }
 
-const okRoot = makeFixture({
-  pipeline: "npm run verify:ffa:ui:migration:contract && npm run verify:ffa:ui:migration:docs",
+test("passes when migration pipeline includes contract and docs commands", () => {
+  const fixture = withFixture({
+    pipeline: "npm run verify:ffa:ui:migration:contract && npm run verify:ffa:ui:migration:docs",
+  });
+
+  try {
+    const result = runVerifier(fixture.root);
+    assert.equal(result.status, 0, `Expected PASS fixture to succeed:\n${result.stdout}\n${result.stderr}`);
+  } finally {
+    fixture.cleanup();
+  }
 });
-const ok = runWithRoot(okRoot);
-if (ok.status !== 0) {
-  console.error("Expected PASS fixture to succeed");
-  console.error(ok.stdout);
-  console.error(ok.stderr);
-  process.exit(1);
-}
 
-const badRoot = makeFixture({ pipeline: "npm run verify:ffa:ui:migration:contract" });
-const bad = runWithRoot(badRoot);
-if (bad.status === 0) {
-  console.error("Expected FAIL fixture to fail");
-  console.error(bad.stdout);
-  console.error(bad.stderr);
-  process.exit(1);
-}
+test("fails when migration pipeline misses docs command", () => {
+  const fixture = withFixture({ pipeline: "npm run verify:ffa:ui:migration:contract" });
 
-if (!bad.stderr.includes("verify:ffa:ui:migration:docs")) {
-  console.error("Expected missing docs command error in stderr");
-  console.error(bad.stderr);
-  process.exit(1);
-}
-
-console.log("[verify-ffa-ui-migration-contract:test] PASS");
+  try {
+    const result = runVerifier(fixture.root);
+    assert.notEqual(result.status, 0, "Expected FAIL fixture to fail");
+    assert.match(result.stderr, /verify:ffa:ui:migration:docs/);
+  } finally {
+    fixture.cleanup();
+  }
+});
