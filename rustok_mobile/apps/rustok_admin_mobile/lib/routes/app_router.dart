@@ -14,7 +14,8 @@ const _routeCodec = RouteCodec(
   }),
 );
 
-GoRouter buildRouter(List<ModuleRouteEntry> moduleRoutes) {
+GoRouter buildRouter(ModuleRegistryAdaptationResult registryReport) {
+  final moduleRoutes = registryReport.routes;
   return GoRouter(
     initialLocation: modulesRootPath,
     routes: [
@@ -23,7 +24,11 @@ GoRouter buildRouter(List<ModuleRouteEntry> moduleRoutes) {
         routes: [
           GoRoute(
             path: modulesRootPath,
-            builder: (context, state) => ModulesHomePage(moduleRoutes: moduleRoutes),
+            builder: (context, state) => ModulesHomePage(
+              moduleRoutes: moduleRoutes,
+              rejectedModuleEntries: registryReport.rejectedModuleEntries,
+              rejectedChildEntries: registryReport.rejectedChildEntries,
+            ),
             routes: [
               for (final routeEntry in moduleRoutes)
                 GoRoute(
@@ -60,15 +65,33 @@ GoRouter buildRouter(List<ModuleRouteEntry> moduleRoutes) {
 }
 
 class ModulesHomePage extends StatelessWidget {
-  const ModulesHomePage({super.key, required this.moduleRoutes});
+  const ModulesHomePage({
+    super.key,
+    required this.moduleRoutes,
+    required this.rejectedModuleEntries,
+    required this.rejectedChildEntries,
+  });
 
   final List<ModuleRouteEntry> moduleRoutes;
+  final int rejectedModuleEntries;
+  final int rejectedChildEntries;
 
   @override
   Widget build(BuildContext context) {
     return ListView(
       children: [
         const ListTile(title: Text('RusTok Modules')),
+        if (rejectedModuleEntries > 0 || rejectedChildEntries > 0)
+          Card(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            color: Theme.of(context).colorScheme.errorContainer,
+            child: ListTile(
+              title: const Text('Registry adaptation warnings'),
+              subtitle: Text(
+                'Rejected modules: $rejectedModuleEntries · Rejected child pages: $rejectedChildEntries',
+              ),
+            ),
+          ),
         for (final moduleRoute in moduleRoutes)
           ExpansionTile(
             title: Text(moduleRoute.navTitle),
