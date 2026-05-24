@@ -1,5 +1,7 @@
 import 'package:app_module_contracts/app_module_contracts.dart';
 
+const modulesRootPath = '/modules';
+
 class ModuleRouteEntry {
   const ModuleRouteEntry({
     required this.moduleKey,
@@ -31,29 +33,45 @@ class ModuleChildRouteEntry {
 }
 
 List<ModuleRouteEntry> adaptModuleEntries(List<MobileModuleEntry> entries) {
-  return List.unmodifiable(
-    entries.map((entry) {
-      final routeSegment = _sanitizeSegment(entry.routeSegment);
-      final basePath = '/modules/$routeSegment';
-      final childRoutes = entry.childPages.map((child) {
-        final subpath = _sanitizeSegment(child.subpath);
-        return ModuleChildRouteEntry(
+  final adapted = <ModuleRouteEntry>[];
+
+  for (final entry in entries) {
+    final routeSegment = _sanitizeSegment(entry.routeSegment);
+    if (entry.moduleKey.trim().isEmpty || routeSegment.isEmpty) {
+      continue;
+    }
+
+    final basePath = '$modulesRootPath/$routeSegment';
+    final childRoutes = <ModuleChildRouteEntry>[];
+
+    for (final child in entry.childPages) {
+      final subpath = _sanitizeSegment(child.subpath);
+      if (subpath.isEmpty) {
+        continue;
+      }
+
+      childRoutes.add(
+        ModuleChildRouteEntry(
           subpath: subpath,
           path: '$basePath/$subpath',
           title: child.title,
           navLabel: child.navLabel ?? child.title,
-        );
-      }).toList(growable: false);
+        ),
+      );
+    }
 
-      return ModuleRouteEntry(
+    adapted.add(
+      ModuleRouteEntry(
         moduleKey: entry.moduleKey,
         routeSegment: routeSegment,
         path: basePath,
         navTitle: entry.nav.title,
-        childRoutes: childRoutes,
-      );
-    }),
-  );
+        childRoutes: List.unmodifiable(childRoutes),
+      ),
+    );
+  }
+
+  return List.unmodifiable(adapted);
 }
 
 String _sanitizeSegment(String value) {

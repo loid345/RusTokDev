@@ -6,17 +6,26 @@ import 'package:go_router/go_router.dart';
 import '../app_shell/app_shell_page.dart';
 import '../registry/module_entry_adapter.dart';
 
+const _routeCodec = RouteCodec(
+  RouteSanitizer({
+    QueryKeys.tab,
+    QueryKeys.productId,
+    QueryKeys.orderId,
+    QueryKeys.mediaId,
+  }),
+);
+
 GoRouter buildRouter(List<MobileModuleEntry> entries) {
   final moduleRoutes = adaptModuleEntries(entries);
 
   return GoRouter(
-    initialLocation: '/modules',
+    initialLocation: modulesRootPath,
     routes: [
       ShellRoute(
         builder: (context, state, child) => AppShellPage(child: child),
         routes: [
           GoRoute(
-            path: '/modules',
+            path: modulesRootPath,
             builder: (context, state) => ModulesHomePage(moduleRoutes: moduleRoutes),
             routes: [
               for (final routeEntry in moduleRoutes)
@@ -24,15 +33,7 @@ GoRouter buildRouter(List<MobileModuleEntry> entries) {
                   path: routeEntry.routeSegment,
                   name: routeEntry.moduleKey,
                   builder: (context, state) {
-                    const codec = RouteCodec(
-                      RouteSanitizer({
-                        QueryKeys.tab,
-                        QueryKeys.productId,
-                        QueryKeys.orderId,
-                        QueryKeys.mediaId,
-                      }),
-                    );
-                    final selection = codec.decode(
+                    final selection = _routeCodec.decode(
                       state.uri.path,
                       state.uri.queryParameters,
                     );

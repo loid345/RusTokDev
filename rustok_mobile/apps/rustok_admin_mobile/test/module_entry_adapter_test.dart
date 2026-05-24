@@ -33,4 +33,37 @@ void main() {
     expect(blog.childRoutes.first.navLabel, 'Add Blog Post');
     expect(blog.childRoutes.last.navLabel, 'All Posts');
   });
+
+  test('skips invalid module and child segments after sanitization', () {
+    final entries = <MobileModuleEntry>[
+      const MobileModuleEntry(
+        moduleKey: ' ',
+        routeSegment: '/blog/',
+        nav: MobileNavMeta(title: 'Blog', icon: 'article'),
+      ),
+      const MobileModuleEntry(
+        moduleKey: 'rustok_pages',
+        routeSegment: '///',
+        nav: MobileNavMeta(title: 'Pages', icon: 'module'),
+      ),
+      const MobileModuleEntry(
+        moduleKey: 'rustok_search',
+        routeSegment: '/search/',
+        nav: MobileNavMeta(title: 'Search', icon: 'search'),
+        childPages: [
+          MobileChildPage(subpath: '///', title: 'Invalid child'),
+          MobileChildPage(subpath: '/analytics/', title: 'Analytics'),
+        ],
+      ),
+    ];
+
+    final adapted = adaptModuleEntries(entries);
+
+    expect(adapted, hasLength(1));
+    final search = adapted.single;
+    expect(search.moduleKey, 'rustok_search');
+    expect(search.path, '/modules/search');
+    expect(search.childRoutes, hasLength(1));
+    expect(search.childRoutes.single.path, '/modules/search/analytics');
+  });
 }
