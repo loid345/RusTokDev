@@ -63,6 +63,7 @@ def _validate_snapshot_schema(entries: object) -> str | None:
         "child_pages",
     }
     seen_route_segments: set[str] = set()
+    seen_module_slugs: set[str] = set()
 
     for index, item in enumerate(entries):
         if not isinstance(item, dict):
@@ -83,6 +84,9 @@ def _validate_snapshot_schema(entries: object) -> str | None:
             return f"snapshot entry #{index} has invalid module_slug"
         if not _is_snake_case(module_slug):
             return f"snapshot entry #{index} module_slug must be snake_case"
+        if module_slug in seen_module_slugs:
+            return f"snapshot entry #{index} duplicates module_slug '{module_slug}'"
+        seen_module_slugs.add(module_slug)
         if not isinstance(route_segment, str) or not route_segment.strip():
             return f"snapshot entry #{index} has invalid route_segment"
         if not _is_snake_case(route_segment):

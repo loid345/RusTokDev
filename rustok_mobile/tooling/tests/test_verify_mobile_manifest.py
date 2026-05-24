@@ -244,6 +244,30 @@ class VerifyMobileManifestTests(unittest.TestCase):
         self.assertIsNotNone(error)
         self.assertIn("child_pages must be sorted by subpath", error)
 
+    def test_validate_snapshot_schema_rejects_duplicate_module_slug(self):
+        error = _validate_snapshot_schema(
+            [
+                {
+                    "module_slug": "blog",
+                    "surface_kind": "admin_mobile",
+                    "route_segment": "blog",
+                    "permissions": [],
+                    "locale_namespace": "blog",
+                    "child_pages": [],
+                },
+                {
+                    "module_slug": "blog",
+                    "surface_kind": "admin_mobile",
+                    "route_segment": "blog_2",
+                    "permissions": [],
+                    "locale_namespace": "blog_2",
+                    "child_pages": [],
+                },
+            ]
+        )
+        self.assertIsNotNone(error)
+        self.assertIn("duplicates module_slug", error)
+
 
 if __name__ == "__main__":
     unittest.main()
