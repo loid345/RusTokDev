@@ -52,6 +52,21 @@ pub fn fallback_excerpt(value: Option<String>, fallback: &str) -> String {
     fallback_text(value, fallback)
 }
 
+pub fn selected_post_fallback_fields(
+    slug: Option<String>,
+    slug_fallback: &str,
+    excerpt: Option<String>,
+    excerpt_fallback: &str,
+    published_at: Option<String>,
+    published_at_fallback: &str,
+) -> (String, String, String) {
+    (
+        fallback_slug(slug, slug_fallback),
+        fallback_excerpt(excerpt, excerpt_fallback),
+        fallback_text(published_at, published_at_fallback),
+    )
+}
+
 pub fn selected_slug_or_default(value: Option<String>, default_slug: &str) -> String {
     value.unwrap_or_else(|| default_slug.to_string())
 }
@@ -209,6 +224,21 @@ mod tests {
                 "locale: en".to_string(),
                 "published: 2026-01-01T00:00:00Z".to_string(),
             ]
+        );
+        assert_eq!(
+            selected_post_fallback_fields(
+                None,
+                "missing-slug",
+                None,
+                "No excerpt yet.",
+                None,
+                "Unscheduled",
+            ),
+            (
+                "missing-slug".to_string(),
+                "No excerpt yet.".to_string(),
+                "Unscheduled".to_string(),
+            )
         );
     }
 

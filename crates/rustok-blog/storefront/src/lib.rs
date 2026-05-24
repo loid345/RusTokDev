@@ -113,23 +113,19 @@ fn SelectedPostCard(post: Option<BlogPostDetail>) -> impl IntoView {
     let title = post.title;
     let effective_locale = post.effective_locale;
     let status = post.status;
-    let slug = core::fallback_text(
+    let (slug, excerpt, published_at) = core::selected_post_fallback_fields(
         post.slug,
         &t(
             locale.as_deref(),
             "blog.selected.missingSlug",
             "missing-slug",
         ),
-    );
-    let excerpt = core::fallback_text(
         post.excerpt,
         &t(
             locale.as_deref(),
             "blog.selected.noExcerpt",
             "No excerpt yet.",
         ),
-    );
-    let published_at = core::fallback_text(
         post.published_at,
         &t(
             locale.as_deref(),
