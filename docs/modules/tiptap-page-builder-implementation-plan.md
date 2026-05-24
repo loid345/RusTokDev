@@ -73,7 +73,8 @@
 - [x] Выровнять UX-обработку validation/sanitize ошибок в формах.
 - [x] Синхронизировать dependency с Flutter registry/codegen планом (`docs/research/flutter.md`, anti-drift guardrail).
 - [~] Зафиксировать FBA migration contract для `rustok-pages`: pages остаётся владельцем page/menu runtime, но визуальный builder-домен потребляется как внешний reference-capability слой.
-- [ ] Вынести в отдельный runbook процедуру включения/отключения builder-capabilities tenant-by-tenant без отката всего pages runtime.
+- [x] Вынести в отдельный runbook процедуру включения/отключения builder-capabilities tenant-by-tenant без отката всего pages runtime (см. `crates/rustok-pages/docs/implementation-plan.md`, разделы `Tenant switch procedure` + `FBA execution backlog`).
+- [~] Свести capability readiness к единому FBA execution backlog для `pages` (metadata/provider contract, fallback semantics, observability correlation, CI fallback-gate).
 
 **DoD фазы:** `pages` и соседние контуры не владеют builder-доменом напрямую, а используют reference-модуль через стабильный контракт.
 
@@ -261,3 +262,49 @@ Go/No-Go для перехода в следующую волну:
 - **Frontend owners (Next/Leptos/Flutter):** владеют adapter parity и UX fallback semantics.
 
 Перед переводом tenant в следующую волну требуется явное подтверждение от Platform + Pages owner.
+
+## 8. FBA execution roadmap (продолжение разработки Page Builder)
+
+Этот раздел фиксирует, как **продолжать разработку Page Builder уже в FBA-модели**, и как на его примере довести `pages` до production-ready consumer-профиля.
+
+### 8.1 Builder reference module: ближайшие deliverables
+
+1. **Capability runtime metadata**
+   - зафиксировать в runtime metadata builder-модуля явный provider-profile:
+     `preview/tree/properties/publish`, health probes, degradation modes;
+   - добавить machine-readable версию capability-контракта для anti-drift проверок.
+2. **Control-plane handshake**
+   - закрепить единый change-set для `builder.enabled + дочерние flags` как атомарную операцию;
+   - синхронизировать retry/compensation поведение lifecycle hooks с control-plane runbook.
+3. **Observability-first baseline**
+   - связать метрики capability-layer с page publish pipeline (`sanitize failures`, `publish latency`, `error_rate`);
+   - добавить обязательный correlation-id между builder write-path и page publish events.
+4. **Compatibility sunset**
+   - держать legacy bridge только в read/readonly;
+   - расширение legacy write-surface запрещено после Wave 0.
+
+### 8.2 `rustok-pages` как эталон consumer-модуля (FBA)
+
+`rustok-pages` доводится до FBA-consumer ready по четырём трекам:
+
+1. **Provider contract explicitness**
+   - pages runtime metadata явно указывает внешний builder provider;
+   - docs/manifest запрещают pages-local re-ownership editor runtime.
+2. **Fallback semantics**
+   - при `builder.enabled=false` admin остаётся доступным в диагностическом read-only режиме;
+   - storefront read-path не зависит от capability endpoint availability.
+3. **Typed errors / publish gating**
+   - при `builder.publish.enabled=false` publish-path возвращает typed runtime error, не 5xx;
+   - list/read surfaces остаются стабильными при partial disable.
+4. **Operational verification**
+   - tenant switch выполняется по `before/after` snapshot + smoke + decision log;
+   - rollback policy применяется без отката всего pages runtime.
+
+### 8.3 FBA release gate для связки `builder -> pages`
+
+Переход в Wave 1 разрешён только если одновременно выполнены условия:
+
+- builder capability health probes стабильны и наблюдаемы;
+- `pages` прошёл fallback сценарии (`builder.enabled=false`, `builder.publish.enabled=false`);
+- CI содержит fallback regression checks для admin/storefront read paths;
+- для pilot-tenant есть утверждённый owner on-call и rollback playbook.
