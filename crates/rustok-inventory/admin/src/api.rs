@@ -78,8 +78,8 @@ fn graphql_url() -> String {
 }
 
 
-fn normalize_locale_filter(locale: Option<String>) -> Option<String> {
-    locale.and_then(|value| {
+fn normalize_optional_trimmed(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
         let trimmed = value.trim();
         if trimmed.is_empty() {
             None
@@ -87,28 +87,18 @@ fn normalize_locale_filter(locale: Option<String>) -> Option<String> {
             Some(trimmed.to_string())
         }
     })
+}
+
+fn normalize_locale_filter(locale: Option<String>) -> Option<String> {
+    normalize_optional_trimmed(locale)
 }
 
 fn normalize_search_filter(search: Option<String>) -> Option<String> {
-    search.and_then(|value| {
-        let trimmed = value.trim();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_string())
-        }
-    })
+    normalize_optional_trimmed(search)
 }
 
 fn normalize_status_filter(status: Option<String>) -> Option<String> {
-    status.and_then(|value| {
-        let trimmed = value.trim();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_ascii_uppercase())
-        }
-    })
+    normalize_optional_trimmed(status).map(|value| value.to_ascii_uppercase())
 }
 
 async fn request<V, T>(
@@ -200,8 +190,19 @@ pub async fn fetch_product(
 #[cfg(test)]
 mod tests {
     use super::{
-        normalize_locale_filter, normalize_search_filter, normalize_status_filter,
+        normalize_locale_filter, normalize_optional_trimmed, normalize_search_filter,
+        normalize_status_filter,
     };
+
+    #[test]
+    fn normalize_optional_trimmed_keeps_non_blank_and_drops_blank_values() {
+        assert_eq!(
+            normalize_optional_trimmed(Some("  value  ".to_string())),
+            Some("value".to_string())
+        );
+        assert_eq!(normalize_optional_trimmed(Some("   ".to_string())), None);
+        assert_eq!(normalize_optional_trimmed(None), None);
+    }
 
     #[test]
     fn normalize_locale_filter_trims_and_drops_blank_values() {
