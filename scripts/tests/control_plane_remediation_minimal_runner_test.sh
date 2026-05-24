@@ -107,4 +107,10 @@ if ! rg -q "==> migration tests" "$TIMEOUT_OUTPUT"; then
   exit 1
 fi
 
+if rg -q "==> module lifecycle tests" "$TIMEOUT_OUTPUT"; then
+  echo "timeout scenario unexpectedly progressed past migration step" >&2
+  cat "$TIMEOUT_OUTPUT" >&2
+  exit 1
+fi
+
 echo "control_plane_remediation_minimal_runner_test.sh: PASS"

@@ -772,3 +772,21 @@ rollback-стратегии и Definition of Done по итерациям.
 ### Актуализация 2026-05-24 (итерация 56)
 
 - Для runner smoke-test добавлен негативный timeout-сценарий (`RUSTOK_VERIFY_STEP_TIMEOUT=1s`), подтверждающий fail-fast поведение на затянутом шаге migration.
+
+### Актуализация 2026-05-24 (итерация 57)
+
+- Timeout smoke-test для minimal runner усилен инвариантом остановки pipeline: при `RUSTOK_VERIFY_STEP_TIMEOUT=1s` выполнение не должно переходить за шаг migration к `module lifecycle tests`.
+
+### Актуализация 2026-05-24 (итерация 58)
+
+- Alias smoke-test для `verify-all` расширен дополнительным селектором по имени файла (`run-control-plane-remediation-minimal.sh`), чтобы фиксировать parity между alias- и direct-selector путями.
+
+### Актуализация 2026-05-24 (итерация 59)
+
+- Добавлен утилитарный отчёт `scripts/verify/report-control-plane-remediation-progress.py`, который считает `[x]/[~]/[ ]` по remediation-плану и печатает top-элементы хвоста для batch-планирования следующей итерации.
+- Добавлен изолированный smoke-test `scripts/tests/control_plane_remediation_progress_report_test.sh` (fixture markdown + проверка expected counters), чтобы зафиксировать контракт отчёта.
+
+### Актуализация 2026-05-24 (итерация 60)
+
+- `report-control-plane-remediation-progress.py` получил явный fail-fast для отсутствующего файла плана (`exit 1` + `ERROR: remediation plan not found: ...`), чтобы CI/локальные раннеры не давали ложный PASS при неверном path.
+- Smoke-тест progress-report расширен негативным сценарием missing-plan path.
