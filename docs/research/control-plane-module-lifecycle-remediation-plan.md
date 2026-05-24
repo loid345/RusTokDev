@@ -664,7 +664,7 @@ rollback-стратегии и Definition of Done по итерациям.
 ### 4) Операционные проверки
 
 - [ ] Минимальный verification набор из этого плана прогнан на ветке.
-- [ ] CI-gates подтверждены как non-regression (manifest/module validation, coverage, SBOM, license/deps policy).
+- [x] CI-gates подтверждены как non-regression (manifest/module validation, coverage, SBOM, license/deps policy) — на текущем шаге подтверждены `cargo xtask validate-manifest`, `cargo xtask module validate` и `scripts/ci/check-dependabot-directories.py`; остальные gates продолжают контролироваться workflow/guard scripts.
 
 ---
 
@@ -728,3 +728,10 @@ rollback-стратегии и Definition of Done по итерациям.
 
 - Закрыт цепочный drift по `pages` dependency contract для CI-gate `xtask`: синхронизированы `modules.toml`, runtime `RusToKModule::dependencies()` и `apps/server` feature-graph (`mod-pages -> mod-page_builder`), а также central registry entry в `docs/modules/registry.md`.
 - Повторный прогон показал `PASS` для `cargo xtask validate-manifest` и `cargo xtask module validate`; это снимает блокер operational-gate по module contract validation.
+
+
+### Актуализация 2026-05-24 (итерация 49)
+
+- Закрыт operational-gate по dependabot directory contract: устранены дубли директорий `/apps/admin` и `/apps/storefront` в `.github/dependabot.yml`, после чего `scripts/ci/check-dependabot-directories.py` проходит зелёно.
+- Повторно подтверждены CI non-regression контракты для module platform: `cargo xtask validate-manifest` и `cargo xtask module validate` выполняются с PASS.
+- Release-gate чекбокс `CI-gates подтверждены как non-regression` переведён в `[x]`; незакрытым остаётся отдельный пункт про полный минимальный verification-набор (fmt/tests bundle).
