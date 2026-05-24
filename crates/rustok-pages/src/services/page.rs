@@ -705,34 +705,6 @@ impl PageService {
         Ok(())
     }
 
-    async fn ensure_builder_enabled_for_page(
-        &self,
-        tenant_id: Uuid,
-        page_id: Uuid,
-    ) -> PagesResult<()> {
-        if self
-            .page_uses_builder_capability_for_id(tenant_id, page_id)
-            .await?
-        {
-            self.ensure_builder_enabled(tenant_id).await?;
-        }
-        Ok(())
-    }
-
-    async fn ensure_builder_publish_enabled_for_page(
-        &self,
-        tenant_id: Uuid,
-        page_id: Uuid,
-    ) -> PagesResult<()> {
-        if self
-            .page_uses_builder_capability_for_id(tenant_id, page_id)
-            .await?
-        {
-            self.ensure_builder_publish_enabled(tenant_id).await?;
-        }
-        Ok(())
-    }
-
     async fn ensure_builder_publish_capabilities_for_page(
         &self,
         tenant_id: Uuid,
