@@ -990,7 +990,7 @@ fn apply_post_to_form(
     set_excerpt.set(core::optional_text_or_default(post.excerpt.clone()));
     set_body.set(core::optional_text_or_default(post.body.clone()));
     set_body_format.set(post.body_format.clone());
-    set_tags_input.set(post.tags.join(", "));
+    set_tags_input.set(core::tags_input_value(post.tags.as_slice()));
     set_publish_now.set(core::is_published_status(post.status.as_str()));
 }
 

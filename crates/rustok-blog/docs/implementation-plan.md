@@ -8,14 +8,14 @@ packages и module metadata синхронизированы.
 ## Execution checkpoint
 
 - Current phase: phase_b_in_progress
-- Last checkpoint: FFA slice #18 completed (admin optional text default mapping moved to `core`, dual-path transport unchanged).
+- Last checkpoint: FFA slice #19 completed (admin tags input formatting moved to `core`, dual-path transport unchanged).
 - Next step: Зафиксировать evidence по parity checklist и выбрать следующий один use-case для admin/storefront core extraction без изменения transport-контракта.
 - Open blockers: None.
 - Hand-off notes for next agent:
   1. Продолжать one-task-per-iteration: один helper/use-case -> storefront/admin -> docs double-check.
   2. Не менять dual-path контракт (`native #[server]` + GraphQL fallback) при FFA-декомпозиции.
   3. После каждого slice обновлять parity evidence (`docs/verification/ffa-ui-parity-checklist.md`).
-- Last updated at (UTC): 2026-05-24T17:35:00Z
+- Last updated at (UTC): 2026-05-24T18:00:00Z
 
 ## Область работ
 
@@ -130,6 +130,7 @@ packages и module metadata синхронизированы.
 - [x] Slice 16: admin submit-issue label mapping switched from inline `issue_kind_label(issue.kind)` to `core::issue_label_for`.
 - [x] Slice 17: admin locale argument mapping switched from inline `Some(post_locale[..])` to `core::locale_arg`.
 - [x] Slice 18: admin optional text default mapping switched from inline `unwrap_or_default()` to `core::optional_text_or_default`.
+- [x] Slice 19: admin tags input formatting switched from inline `post.tags.join(\", \")` to `core::tags_input_value`.
 - [ ] Sync admin surface for the same helper family where applicable and attach parity evidence.
 - [ ] `cargo xtask module validate blog` / `cargo xtask module test blog` rerun after next slice touching runtime contract.
 
