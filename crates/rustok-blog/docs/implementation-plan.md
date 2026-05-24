@@ -8,14 +8,14 @@ packages и module metadata синхронизированы.
 ## Execution checkpoint
 
 - Current phase: phase_b_in_progress
-- Last checkpoint: FFA slice #34 completed (admin editing-banner optional-id mapping moved to `core::label_with_optional_id(...)`, dual-path transport unchanged).
+- Last checkpoint: FFA slice #35 completed (storefront collection-visibility predicates moved from inline `.is_empty()` checks to `core::has_items(...)` for selected-post tags and published-post list empty-state, dual-path transport unchanged).
 - Next step: Зафиксировать evidence по parity checklist и выбрать следующий один use-case для admin/storefront core extraction без изменения transport-контракта.
 - Open blockers: None.
 - Hand-off notes for next agent:
   1. Продолжать one-task-per-iteration: один helper/use-case -> storefront/admin -> docs double-check.
   2. Не менять dual-path контракт (`native #[server]` + GraphQL fallback) при FFA-декомпозиции.
   3. После каждого slice обновлять parity evidence (`docs/verification/ffa-ui-parity-checklist.md`).
-- Last updated at (UTC): 2026-05-24T23:58:00Z
+- Last updated at (UTC): 2026-05-24T23:59:00Z
 
 ## FFA/FBA status
 
@@ -157,6 +157,7 @@ packages и module metadata синхронизированы.
 - [x] Slice 32: admin save-path create/update branch switched from inline `match Option` to `core::is_editing_mode(...)` guard.
 - [x] Slice 33: admin save-path update-id extraction switched to `core::editing_post_id_if_editing_mode(...)` and removed inline `expect(...)`.
 - [x] Slice 34: admin editing-banner label mapping switched from inline `map(...).unwrap_or_default()` to `core::label_with_optional_id(...)`.
+- [x] Slice 35: storefront tags/list empty-state predicates switched from inline `.is_empty()` to `core::has_items(...)` for collection guard reuse.
 - [x] Sync admin surface for the same helper family where applicable and attach parity evidence.
 - [ ] `cargo xtask module validate blog` / `cargo xtask module test blog` rerun after next slice touching runtime contract.
 

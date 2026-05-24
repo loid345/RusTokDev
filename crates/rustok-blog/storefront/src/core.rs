@@ -73,6 +73,10 @@ pub fn status_label(status: &str, fallback: &str) -> String {
     }
 }
 
+pub fn has_items<T>(items: &[T]) -> bool {
+    !items.is_empty()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -151,5 +155,11 @@ mod tests {
             "published".to_string()
         );
         assert_eq!(status_label("   ", "unknown"), "unknown".to_string());
+    }
+
+    #[test]
+    fn has_items_detects_non_empty_collection() {
+        assert!(!has_items::<u8>(&[]));
+        assert!(has_items(&[1_u8]));
     }
 }

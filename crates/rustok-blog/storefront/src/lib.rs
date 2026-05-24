@@ -177,7 +177,7 @@ fn SelectedPostCard(post: Option<BlogPostDetail>) -> impl IntoView {
             </div>
             <p class="mt-3 text-sm text-muted-foreground">{excerpt}</p>
             <p class="mt-4 whitespace-pre-line text-sm leading-7 text-muted-foreground">{body}</p>
-            {if tags.is_empty() {
+            {if !core::has_items(tags.as_slice()) {
                 ().into_any()
             } else {
                 view! {
@@ -210,7 +210,7 @@ fn PublishedPostsList(items: Vec<BlogPostListItem>, total: u64) -> impl IntoView
     let module_route_base = route_context.module_route_base(route_segment.as_str());
     let unknown_status_label = t(locale.as_deref(), "blog.list.unknownStatus", "unknown");
 
-    if items.is_empty() {
+    if !core::has_items(items.as_slice()) {
         return view! {
             <article class="rounded-2xl border border-dashed border-border p-6">
                 <p class="text-sm text-muted-foreground">
