@@ -1,6 +1,28 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+SECONDS=0
+CURRENT_STEP="bootstrap"
+
+format_duration() {
+  local total="$1"
+  local h=$((total / 3600))
+  local m=$(((total % 3600) / 60))
+  local s=$((total % 60))
+  printf "%02dh:%02dm:%02ds" "$h" "$m" "$s"
+}
+
+on_error() {
+  local exit_code="$?"
+  echo
+  echo "Control-plane remediation minimal verification: FAIL" >&2
+  echo "Failed step: ${CURRENT_STEP}" >&2
+  echo "Elapsed: $(format_duration "${SECONDS}")" >&2
+  exit "${exit_code}"
+}
+
+trap on_error ERR
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOCK_FILE="${ROOT_DIR}/target/.control-plane-remediation-minimal.lock"
 
@@ -31,9 +53,13 @@ step_timeout() {
 run_step() {
   local title="$1"
   shift
+  local step_start="${SECONDS}"
+  CURRENT_STEP="${title}"
   printf "\n==> %s\n" "${title}"
   printf "$ %s\n" "$*"
   step_timeout "$@"
+  local step_elapsed=$((SECONDS - step_start))
+  printf "--> %s: PASS (%s)\n" "${title}" "$(format_duration "${step_elapsed}")"
 }
 
 if [[ "${RUSTOK_VERIFY_SKIP_FMT:-0}" == "1" ]]; then
@@ -49,4 +75,4 @@ run_step "manifest validation" cargo xtask validate-manifest
 run_step "module contract validation" cargo xtask module validate
 run_step "dependabot directory contract" python3 scripts/ci/check-dependabot-directories.py
 
-printf "\nControl-plane remediation minimal verification: PASS\n"
+printf "\nControl-plane remediation minimal verification: PASS (%s)\n" "$(format_duration "${SECONDS}")"
