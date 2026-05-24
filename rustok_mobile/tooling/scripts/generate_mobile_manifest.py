@@ -91,7 +91,10 @@ def _parse_permissions(admin_ui: dict[str, object]) -> list[str]:
 
 def _parse_locale_namespace(admin_ui: dict[str, object], module_slug: str) -> str:
     raw = str(admin_ui.get("locale_namespace", "")).strip()
-    return _normalize_key(raw or module_slug)
+    normalized = _normalize_key(raw or module_slug)
+    if normalized:
+        return normalized
+    return _normalize_key(module_slug)
 
 def _parse_child_pages(admin_ui: dict[str, object]) -> list[dict[str, str]]:
     pages_raw = admin_ui.get("child_pages")
