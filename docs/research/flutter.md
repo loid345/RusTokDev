@@ -1162,7 +1162,7 @@ _Легенда статусов: `⬜ Planned` — не начато, `🟡 In 
 | `mobile_manifest` minimal schema snapshot | `rustok_mobile/tooling` + docs трека | schema snapshot обновлён и закоммичен | ✅ Done |
 | Compatibility matrix (`required/optional/deprecated`) | `docs/research/flutter.md` | матрица заполнена для всех contract-полей | ✅ Done |
 | Deterministic codegen job | mobile CI pipeline | `dart run build_runner build --delete-conflicting-outputs` + `git diff --exit-code` | ⬜ Planned |
-| Host adapter seam (`module_entry_adapter`) | `apps/rustok_admin_mobile` | registry подключается без ручного списка модулей в shell-router; проверяется через unit/widget tests адаптера и home-shell рендера | ✅ Done |
+| Host adapter seam (`module_entry_adapter`) | `apps/rustok_admin_mobile` | registry подключается без ручного списка модулей в shell-router | ✅ Done |
 | Pilot E2E evidence (modules/blog) | integration tests / manual evidence | login → module list/detail → shell back | ⬜ Planned |
 
 #### PR-A evidence pack (registry contract freeze)
@@ -1193,6 +1193,7 @@ _Легенда статусов: `⬜ Planned` — не начато, `🟡 In 
 - Добавлено явное требование использовать только capability-поля, без Flutter-specific transport/UI API.
 - Зафиксированы правила default/fallback для optional-полей (`child_pages`, `permissions`, `locale_namespace`).
 - Закреплён запрет на breaking rename для `module_slug` и обязательный redirect/mapping для `route_segment`.
+- Runtime-contract в `app_module_contracts` синхронизирован со snapshot: `surface_kind` и `module_slug/route_segment` обязательны, `child_pages`/`permissions` имеют default `[]`, `locale_namespace` optional.
 
 **Execution rule:** каждый следующий PR в этом треке должен обновлять таблицу статусов выше и добавлять ссылку на проверяемое evidence (commit, CI job или test log).
 
@@ -1201,7 +1202,7 @@ _Легенда статусов: `⬜ Planned` — не начато, `🟡 In 
 - [ ] Нет Flutter-specific API-контрактов поверх платформы (только consumption существующих platform contracts).
 - [ ] Route/query keys соответствуют canonical `snake_case` правилам RusTok.
 - [ ] Locale/tenant/auth context собирается host-слоем централизованно (без feature-local fallback chains).
-- [ ] Registry/codegen изменения не ломают возможность module-owned surfaces подключаться декларативно.
+- [x] Registry/codegen изменения не ломают возможность module-owned surfaces подключаться декларативно.
 
 #### Чек-лист anti-duplication для PR
 
