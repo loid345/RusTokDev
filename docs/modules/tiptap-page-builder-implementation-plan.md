@@ -530,7 +530,7 @@ Go/No-Go для перехода в следующую волну:
 
 **Артефакты Sprint 1:**
 - changelog entry по contract freeze;
-- CI отчёт anti-drift check;
+- CI отчёт anti-drift check (baseline command: `node scripts/verify/verify-page-builder-contract-parity.mjs`);
 - обновлённые metadata snapshots provider/consumer.
 
 ### 12.2 Sprint 2 (до 2026-06-30): `rustok-pages` fallback hardening
