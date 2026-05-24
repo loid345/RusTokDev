@@ -1270,7 +1270,7 @@ mod tests {
             ToggleCase {
                 error: ToggleModuleError::HookFailed("boom".into()),
                 expected_message: toggle_err_hook_failed("boom"),
-                expected_code: Some("BAD_USER_INPUT"),
+                expected_code: Some("MODULE_HOOK_FAILED"),
                 case_name: "hook-failed",
             },
             ToggleCase {
@@ -1302,6 +1302,13 @@ mod tests {
             .collect()
     }
 
+    fn toggle_hook_failed_cases() -> Vec<ToggleCase> {
+        toggle_error_contract_cases()
+            .into_iter()
+            .filter(|case| case.expected_code == Some("MODULE_HOOK_FAILED"))
+            .collect()
+    }
+
     #[test]
     fn toggle_error_taxonomy_partitions_are_disjoint_and_complete() {
         let all = toggle_error_contract_cases();
@@ -1325,6 +1332,7 @@ mod tests {
         assert!(
             all.iter().all(|case| {
                 case.expected_code == Some("BAD_USER_INPUT")
+                    || case.expected_code == Some("MODULE_HOOK_FAILED")
                     || case.expected_code == Some("INTERNAL_ERROR")
             }),
             "toggle taxonomy contains unsupported error code category"
@@ -1361,6 +1369,19 @@ mod tests {
                 error_code(&gql).as_deref(),
                 Some("BAD_USER_INPUT"),
                 "toggle user-input taxonomy must map to BAD_USER_INPUT code for case: {}",
+                case.case_name
+            );
+        }
+    }
+
+    #[test]
+    fn toggle_hook_failed_taxonomy_maps_only_to_module_hook_failed_code() {
+        for case in toggle_hook_failed_cases() {
+            let gql = map_toggle_module_error(case.error).extend();
+            assert_eq!(
+                error_code(&gql).as_deref(),
+                Some("MODULE_HOOK_FAILED"),
+                "toggle hook-failed taxonomy must map to MODULE_HOOK_FAILED code for case: {}",
                 case.case_name
             );
         }
