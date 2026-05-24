@@ -345,6 +345,14 @@ impl SeoService {
     }
 }
 
+fn push_submission_failure(summary: &mut SitemapSubmissionSummary, message: String) {
+    if summary.failures.len() < SITEMAP_SUBMIT_MAX_FAILURE_DETAILS {
+        summary.failures.push(message);
+    } else {
+        summary.omitted_failure_count += 1;
+    }
+}
+
 fn disabled_sitemap_status() -> SeoSitemapStatusRecord {
     SeoSitemapStatusRecord {
         enabled: false,

@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import json
 import pathlib
+import json
 import re
 import tomllib
 
@@ -39,6 +41,13 @@ def parse_args() -> argparse.Namespace:
             "rustok_mobile/apps/rustok_admin_mobile/lib/registry/mobile_manifest.g.dart"
         ),
         help="Output dart file path",
+    )
+    parser.add_argument(
+        "--snapshot-output",
+        default=(
+            "rustok_mobile/tooling/snapshots/mobile_manifest.snapshot.json"
+        ),
+        help="Output JSON snapshot path for registry contract checks",
     )
     return parser.parse_args()
 
@@ -110,6 +119,7 @@ def scan_modules(repo_root: pathlib.Path) -> list[dict[str, object]]:
         modules.append(
             {
                 "module_key": module_key,
+                "module_slug": slug,
                 "route_segment": route_segment,
                 "nav_label": nav_label,
                 "icon": _pick_icon(slug),
@@ -163,14 +173,47 @@ def render(modules: list[dict[str, object]]) -> str:
     return "\n".join(lines)
 
 
+
+def to_snapshot(modules: list[dict[str, object]]) -> list[dict[str, object]]:
+    snapshot: list[dict[str, object]] = []
+    for module in modules:
+        route_segment = str(module["route_segment"])
+        snapshot.append(
+            {
+                "module_slug": str(module.get("module_slug") or str(module["module_key"]).removeprefix("rustok_")),
+                "surface_kind": "admin_mobile",
+                "route_segment": route_segment,
+                "permissions": [],
+                "locale_namespace": route_segment,
+                "child_pages": [
+                    {
+                        "subpath": str(page["subpath"]),
+                        "title": str(page["title"]),
+                        "nav_label": str(page.get("nav_label") or page["title"]),
+                    }
+                    for page in module.get("child_pages", [])
+                    if isinstance(page, dict)
+                ],
+            }
+        )
+    return snapshot
+
+
+def render_snapshot_json(modules: list[dict[str, object]]) -> str:
+    return json.dumps(to_snapshot(modules), ensure_ascii=False, indent=2) + "\n"
+
 def main() -> None:
     args = parse_args()
     repo_root = pathlib.Path(args.repo_root).resolve()
     output = pathlib.Path(args.output).resolve()
+    snapshot_output = pathlib.Path(args.snapshot_output).resolve()
     modules = scan_modules(repo_root)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(render(modules), encoding="utf-8")
+    snapshot_output.parent.mkdir(parents=True, exist_ok=True)
+    snapshot_output.write_text(render_snapshot_json(modules), encoding="utf-8")
     print(f"Generated {len(modules)} modules into {output}")
+    print(f"Generated snapshot into {snapshot_output}")
 
 
 if __name__ == "__main__":
