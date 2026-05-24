@@ -221,9 +221,9 @@ fn PublishedPostsList(items: Vec<BlogPostListItem>, total: u64) -> impl IntoView
                         let href = core::module_href(module_route_base.as_str(), slug.as_str());
                         view! {
                             <article class="rounded-2xl border border-border bg-background p-5">
-                                <div class="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
+                                <span class=core::status_badge_css(post.status.as_str())>
                                     {post.status}
-                                </div>
+                                </span>
                                 <h4 class="mt-2 text-base font-semibold text-foreground">{post.title}</h4>
                                 <p class="mt-2 text-sm text-muted-foreground">
                                     {core::fallback_excerpt(
