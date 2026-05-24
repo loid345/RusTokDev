@@ -111,6 +111,30 @@ pub fn list_post_card_fields(
     (resolved_excerpt, href, resolved_open_label, locale_meta)
 }
 
+pub fn list_post_card_view(
+    slug: Option<String>,
+    missing_slug_fallback: &str,
+    excerpt: Option<String>,
+    excerpt_fallback: &str,
+    module_route_base: &str,
+    open_label: &str,
+    locale_label: &str,
+    effective_locale: &str,
+    status: String,
+) -> (String, String, String, String, String) {
+    let (resolved_excerpt, href, resolved_open_label, locale_meta) = list_post_card_fields(
+        slug,
+        missing_slug_fallback,
+        excerpt,
+        excerpt_fallback,
+        module_route_base,
+        open_label,
+        locale_label,
+        effective_locale,
+    );
+    (status, resolved_excerpt, href, resolved_open_label, locale_meta)
+}
+
 pub fn fallback_slug(value: Option<String>, fallback: &str) -> String {
     fallback_text(value, fallback)
 }
@@ -355,6 +379,26 @@ mod tests {
                 "en",
             ),
             (
+                "No excerpt yet.".to_string(),
+                "/store/modules/blog?slug=missing-slug".to_string(),
+                "Open missing-slug".to_string(),
+                "locale: en".to_string(),
+            )
+        );
+        assert_eq!(
+            list_post_card_view(
+                None,
+                "missing-slug",
+                None,
+                "No excerpt yet.",
+                "/store/modules/blog",
+                "Open",
+                "locale",
+                "en",
+                "published".to_string(),
+            ),
+            (
+                "published".to_string(),
                 "No excerpt yet.".to_string(),
                 "/store/modules/blog?slug=missing-slug".to_string(),
                 "Open missing-slug".to_string(),

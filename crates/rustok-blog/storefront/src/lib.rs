@@ -244,7 +244,7 @@ fn PublishedPostsList(items: Vec<BlogPostListItem>, total: u64) -> impl IntoView
                         );
                         let open_label = t(locale.as_deref(), "blog.list.open", "Open");
                         let locale_label = t(locale.as_deref(), "blog.list.localeLabel", "locale");
-                        let (excerpt, href, open_label, locale_meta) = core::list_post_card_fields(
+                        let (status, excerpt, href, open_label, locale_meta) = core::list_post_card_view(
                             post.slug,
                             missing_slug_fallback.as_str(),
                             post.excerpt,
@@ -253,11 +253,12 @@ fn PublishedPostsList(items: Vec<BlogPostListItem>, total: u64) -> impl IntoView
                             open_label.as_str(),
                             locale_label.as_str(),
                             post.effective_locale.as_str(),
+                            post.status,
                         );
                         view! {
                             <article class="rounded-2xl border border-border bg-background p-5">
                                 <BlogStatusBadge
-                                    status=post.status
+                                    status=status
                                     unknown_label=unknown_status_label.clone()
                                 />
                                 <h4 class="mt-2 text-base font-semibold text-foreground">{post.title}</h4>
