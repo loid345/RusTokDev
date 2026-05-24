@@ -29,8 +29,8 @@
 ## 2. Статус фаз
 
 - [x] **Фаза 0 — Контракт и backend-baseline зафиксированы**
-- [ ] **Фаза 1 — Выделение FBA reference-модуля builder-а**
-- [ ] **Фаза 2 — Интеграция consumer-ов (в т.ч. `pages`) с reference-модулем**
+- [~] **Фаза 1 — Выделение FBA reference-модуля builder-а**
+- [~] **Фаза 2 — Интеграция consumer-ов (в т.ч. `pages`) с reference-модулем**
 - [ ] **Фаза 3 — Feature flags и стратегия rollout**
 - [ ] **Фаза 4 — Миграция legacy markdown → rt_json_v1**
 - [ ] **Фаза 5 — Release-gate: тесты, RBAC, observability**
@@ -52,13 +52,13 @@
 
 ### Фаза 1 — Выделение FBA reference-модуля builder-а
 
-**Статус:** [ ] Todo
+**Статус:** [~] In progress
 
-- [ ] Создать самостоятельный FBA reference-модуль builder-а (без жёсткой привязки к `pages` как owner-контексту).
-- [ ] Зафиксировать capability-contracts (`preview/tree/properties/publish`) и lifecycle hooks reference-модуля.
-- [ ] Подготовить module health contract + observability baseline для reference-модуля.
-- [ ] Определить compatibility-периметр legacy payload-ов как временный слой и зафиксировать sunset criteria.
-- [ ] Выровнять contract parity для Next/Leptos/Flutter как consumer-ов reference-модуля.
+- [x] Зафиксировать самостоятельный FBA reference-контур builder-а на уровне центральной документации и правил rollout (без возврата к pages-owned реализации).
+- [x] Зафиксировать capability-contracts (`preview/tree/properties/publish`) как минимально обязательный consumer surface для reference-модуля.
+- [~] Подготовить module health contract + observability baseline для reference-модуля (метрики и release-gate определены, автоматизация в CI остаётся в Phase 5).
+- [~] Определить compatibility-периметр legacy payload-ов как временный слой и зафиксировать sunset criteria (критерии заданы, tenant-график отключения фиксируется в rollout runbook).
+- [ ] Выровнять contract parity для Next/Leptos/Flutter как consumer-ов reference-модуля на уровне production-readiness.
 
 **DoD фазы:** reference-модуль способен жить и катиться независимо, а `pages` и другие контуры подключаются к нему как consumer-ы по стабильному FBA-контракту.
 
@@ -72,6 +72,8 @@
 - [x] Зафиксировать parity-план для `apps/next-admin` и `apps/admin` на уровне capability-contract.
 - [x] Выровнять UX-обработку validation/sanitize ошибок в формах.
 - [x] Синхронизировать dependency с Flutter registry/codegen планом (`docs/research/flutter.md`, anti-drift guardrail).
+- [~] Зафиксировать FBA migration contract для `rustok-pages`: pages остаётся владельцем page/menu runtime, но визуальный builder-домен потребляется как внешний reference-capability слой.
+- [ ] Вынести в отдельный runbook процедуру включения/отключения builder-capabilities tenant-by-tenant без отката всего pages runtime.
 
 **DoD фазы:** `pages` и соседние контуры не владеют builder-доменом напрямую, а используют reference-модуль через стабильный контракт.
 
@@ -163,3 +165,35 @@
 - **Control-plane alignment:** rollout, enable/disable, retry/compensation и health-check сценарии должны идти через стандартные lifecycle/mechanism-практики FBA, а не через ad-hoc module toggles.
 - **Parity by contract, not by framework:** parity между Next/Leptos/Flutter контролируется через единый capability contract (`grapesjs_v1` + publish semantics), а не требованием UI 1:1.
 - **Reference outcome:** после стабилизации этот модуль используется как шаблон для остальных FBA-миграций (content-подобные и layout-driven домены).
+
+## 7. FBA migration blueprint на примере `rustok-pages`
+
+Ниже фиксируется практический шаблон перевода существующего module-owned домена в FBA-модель на примере `pages` как первого consumer-а reference builder-модуля.
+
+### 7.1 Целевая роль `rustok-pages` в FBA
+
+- `rustok-pages` **не** владеет визуальным editor runtime как внутренней реализацией.
+- `rustok-pages` владеет page/menu/visibility/publish runtime-contract и потребляет builder как capability provider.
+- Вся логика включения builder-функций идёт через control-plane политики (`tenant/module/form level`) и module health signals.
+
+### 7.2 Границы ответственности (ownership split)
+
+- **Reference builder-модуль:** schema `grapesjs_v1`, capability endpoints (`preview/tree/properties/publish`), sanitize/validation contract, capability-health signals.
+- **`rustok-pages`:** page lifecycle, publish pipeline, routing/canonical slug, channel visibility, storefront rendering guarantees.
+- **Host runtimes (Next/Leptos/Flutter):** UI adapters, feature-toggle awareness, отображение ошибок contract-layer без vendor-specific forks.
+
+### 7.3 Этапы перевода `pages` к FBA-consumer модели
+
+1. Закрепить builder-capability boundary в `rustok-pages` docs/manifest и запретить возврат к pages-local builder ownership.
+2. Добавить tenant-scoped capability toggles: `builder.preview`, `builder.publish`, `builder.properties` как часть rollout-профиля.
+3. Синхронизировать observability: correlation между page publish latency и builder sanitize/validation failures.
+4. Верифицировать dual-path admin integration (`native #[server]` + GraphQL fallback) без дрейфа payload contract.
+5. Перевести compatibility-слой legacy blocks в sunset-режим: только read/bridge path, без расширения функционала.
+
+### 7.4 FBA readiness checklist для `pages`
+
+- [ ] `rustok-pages` runtime metadata явно описывает внешний builder capability-provider.
+- [ ] Rollout runbook позволяет частично отключать builder-capabilities без деградации page read/publish.
+- [ ] CI-gate содержит сценарии fallback на legacy-read path при недоступности capability-layer.
+- [ ] Stores/admin UIs проходят parity-check по error semantics (`validation/sanitize/runtime`).
+- [ ] Для legacy block-driven path утверждён tenant-by-tenant sunset график.

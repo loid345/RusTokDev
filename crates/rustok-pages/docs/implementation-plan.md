@@ -1,25 +1,26 @@
 # План реализации `rustok-pages`
 
 Статус: pages-owned storage и visual builder contract уже зафиксированы; модуль
-удерживается в режиме steady-state hardening и rollout polish.
+переводится в FBA-consumer режим для visual builder capability layer и удерживается
+в steady-state hardening + rollout polish.
 
 ## Execution checkpoint
 
 - Current phase: phase_b_closed
 - Last checkpoint: Phase B pilot closure зафиксирован (core extraction + validate/test + docs double-check).
-- Next step: Перевести `rustok-pages` в maintenance mode и при следующем инкременте ограничиваться runtime-contract задачами (builder/visibility/observability), без возврата UI helper-логики из core в lib.rs.
+- Next step: Завершить FBA migration handshake с reference builder-модулем (capability ownership + rollout runbook) и затем удерживать `rustok-pages` в maintenance mode без возврата UI helper-логики из core в lib.rs.
 - Open blockers: None.
 - Hand-off notes for next agent:
   1. Перед любыми изменениями pages сначала сверить `docs/research/dioxus-ffa-pilot-connectivity-map.md` и этот файл; не открывать новый slice без явной цели в трекере.
   2. Для кода ориентироваться на текущий образец: Leptos UI = thin render/bind, formatting/parsing helpers = `core::*`, dual-path (`native #[server]` + GraphQL fallback) не менять.
   3. Если задача не про pages runtime contract, приоритет смещается на следующий модуль волны; в pages вносить только bugfix/contract-sync.
-- Last updated at (UTC): 2026-05-23T23:59:00Z
+- Last updated at (UTC): 2026-05-24T00:40:00Z
 - Latest maintenance update: Leptos admin package now exposes capability surfaces `preview/tree/properties/publish` for `grapesjs_v1` and keeps legacy `blocks` compatibility visible in the same write-path.
 
 ## Область работ
 
 - удерживать `rustok-pages` как владельца page, block и menu runtime contract;
-- синхронизировать visual builder semantics, visibility rules и local docs;
+- синхронизировать visual builder semantics как внешний FBA capability layer, visibility rules и local docs;
 - не допускать возврата page read/write paths на shared storage.
 
 ## Текущее состояние
@@ -30,6 +31,13 @@
 - visibility contract уже использует typed relation `page_channel_visibility`;
 - write-path UX для page builder теперь использует единый паттерн ошибок `validation/sanitize/runtime` и contract-safe JSON handling для `body.contentJson`.
 
+## FBA migration frame (`pages` как consumer reference builder-модуля)
+
+- `rustok-pages` продолжает владеть page/menu lifecycle и publish pipeline.
+- Builder-domain (`preview/tree/properties/publish`) рассматривается как внешний capability-provider.
+- В module docs и runtime metadata фиксируется запрет на возврат к pages-local ownership визуального builder runtime.
+- Legacy block-driven path удерживается как compatibility-bridge с явным sunset roadmap.
+
 ## Этапы
 
 ### 1. Contract stability
@@ -39,18 +47,21 @@
 - [x] удерживать compatibility surface для legacy block-driven pages;
 - [ ] удерживать sync между runtime contracts, UI packages и module metadata;
 - [ ] контрактные тесты покрывают все публичные use-case для уже поставленных pages runtime surfaces.
+- [ ] зафиксировать в runtime metadata, что builder capability layer является внешним provider-контуром.
 
 ### 2. Product hardening
 
 - [ ] удерживать GraphQL и REST surfaces синхронизированными при изменении page builder flows;
 - [ ] развивать page/menu observability и write-path metrics при реальном operational pressure;
 - [ ] документировать policy для authenticated/admin bypass и stricter visibility invariants, если она меняется.
+- [ ] описать tenant-level toggle policy для capability surfaces (`builder.preview/tree/properties/publish`) без деградации core pages runtime.
 
 ### 3. Operability
 
 - [ ] покрывать page/block/menu lifecycle targeted integration tests;
 - [ ] документировать новые runtime guarantees одновременно с изменением visual builder и visibility contract;
 - [ ] синхронизировать local docs, README и central references при изменении module boundary.
+- [ ] добавить FBA runbook: partial disable capability layer + fallback behavior для admin/storefront paths.
 
 ## Проверка
 
