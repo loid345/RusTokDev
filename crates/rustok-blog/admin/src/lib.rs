@@ -905,11 +905,11 @@ fn BlogPostsTable(
                                                         move |_| on_edit.run((post_id_edit.clone(), post_locale_edit.clone()))
                                                     }
                                                 >
-                                                    {if is_editing {
-                                                        t(locale.as_deref(), "blog.table.editing", "Editing")
-                                                    } else {
-                                                        t(locale.as_deref(), "blog.table.edit", "Edit")
-                                                    }}
+                                                    {core::edit_action_label(
+                                                        is_editing,
+                                                        t(locale.as_deref(), "blog.table.editing", "Editing"),
+                                                        t(locale.as_deref(), "blog.table.edit", "Edit"),
+                                                    )}
                                                 </button>
                                                 <button
                                                     type="button"
@@ -919,15 +919,13 @@ fn BlogPostsTable(
                                                         move |_| on_toggle_publish.run((post_id_publish.clone(), !is_published, post_locale_publish.clone()))
                                                     }
                                                 >
-                                                    {if is_published {
-                                                        t(locale.as_deref(), "blog.table.unpublish", "Unpublish")
-                                                    } else {
-                                                        t(locale.as_deref(), "blog.table.publish", "Publish")
-                                                    }}
+                                                    {core::publish_action_label(
+                                                        is_published,
+                                                        t(locale.as_deref(), "blog.table.unpublish", "Unpublish"),
+                                                        t(locale.as_deref(), "blog.table.publish", "Publish"),
+                                                    )}
                                                 </button>
-                                                {if is_archived {
-                                                    ().into_any()
-                                                } else {
+                                                {if core::should_show_archive_action(is_archived) {
                                                     view! {
                                                         <button
                                                             type="button"
@@ -941,6 +939,8 @@ fn BlogPostsTable(
                                                         </button>
                                                     }
                                                     .into_any()
+                                                } else {
+                                                    ().into_any()
                                                 }}
                                                 <button
                                                     type="button"
