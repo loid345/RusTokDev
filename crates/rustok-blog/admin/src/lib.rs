@@ -204,7 +204,7 @@ pub fn BlogAdmin() -> impl IntoView {
                         set_publish_now,
                         default_locale.as_str(),
                     );
-                    set_submit_error.set(Some(core::error_with_context(
+                    set_submit_error.set(Some(WritePathIssue::with_context(
                         &t(
                             ui_locale.as_deref(),
                             "blog.error.loadPost",
@@ -296,7 +296,7 @@ pub fn BlogAdmin() -> impl IntoView {
                     submit_query_writer.replace_value(AdminQueryKey::PostId.as_str(), post_id);
                 }
                 Err(err) => {
-                    set_submit_error.set(Some(core::error_with_context(
+                    set_submit_error.set(Some(WritePathIssue::with_context(
                         &t(
                             submit_ui_locale.as_deref(),
                             "blog.error.savePost",
@@ -358,7 +358,7 @@ pub fn BlogAdmin() -> impl IntoView {
                         set_refresh_nonce.update(|value| *value += 1);
                     }
                     Err(err) => {
-                        set_submit_error.set(Some(core::error_with_context(
+                        set_submit_error.set(Some(WritePathIssue::with_context(
                             &t(
                                 ui_locale.as_deref(),
                                 "blog.error.updateStatus",
@@ -409,7 +409,7 @@ pub fn BlogAdmin() -> impl IntoView {
                     set_refresh_nonce.update(|value| *value += 1);
                 }
                 Err(err) => {
-                    set_submit_error.set(Some(core::error_with_context(
+                    set_submit_error.set(Some(WritePathIssue::with_context(
                         &t(
                             ui_locale.as_deref(),
                             "blog.error.archivePost",
@@ -464,7 +464,7 @@ pub fn BlogAdmin() -> impl IntoView {
                     ))));
                 }
                 Err(err) => {
-                    set_submit_error.set(Some(core::error_with_context(
+                    set_submit_error.set(Some(WritePathIssue::with_context(
                         &t(
                             ui_locale.as_deref(),
                             "blog.error.deletePost",
@@ -973,6 +973,33 @@ fn StatusBadge(status: String) -> impl IntoView {
         <span class=badge_css>
             {status}
         </span>
+    }
+}
+
+fn issue_banner_class(issue: &WritePathIssue) -> &'static str {
+    match issue.kind {
+        WritePathIssueKind::Validation => {
+            "rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        }
+        WritePathIssueKind::Sanitization => {
+            "rounded-xl border border-orange-300/60 bg-orange-50 px-4 py-3 text-sm text-orange-900"
+        }
+        WritePathIssueKind::Runtime => {
+            "rounded-xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+        }
+    }
+}
+
+fn issue_label<'a>(
+    issue: &WritePathIssue,
+    validation_label: &'a str,
+    sanitize_label: &'a str,
+    runtime_label: &'a str,
+) -> &'a str {
+    match issue.kind {
+        WritePathIssueKind::Validation => validation_label,
+        WritePathIssueKind::Sanitization => sanitize_label,
+        WritePathIssueKind::Runtime => runtime_label,
     }
 }
 
