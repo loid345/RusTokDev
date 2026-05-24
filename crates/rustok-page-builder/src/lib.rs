@@ -163,4 +163,33 @@ mod tests {
             .expect_err("publish should be disabled");
         assert_eq!(err, BuilderRolloutError::CapabilityDisabled("publish"));
     }
+
+    #[test]
+    fn module_manifest_declares_provider_contract_version() {
+        let manifest = include_str!("../rustok-module.toml");
+        let value: toml::Value =
+            toml::from_str(manifest).expect("rustok-module.toml must stay valid TOML");
+
+        let provider = value
+            .get("fba")
+            .and_then(|fba| fba.get("provider"))
+            .expect("fba.provider metadata is required");
+
+        assert_eq!(
+            provider
+                .get("contract")
+                .and_then(toml::Value::as_str)
+                .expect("fba.provider.contract is required"),
+            "grapesjs_v1",
+            "provider contract drifted"
+        );
+        assert_eq!(
+            provider
+                .get("builder_contract_version")
+                .and_then(toml::Value::as_str)
+                .expect("fba.provider.builder_contract_version is required"),
+            "1.0",
+            "provider builder contract version drifted"
+        );
+    }
 }

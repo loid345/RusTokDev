@@ -49,6 +49,14 @@ fn module_manifest_declares_fba_builder_consumer_contract() {
         .get("fba")
         .and_then(|fba| fba.get("builder_consumer"))
         .expect("fba.builder_consumer metadata is required");
+    assert_eq!(
+        consumer
+            .get("builder_contract_version")
+            .and_then(toml::Value::as_str)
+            .expect("fba.builder_consumer.builder_contract_version is required"),
+        "1.0",
+        "pages builder contract version drifted"
+    );
 
     let degraded_modes = consumer
         .get("degraded_modes")
