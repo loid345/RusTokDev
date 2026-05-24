@@ -18,9 +18,9 @@ use rustok_events::DomainEvent;
 use rustok_outbox::TransactionalEventBus;
 
 use crate::dto::{
-    CreateOrderAdjustmentInput, CreateOrderInput, CreateOrderLineItemInput,
-    CreateOrderTaxLineInput, ListOrdersInput, OrderAdjustmentResponse, OrderLineItemResponse,
-    OrderResponse, OrderTaxLineResponse,
+    CreateOrderAdjustmentInput, CreateOrderInput, CreateOrderLineItemInput, CreateOrderReturnInput,
+    CreateOrderTaxLineInput, ListOrderReturnsInput, ListOrdersInput, OrderAdjustmentResponse,
+    OrderLineItemResponse, OrderResponse, OrderReturnResponse, OrderTaxLineResponse,
 };
 use crate::entities;
 use crate::error::{OrderError, OrderResult};
@@ -31,6 +31,7 @@ const STATUS_PAID: &str = "paid";
 const STATUS_SHIPPED: &str = "shipped";
 const STATUS_DELIVERED: &str = "delivered";
 const STATUS_CANCELLED: &str = "cancelled";
+const RETURN_STATUS_PENDING: &str = "pending";
 
 mod order_field_definitions_storage {
     rustok_core::define_field_definitions_entity!("order_field_definitions");
@@ -920,6 +921,22 @@ fn adjustment_total(adjustments: &[entities::order_adjustment::Model]) -> Decima
         .fold(Decimal::ZERO, |acc, adjustment| acc + adjustment.amount)
 }
 
+fn map_order_return_response(value: entities::order_return::Model) -> OrderReturnResponse {
+    OrderReturnResponse {
+        id: value.id,
+        tenant_id: value.tenant_id,
+        order_id: value.order_id,
+        reason: value.reason,
+        note: value.note,
+        status: value.status,
+        metadata: value.metadata,
+        created_at: value.created_at.with_timezone(&Utc),
+        updated_at: value.updated_at.with_timezone(&Utc),
+        completed_at: value.completed_at.map(|ts| ts.with_timezone(&Utc)),
+        cancelled_at: value.cancelled_at.map(|ts| ts.with_timezone(&Utc)),
+    }
+}
+
 async fn load_order_custom_fields_schema(
     db: &DatabaseConnection,
     tenant_id: Uuid,
@@ -1191,3 +1208,54 @@ where
 
     Ok(default_locale)
 }
+    #[instrument(skip(self, input), fields(tenant_id = %tenant_id, order_id = %order_id))]
+    pub async fn create_return(
+        &self,
+        tenant_id: Uuid,
+        order_id: Uuid,
+        input: CreateOrderReturnInput,
+    ) -> OrderResult<OrderReturnResponse> {
+        input
+            .validate()
+            .map_err(|error| OrderError::Validation(error.to_string()))?;
+        self.load_order_model(tenant_id, order_id).await?;
+        let now = Utc::now();
+        let created = entities::order_return::ActiveModel {
+            id: Set(generate_id()),
+            tenant_id: Set(tenant_id),
+            order_id: Set(order_id),
+            reason: Set(input.reason.map(|value| value.trim().to_string())),
+            note: Set(input.note.map(|value| value.trim().to_string())),
+            status: Set(RETURN_STATUS_PENDING.to_string()),
+            metadata: Set(input.metadata),
+            created_at: Set(now.into()),
+            updated_at: Set(now.into()),
+            completed_at: Set(None),
+            cancelled_at: Set(None),
+        }
+        .insert(&self.db)
+        .await?;
+        Ok(map_order_return_response(created))
+    }
+
+    pub async fn list_returns(
+        &self,
+        tenant_id: Uuid,
+        input: ListOrderReturnsInput,
+    ) -> OrderResult<(Vec<OrderReturnResponse>, u64)> {
+        let page = input.page.max(1);
+        let per_page = input.per_page.clamp(1, 100);
+        let mut query = entities::order_return::Entity::find()
+            .filter(entities::order_return::Column::TenantId.eq(tenant_id))
+            .order_by_desc(entities::order_return::Column::CreatedAt);
+        if let Some(order_id) = input.order_id {
+            query = query.filter(entities::order_return::Column::OrderId.eq(order_id));
+        }
+        if let Some(status) = input.status {
+            query = query.filter(entities::order_return::Column::Status.eq(status.trim().to_ascii_lowercase()));
+        }
+        let paginator = query.paginate(&self.db, per_page);
+        let total = paginator.num_items().await?;
+        let rows = paginator.fetch_page(page.saturating_sub(1)).await?;
+        Ok((rows.into_iter().map(map_order_return_response).collect(), total))
+    }

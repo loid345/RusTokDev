@@ -99,6 +99,23 @@ pub struct CancelOrderInput {
     pub reason: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
+pub struct CreateOrderReturnInput {
+    #[validate(length(max = 255))]
+    pub reason: Option<String>,
+    #[validate(length(max = 2000))]
+    pub note: Option<String>,
+    pub metadata: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ListOrderReturnsInput {
+    pub page: u64,
+    pub per_page: u64,
+    pub order_id: Option<Uuid>,
+    pub status: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct OrderResponse {
     pub id: Uuid,
@@ -178,4 +195,19 @@ pub struct OrderTaxLineResponse {
     pub metadata: Value,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct OrderReturnResponse {
+    pub id: Uuid,
+    pub tenant_id: Uuid,
+    pub order_id: Uuid,
+    pub reason: Option<String>,
+    pub note: Option<String>,
+    pub status: String,
+    pub metadata: Value,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub cancelled_at: Option<DateTime<Utc>>,
 }

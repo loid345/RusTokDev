@@ -42,7 +42,7 @@ outbox publication и module-owned admin UI, а post-order и transport parity
 
 ### 2. Post-order expansion
 
-- [ ] развивать returns, refunds, exchanges и order changes как отдельный следующий слой;
+- [~] развивать returns, refunds, exchanges и order changes как отдельный следующий слой; (started: `order_returns` storage + `OrderService::{create_return,list_returns}` foundation)
 - [ ] покрывать lifecycle transitions и failure semantics targeted tests;
 - [ ] удерживать compatibility с payment/fulfillment orchestration без размывания order ownership.
 

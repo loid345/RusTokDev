@@ -1,7 +1,10 @@
 use chrono::Utc;
 use flex::attached;
 use rust_decimal::Decimal;
-use rustok_order::dto::{CreateOrderAdjustmentInput, CreateOrderInput, CreateOrderLineItemInput};
+use rustok_order::dto::{
+    CreateOrderAdjustmentInput, CreateOrderInput, CreateOrderLineItemInput, CreateOrderReturnInput,
+    ListOrderReturnsInput,
+};
 use rustok_order::entities::{order, order_tax_line};
 use rustok_order::error::OrderError;
 use rustok_order::services::OrderService;
@@ -325,6 +328,48 @@ async fn invalid_transition_is_rejected() {
         }
         other => panic!("expected invalid transition, got {other:?}"),
     }
+}
+
+#[tokio::test]
+async fn create_and_list_order_returns() {
+    let service = setup().await;
+    let tenant_id = Uuid::new_v4();
+    let actor_id = Uuid::new_v4();
+    let created_order = service
+        .create_order(tenant_id, actor_id, create_order_input())
+        .await
+        .expect("order should be created");
+
+    let created_return = service
+        .create_return(
+            tenant_id,
+            created_order.id,
+            CreateOrderReturnInput {
+                reason: Some("damaged".to_string()),
+                note: Some("Box arrived crushed".to_string()),
+                metadata: serde_json::json!({ "source": "admin-test" }),
+            },
+        )
+        .await
+        .expect("return should be created");
+    assert_eq!(created_return.status, "pending");
+    assert_eq!(created_return.reason.as_deref(), Some("damaged"));
+
+    let (rows, total) = service
+        .list_returns(
+            tenant_id,
+            ListOrderReturnsInput {
+                page: 1,
+                per_page: 20,
+                order_id: Some(created_order.id),
+                status: Some("PENDING".to_string()),
+            },
+        )
+        .await
+        .expect("returns list should succeed");
+    assert_eq!(total, 1);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, created_return.id);
 }
 
 #[tokio::test]
