@@ -36,6 +36,9 @@ pub enum PagesError {
     #[error("Forbidden: {0}")]
     Forbidden(String),
 
+    #[error("Feature disabled: {feature}")]
+    FeatureDisabled { feature: String },
+
     #[error("Content error: {0}")]
     Content(#[from] rustok_content::ContentError),
 
@@ -91,6 +94,15 @@ impl From<PagesError> for RichError {
             }
             PagesError::Forbidden(msg) => RichError::new(ErrorKind::Forbidden, msg)
                 .with_user_message("You do not have permission to perform this action"),
+            PagesError::FeatureDisabled { feature } => {
+                RichError::new(
+                    ErrorKind::BusinessLogic,
+                    format!("Feature '{feature}' is disabled for this tenant"),
+                )
+                .with_user_message("This feature is disabled for the current tenant")
+                .with_field("feature", feature)
+                .with_error_code("FEATURE_DISABLED")
+            }
             PagesError::Content(content_err) => content_err.into(),
             PagesError::Rich(rich) => *rich,
         }
@@ -135,6 +147,13 @@ impl PagesError {
     /// Create a cannot delete published error
     pub fn cannot_delete_published() -> Self {
         PagesError::CannotDeletePublished
+    }
+
+    /// Create a feature disabled error
+    pub fn feature_disabled(feature: impl Into<String>) -> Self {
+        PagesError::FeatureDisabled {
+            feature: feature.into(),
+        }
     }
 }
 
@@ -192,5 +211,18 @@ mod tests {
 
         assert_eq!(rich.kind, ErrorKind::BusinessLogic);
         assert_eq!(rich.error_code, Some("CANNOT_DELETE_PUBLISHED".to_string()));
+    }
+
+    #[test]
+    fn test_feature_disabled_conversion() {
+        let err = PagesError::feature_disabled("builder.publish.enabled");
+        let rich: RichError = err.into();
+
+        assert_eq!(rich.kind, ErrorKind::BusinessLogic);
+        assert_eq!(rich.error_code, Some("FEATURE_DISABLED".to_string()));
+        assert_eq!(
+            rich.fields.get("feature"),
+            Some(&"builder.publish.enabled".to_string())
+        );
     }
 }

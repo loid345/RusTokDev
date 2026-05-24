@@ -634,9 +634,7 @@ impl PageService {
             .map(|m| is_builder_publish_enabled(&m.settings))
             .unwrap_or(true);
         if !enabled {
-            return Err(PagesError::validation(
-                "feature-disabled: builder.publish.enabled=false",
-            ));
+            return Err(PagesError::feature_disabled("builder.publish.enabled"));
         }
         Ok(())
     }
