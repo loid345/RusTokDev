@@ -120,6 +120,7 @@ def _validate_snapshot_schema(entries: object) -> str | None:
             return f"snapshot entry #{index} child_pages must be an array"
 
         seen_subpaths: set[str] = set()
+        previous_subpath: str | None = None
         for child_index, child in enumerate(child_pages):
             if not isinstance(child, dict):
                 return f"snapshot entry #{index} child #{child_index} is not an object"
@@ -138,7 +139,12 @@ def _validate_snapshot_schema(entries: object) -> str | None:
                 return (
                     f"snapshot entry #{index} child #{child_index} duplicates subpath '{subpath}'"
                 )
+            if previous_subpath is not None and subpath < previous_subpath:
+                return (
+                    f"snapshot entry #{index} child_pages must be sorted by subpath"
+                )
             seen_subpaths.add(subpath)
+            previous_subpath = subpath
 
     return None
 

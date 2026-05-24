@@ -225,6 +225,25 @@ class VerifyMobileManifestTests(unittest.TestCase):
         self.assertIsNotNone(error)
         self.assertIn("permissions must be sorted ascending", error)
 
+    def test_validate_snapshot_schema_rejects_unsorted_child_pages(self):
+        error = _validate_snapshot_schema(
+            [
+                {
+                    "module_slug": "blog",
+                    "surface_kind": "admin_mobile",
+                    "route_segment": "blog",
+                    "permissions": [],
+                    "locale_namespace": "blog",
+                    "child_pages": [
+                        {"subpath": "posts", "title": "Posts", "nav_label": "Posts"},
+                        {"subpath": "all", "title": "All", "nav_label": "All"},
+                    ],
+                }
+            ]
+        )
+        self.assertIsNotNone(error)
+        self.assertIn("child_pages must be sorted by subpath", error)
+
 
 if __name__ == "__main__":
     unittest.main()
