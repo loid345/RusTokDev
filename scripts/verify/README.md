@@ -491,3 +491,9 @@ RUSTOK_VERIFY_SKIP_FMT=1 ./scripts/verify/run-control-plane-remediation-minimal.
 ```bash
 ./scripts/verify/verify-all.sh control-plane-remediation-minimal
 ```
+
+Опционально можно ограничить длительность каждого шага:
+
+```bash
+RUSTOK_VERIFY_STEP_TIMEOUT=15m ./scripts/verify/run-control-plane-remediation-minimal.sh
+```

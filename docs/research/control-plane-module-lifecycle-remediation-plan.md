@@ -763,3 +763,12 @@ rollback-стратегии и Definition of Done по итерациям.
 
 - Smoke-тесты для control-plane minimal runner переведены на изолированные fixture-сценарии (`mktemp` + fake `cargo`/`python3`), без зависимости от состояния текущего workspace и без тяжёлой перекомпиляции.
 - Alias-тест `verify-all -> control-plane-remediation-minimal` теперь проверяет полный PASS-path в fixture, включая финальный отчёт `All verification suites passed!`.
+
+### Актуализация 2026-05-24 (итерация 55)
+
+- Runner `run-control-plane-remediation-minimal.sh` усилен preflight-проверкой `flock` и поддержкой `RUSTOK_VERIFY_STEP_TIMEOUT` для ограничения длительности каждого шага в длинных CI/local прогонах.
+- `scripts/verify/README.md` дополнен примером timeout-конфигурации для reproducible long-run execution.
+
+### Актуализация 2026-05-24 (итерация 56)
+
+- Для runner smoke-test добавлен негативный timeout-сценарий (`RUSTOK_VERIFY_STEP_TIMEOUT=1s`), подтверждающий fail-fast поведение на затянутом шаге migration.

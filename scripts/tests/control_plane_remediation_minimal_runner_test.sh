@@ -82,4 +82,29 @@ do
   fi
 done
 
+
+# timeout mode: ensure step timeout wiring is active and surfaces timeout failure
+cat > "$FIXTURE_ROOT/fakebin/cargo" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$*" == *"test -p migration"* ]]; then
+  sleep 2
+fi
+printf "fake cargo called (timeout phase): %s\n" "$*"
+exit 0
+SH
+chmod +x "$FIXTURE_ROOT/fakebin/cargo"
+
+TIMEOUT_OUTPUT="$(mktemp)"
+if (cd "$FIXTURE_ROOT" && PATH="$FIXTURE_ROOT/fakebin:$PATH" RUSTOK_VERIFY_SKIP_FMT=1 RUSTOK_VERIFY_STEP_TIMEOUT=1s "$RUNNER" >"$TIMEOUT_OUTPUT" 2>&1); then
+  echo "runner unexpectedly succeeded with strict timeout" >&2
+  cat "$TIMEOUT_OUTPUT" >&2
+  exit 1
+fi
+if ! rg -q "==> migration tests" "$TIMEOUT_OUTPUT"; then
+  echo "timeout scenario did not reach migration step" >&2
+  cat "$TIMEOUT_OUTPUT" >&2
+  exit 1
+fi
+
 echo "control_plane_remediation_minimal_runner_test.sh: PASS"

@@ -5,6 +5,12 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOCK_FILE="${ROOT_DIR}/target/.control-plane-remediation-minimal.lock"
 
 mkdir -p "${ROOT_DIR}/target"
+
+if ! command -v flock >/dev/null 2>&1; then
+  echo "Required tool missing: flock" >&2
+  exit 1
+fi
+
 exec 9>"${LOCK_FILE}"
 if ! flock -n 9; then
   echo "Another remediation verification run is already active (lock: ${LOCK_FILE})." >&2
@@ -14,12 +20,20 @@ fi
 
 cd "${ROOT_DIR}"
 
+step_timeout() {
+  if [[ -n "${RUSTOK_VERIFY_STEP_TIMEOUT:-}" ]]; then
+    timeout "${RUSTOK_VERIFY_STEP_TIMEOUT}" "$@"
+  else
+    "$@"
+  fi
+}
+
 run_step() {
   local title="$1"
   shift
   printf "\n==> %s\n" "${title}"
   printf "$ %s\n" "$*"
-  "$@"
+  step_timeout "$@"
 }
 
 if [[ "${RUSTOK_VERIFY_SKIP_FMT:-0}" == "1" ]]; then
