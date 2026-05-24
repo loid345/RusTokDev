@@ -1012,6 +1012,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn submit_sitemap_endpoints_whitespace_only_endpoint_is_counted_as_invalid() {
+        let db = test_db().await;
+        let service = SeoService::new_memory(db);
+        let adapter = TestSitemapSubmissionAdapter::new(HashMap::new());
+
+        let result = service
+            .submit_sitemap_endpoints_with_adapter(
+                &["   	  ".to_string()],
+                "https://store.example.com/sitemap.xml",
+                &adapter,
+            )
+            .await;
+
+        let message = result.expect_err("whitespace endpoint must be invalid");
+        assert!(message.contains("0 success(es) and 1 failure(s)"));
+        assert!(message.contains("invalid endpoint:"));
+        assert!(adapter.submitted_endpoints().await.is_empty());
+        assert!(adapter.submitted_request_urls().await.is_empty());
+    }
+
+    #[tokio::test]
     async fn submit_sitemap_endpoints_invalid_endpoint_is_not_submitted() {
         let db = test_db().await;
         let service = SeoService::new_memory(db);
@@ -1124,6 +1145,31 @@ mod tests {
         assert!(message.contains("0 success(es) and 2 failure(s)"));
         assert!(message.len() <= SITEMAP_SUBMIT_MAX_ERROR_LEN + 3);
         assert!(message.ends_with("..."));
+    }
+
+    #[test]
+    fn submission_summary_without_failures_returns_none() {
+        let summary = SitemapSubmissionSummary {
+            success_count: 3,
+            failure_count: 0,
+            failures: Vec::new(),
+        };
+        assert_eq!(summary.into_error(), None);
+    }
+
+    #[test]
+    fn submission_summary_with_failure_count_but_empty_details_still_returns_error() {
+        let summary = SitemapSubmissionSummary {
+            success_count: 2,
+            failure_count: 1,
+            failures: Vec::new(),
+        };
+
+        let message = summary.into_error().expect("error summary expected");
+        assert_eq!(
+            message,
+            "sitemap submission finished with 2 success(es) and 1 failure(s)"
+        );
     }
 
     #[test]
