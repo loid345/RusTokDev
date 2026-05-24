@@ -52,6 +52,27 @@ pub fn summarize_content(content: &str, format: &str, fallback_template: &str) -
         .replace("{count}", &content.chars().count().to_string())
 }
 
+pub fn status_badge_css(status: &str) -> &'static str {
+    let status = status.trim();
+
+    if status.eq_ignore_ascii_case("published") {
+        "inline-flex rounded-full border border-emerald-300/50 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium uppercase tracking-[0.18em] text-emerald-800 dark:border-emerald-700/40 dark:bg-emerald-900/25 dark:text-emerald-300"
+    } else if status.eq_ignore_ascii_case("archived") {
+        "inline-flex rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground"
+    } else {
+        "inline-flex rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-medium uppercase tracking-[0.18em] text-primary"
+    }
+}
+
+pub fn status_label(status: &str, fallback: &str) -> String {
+    let normalized = status.trim();
+    if normalized.is_empty() {
+        fallback.to_string()
+    } else {
+        normalized.to_string()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -104,5 +125,34 @@ mod tests {
             body_or_fallback(None, "No body content yet."),
             "No body content yet.".to_string()
         );
+    }
+
+    #[test]
+    fn status_badge_css_maps_known_statuses() {
+        assert_eq!(
+            status_badge_css("published"),
+            "inline-flex rounded-full border border-emerald-300/50 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium uppercase tracking-[0.18em] text-emerald-800 dark:border-emerald-700/40 dark:bg-emerald-900/25 dark:text-emerald-300"
+        );
+        assert_eq!(
+            status_badge_css("archived"),
+            "inline-flex rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground"
+        );
+        assert_eq!(
+            status_badge_css("draft"),
+            "inline-flex rounded-full border border-primary/30 bg-primary/10 px-2.5 py-0.5 text-xs font-medium uppercase tracking-[0.18em] text-primary"
+        );
+        assert_eq!(
+            status_badge_css("  Published  "),
+            "inline-flex rounded-full border border-emerald-300/50 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium uppercase tracking-[0.18em] text-emerald-800 dark:border-emerald-700/40 dark:bg-emerald-900/25 dark:text-emerald-300"
+        );
+    }
+
+    #[test]
+    fn status_label_trims_and_falls_back() {
+        assert_eq!(
+            status_label("  published  ", "unknown"),
+            "published".to_string()
+        );
+        assert_eq!(status_label("   ", "unknown"), "unknown".to_string());
     }
 }

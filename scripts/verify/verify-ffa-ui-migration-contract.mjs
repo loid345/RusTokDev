@@ -34,6 +34,14 @@ const requiredChecklistChecks = [
     pattern: /- \[[ xX]\] GraphQL fallback работает для того же сценария\./,
   },
   {
+    label: "headless host path checklist item",
+    pattern: /- \[[ xX]\] Headless host path \(Next\/mobile\/external\) не сломан\./,
+  },
+  {
+    label: "graphql-rest contract guard checklist item",
+    pattern: /- \[[ xX]\] GraphQL\/REST surface не удалён и не ослаблен\./,
+  },
+  {
     label: "ui/business ownership checklist item",
     pattern: /- \[[ xX]\] UI слой не владеет transport\/business логикой\./,
   },
@@ -57,6 +65,14 @@ const requiredIndexRefs = [
   "dioxus-ffa-ui-migration-plan.md",
   "dioxus-ffa-pilot-connectivity-map.md",
   "ffa-ui-parity-checklist.md",
+];
+
+const requiredKpiMentions = [
+  "Функциональный parity",
+  "Error parity",
+  "Performance guard",
+  "Contract guard",
+  "Docs guard",
 ];
 
 function assertFileExists(relPath) {
@@ -156,6 +172,12 @@ function collectValidationErrors({ plan, connectivity, checklist, docsIndex }) {
   requiredChecklistChecks.forEach(({ label, pattern }) => {
     if (!pattern.test(checklist)) {
       errors.push(`Не найден обязательный checklist-паттерн (${label}) в docs/verification/ffa-ui-parity-checklist.md`);
+    }
+  });
+
+  requiredKpiMentions.forEach((kpi) => {
+    if (!plan.includes(kpi)) {
+      errors.push(`Не найден обязательный KPI-маркер в migration plan: ${kpi}`);
     }
   });
 

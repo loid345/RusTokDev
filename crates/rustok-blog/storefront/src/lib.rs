@@ -14,10 +14,8 @@ use crate::model::{BlogPostDetail, BlogPostListItem, StorefrontBlogData};
 #[component]
 pub fn BlogView() -> impl IntoView {
     let route_context = use_context::<UiRouteContext>().unwrap_or_default();
-    let selected_slug = core::selected_slug_or_default(
-        read_route_query_value(&route_context, "slug"),
-        "latest",
-    );
+    let selected_slug =
+        core::selected_slug_or_default(read_route_query_value(&route_context, "slug"), "latest");
     let selected_locale = route_context.locale.clone();
     let badge = t(selected_locale.as_deref(), "blog.badge", "blog");
     let title = t(
@@ -114,17 +112,30 @@ fn SelectedPostCard(post: Option<BlogPostDetail>) -> impl IntoView {
 
     let title = post.title;
     let effective_locale = post.effective_locale;
+    let status = post.status;
     let slug = core::fallback_text(
         post.slug,
-        &t(locale.as_deref(), "blog.selected.missingSlug", "missing-slug"),
+        &t(
+            locale.as_deref(),
+            "blog.selected.missingSlug",
+            "missing-slug",
+        ),
     );
     let excerpt = core::fallback_text(
         post.excerpt,
-        &t(locale.as_deref(), "blog.selected.noExcerpt", "No excerpt yet."),
+        &t(
+            locale.as_deref(),
+            "blog.selected.noExcerpt",
+            "No excerpt yet.",
+        ),
     );
     let published_at = core::fallback_text(
         post.published_at,
-        &t(locale.as_deref(), "blog.selected.unscheduled", "Unscheduled"),
+        &t(
+            locale.as_deref(),
+            "blog.selected.unscheduled",
+            "Unscheduled",
+        ),
     );
     let tags = post.tags;
     let body_format = post.body_format;
@@ -140,19 +151,29 @@ fn SelectedPostCard(post: Option<BlogPostDetail>) -> impl IntoView {
                 ),
             )
         }),
-        &t(locale.as_deref(), "blog.selected.noBody", "No body content yet."),
+        &t(
+            locale.as_deref(),
+            "blog.selected.noBody",
+            "No body content yet.",
+        ),
     );
 
     view! {
         <article class="rounded-2xl border border-border bg-background p-6">
             <div class="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
                 <span>{core::label_value_pair(&t(locale.as_deref(), "blog.selected.slugLabel", "slug"), slug.as_str())}</span>
-                <span>"В·"</span>
+                <span>"·"</span>
                 <span>{core::label_value_pair(&t(locale.as_deref(), "blog.selected.localeLabel", "locale"), effective_locale.as_str())}</span>
-                <span>"В·"</span>
+                <span>"·"</span>
                 <span>{core::label_value_pair(&t(locale.as_deref(), "blog.selected.publishedLabel", "published"), published_at.as_str())}</span>
             </div>
             <h3 class="mt-3 text-2xl font-semibold text-foreground">{title}</h3>
+            <div class="mt-3">
+                <BlogStatusBadge
+                    status=status
+                    unknown_label=t(locale.as_deref(), "blog.selected.unknownStatus", "unknown")
+                />
+            </div>
             <p class="mt-3 text-sm text-muted-foreground">{excerpt}</p>
             <p class="mt-4 whitespace-pre-line text-sm leading-7 text-muted-foreground">{body}</p>
             {if tags.is_empty() {
@@ -186,6 +207,7 @@ fn PublishedPostsList(items: Vec<BlogPostListItem>, total: u64) -> impl IntoView
     let route_segment =
         core::route_segment_or_default(route_context.route_segment.as_ref().cloned(), "blog");
     let module_route_base = route_context.module_route_base(route_segment.as_str());
+    let unknown_status_label = t(locale.as_deref(), "blog.list.unknownStatus", "unknown");
 
     if items.is_empty() {
         return view! {
@@ -221,9 +243,10 @@ fn PublishedPostsList(items: Vec<BlogPostListItem>, total: u64) -> impl IntoView
                         let href = core::module_href(module_route_base.as_str(), slug.as_str());
                         view! {
                             <article class="rounded-2xl border border-border bg-background p-5">
-                                <div class="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">
-                                    {post.status}
-                                </div>
+                                <BlogStatusBadge
+                                    status=post.status
+                                    unknown_label=unknown_status_label.clone()
+                                />
                                 <h4 class="mt-2 text-base font-semibold text-foreground">{post.title}</h4>
                                 <p class="mt-2 text-sm text-muted-foreground">
                                     {core::fallback_excerpt(
@@ -245,4 +268,15 @@ fn PublishedPostsList(items: Vec<BlogPostListItem>, total: u64) -> impl IntoView
         </div>
     }
     .into_any()
+}
+
+#[component]
+fn BlogStatusBadge(status: String, unknown_label: String) -> impl IntoView {
+    let label = core::status_label(status.as_str(), unknown_label.as_str());
+    let badge_css = core::status_badge_css(label.as_str());
+    view! {
+        <span class=badge_css>
+            {label}
+        </span>
+    }
 }
