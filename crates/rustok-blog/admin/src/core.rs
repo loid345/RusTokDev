@@ -253,6 +253,19 @@ pub fn submit_button_state(is_save_busy: bool, is_editing_mode: bool) -> SubmitB
     }
 }
 
+pub fn submit_action_label(
+    state: SubmitButtonState,
+    saving_label: String,
+    update_label: String,
+    create_label: String,
+) -> String {
+    match state {
+        SubmitButtonState::Saving => saving_label,
+        SubmitButtonState::Editing => update_label,
+        SubmitButtonState::Creating => create_label,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -418,6 +431,33 @@ mod tests {
         assert_eq!(
             issue_label_for(&WritePathIssue::with_runtime("runtime issue")),
             "Runtime"
+        );
+        assert_eq!(
+            submit_action_label(
+                SubmitButtonState::Saving,
+                "Saving...".to_string(),
+                "Update post".to_string(),
+                "Create post".to_string()
+            ),
+            "Saving...".to_string()
+        );
+        assert_eq!(
+            submit_action_label(
+                SubmitButtonState::Editing,
+                "Saving...".to_string(),
+                "Update post".to_string(),
+                "Create post".to_string()
+            ),
+            "Update post".to_string()
+        );
+        assert_eq!(
+            submit_action_label(
+                SubmitButtonState::Creating,
+                "Saving...".to_string(),
+                "Update post".to_string(),
+                "Create post".to_string()
+            ),
+            "Create post".to_string()
         );
     }
 }
