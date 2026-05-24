@@ -587,7 +587,7 @@ pub fn BlogAdmin() -> impl IntoView {
                         <p class="text-sm text-muted-foreground">{form_subtitle.clone()}</p>
                     </div>
 
-                    <Show when=move || editing_post_id.get().is_some()>
+                    <Show when=move || core::is_editing_mode(editing_post_id.get().as_deref())>
                         <BlogEditBanner
                             banner_text=Signal::derive({
                                 let editing_banner_text = editing_banner_text;
