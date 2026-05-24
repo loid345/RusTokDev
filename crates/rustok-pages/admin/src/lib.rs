@@ -172,7 +172,7 @@ pub fn PagesAdmin() -> impl IntoView {
     let tree_surface_body = t(
         route_context.locale.as_deref(),
         "pages.surface.tree.body",
-        "Page/component tree from projectData plus existing block compatibility snapshot.",
+        "Page/component tree from projectData plus existing-block compatibility snapshot.",
     );
     let properties_surface_title = t(
         route_context.locale.as_deref(),
