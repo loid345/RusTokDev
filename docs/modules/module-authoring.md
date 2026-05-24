@@ -220,6 +220,22 @@ Module-owned UI package не имеет права invent-ить свою locale
 2. Если меняется статус локального блока, синхронно обновляется central entry в `docs/modules/registry.md` (раздел FFA/FBA readiness board).
 3. Нельзя выставлять `parity_verified`/`transport_verified` без явного verification evidence в PR и в локальном плане.
 
+### 7. Правило для модулей, у которых UI запланирован, но ещё не реализован
+
+Чтобы не терять контроль над будущими UI-surface, для модулей с планируемым UI действует
+обязательное предварительное правило:
+
+1. Если UI ещё не реализован, в локальном `docs/implementation-plan.md` всё равно должен
+   быть `## FFA/FBA status` block со статусами `not_started` и явной пометкой в `Evidence`,
+   что UI surface запланирован, но не опубликован.
+2. В central `docs/modules/registry.md` (FFA/FBA readiness board) для такого модуля должна
+   существовать строка со статусом `not_started` и корректным `Source plan`.
+3. В PR, где впервые появляется module-owned UI (admin/storefront/host-integrated),
+   исполнитель обязан в том же изменении:
+   - обновить локальный статус минимум до `in_progress`;
+   - синхронизировать соответствующую строку в central board;
+   - приложить первичное verification evidence (минимум validate/check + transport parity note).
+
 ## Что запрещено
 
 При написании модуля нельзя:
