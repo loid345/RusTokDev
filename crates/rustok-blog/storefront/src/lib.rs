@@ -163,9 +163,9 @@ fn SelectedPostCard(post: Option<BlogPostDetail>) -> impl IntoView {
         <article class="rounded-2xl border border-border bg-background p-6">
             <div class="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.22em] text-muted-foreground">
                 <span>{slug_meta}</span>
-                <span>"·"</span>
+                <span>{core::meta_separator()}</span>
                 <span>{locale_meta}</span>
-                <span>"·"</span>
+                <span>{core::meta_separator()}</span>
                 <span>{published_meta}</span>
             </div>
             <h3 class="mt-3 text-2xl font-semibold text-foreground">{title}</h3>

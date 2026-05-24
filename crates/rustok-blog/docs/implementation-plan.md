@@ -8,14 +8,14 @@ packages и module metadata синхронизированы.
 ## Execution checkpoint
 
 - Current phase: phase_b_in_progress
-- Last checkpoint: FFA slice #43 completed (storefront published-post card field composition unified via `core::list_post_card_fields(...)`, combining summary + locale meta mapping in one core entrypoint, dual-path transport unchanged).
+- Last checkpoint: FFA slice #44 completed (storefront selected-post meta separator moved from inline literal to `core::meta_separator(...)` for consistent meta-row composition, dual-path transport unchanged).
 - Next step: Зафиксировать evidence по parity checklist и выбрать следующий один use-case для admin/storefront core extraction без изменения transport-контракта.
 - Open blockers: None.
 - Hand-off notes for next agent:
   1. Продолжать one-task-per-iteration: один helper/use-case -> storefront/admin -> docs double-check.
   2. Не менять dual-path контракт (`native #[server]` + GraphQL fallback) при FFA-декомпозиции.
   3. После каждого slice обновлять parity evidence (`docs/verification/ffa-ui-parity-checklist.md`).
-- Last updated at (UTC): 2026-05-25T01:24:00Z
+- Last updated at (UTC): 2026-05-25T01:33:00Z
 
 ## FFA/FBA status
 
@@ -166,6 +166,7 @@ packages и module metadata синхронизированы.
 - [x] Slice 41: storefront published-post card summary (`excerpt` + `href` + open label) switched from inline composition to `core::list_post_summary(...)`.
 - [x] Slice 42: storefront published-post locale meta label/value composition switched from inline call to `core::list_post_locale_meta(...)`.
 - [x] Slice 43: storefront published-post card field composition (`excerpt` + `href` + open label + locale meta) unified via `core::list_post_card_fields(...)`.
+- [x] Slice 44: storefront selected-post meta separator switched from inline literal to `core::meta_separator(...)`.
 - [x] Sync admin surface for the same helper family where applicable and attach parity evidence.
 - [ ] `cargo xtask module validate blog` / `cargo xtask module test blog` rerun after next slice touching runtime contract.
 

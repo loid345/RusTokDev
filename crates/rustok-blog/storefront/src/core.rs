@@ -29,6 +29,10 @@ pub fn post_meta_pairs(
     ]
 }
 
+pub fn meta_separator() -> &'static str {
+    "·"
+}
+
 pub fn list_post_excerpt(post_excerpt: Option<String>, fallback: &str) -> String {
     fallback_excerpt(post_excerpt, fallback)
 }
@@ -269,6 +273,7 @@ mod tests {
                 "published: 2026-01-01T00:00:00Z".to_string(),
             ]
         );
+        assert_eq!(meta_separator(), "·");
         assert_eq!(
             selected_post_fallback_fields(
                 None,
