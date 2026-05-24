@@ -283,7 +283,7 @@ fn PublishedPostsList(items: Vec<BlogPostListItem>, total: u64) -> impl IntoView
 
 #[component]
 fn BlogStatusBadge(status: String, unknown_label: String) -> impl IntoView {
-    let (label, badge_css) = core::status_presentation(status.as_str(), unknown_label.as_str());
+    let (label, badge_css) = core::status_badge_view(status, unknown_label.as_str());
     view! {
         <span class=badge_css>
             {label}

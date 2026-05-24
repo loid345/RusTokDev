@@ -223,6 +223,10 @@ pub fn status_presentation(status: &str, fallback: &str) -> (String, &'static st
     (label, badge_css)
 }
 
+pub fn status_badge_view(status: String, unknown_label: &str) -> (String, &'static str) {
+    status_presentation(status.as_str(), unknown_label)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -449,6 +453,16 @@ mod tests {
         assert_eq!(
             css,
             "inline-flex rounded-full border border-emerald-300/50 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium uppercase tracking-[0.18em] text-emerald-800 dark:border-emerald-700/40 dark:bg-emerald-900/25 dark:text-emerald-300"
+        );
+    }
+
+    #[test]
+    fn status_badge_view_maps_owned_status() {
+        let (label, css) = status_badge_view(" archived ".to_string(), "unknown");
+        assert_eq!(label, "archived".to_string());
+        assert_eq!(
+            css,
+            "inline-flex rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground"
         );
     }
 }
