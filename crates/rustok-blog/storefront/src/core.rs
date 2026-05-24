@@ -77,6 +77,12 @@ pub fn has_items<T>(items: &[T]) -> bool {
     !items.is_empty()
 }
 
+pub fn status_presentation(status: &str, fallback: &str) -> (String, &'static str) {
+    let label = status_label(status, fallback);
+    let badge_css = status_badge_css(label.as_str());
+    (label, badge_css)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -161,5 +167,15 @@ mod tests {
     fn has_items_detects_non_empty_collection() {
         assert!(!has_items::<u8>(&[]));
         assert!(has_items(&[1_u8]));
+    }
+
+    #[test]
+    fn status_presentation_returns_label_and_css() {
+        let (label, css) = status_presentation("  published  ", "unknown");
+        assert_eq!(label, "published".to_string());
+        assert_eq!(
+            css,
+            "inline-flex rounded-full border border-emerald-300/50 bg-emerald-50 px-2.5 py-0.5 text-xs font-medium uppercase tracking-[0.18em] text-emerald-800 dark:border-emerald-700/40 dark:bg-emerald-900/25 dark:text-emerald-300"
+        );
     }
 }
