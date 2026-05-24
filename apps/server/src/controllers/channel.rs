@@ -730,13 +730,13 @@ mod tests {
 
         assert_eq!(payload.priority, Some(40));
         assert_eq!(payload.is_active, Some(false));
-        assert_eq!(payload.host_equals.as_deref(), Some("SHOP.EXAMPLE.TEST"));
-        assert_eq!(payload.host_suffix.as_deref(), Some(""));
+        assert_eq!(payload.host_equals.as_deref(), Some("shop.example.test"));
+        assert_eq!(payload.host_suffix.as_deref(), None);
         assert_eq!(
             payload.oauth_app_id.as_deref(),
             Some("550e8400-e29b-41d4-a716-446655440000")
         );
-        assert_eq!(payload.surface.as_deref(), Some("HTTP"));
-        assert_eq!(payload.locale.as_deref(), Some("EN_US"));
+        assert_eq!(payload.surface.as_deref(), Some("http"));
+        assert_eq!(payload.locale.as_deref(), Some("en_us"));
     }
 }
