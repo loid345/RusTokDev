@@ -678,3 +678,44 @@ Go/No-Go для перехода в следующую волну:
 - [ ] В `docs/modules/registry.md` отражён актуальный maturity-state по `builder/pages` треку.
 
 Этот outcome является checkpoint для решения о переходе к broad rollout (Wave 2) в следующем плановом цикле.
+
+## 13. Forum UI как widget-driven consumer Page Builder (phpFox-подобный сценарий)
+
+Ниже фиксируется целевая трактовка, если forum UI собирается из page-builder “кирпичиков” (widgets/blocks), как в phpFox-подобном подходе.
+
+### 13.1 Что меняется в роли `forum` в этом треке
+
+- `rustok-forum` остаётся владельцем forum domain (topics/replies/moderation/policies), но UI-композиция страниц форума переходит в capability-consumer режим через builder widgets.
+- Builder в этом случае выступает layout/composition layer, а не заменой forum runtime.
+- `forum` не получает pages-local ownership editor runtime; он потребляет тот же reference provider-контракт (`preview/tree/properties/publish` + typed errors).
+
+### 13.2 Минимальный widget contract для forum-builder интеграции
+
+Для rollout без vendor-lock обязательный baseline:
+
+1. `widget_type` (machine-readable identifier, например `forum.topic_list`, `forum.topic_detail`, `forum.reply_stream`);
+2. `data_contract_version` (версия входных данных виджета, проверяется anti-drift gate);
+3. `props_schema` (валидируемый JSON schema для UI-настроек);
+4. `capability_requirements` (`preview`, `publish`, `moderation_view` при необходимости);
+5. `fallback_mode` (`readonly`, `hidden`, `degraded`) при частичном disable builder capabilities.
+
+### 13.3 Границы ответственности (обязательно)
+
+- **Forum owners:** domain data, moderation semantics, ACL/RBAC checks, query contracts.
+- **Builder owners:** widget rendering host, layout tree, publish pipeline integration, typed error surfacing.
+- **Frontend owners:** adapter parity (Next/Leptos/Flutter), UX fallback при недоступности отдельных widgets.
+- **Platform team:** tenant toggle policy, rollout/rollback governance, observability SLO gates.
+
+### 13.4 Ограничения rollout (чтобы не сломать forum runtime)
+
+- Запрещено переносить domain-логику forum в widget layer; widgets только композируют и отображают уже контрактные forum capabilities.
+- При `builder_off` forum read-path обязан оставаться доступным через baseline forum routes (без 5xx).
+- Для Wave 1 требуется parity-check: одинаковая typed error семантика для forum widgets на Next/Leptos/Flutter.
+- Любое расширение widget props должно идти через versioned `data_contract_version` и CI anti-drift check.
+
+### 13.5 Очередь внедрения forum widgets после `pages`
+
+1. **FW-1 (contract freeze):** утвердить widget catalog v1 (`topic_list/topic_detail/reply_stream`) и schema validation.
+2. **FW-2 (fallback hardening):** подтвердить `builder_off/publish_off` без деградации forum read/moderation surfaces.
+3. **FW-3 (pilot):** включить 1–2 low-traffic tenant с evidence packet (metadata/fallback/observability/rollback).
+4. **FW-4 (promotion):** расширять rollout только после owner sign-off и SLO stability 24–72h.

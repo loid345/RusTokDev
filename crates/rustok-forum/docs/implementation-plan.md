@@ -59,6 +59,7 @@
 2. При изменении public/runtime surface синхронизировать `README.md` и `docs/README.md`.
 3. При изменении dependency graph, visibility semantics или metadata синхронизировать `rustok-module.toml`.
 4. При изменении forum/content conversion expectations обновлять связанные docs в `rustok-content`.
+5. При изменении forum widget/page-builder integration expectations синхронно обновлять `docs/modules/tiptap-page-builder-implementation-plan.md` (раздел Forum widget-driven consumer).
 
 
 ## Quality backlog
