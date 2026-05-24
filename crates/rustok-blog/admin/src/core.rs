@@ -174,6 +174,10 @@ pub fn should_show_archive_action(is_archived: bool) -> bool {
     !is_archived
 }
 
+pub fn next_publish_state(is_published: bool) -> bool {
+    !is_published
+}
+
 pub fn has_required_draft_fields(title: &str, body: &str) -> bool {
     !title.is_empty() && !body.is_empty()
 }
@@ -341,6 +345,8 @@ mod tests {
         );
         assert!(should_show_archive_action(false));
         assert!(!should_show_archive_action(true));
+        assert!(!next_publish_state(true));
+        assert!(next_publish_state(false));
         assert!(has_required_draft_fields("Title", "Body"));
         assert!(!has_required_draft_fields("", "Body"));
         assert!(!has_required_draft_fields("Title", ""));

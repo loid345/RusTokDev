@@ -8,14 +8,14 @@ packages и module metadata синхронизированы.
 ## Execution checkpoint
 
 - Current phase: phase_b_in_progress
-- Last checkpoint: FFA slice #13 completed (admin selected-post id extraction moved to `core`, dual-path transport unchanged).
+- Last checkpoint: FFA slice #14 completed (admin next publish-state predicate moved to `core`, dual-path transport unchanged).
 - Next step: Зафиксировать evidence по parity checklist и выбрать следующий один use-case для admin/storefront core extraction без изменения transport-контракта.
 - Open blockers: None.
 - Hand-off notes for next agent:
   1. Продолжать one-task-per-iteration: один helper/use-case -> storefront/admin -> docs double-check.
   2. Не менять dual-path контракт (`native #[server]` + GraphQL fallback) при FFA-декомпозиции.
   3. После каждого slice обновлять parity evidence (`docs/verification/ffa-ui-parity-checklist.md`).
-- Last updated at (UTC): 2026-05-24T15:35:00Z
+- Last updated at (UTC): 2026-05-24T16:00:00Z
 
 ## Область работ
 
@@ -125,6 +125,7 @@ packages и module metadata синхронизированы.
 - [x] Slice 11: admin slug-autofill predicate switched from inline `!has_non_empty_text` to `core::should_autofill_slug` for consistent helper reuse.
 - [x] Slice 12: admin selected-post load predicate switched from inline `Some(post_id) if has_non_empty_text(...)` to `core::should_load_selected_post`.
 - [x] Slice 13: admin selected-post id extraction switched from nested `if let Some(post_id)` to `core::selected_post_id_if_loadable`.
+- [x] Slice 14: admin publish-toggle next-state predicate switched from inline `!is_published` to `core::next_publish_state`.
 - [ ] Sync admin surface for the same helper family where applicable and attach parity evidence.
 - [ ] `cargo xtask module validate blog` / `cargo xtask module test blog` rerun after next slice touching runtime contract.
 

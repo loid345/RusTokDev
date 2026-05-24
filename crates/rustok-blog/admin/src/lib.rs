@@ -906,7 +906,11 @@ fn BlogPostsTable(
                                                     class="text-xs font-medium text-primary hover:underline"
                                                     disabled=row_busy
                                                     on:click={
-                                                        move |_| on_toggle_publish.run((post_id_publish.clone(), !is_published, post_locale_publish.clone()))
+                                                        move |_| on_toggle_publish.run((
+                                                            post_id_publish.clone(),
+                                                            core::next_publish_state(is_published),
+                                                            post_locale_publish.clone(),
+                                                        ))
                                                     }
                                                 >
                                                     {core::publish_action_label(
