@@ -850,3 +850,10 @@ rollback-стратегии и Definition of Done по итерациям.
 - Закрыт release-gate пункт документации: central и локальные документы синхронизированы с фактическим runtime contract control-plane.
 - В central docs зафиксированы DB-backed `platform_state` runtime source, atomic CAS+build enqueue и canonical SHA-256 snapshot/hash contract; в `apps/server`/`apps/admin` локальных docs закреплён GraphQL-only toggle entrypoint и отсутствие локального lifecycle SQL duplicate path.
 - На этом шаге незакрытым operational хвостом остаётся только полный зелёный прогон минимального verification-набора (fmt + test bundle).
+
+
+### Актуализация 2026-05-25 (итерация 67)
+
+- Исправлены регрессии в `run-control-plane-remediation-minimal.sh`, обнаруженные после расширения triage-режима: шаги больше не помечаются как `PASS` при фактическом падении команды внутри `run_step`, а вывод pass-line стабилизирован через `printf --` для префиксов вида `--> ...`.
+- Исправлен fixture smoke-test `scripts/tests/control_plane_remediation_minimal_runner_test.sh`: pattern-matching по строкам, начинающимся с `--`, переведён на `rg -q --`, а сценарий `continue-on-fmt-fail` синхронизирован по ожидаемому `exit 2` и обязательным маркерам `PARTIAL PASS`.
+- Это закрывает отдельный operational-риск ложноположительного PASS в minimal bundle runner и возвращает deterministic/non-regression baseline для Batch-2 verification цикла.
