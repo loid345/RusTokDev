@@ -477,29 +477,6 @@ fi
 - [Known Pitfalls](../../docs/ai/KNOWN_PITFALLS.md) — частые ошибки AI-агентов
 
 
-## Control-plane remediation minimal bundle
-
-```bash
-./scripts/verify/run-control-plane-remediation-minimal.sh
-```
-
-Опционально для triage при известном pre-existing formatting drift:
-
-```bash
-RUSTOK_VERIFY_SKIP_FMT=1 ./scripts/verify/run-control-plane-remediation-minimal.sh
-```
-
-```bash
-./scripts/verify/verify-all.sh control-plane-remediation-minimal
-```
-
-Опционально можно ограничить длительность каждого шага:
-
-```bash
-RUSTOK_VERIFY_STEP_TIMEOUT=15m ./scripts/verify/run-control-plane-remediation-minimal.sh
-```
-
-
 ## Control-plane remediation progress snapshot
 
 ```bash
