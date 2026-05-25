@@ -8,14 +8,14 @@ packages и module metadata синхронизированы.
 ## Execution checkpoint
 
 - Current phase: phase_b_in_progress
-- Last checkpoint: FFA slice #34 completed (admin editing-banner optional-id mapping moved to `core::label_with_optional_id(...)`, dual-path transport unchanged).
+- Last checkpoint: FFA slice #54 completed (storefront published-post empty-state handoff switched to `core::published_posts_empty_state_view(...)` tuple-based core payload, preserving dual-path transport contract and thin UI rendering branch).
 - Next step: Зафиксировать evidence по parity checklist и выбрать следующий один use-case для admin/storefront core extraction без изменения transport-контракта.
 - Open blockers: None.
 - Hand-off notes for next agent:
   1. Продолжать one-task-per-iteration: один helper/use-case -> storefront/admin -> docs double-check.
   2. Не менять dual-path контракт (`native #[server]` + GraphQL fallback) при FFA-декомпозиции.
   3. После каждого slice обновлять parity evidence (`docs/verification/ffa-ui-parity-checklist.md`).
-- Last updated at (UTC): 2026-05-24T23:58:00Z
+- Last updated at (UTC): 2026-05-25T03:25:00Z
 
 ## FFA/FBA status
 
@@ -157,6 +157,26 @@ packages и module metadata синхронизированы.
 - [x] Slice 32: admin save-path create/update branch switched from inline `match Option` to `core::is_editing_mode(...)` guard.
 - [x] Slice 33: admin save-path update-id extraction switched to `core::editing_post_id_if_editing_mode(...)` and removed inline `expect(...)`.
 - [x] Slice 34: admin editing-banner label mapping switched from inline `map(...).unwrap_or_default()` to `core::label_with_optional_id(...)`.
+- [x] Slice 35: storefront tags/list empty-state predicates switched from inline `.is_empty()` to `core::has_items(...)` for collection guard reuse.
+- [x] Slice 36: storefront status-badge label/css composition switched from inline mapping to `core::status_presentation(...)`.
+- [x] Slice 37: storefront body summary/fallback composition switched from inline `Option::map(...)` flow to `core::summarized_body_or_fallback(...)`.
+- [x] Slice 38: storefront post-link (`href` + localized open label) composition switched from inline pairing to `core::post_link(...)`.
+- [x] Slice 39: storefront selected-post meta (`slug/locale/published`) label/value composition switched from inline calls to `core::post_meta_pairs(...)`.
+- [x] Slice 40: storefront selected-post fallback mapping (`slug/excerpt/published_at`) switched from inline fallbacks to `core::selected_post_fallback_fields(...)`.
+- [x] Slice 41: storefront published-post card summary (`excerpt` + `href` + open label) switched from inline composition to `core::list_post_summary(...)`.
+- [x] Slice 42: storefront published-post locale meta label/value composition switched from inline call to `core::list_post_locale_meta(...)`.
+- [x] Slice 43: storefront published-post card field composition (`excerpt` + `href` + open label + locale meta) unified via `core::list_post_card_fields(...)`.
+- [x] Slice 44: storefront selected-post meta separator switched from inline literal to `core::meta_separator(...)`.
+- [x] Slice 45: storefront selected-post meta row (`slug/locale/published` + separator) unified via `core::selected_post_meta_row(...)`.
+- [x] Slice 46: storefront published-post card payload (`status` + `excerpt` + `href` + open label + locale meta) unified via `core::list_post_card_view(...)`.
+- [x] Slice 47: storefront status-badge owned status mapping switched to `core::status_badge_view(...)`.
+- [x] Slice 48: storefront selected-post tags visibility/data mapping switched to `core::selected_post_tag_items(...)`.
+- [x] Slice 49: storefront published-post empty-state mapping switched to `core::published_posts_or_empty_message(...)`.
+- [x] Slice 50: storefront published-post view-state mapping switched to `core::published_posts_view_state(...)`.
+- [x] Slice 51: storefront published-post items normalization switched to `core::published_posts_items_or_default(...)`.
+- [x] Slice 52: storefront published-post ready-state mapping switched to `core::published_posts_ready_items(...)`.
+- [x] Slice 53: storefront published-post empty-state message handoff switched to `core::published_posts_empty_state_message(...)`.
+- [x] Slice 54: storefront published-post empty-state payload switched to `core::published_posts_empty_state_view(...)`.
 - [x] Sync admin surface for the same helper family where applicable and attach parity evidence.
 - [ ] `cargo xtask module validate blog` / `cargo xtask module test blog` rerun after next slice touching runtime contract.
 
