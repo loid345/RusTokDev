@@ -7,7 +7,7 @@ VERIFY_DIR="$REPO_ROOT/scripts/verify"
 
 create_fixture_repo() {
   FIXTURE_ROOT="$(mktemp -d)"
-  mkdir -p "$FIXTURE_ROOT/crates/rustok-page-builder" "$FIXTURE_ROOT/crates/rustok-pages" "$FIXTURE_ROOT/scripts/verify"
+  mkdir -p "$FIXTURE_ROOT/crates/rustok-page-builder" "$FIXTURE_ROOT/crates/rustok-pages" "$FIXTURE_ROOT/crates/rustok-forum" "$FIXTURE_ROOT/scripts/verify" "$FIXTURE_ROOT/apps/next-admin/src/features/blog/components" "$FIXTURE_ROOT/apps/next-admin/src/features/blog/api" "$FIXTURE_ROOT/crates/rustok-pages/admin/locales" "$FIXTURE_ROOT/crates/rustok-pages/admin/src"
 
   cat > "$FIXTURE_ROOT/crates/rustok-page-builder/rustok-module.toml" <<'EOF'
 [module]
@@ -24,6 +24,31 @@ EOF
 
 - Current phase: fixture
 - Notes: FBA page-builder readiness fixture.
+EOF
+
+
+  cat > "$FIXTURE_ROOT/apps/next-admin/src/features/blog/components/post-form.tsx" <<'EOF'
+export const PostForm = () => null;
+EOF
+
+  cat > "$FIXTURE_ROOT/apps/next-admin/src/features/blog/components/page-builder.tsx" <<'EOF'
+export const PageBuilder = () => null;
+EOF
+
+  cat > "$FIXTURE_ROOT/apps/next-admin/src/features/blog/api/posts.ts" <<'EOF'
+export const postsApi = {};
+EOF
+
+  cat > "$FIXTURE_ROOT/crates/rustok-pages/admin/src/lib.rs" <<'EOF'
+pub fn placeholder() {}
+EOF
+
+  cat > "$FIXTURE_ROOT/crates/rustok-pages/admin/locales/en.json" <<'EOF'
+{}
+EOF
+
+  cat > "$FIXTURE_ROOT/crates/rustok-pages/admin/locales/ru.json" <<'EOF'
+{}
 EOF
 
   cat > "$FIXTURE_ROOT/crates/rustok-pages/rustok-module.toml" <<'EOF'
@@ -71,6 +96,30 @@ EOF
   cp "$VERIFY_DIR/verify-page-builder-consumer-readiness.mjs" "$FIXTURE_ROOT/scripts/verify/"
   cp "$VERIFY_DIR/verify-page-builder-fallback-profiles.mjs" "$FIXTURE_ROOT/scripts/verify/"
   cp "$VERIFY_DIR/verify-page-builder-toggle-profiles-consistency.mjs" "$FIXTURE_ROOT/scripts/verify/"
+  cp "$VERIFY_DIR/verify-page-builder-terminology.mjs" "$FIXTURE_ROOT/scripts/verify/"
+
+  mkdir -p "$FIXTURE_ROOT/crates/rustok-forum/docs"
+  cat > "$FIXTURE_ROOT/crates/rustok-forum/docs/implementation-plan.md" <<'EOF'
+# Forum implementation
+
+## Execution checkpoint
+
+- Current phase: fixture
+- Notes: builder consumer readiness fixture.
+EOF
+
+  cat > "$FIXTURE_ROOT/crates/rustok-forum/rustok-module.toml" <<'EOF'
+[module]
+slug = "forum"
+
+[dependencies]
+page_builder = "*"
+
+[fba.builder_consumer]
+contract_version = "1.0"
+builder_contract_version = "1.0"
+EOF
+
   cp "$VERIFY_DIR/verify-page-builder-fba-baseline.mjs" "$FIXTURE_ROOT/scripts/verify/"
 }
 
@@ -85,6 +134,8 @@ test_baseline_passes_on_isolated_fixture() {
   (cd "$FIXTURE_ROOT" && node scripts/verify/verify-page-builder-consumer-readiness.mjs pages)
   (cd "$FIXTURE_ROOT" && node scripts/verify/verify-page-builder-fallback-profiles.mjs)
   (cd "$FIXTURE_ROOT" && node scripts/verify/verify-page-builder-toggle-profiles-consistency.mjs)
+  (cd "$FIXTURE_ROOT" && node scripts/verify/verify-page-builder-consumer-readiness.mjs forum)
+  (cd "$FIXTURE_ROOT" && node scripts/verify/verify-page-builder-fba-baseline.mjs pages)
 }
 
 test_baseline_fails_on_contract_mismatch_fixture() {
@@ -97,6 +148,31 @@ test_baseline_fails_on_contract_mismatch_fixture() {
 
 - Current phase: fixture
 - Notes: FBA page-builder readiness fixture.
+EOF
+
+
+  cat > "$FIXTURE_ROOT/apps/next-admin/src/features/blog/components/post-form.tsx" <<'EOF'
+export const PostForm = () => null;
+EOF
+
+  cat > "$FIXTURE_ROOT/apps/next-admin/src/features/blog/components/page-builder.tsx" <<'EOF'
+export const PageBuilder = () => null;
+EOF
+
+  cat > "$FIXTURE_ROOT/apps/next-admin/src/features/blog/api/posts.ts" <<'EOF'
+export const postsApi = {};
+EOF
+
+  cat > "$FIXTURE_ROOT/crates/rustok-pages/admin/src/lib.rs" <<'EOF'
+pub fn placeholder() {}
+EOF
+
+  cat > "$FIXTURE_ROOT/crates/rustok-pages/admin/locales/en.json" <<'EOF'
+{}
+EOF
+
+  cat > "$FIXTURE_ROOT/crates/rustok-pages/admin/locales/ru.json" <<'EOF'
+{}
 EOF
 
   cat > "$FIXTURE_ROOT/crates/rustok-pages/rustok-module.toml" <<'EOF'
