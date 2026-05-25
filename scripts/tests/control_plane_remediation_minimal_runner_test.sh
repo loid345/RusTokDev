@@ -83,20 +83,20 @@ for pattern in \
   "Control-plane remediation minimal verification: PASS" \
   "--> migration tests: PASS"
 do
-  if ! rg -q "$pattern" "$STEP_OUTPUT"; then
+  if ! rg -q -- "$pattern" "$STEP_OUTPUT"; then
     echo "expected pattern missing: $pattern" >&2
     cat "$STEP_OUTPUT" >&2
     exit 1
   fi
 done
 
-if ! rg -q "Control-plane remediation minimal verification: PASS \([0-9]{2}h:[0-9]{2}m:[0-9]{2}s\)" "$STEP_OUTPUT"; then
+if ! rg -q -- "Control-plane remediation minimal verification: PASS \([0-9]{2}h:[0-9]{2}m:[0-9]{2}s\)" "$STEP_OUTPUT"; then
   echo "success scenario missing total duration suffix" >&2
   cat "$STEP_OUTPUT" >&2
   exit 1
 fi
 
-if ! rg -q "--> migration tests: PASS \([0-9]{2}h:[0-9]{2}m:[0-9]{2}s\)" "$STEP_OUTPUT"; then
+if ! rg -q -- "--> migration tests: PASS \([0-9]{2}h:[0-9]{2}m:[0-9]{2}s\)" "$STEP_OUTPUT"; then
   echo "success scenario missing per-step duration suffix" >&2
   cat "$STEP_OUTPUT" >&2
   exit 1
@@ -171,8 +171,7 @@ if [[ "$*" == *"fmt --all -- --check"* ]]; then
   echo "fake fmt drift" >&2
   exit 1
 fi
-printf "fake cargo called (continue-on-fmt): %s
-" "$*"
+printf "fake cargo called (continue-on-fmt): %s\n" "$*"
 exit 0
 SH
 chmod +x "$FIXTURE_ROOT/fakebin/cargo"
@@ -187,9 +186,14 @@ if [[ "$continue_exit" -ne 2 ]]; then
   cat "$CONTINUE_FMT_OUTPUT" >&2
   exit 1
 fi
-for pattern in   "Format failure continuation enabled"   "WARNING: format check failed; continuing"   "==> migration tests"   "==> dependabot directory contract"   "PARTIAL PASS"
+for pattern in \
+  "Format failure continuation enabled" \
+  "WARNING: format check failed; continuing" \
+  "==> migration tests" \
+  "==> dependabot directory contract" \
+  "PARTIAL PASS"
 do
-  if ! rg -q "$pattern" "$CONTINUE_FMT_OUTPUT"; then
+  if ! rg -q -- "$pattern" "$CONTINUE_FMT_OUTPUT"; then
     echo "continue-on-fmt scenario missing pattern: $pattern" >&2
     cat "$CONTINUE_FMT_OUTPUT" >&2
     exit 1

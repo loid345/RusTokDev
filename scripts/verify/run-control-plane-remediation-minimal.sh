@@ -64,16 +64,14 @@ run_step() {
   shift
   local step_start="${SECONDS}"
   CURRENT_STEP="${title}"
-  printf "
-==> %s
-" "${title}"
-  printf "$ %s
-" "$*"
+  printf "\n==> %s\n" "${title}"
+  printf "$ %s\n" "$*"
   CURRENT_COMMAND="$*"
-  step_timeout "$@"
+  if ! step_timeout "$@"; then
+    return 1
+  fi
   local step_elapsed=$((SECONDS - step_start))
-  printf "--> %s: PASS (%s)
-" "${title}" "$(format_duration "${step_elapsed}")"
+  printf -- "--> %s: PASS (%s)\n" "${title}" "$(format_duration "${step_elapsed}")"
   CURRENT_COMMAND="n/a"
 }
 
@@ -104,6 +102,4 @@ if [[ "${FMT_FAILED}" == "1" ]]; then
   exit 2
 fi
 
-printf "
-Control-plane remediation minimal verification: PASS (%s)
-" "$(format_duration "${SECONDS}")"
+printf "\nControl-plane remediation minimal verification: PASS (%s)\n" "$(format_duration "${SECONDS}")"
