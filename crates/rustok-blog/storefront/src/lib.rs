@@ -143,7 +143,10 @@ fn SelectedPostCard(post: Option<BlogPostDetail>) -> impl IntoView {
     );
     let tags = post.tags;
     let body_format = post.body_format;
-    let unknown_status_label = t(locale.as_deref(), "blog.selected.unknownStatus", "unknown");
+    let selected_post_status = core::selected_post_status_view(
+        status,
+        t(locale.as_deref(), "blog.selected.unknownStatus", "unknown"),
+    );
     let selected_post_meta = core::selected_post_meta_view(
         &t(locale.as_deref(), "blog.selected.slugLabel", "slug"),
         slug.as_str(),
@@ -180,8 +183,8 @@ fn SelectedPostCard(post: Option<BlogPostDetail>) -> impl IntoView {
             <h3 class="mt-3 text-2xl font-semibold text-foreground">{title}</h3>
             <div class="mt-3">
                 <BlogStatusBadge
-                    status=status
-                    unknown_label=unknown_status_label
+                    status=selected_post_status.status
+                    unknown_label=selected_post_status.unknown_label
                 />
             </div>
             <p class="mt-3 text-sm text-muted-foreground">{selected_post_content.excerpt}</p>

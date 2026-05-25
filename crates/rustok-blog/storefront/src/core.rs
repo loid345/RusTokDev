@@ -34,6 +34,11 @@ pub struct SelectedPostContentView {
     pub body: String,
 }
 
+pub struct SelectedPostStatusView {
+    pub status: String,
+    pub unknown_label: String,
+}
+
 pub fn selected_post_meta_view(
     slug_label: &str,
     slug: &str,
@@ -64,6 +69,13 @@ pub fn selected_post_tags_view(tags: Vec<String>) -> Option<SelectedPostTagsView
 
 pub fn selected_post_content_view(excerpt: String, body: String) -> SelectedPostContentView {
     SelectedPostContentView { excerpt, body }
+}
+
+pub fn selected_post_status_view(status: String, unknown_label: String) -> SelectedPostStatusView {
+    SelectedPostStatusView {
+        status,
+        unknown_label,
+    }
 }
 
 pub fn open_link_label(label: &str, slug: &str) -> String {
@@ -412,6 +424,13 @@ mod tests {
         );
         assert_eq!(view.excerpt, "No excerpt yet.".to_string());
         assert_eq!(view.body, "No body content yet.".to_string());
+    }
+
+    #[test]
+    fn selected_post_status_view_returns_status_and_unknown_label() {
+        let view = selected_post_status_view("published".to_string(), "unknown".to_string());
+        assert_eq!(view.status, "published".to_string());
+        assert_eq!(view.unknown_label, "unknown".to_string());
     }
 
     #[test]
