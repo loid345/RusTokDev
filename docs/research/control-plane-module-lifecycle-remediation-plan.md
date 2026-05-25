@@ -871,3 +871,10 @@ rollback-стратегии и Definition of Done по итерациям.
 - Выполнен strict-прогон `scripts/verify/run-control-plane-remediation-minimal.sh` без triage-флагов: runner завершился `FAIL` на шаге `format check` (`cargo fmt --all -- --check`, `exit 1`, ~6s).
 - Подтверждён, что блокером полного закрытия operational-gate остаётся pre-existing workspace rustfmt drift (без новых control-plane функциональных ошибок в самом runner).
 - Чекбокс `Минимальный verification набор из этого плана прогнан на ветке` сохраняется в `[ ]` до отдельного полного зелёного прогона после выравнивания formatting baseline.
+
+
+### Актуализация 2026-05-25 (итерация 70)
+
+- Для ускорения закрытия operational хвоста выполнено выравнивание rustfmt baseline по текущему drift-списку strict-runner: форматированы затронутые файлы `rustok-blog`, `rustok-commerce` tests, `rustok-inventory` admin API и `rustok-seo` sitemap services.
+- После форматирования strict-runner проходит шаг `format check` (`PASS`) и переходит к следующему этапу (`migration tests`), что подтверждает снятие format-blocker для данного набора файлов.
+- Для полного закрытия чекбокса минимального verification-набора остаётся дождаться завершения полного bundle-прогона (`migration + rustok-server tests + xtask/dependabot checks`) в отдельном run-окне.

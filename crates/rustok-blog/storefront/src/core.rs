@@ -65,10 +65,7 @@ pub fn module_href(base: &str, slug: &str) -> String {
 }
 
 pub fn post_link(base: &str, slug: &str, open_label: &str) -> (String, String) {
-    (
-        module_href(base, slug),
-        open_link_label(open_label, slug),
-    )
+    (module_href(base, slug), open_link_label(open_label, slug))
 }
 
 pub fn list_post_summary(
@@ -81,7 +78,8 @@ pub fn list_post_summary(
 ) -> (String, String, String) {
     let resolved_slug = fallback_slug(slug, missing_slug_fallback);
     let resolved_excerpt = list_post_excerpt(excerpt, excerpt_fallback);
-    let (href, resolved_open_label) = post_link(module_route_base, resolved_slug.as_str(), open_label);
+    let (href, resolved_open_label) =
+        post_link(module_route_base, resolved_slug.as_str(), open_label);
     (resolved_excerpt, href, resolved_open_label)
 }
 
@@ -132,7 +130,13 @@ pub fn list_post_card_view(
         locale_label,
         effective_locale,
     );
-    (status, resolved_excerpt, href, resolved_open_label, locale_meta)
+    (
+        status,
+        resolved_excerpt,
+        href,
+        resolved_open_label,
+        locale_meta,
+    )
 }
 
 pub fn fallback_slug(value: Option<String>, fallback: &str) -> String {
