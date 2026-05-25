@@ -8,14 +8,14 @@ packages и module metadata синхронизированы.
 ## Execution checkpoint
 
 - Current phase: phase_b_in_progress
-- Last checkpoint: FFA slice #67 completed (storefront status-badge branch migrated from tuple payload to typed core view-model `StatusBadgeView` via `core::status_badge_typed_view(...)`).
+- Last checkpoint: FFA slice #68 completed (storefront post-link mapping migrated to typed core view-model `PostLinkView` via `core::post_link_typed_view(...)`, and list summary now consumes typed link payload).
 - Next step: Зафиксировать evidence по parity checklist и выбрать следующий один use-case для admin/storefront core extraction без изменения transport-контракта.
 - Open blockers: None.
 - Hand-off notes for next agent:
   1. Продолжать one-task-per-iteration: один helper/use-case -> storefront/admin -> docs double-check.
   2. Не менять dual-path контракт (`native #[server]` + GraphQL fallback) при FFA-декомпозиции.
   3. После каждого slice обновлять parity evidence (`docs/verification/ffa-ui-parity-checklist.md`).
-- Last updated at (UTC): 2026-05-25T17:22:00Z
+- Last updated at (UTC): 2026-05-25T17:40:00Z
 
 ## FFA/FBA status
 
@@ -190,6 +190,7 @@ packages и module metadata синхронизированы.
 - [x] Slice 65: storefront empty-state/header fragments now consume typed payloads `SelectedPostEmptyStateView` and `PublishedPostsHeaderView` via `core::selected_post_empty_state_typed_view(...)` / `core::published_posts_header_typed_view(...)`.
 - [x] Slice 66: storefront published-post empty-state fragment now consumes typed payload `PublishedPostsEmptyStateView` via `core::published_posts_empty_state_typed_view(...)` instead of tuple destructuring from `published_posts_empty_state_view(...)`.
 - [x] Slice 67: storefront status-badge fragment now consumes typed payload `StatusBadgeView` via `core::status_badge_typed_view(...)` instead of tuple destructuring from `status_badge_view(...)`.
+- [x] Slice 68: storefront post-link fragment now consumes typed payload `PostLinkView` via `core::post_link_typed_view(...)`; `list_post_summary(...)` switched from tuple link destructuring to typed link payload consumption.
 - [x] Sync admin surface for the same helper family where applicable and attach parity evidence.
 - [ ] `cargo xtask module validate blog` / `cargo xtask module test blog` rerun after next slice touching runtime contract.
 

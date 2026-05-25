@@ -72,6 +72,11 @@ pub struct StatusBadgeView {
     pub badge_css: &'static str,
 }
 
+pub struct PostLinkView {
+    pub href: String,
+    pub open_label: String,
+}
+
 pub fn published_posts_header_typed_view(
     title: String,
     total: u64,
@@ -210,6 +215,11 @@ pub fn post_link(base: &str, slug: &str, open_label: &str) -> (String, String) {
     )
 }
 
+pub fn post_link_typed_view(base: &str, slug: &str, open_label: &str) -> PostLinkView {
+    let (href, open_label) = post_link(base, slug, open_label);
+    PostLinkView { href, open_label }
+}
+
 pub fn list_post_summary(
     slug: Option<String>,
     missing_slug_fallback: &str,
@@ -220,8 +230,8 @@ pub fn list_post_summary(
 ) -> (String, String, String) {
     let resolved_slug = fallback_slug(slug, missing_slug_fallback);
     let resolved_excerpt = list_post_excerpt(excerpt, excerpt_fallback);
-    let (href, resolved_open_label) = post_link(module_route_base, resolved_slug.as_str(), open_label);
-    (resolved_excerpt, href, resolved_open_label)
+    let link_view = post_link_typed_view(module_route_base, resolved_slug.as_str(), open_label);
+    (resolved_excerpt, link_view.href, link_view.open_label)
 }
 
 pub fn list_post_locale_meta(locale_label: &str, effective_locale: &str) -> String {
@@ -523,6 +533,13 @@ mod tests {
             view.badge_css,
             "inline-flex rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground"
         );
+    }
+
+    #[test]
+    fn post_link_typed_view_builds_struct() {
+        let view = post_link_typed_view("/store/modules/blog", "hello-world", "Open");
+        assert_eq!(view.href, "/store/modules/blog?slug=hello-world".to_string());
+        assert_eq!(view.open_label, "Open hello-world".to_string());
     }
 
     #[test]
