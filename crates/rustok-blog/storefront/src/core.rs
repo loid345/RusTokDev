@@ -45,6 +45,14 @@ pub struct SelectedPostHeaderView {
     pub status: SelectedPostStatusView,
 }
 
+pub struct PublishedPostCardView {
+    pub status: String,
+    pub excerpt: String,
+    pub href: String,
+    pub open_label: String,
+    pub locale_meta: String,
+}
+
 pub fn selected_post_meta_view(
     slug_label: &str,
     slug: &str,
@@ -223,6 +231,37 @@ pub fn list_post_card_view(
         effective_locale,
     );
     (status, resolved_excerpt, href, resolved_open_label, locale_meta)
+}
+
+pub fn published_post_card_view(
+    slug: Option<String>,
+    missing_slug_fallback: &str,
+    excerpt: Option<String>,
+    excerpt_fallback: &str,
+    module_route_base: &str,
+    open_label: &str,
+    locale_label: &str,
+    effective_locale: &str,
+    status: String,
+) -> PublishedPostCardView {
+    let (status, excerpt, href, open_label, locale_meta) = list_post_card_view(
+        slug,
+        missing_slug_fallback,
+        excerpt,
+        excerpt_fallback,
+        module_route_base,
+        open_label,
+        locale_label,
+        effective_locale,
+        status,
+    );
+    PublishedPostCardView {
+        status,
+        excerpt,
+        href,
+        open_label,
+        locale_meta,
+    }
 }
 
 pub fn fallback_slug(value: Option<String>, fallback: &str) -> String {
@@ -468,6 +507,26 @@ mod tests {
         assert_eq!(header.title, "Hello".to_string());
         assert_eq!(header.meta.slug_meta, "slug: hello-world".to_string());
         assert_eq!(header.status.status, "published".to_string());
+    }
+
+    #[test]
+    fn published_post_card_view_maps_tuple_to_typed_payload() {
+        let view = published_post_card_view(
+            None,
+            "missing-slug",
+            None,
+            "No excerpt yet.",
+            "/store/modules/blog",
+            "Open",
+            "locale",
+            "en",
+            "published".to_string(),
+        );
+        assert_eq!(view.status, "published".to_string());
+        assert_eq!(view.excerpt, "No excerpt yet.".to_string());
+        assert_eq!(view.href, "/store/modules/blog?slug=missing-slug".to_string());
+        assert_eq!(view.open_label, "Open missing-slug".to_string());
+        assert_eq!(view.locale_meta, "locale: en".to_string());
     }
 
     #[test]

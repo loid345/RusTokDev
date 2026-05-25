@@ -274,7 +274,7 @@ fn PublishedPostsList(items: Vec<BlogPostListItem>, total: u64) -> impl IntoView
                         );
                         let open_label = t(locale.as_deref(), "blog.list.open", "Open");
                         let locale_label = t(locale.as_deref(), "blog.list.localeLabel", "locale");
-                        let (status, excerpt, href, open_label, locale_meta) = core::list_post_card_view(
+                        let post_card_view = core::published_post_card_view(
                             post.slug,
                             missing_slug_fallback.as_str(),
                             post.excerpt,
@@ -288,18 +288,18 @@ fn PublishedPostsList(items: Vec<BlogPostListItem>, total: u64) -> impl IntoView
                         view! {
                             <article class="rounded-2xl border border-border bg-background p-5">
                                 <BlogStatusBadge
-                                    status=status
+                                    status=post_card_view.status
                                     unknown_label=unknown_status_label.clone()
                                 />
                                 <h4 class="mt-2 text-base font-semibold text-foreground">{post.title}</h4>
                                 <p class="mt-2 text-sm text-muted-foreground">
-                                    {excerpt}
+                                    {post_card_view.excerpt}
                                 </p>
-                                <a class="mt-3 inline-flex text-sm text-primary hover:underline" href=href>
-                                    {open_label}
+                                <a class="mt-3 inline-flex text-sm text-primary hover:underline" href=post_card_view.href>
+                                    {post_card_view.open_label}
                                 </a>
                                 <p class="mt-3 text-xs text-muted-foreground">
-                                    {locale_meta}
+                                    {post_card_view.locale_meta}
                                 </p>
                             </article>
                         }
