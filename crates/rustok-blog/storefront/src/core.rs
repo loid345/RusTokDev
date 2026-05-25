@@ -6,6 +6,10 @@ pub fn count_label(total: u64, suffix: &str) -> String {
     format!("{total} {suffix}")
 }
 
+pub fn published_posts_total_label(total: u64, suffix: &str) -> String {
+    count_label(total, suffix)
+}
+
 pub fn open_link_label(label: &str, slug: &str) -> String {
     format!("{label} {slug}")
 }
@@ -288,6 +292,11 @@ mod tests {
     #[test]
     fn fallback_text_returns_fallback_for_none() {
         assert_eq!(fallback_text(None, "fallback"), "fallback".to_string());
+    }
+
+    #[test]
+    fn published_posts_total_label_delegates_to_count_label() {
+        assert_eq!(published_posts_total_label(7, "total"), "7 total".to_string());
     }
 
     #[test]

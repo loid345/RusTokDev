@@ -8,14 +8,14 @@ packages и module metadata синхронизированы.
 ## Execution checkpoint
 
 - Current phase: phase_b_in_progress
-- Last checkpoint: FFA slice #54 completed (storefront published-post empty-state handoff switched to `core::published_posts_empty_state_view(...)` tuple-based core payload, preserving dual-path transport contract and thin UI rendering branch).
+- Last checkpoint: FFA slice #55 completed (storefront published-post total-counter label switched from direct UI formatting to `core::published_posts_total_label(...)`, сохранив dual-path transport contract и thin UI render branch).
 - Next step: Зафиксировать evidence по parity checklist и выбрать следующий один use-case для admin/storefront core extraction без изменения transport-контракта.
 - Open blockers: None.
 - Hand-off notes for next agent:
   1. Продолжать one-task-per-iteration: один helper/use-case -> storefront/admin -> docs double-check.
   2. Не менять dual-path контракт (`native #[server]` + GraphQL fallback) при FFA-декомпозиции.
   3. После каждого slice обновлять parity evidence (`docs/verification/ffa-ui-parity-checklist.md`).
-- Last updated at (UTC): 2026-05-25T03:25:00Z
+- Last updated at (UTC): 2026-05-25T12:10:00Z
 
 ## FFA/FBA status
 
@@ -177,6 +177,7 @@ packages и module metadata синхронизированы.
 - [x] Slice 52: storefront published-post ready-state mapping switched to `core::published_posts_ready_items(...)`.
 - [x] Slice 53: storefront published-post empty-state message handoff switched to `core::published_posts_empty_state_message(...)`.
 - [x] Slice 54: storefront published-post empty-state payload switched to `core::published_posts_empty_state_view(...)`.
+- [x] Slice 55: storefront published-post total counter label switched from direct `core::count_label(...)` usage in UI to dedicated `core::published_posts_total_label(...)` helper.
 - [x] Sync admin surface for the same helper family where applicable and attach parity evidence.
 - [ ] `cargo xtask module validate blog` / `cargo xtask module test blog` rerun after next slice touching runtime contract.
 

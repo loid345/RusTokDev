@@ -239,7 +239,10 @@ fn PublishedPostsList(items: Vec<BlogPostListItem>, total: u64) -> impl IntoView
                     {t(locale.as_deref(), "blog.list.title", "Published posts")}
                 </h3>
                 <span class="text-sm text-muted-foreground">
-                    {core::count_label(total, &t(locale.as_deref(), "blog.list.total", "total"))}
+                    {core::published_posts_total_label(
+                        total,
+                        &t(locale.as_deref(), "blog.list.total", "total"),
+                    )}
                 </span>
             </div>
             <div class="grid gap-3 md:grid-cols-2">
