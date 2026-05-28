@@ -1123,7 +1123,7 @@ _Легенда статусов: `⬜ Planned` — не начато, `🟡 In 
 | ⬜ Planned | **Phase 5 — Offline/advanced sync (optional)** | Добавить офлайн-сценарии только после продуктового подтверждения требований. | [Open questions и ограничения](#open-questions-и-ограничения), [Риски и митигации](#риски-и-митигации) | Есть утверждённые offline requirements и реализована целевая стратегия sync/outbox. |
 
 
-#### Операционный статус плана (обновлено: 2026-05-24, FFA continuation)
+#### Операционный статус плана (обновлено: 2026-05-28, FFA continuation)
 
 - **FFA в плане отмечен:** ✅ Да. FFA-baseline явно зафиксирован в `Phase 0 — Foundation` и отдельно закреплён в anti-drift guardrail разделе.
 - **Текущий фокус выполнения:** `Phase 2 — Registry/codegen` (статус `🟡 In progress`) без изменения platform contract.
@@ -1162,7 +1162,10 @@ _Легенда статусов: `⬜ Planned` — не начато, `🟡 In 
 | `mobile_manifest` minimal schema snapshot | `rustok_mobile/tooling` + docs трека | schema snapshot обновлён и закоммичен | ✅ Done |
 | Compatibility matrix (`required/optional/deprecated`) | `docs/research/flutter.md` | матрица заполнена для всех contract-полей | ✅ Done |
 | Deterministic codegen job | mobile CI pipeline | `dart run build_runner build --delete-conflicting-outputs` + `git diff --exit-code` | ⬜ Planned |
+| Local deterministic codegen check | `rustok_mobile/tooling/scripts/check_mobile_codegen.py` | generator CLI runs into temp outputs and diffs against committed manifest/snapshot | ✅ Done |
+| Generated-file diff diagnostics | `rustok_mobile/tooling/scripts/verify_mobile_manifest.py` | stale manifest/snapshot failures print unified diff + regeneration command | ✅ Done |
 | Host adapter seam (`module_entry_adapter`) | `apps/rustok_admin_mobile` | registry подключается без ручного списка модулей в shell-router | ✅ Done |
+| Manifest-driven nav icon mapping | `apps/rustok_admin_mobile` | host nav использует `nav.icon` из generated manifest и fallback по module metadata без ручного списка routes | ✅ Done |
 | Pilot E2E evidence (modules/blog) | integration tests / manual evidence | login → module list/detail → shell back | ⬜ Planned |
 
 #### PR-A evidence pack (registry contract freeze)
@@ -1173,6 +1176,7 @@ _Легенда статусов: `⬜ Planned` — не начато, `🟡 In 
 - `module_slug` — required;
 - `surface_kind` — required;
 - `route_segment` — required;
+- `nav_icon` — required в snapshot/codegen output, optional на уровне исходных module manifests с fallback `module`;
 - `child_pages` — optional (по умолчанию пустой список);
 - `permissions` — optional (по умолчанию пустой список);
 - `locale_namespace` — optional.
@@ -1184,6 +1188,7 @@ _Легенда статусов: `⬜ Planned` — не начато, `🟡 In 
 | `module_slug` | required | Запрещено переименование без migration-слоя в codegen | Идентификатор capability-поверхности, не runtime-деталь Flutter |
 | `surface_kind` | required | Допустимо расширение enum только backward-compatible значениями | Нормализует тип surface для host-клиентов |
 | `route_segment` | required | Изменение требует явного redirect/mapping в host routing | Поддерживает единый routing contract между host-ами |
+| `nav_icon` | required in snapshot / optional in source manifests | Отсутствие в manifest нормализуется в `module`; новые значения должны быть backward-compatible с host fallback mapping | Visual parity metadata без Flutter-specific API или transport contract |
 | `child_pages` | optional | Отсутствие трактуется как `[]`; новые элементы добавляются additive | Нужен для nested surfaces/page-builder сценариев |
 | `permissions` | optional | Отсутствие трактуется как `[]`; новые permission strings additive | Capability-level gate, без mobile-only API |
 | `locale_namespace` | optional | Отсутствие означает fallback на module slug namespace | Сохраняет host-owned locale policy без feature-local fallback |
@@ -1193,7 +1198,7 @@ _Легенда статусов: `⬜ Planned` — не начато, `🟡 In 
 - Добавлено явное требование использовать только capability-поля, без Flutter-specific transport/UI API.
 - Зафиксированы правила default/fallback для optional-полей (`child_pages`, `permissions`, `locale_namespace`).
 - Закреплён запрет на breaking rename для `module_slug` и обязательный redirect/mapping для `route_segment`.
-- Runtime-contract в `app_module_contracts` синхронизирован со snapshot: `surface_kind` и `module_slug/route_segment` обязательны, `child_pages`/`permissions` имеют default `[]`, `locale_namespace` optional.
+- Runtime-contract в `app_module_contracts` синхронизирован со snapshot: `surface_kind`, `module_slug/route_segment` и нормализованный `nav_icon` обязательны в generated snapshot, `child_pages`/`permissions` имеют default `[]`, `locale_namespace` optional.
 
 **Execution rule:** каждый следующий PR в этом треке должен обновлять таблицу статусов выше и добавлять ссылку на проверяемое evidence (commit, CI job или test log).
 

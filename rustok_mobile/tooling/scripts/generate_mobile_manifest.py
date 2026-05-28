@@ -45,9 +45,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--snapshot-output",
-        default=(
-            "rustok_mobile/tooling/snapshots/mobile_manifest.snapshot.json"
-        ),
+        default=("rustok_mobile/tooling/snapshots/mobile_manifest.snapshot.json"),
         help="Output JSON snapshot path for registry contract checks",
     )
     return parser.parse_args()
@@ -67,8 +65,6 @@ def _pick_icon(slug: str) -> str:
         if needle in normalized_slug:
             return icon
     return "module"
-
-
 
 
 def _parse_permissions(admin_ui: dict[str, object]) -> list[str]:
@@ -95,6 +91,7 @@ def _parse_locale_namespace(admin_ui: dict[str, object], module_slug: str) -> st
     if normalized:
         return normalized
     return _normalize_key(module_slug)
+
 
 def _parse_child_pages(admin_ui: dict[str, object]) -> list[dict[str, str]]:
     pages_raw = admin_ui.get("child_pages")
@@ -146,7 +143,9 @@ def scan_modules(repo_root: pathlib.Path) -> list[dict[str, object]]:
                 f"'{route_segment}' in {manifest}; already declared in {previous_manifest}"
             )
 
-        nav_label = str(admin_ui.get("nav_label", module.get("name", slug.title()))).strip()
+        nav_label = str(
+            admin_ui.get("nav_label", module.get("name", slug.title()))
+        ).strip()
         nav_label = nav_label or slug.title()
         module_key = f"rustok_{_normalize_key(slug.replace('-', '_'))}"
 
@@ -209,18 +208,25 @@ def render(modules: list[dict[str, object]]) -> str:
     return "\n".join(lines)
 
 
-
 def to_snapshot(modules: list[dict[str, object]]) -> list[dict[str, object]]:
     snapshot: list[dict[str, object]] = []
     for module in modules:
         route_segment = str(module["route_segment"])
         snapshot.append(
             {
-                "module_slug": str(module.get("module_slug") or str(module["module_key"]).removeprefix("rustok_")),
+                "module_slug": str(
+                    module.get("module_slug")
+                    or str(module["module_key"]).removeprefix("rustok_")
+                ),
                 "surface_kind": "admin_mobile",
                 "route_segment": route_segment,
+                "nav_icon": str(module.get("icon") or "module"),
                 "permissions": list(module.get("permissions", [])),
-                "locale_namespace": str(module.get("locale_namespace") or module.get("module_slug") or route_segment),
+                "locale_namespace": str(
+                    module.get("locale_namespace")
+                    or module.get("module_slug")
+                    or route_segment
+                ),
                 "child_pages": [
                     {
                         "subpath": str(page["subpath"]),
@@ -237,6 +243,7 @@ def to_snapshot(modules: list[dict[str, object]]) -> list[dict[str, object]]:
 
 def render_snapshot_json(modules: list[dict[str, object]]) -> str:
     return json.dumps(to_snapshot(modules), ensure_ascii=False, indent=2) + "\n"
+
 
 def main() -> None:
     args = parse_args()

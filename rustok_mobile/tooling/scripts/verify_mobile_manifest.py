@@ -4,19 +4,29 @@
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import pathlib
 import re
 import sys
 
 if __package__:
-    from .generate_mobile_manifest import render, render_snapshot_json, scan_modules, to_snapshot
+    from .generate_mobile_manifest import (
+        render,
+        render_snapshot_json,
+        scan_modules,
+        to_snapshot,
+    )
 else:
     current_dir = pathlib.Path(__file__).resolve().parent
     if str(current_dir) not in sys.path:
         sys.path.insert(0, str(current_dir))
-    from generate_mobile_manifest import render, render_snapshot_json, scan_modules, to_snapshot
-
+    from generate_mobile_manifest import (
+        render,
+        render_snapshot_json,
+        scan_modules,
+        to_snapshot,
+    )
 
 
 _SNAKE_CASE_RE = re.compile(r"^[a-z0-9_]+$")
@@ -29,6 +39,7 @@ def _is_snake_case(value: str) -> bool:
 
 def _is_permission_key(value: str) -> bool:
     return bool(value) and bool(_PERMISSION_RE.fullmatch(value))
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -46,13 +57,10 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--snapshot",
-        default=(
-            "rustok_mobile/tooling/snapshots/mobile_manifest.snapshot.json"
-        ),
+        default=("rustok_mobile/tooling/snapshots/mobile_manifest.snapshot.json"),
         help="Path to generated registry snapshot JSON",
     )
     return parser.parse_args()
-
 
 
 def _validate_snapshot_schema(entries: object) -> str | None:
@@ -63,6 +71,7 @@ def _validate_snapshot_schema(entries: object) -> str | None:
         "module_slug",
         "surface_kind",
         "route_segment",
+        "nav_icon",
         "permissions",
         "locale_namespace",
         "child_pages",
@@ -85,6 +94,7 @@ def _validate_snapshot_schema(entries: object) -> str | None:
         module_slug = item["module_slug"]
         route_segment = item["route_segment"]
         surface_kind = item["surface_kind"]
+        nav_icon = item["nav_icon"]
         locale_namespace = item["locale_namespace"]
         permissions = item["permissions"]
         child_pages = item["child_pages"]
@@ -106,7 +116,10 @@ def _validate_snapshot_schema(entries: object) -> str | None:
             return f"snapshot entry #{index} route_segment must be snake_case"
         if route_segment in seen_route_segments:
             return f"snapshot entry #{index} duplicates route_segment '{route_segment}'"
-        if previous_route_segment is not None and route_segment < previous_route_segment:
+        if (
+            previous_route_segment is not None
+            and route_segment < previous_route_segment
+        ):
             return "snapshot entries must be sorted by route_segment"
         seen_route_segments.add(route_segment)
         previous_route_segment = route_segment
@@ -114,7 +127,15 @@ def _validate_snapshot_schema(entries: object) -> str | None:
         if not isinstance(surface_kind, str) or surface_kind != surface_kind.strip():
             return f"snapshot entry #{index} has invalid surface_kind"
         if surface_kind != "admin_mobile":
-            return f"snapshot entry #{index} has unsupported surface_kind '{surface_kind}'"
+            return (
+                f"snapshot entry #{index} has unsupported surface_kind '{surface_kind}'"
+            )
+        if not isinstance(nav_icon, str) or not nav_icon.strip():
+            return f"snapshot entry #{index} has invalid nav_icon"
+        if nav_icon != nav_icon.strip():
+            return f"snapshot entry #{index} nav_icon must be trimmed"
+        if not _is_snake_case(nav_icon):
+            return f"snapshot entry #{index} nav_icon must be snake_case"
         if not isinstance(locale_namespace, str) or not locale_namespace.strip():
             return f"snapshot entry #{index} has invalid locale_namespace"
         if locale_namespace != locale_namespace.strip():
@@ -131,21 +152,13 @@ def _validate_snapshot_schema(entries: object) -> str | None:
                     f"snapshot entry #{index} permission #{permission_index} is invalid"
                 )
             if permission != permission.strip():
-                return (
-                    f"snapshot entry #{index} permission #{permission_index} must be trimmed"
-                )
+                return f"snapshot entry #{index} permission #{permission_index} must be trimmed"
             if not _is_permission_key(permission):
-                return (
-                    f"snapshot entry #{index} permission #{permission_index} must use [a-z0-9_.:]"
-                )
+                return f"snapshot entry #{index} permission #{permission_index} must use [a-z0-9_.:]"
             if permission in seen_permissions:
-                return (
-                    f"snapshot entry #{index} duplicates permission '{permission}'"
-                )
+                return f"snapshot entry #{index} duplicates permission '{permission}'"
             if previous_permission is not None and permission < previous_permission:
-                return (
-                    f"snapshot entry #{index} permissions must be sorted ascending"
-                )
+                return f"snapshot entry #{index} permissions must be sorted ascending"
             seen_permissions.add(permission)
             previous_permission = permission
         if not isinstance(child_pages, list):
@@ -159,41 +172,57 @@ def _validate_snapshot_schema(entries: object) -> str | None:
             required_child_keys = {"subpath", "title", "nav_label"}
             missing_child = required_child_keys.difference(child.keys())
             if missing_child:
-                return (
-                    f"snapshot entry #{index} child #{child_index} missing keys: {sorted(missing_child)}"
-                )
+                return f"snapshot entry #{index} child #{child_index} missing keys: {sorted(missing_child)}"
             unknown_child = set(child.keys()).difference(required_child_keys)
             if unknown_child:
-                return (
-                    f"snapshot entry #{index} child #{child_index} has unknown keys: {sorted(unknown_child)}"
-                )
+                return f"snapshot entry #{index} child #{child_index} has unknown keys: {sorted(unknown_child)}"
             for key in ("subpath", "title", "nav_label"):
                 value = child.get(key)
                 if not isinstance(value, str) or not value.strip():
-                    return (
-                        f"snapshot entry #{index} child #{child_index} has invalid {key}"
-                    )
+                    return f"snapshot entry #{index} child #{child_index} has invalid {key}"
                 if value != value.strip():
-                    return (
-                        f"snapshot entry #{index} child #{child_index} {key} must be trimmed"
-                    )
+                    return f"snapshot entry #{index} child #{child_index} {key} must be trimmed"
             subpath = child["subpath"]
             if not _is_snake_case(subpath):
-                return (
-                    f"snapshot entry #{index} child #{child_index} subpath must be snake_case"
-                )
+                return f"snapshot entry #{index} child #{child_index} subpath must be snake_case"
             if subpath in seen_subpaths:
-                return (
-                    f"snapshot entry #{index} child #{child_index} duplicates subpath '{subpath}'"
-                )
+                return f"snapshot entry #{index} child #{child_index} duplicates subpath '{subpath}'"
             if previous_subpath is not None and subpath < previous_subpath:
-                return (
-                    f"snapshot entry #{index} child_pages must be sorted by subpath"
-                )
+                return f"snapshot entry #{index} child_pages must be sorted by subpath"
             seen_subpaths.add(subpath)
             previous_subpath = subpath
 
     return None
+
+
+def _print_regeneration_command(repo_root: pathlib.Path) -> None:
+    print("Run:")
+    print(
+        "  python3 rustok_mobile/tooling/scripts/generate_mobile_manifest.py "
+        f"--repo-root {repo_root}"
+    )
+
+
+def _print_stale_diff(
+    *,
+    label: str,
+    path: pathlib.Path,
+    current: str,
+    expected: str,
+    repo_root: pathlib.Path,
+) -> None:
+    print(f"ERROR: {label} is stale: {path}")
+    print("Diff (current -> expected):")
+    for line in difflib.unified_diff(
+        current.splitlines(),
+        expected.splitlines(),
+        fromfile=f"{path} (current)",
+        tofile=f"{path} (expected)",
+        lineterm="",
+    ):
+        print(line)
+    _print_regeneration_command(repo_root)
+
 
 def main() -> int:
     args = parse_args()
@@ -215,11 +244,12 @@ def main() -> int:
 
     current = manifest_path.read_text(encoding="utf-8")
     if current != expected:
-        print("ERROR: mobile manifest is stale.")
-        print("Run:")
-        print(
-            "  python3 rustok_mobile/tooling/scripts/generate_mobile_manifest.py "
-            f"--repo-root {repo_root}"
+        _print_stale_diff(
+            label="mobile manifest",
+            path=manifest_path,
+            current=current,
+            expected=expected,
+            repo_root=repo_root,
         )
         return 1
 
@@ -229,11 +259,12 @@ def main() -> int:
 
     snapshot_current = snapshot_path.read_text(encoding="utf-8")
     if snapshot_current != expected_snapshot:
-        print("ERROR: mobile manifest snapshot is stale.")
-        print("Run:")
-        print(
-            "  python3 rustok_mobile/tooling/scripts/generate_mobile_manifest.py "
-            f"--repo-root {repo_root}"
+        _print_stale_diff(
+            label="mobile manifest snapshot",
+            path=snapshot_path,
+            current=snapshot_current,
+            expected=expected_snapshot,
+            repo_root=repo_root,
         )
         return 1
 

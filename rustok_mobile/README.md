@@ -15,6 +15,7 @@ Flutter workspace scaffold based on `docs/research/flutter.md`.
 
 - Host app routing with `go_router` + `ShellRoute`.
 - Generated-manifest style module registry adapter (`mobile_manifest.g.dart`).
+- Manifest-driven navigation icon mapping with metadata fallbacks for generic module icons.
 - Shared route contracts with snake_case query key constraints.
 - Shared GraphQL transport context/header builders (tenant/locale non-blank validation in request context).
 - GraphQL client factory with HTTP/WebSocket split transport and subscription support.
@@ -53,8 +54,23 @@ python3 rustok_mobile/tooling/scripts/generate_mobile_manifest.py --repo-root /w
 python3 rustok_mobile/tooling/scripts/verify_mobile_manifest.py --repo-root /workspace/RusTok
 ```
 
+The verification command fails on stale generated files and prints a unified diff
+from the committed manifest/snapshot to the expected deterministic output. The
+snapshot includes normalized `nav_icon` metadata so navigation parity drift is
+visible in codegen checks.
+
+## Check deterministic codegen
+
+```bash
+python3 rustok_mobile/tooling/scripts/check_mobile_codegen.py --repo-root /workspace/RusTok
+```
+
+This command runs the generator into temporary files and compares those outputs
+with the committed manifest and snapshot. Use it when you need a CI-friendly
+signal that exercises the generator CLI itself.
+
 ## Next steps
 
-1. Replace generic icon mapping with module metadata mapping rules.
-2. Start first module package (`rustok_auth_mobile`) with real screens.
-3. Replace in-memory auth session store with secure storage and connect refresh flow to sign-in lifecycle.
+1. Start first module package (`rustok_auth_mobile`) with real screens.
+2. Replace in-memory auth session store with secure storage and connect refresh flow to sign-in lifecycle.
+3. Add deterministic generated-file checks to the mobile CI pipeline.

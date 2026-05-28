@@ -3,6 +3,7 @@
     "module_slug": "blog",
     "surface_kind": "admin_mobile",
     "route_segment": "blog",
+    "nav_icon": "article",
     "permissions": [],
     "locale_namespace": "blog",
     "child_pages": [
@@ -22,6 +23,7 @@
     "module_slug": "channel",
     "surface_kind": "admin_mobile",
     "route_segment": "channels",
+    "nav_icon": "module",
     "permissions": [],
     "locale_namespace": "channel",
     "child_pages": [
@@ -41,6 +43,7 @@
     "module_slug": "comments",
     "surface_kind": "admin_mobile",
     "route_segment": "comments",
+    "nav_icon": "chat",
     "permissions": [],
     "locale_namespace": "comments",
     "child_pages": []
@@ -49,6 +52,7 @@
     "module_slug": "commerce",
     "surface_kind": "admin_mobile",
     "route_segment": "commerce",
+    "nav_icon": "module",
     "permissions": [],
     "locale_namespace": "commerce",
     "child_pages": []
@@ -57,6 +61,7 @@
     "module_slug": "customer",
     "surface_kind": "admin_mobile",
     "route_segment": "customers",
+    "nav_icon": "people",
     "permissions": [],
     "locale_namespace": "customer",
     "child_pages": []
@@ -65,6 +70,7 @@
     "module_slug": "forum",
     "surface_kind": "admin_mobile",
     "route_segment": "forum",
+    "nav_icon": "forum",
     "permissions": [],
     "locale_namespace": "forum",
     "child_pages": [
@@ -84,6 +90,7 @@
     "module_slug": "fulfillment",
     "surface_kind": "admin_mobile",
     "route_segment": "fulfillment",
+    "nav_icon": "module",
     "permissions": [],
     "locale_namespace": "fulfillment",
     "child_pages": []
@@ -92,6 +99,7 @@
     "module_slug": "index",
     "surface_kind": "admin_mobile",
     "route_segment": "index",
+    "nav_icon": "module",
     "permissions": [],
     "locale_namespace": "index",
     "child_pages": []
@@ -100,6 +108,7 @@
     "module_slug": "inventory",
     "surface_kind": "admin_mobile",
     "route_segment": "inventory",
+    "nav_icon": "inventory",
     "permissions": [],
     "locale_namespace": "inventory",
     "child_pages": []
@@ -108,6 +117,7 @@
     "module_slug": "media",
     "surface_kind": "admin_mobile",
     "route_segment": "media",
+    "nav_icon": "perm_media",
     "permissions": [],
     "locale_namespace": "media",
     "child_pages": []
@@ -116,6 +126,7 @@
     "module_slug": "order",
     "surface_kind": "admin_mobile",
     "route_segment": "orders",
+    "nav_icon": "receipt_long",
     "permissions": [],
     "locale_namespace": "order",
     "child_pages": []
@@ -124,6 +135,7 @@
     "module_slug": "outbox",
     "surface_kind": "admin_mobile",
     "route_segment": "outbox",
+    "nav_icon": "module",
     "permissions": [],
     "locale_namespace": "outbox",
     "child_pages": []
@@ -132,6 +144,7 @@
     "module_slug": "pages",
     "surface_kind": "admin_mobile",
     "route_segment": "pages",
+    "nav_icon": "module",
     "permissions": [],
     "locale_namespace": "pages",
     "child_pages": [
@@ -151,6 +164,7 @@
     "module_slug": "pricing",
     "surface_kind": "admin_mobile",
     "route_segment": "pricing",
+    "nav_icon": "module",
     "permissions": [],
     "locale_namespace": "pricing",
     "child_pages": []
@@ -159,6 +173,7 @@
     "module_slug": "product",
     "surface_kind": "admin_mobile",
     "route_segment": "product",
+    "nav_icon": "inventory_2",
     "permissions": [],
     "locale_namespace": "product",
     "child_pages": []
@@ -167,6 +182,7 @@
     "module_slug": "rbac",
     "surface_kind": "admin_mobile",
     "route_segment": "rbac",
+    "nav_icon": "shield",
     "permissions": [],
     "locale_namespace": "rbac",
     "child_pages": []
@@ -175,6 +191,7 @@
     "module_slug": "region",
     "surface_kind": "admin_mobile",
     "route_segment": "regions",
+    "nav_icon": "module",
     "permissions": [],
     "locale_namespace": "region",
     "child_pages": []
@@ -183,6 +200,7 @@
     "module_slug": "search",
     "surface_kind": "admin_mobile",
     "route_segment": "search",
+    "nav_icon": "search",
     "permissions": [],
     "locale_namespace": "search",
     "child_pages": [
@@ -212,6 +230,7 @@
     "module_slug": "seo",
     "surface_kind": "admin_mobile",
     "route_segment": "seo",
+    "nav_icon": "travel_explore",
     "permissions": [],
     "locale_namespace": "seo",
     "child_pages": [
@@ -226,6 +245,7 @@
     "module_slug": "tenant",
     "surface_kind": "admin_mobile",
     "route_segment": "tenant",
+    "nav_icon": "apartment",
     "permissions": [],
     "locale_namespace": "tenant",
     "child_pages": []
@@ -234,6 +254,7 @@
     "module_slug": "workflow",
     "surface_kind": "admin_mobile",
     "route_segment": "workflow",
+    "nav_icon": "account_tree",
     "permissions": [],
     "locale_namespace": "workflow",
     "child_pages": [
