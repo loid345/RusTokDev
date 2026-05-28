@@ -18,9 +18,7 @@ class GenerateMobileManifestTests(unittest.TestCase):
             (root / "crates/mod-b").mkdir(parents=True)
             (root / "crates/mod-c").mkdir(parents=True)
 
-            (root / "crates/mod-a/rustok-module.toml").write_text(
-                textwrap.dedent(
-                    """
+            (root / "crates/mod-a/rustok-module.toml").write_text(textwrap.dedent("""
                     [module]
                     slug = "auth"
                     name = "Auth"
@@ -32,12 +30,8 @@ class GenerateMobileManifestTests(unittest.TestCase):
                     [[provides.admin_ui.child_pages]]
                     subpath = "Users"
                     title = "Users"
-                    """
-                ).strip()
-            )
-            (root / "crates/mod-b/rustok-module.toml").write_text(
-                textwrap.dedent(
-                    """
+                    """).strip())
+            (root / "crates/mod-b/rustok-module.toml").write_text(textwrap.dedent("""
                     [module]
                     slug = "blog"
                     name = "Blog"
@@ -45,17 +39,11 @@ class GenerateMobileManifestTests(unittest.TestCase):
                     [provides.admin_ui]
                     route_segment = "blog"
                     nav_label = "Blog"
-                    """
-                ).strip()
-            )
-            (root / "crates/mod-c/rustok-module.toml").write_text(
-                textwrap.dedent(
-                    """
+                    """).strip())
+            (root / "crates/mod-c/rustok-module.toml").write_text(textwrap.dedent("""
                     [module]
                     slug = "service-only"
-                    """
-                ).strip()
-            )
+                    """).strip())
 
             modules = scan_modules(root)
             self.assertEqual([m["route_segment"] for m in modules], ["auth", "blog"])
@@ -108,6 +96,7 @@ class GenerateMobileManifestTests(unittest.TestCase):
         self.assertIn('"module_slug": "blog"', payload)
         self.assertIn('"surface_kind": "admin_mobile"', payload)
         self.assertIn('"route_segment": "blog"', payload)
+        self.assertIn('"nav_icon": "article"', payload)
         self.assertIn('"child_pages"', payload)
 
     def test_scan_modules_raises_on_duplicate_route_segment(self):
@@ -116,28 +105,20 @@ class GenerateMobileManifestTests(unittest.TestCase):
             (root / "crates/mod-a").mkdir(parents=True)
             (root / "crates/mod-b").mkdir(parents=True)
 
-            (root / "crates/mod-a/rustok-module.toml").write_text(
-                textwrap.dedent(
-                    """
+            (root / "crates/mod-a/rustok-module.toml").write_text(textwrap.dedent("""
                     [module]
                     slug = "blog"
 
                     [provides.admin_ui]
                     route_segment = "content"
-                    """
-                ).strip()
-            )
-            (root / "crates/mod-b/rustok-module.toml").write_text(
-                textwrap.dedent(
-                    """
+                    """).strip())
+            (root / "crates/mod-b/rustok-module.toml").write_text(textwrap.dedent("""
                     [module]
                     slug = "forum"
 
                     [provides.admin_ui]
                     route_segment = "content"
-                    """
-                ).strip()
-            )
+                    """).strip())
 
             with self.assertRaises(ValueError) as ctx:
                 scan_modules(root)
@@ -149,9 +130,7 @@ class GenerateMobileManifestTests(unittest.TestCase):
             root = pathlib.Path(tmp)
             (root / "crates/mod-a").mkdir(parents=True)
 
-            (root / "crates/mod-a/rustok-module.toml").write_text(
-                textwrap.dedent(
-                    """
+            (root / "crates/mod-a/rustok-module.toml").write_text(textwrap.dedent("""
                     [module]
                     slug = "blog"
 
@@ -159,9 +138,7 @@ class GenerateMobileManifestTests(unittest.TestCase):
                     route_segment = "blog"
                     locale_namespace = "content_blog"
                     permissions = ["modules.read", "modules.read", " "]
-                    """
-                ).strip()
-            )
+                    """).strip())
 
             modules = scan_modules(root)
             self.assertEqual(modules[0]["locale_namespace"], "content_blog")
@@ -190,9 +167,7 @@ class GenerateMobileManifestTests(unittest.TestCase):
             root = pathlib.Path(tmp)
             (root / "crates/mod-a").mkdir(parents=True)
 
-            (root / "crates/mod-a/rustok-module.toml").write_text(
-                textwrap.dedent(
-                    """
+            (root / "crates/mod-a/rustok-module.toml").write_text(textwrap.dedent("""
                     [module]
                     slug = "blog"
 
@@ -200,9 +175,7 @@ class GenerateMobileManifestTests(unittest.TestCase):
                     route_segment = "blog"
                     locale_namespace = "Content Blog"
                     permissions = ["z.read", "a.read", "z.read"]
-                    """
-                ).strip()
-            )
+                    """).strip())
 
             modules = scan_modules(root)
             self.assertEqual(modules[0]["locale_namespace"], "content_blog")
@@ -213,18 +186,14 @@ class GenerateMobileManifestTests(unittest.TestCase):
             root = pathlib.Path(tmp)
             (root / "crates/mod-a").mkdir(parents=True)
 
-            (root / "crates/mod-a/rustok-module.toml").write_text(
-                textwrap.dedent(
-                    """
+            (root / "crates/mod-a/rustok-module.toml").write_text(textwrap.dedent("""
                     [module]
                     slug = "blog"
 
                     [provides.admin_ui]
                     route_segment = "blog"
                     permissions = ["Blog.Read", "BLOG.READ", "blog.write"]
-                    """
-                ).strip()
-            )
+                    """).strip())
 
             modules = scan_modules(root)
             self.assertEqual(modules[0]["permissions"], ["blog.read", "blog.write"])
@@ -234,18 +203,14 @@ class GenerateMobileManifestTests(unittest.TestCase):
             root = pathlib.Path(tmp)
             (root / "crates/mod-a").mkdir(parents=True)
 
-            (root / "crates/mod-a/rustok-module.toml").write_text(
-                textwrap.dedent(
-                    """
+            (root / "crates/mod-a/rustok-module.toml").write_text(textwrap.dedent("""
                     [module]
                     slug = "blog"
 
                     [provides.admin_ui]
                     route_segment = "blog"
                     permissions = ["blog.read", "blog/read", "bad space", "ok:perm"]
-                    """
-                ).strip()
-            )
+                    """).strip())
 
             modules = scan_modules(root)
             self.assertEqual(modules[0]["permissions"], ["blog.read", "ok:perm"])
@@ -255,18 +220,14 @@ class GenerateMobileManifestTests(unittest.TestCase):
             root = pathlib.Path(tmp)
             (root / "crates/mod-a").mkdir(parents=True)
 
-            (root / "crates/mod-a/rustok-module.toml").write_text(
-                textwrap.dedent(
-                    """
+            (root / "crates/mod-a/rustok-module.toml").write_text(textwrap.dedent("""
                     [module]
                     slug = "blog"
 
                     [provides.admin_ui]
                     route_segment = "blog"
                     locale_namespace = "!!!"
-                    """
-                ).strip()
-            )
+                    """).strip())
 
             modules = scan_modules(root)
             self.assertEqual(modules[0]["locale_namespace"], "blog")
