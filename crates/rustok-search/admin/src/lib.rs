@@ -1025,18 +1025,17 @@ fn analytics_panel(analytics: SearchAnalyticsPayload, ui_locale: Option<String>)
 }
 
 fn preview_panel(payload: SearchPreviewPayload, labels: SearchPreviewLabels) -> impl IntoView {
-    let preview_summary = labels
-        .summary_template
-        .replace("{total}", payload.total.to_string().as_str())
-        .replace("{took_ms}", payload.took_ms.to_string().as_str())
-        .replace("{engine}", payload.engine.as_str())
-        .replace("{ranking_profile}", payload.ranking_profile.as_str());
-    let preview_preset = labels.preset_template.replace(
-        "{preset}",
-        payload
-            .preset_key
-            .as_deref()
-            .unwrap_or(labels.none_label.as_str()),
+    let preview_summary = core::render_preview_summary(
+        labels.summary_template.as_str(),
+        payload.total,
+        payload.took_ms,
+        payload.engine.as_str(),
+        payload.ranking_profile.as_str(),
+    );
+    let preview_preset = core::render_preview_preset(
+        labels.preset_template.as_str(),
+        payload.preset_key.as_deref(),
+        labels.none_label.as_str(),
     );
     view! { <section class="rounded-2xl border border-border bg-card p-6 shadow-sm">
         <div><h2 class="text-lg font-semibold text-card-foreground">{labels.title.clone()}</h2><p class="text-sm text-muted-foreground">{preview_summary}</p><p class="mt-2 text-xs text-muted-foreground">{preview_preset}</p></div>
@@ -1779,10 +1778,18 @@ fn DiagnosticsCard(
         "lagging" => t(locale, "search.state.lagging", "lagging"),
         other => other.to_string(),
     };
+    let newest_indexed = core::value_or_fallback(
+        diagnostics.newest_indexed_at,
+        t(locale, "search.common.notIndexedYet", "not indexed yet").as_str(),
+    );
+    let newest_indexed_summary = core::label_value_summary(
+        t(locale, "search.diagnostics.newestIndexed", "Newest indexed").as_str(),
+        newest_indexed.as_str(),
+    );
     view! { <article class="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <div class="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">{t(locale, "search.diagnostics.indexState", "Index state")}</div>
         <div class="mt-3"><span class=format!("inline-flex rounded-full border px-3 py-1 text-xs font-semibold {badge_class}")>{state_label}</span></div>
-        <p class="mt-3 text-sm text-muted-foreground">{format!("{}: {}", t(locale, "search.diagnostics.newestIndexed", "Newest indexed"), diagnostics.newest_indexed_at.unwrap_or_else(|| t(locale, "search.common.notIndexedYet", "not indexed yet")))}</p>
+        <p class="mt-3 text-sm text-muted-foreground">{newest_indexed_summary}</p>
     </article> }
 }
 

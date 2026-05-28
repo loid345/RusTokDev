@@ -193,3 +193,4 @@
 - blog slice #1 evidence: `crates/rustok-blog/storefront/src/core.rs` используется `crates/rustok-blog/storefront/src/lib.rs`; transport split (`native #[server]` + GraphQL fallback) не менялся.
 - `rustok-search` slice #10 evidence: admin relevance editor JSON formatting/profile/preset extraction moved from Leptos render module to `admin/src/core.rs`; transport split (`native #[server]` + GraphQL fallback) не менялся.
 - `rustok-search` slice #11 evidence: admin analytics/diagnostics metric formatting moved from Leptos render module to `admin/src/core.rs`; transport split (`native #[server]` + GraphQL fallback) не менялся.
+- `rustok-search` slice #12 evidence: admin preview summary/preset rendering and diagnostics fallback text moved from Leptos render module to `admin/src/core.rs`; transport split (`native #[server]` + GraphQL fallback) не менялся.

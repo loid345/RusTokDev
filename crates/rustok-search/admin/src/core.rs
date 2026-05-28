@@ -93,6 +93,37 @@ mod tests {
     }
 
     #[test]
+    fn preview_and_fallback_rendering_helpers_are_stable() {
+        assert_eq!(
+            render_preview_summary(
+                "{total} results in {took_ms} ms via {engine} ({ranking_profile})",
+                7,
+                42,
+                "postgres",
+                "balanced",
+            ),
+            "7 results in 42 ms via postgres (balanced)"
+        );
+        assert_eq!(
+            render_preview_preset("preset = {preset}", Some("published"), "none"),
+            "preset = published"
+        );
+        assert_eq!(
+            render_preview_preset("preset = {preset}", None, "none"),
+            "preset = none"
+        );
+        assert_eq!(
+            value_or_fallback(Some("2026-05-28".to_string()), "n/a"),
+            "2026-05-28"
+        );
+        assert_eq!(value_or_fallback(None, "n/a"), "n/a");
+        assert_eq!(
+            label_value_summary("Newest indexed", "n/a"),
+            "Newest indexed: n/a"
+        );
+    }
+
+    #[test]
     fn relevance_editor_json_helpers_are_stable() {
         let config = serde_json::json!({
             "ranking_profiles": {
@@ -192,4 +223,30 @@ pub fn format_seconds(seconds: u64) -> String {
 
 pub fn document_source_path(document_id: &str, source_module: &str, entity_type: &str) -> String {
     format!("{} / {} / {}", document_id, source_module, entity_type)
+}
+
+pub fn render_preview_summary(
+    template: &str,
+    total: u64,
+    took_ms: u64,
+    engine: &str,
+    ranking_profile: &str,
+) -> String {
+    template
+        .replace("{total}", total.to_string().as_str())
+        .replace("{took_ms}", took_ms.to_string().as_str())
+        .replace("{engine}", engine)
+        .replace("{ranking_profile}", ranking_profile)
+}
+
+pub fn render_preview_preset(template: &str, preset_key: Option<&str>, none_label: &str) -> String {
+    template.replace("{preset}", preset_key.unwrap_or(none_label))
+}
+
+pub fn value_or_fallback(value: Option<String>, fallback: &str) -> String {
+    value.unwrap_or_else(|| fallback.to_string())
+}
+
+pub fn label_value_summary(label: &str, value: &str) -> String {
+    format!("{}: {}", label, value)
 }
