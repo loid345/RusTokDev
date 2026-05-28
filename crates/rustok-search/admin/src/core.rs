@@ -93,6 +93,25 @@ mod tests {
     }
 
     #[test]
+    fn navigation_and_rebuild_helpers_are_stable() {
+        assert_eq!(module_overview_href("search"), "/modules/search");
+        assert_eq!(
+            module_section_href("search", "analytics"),
+            "/modules/search/analytics"
+        );
+        assert_eq!(
+            engine_option_label("PostgreSQL", "postgres"),
+            "PostgreSQL (postgres)"
+        );
+        assert_eq!(rebuild_target_suffix(Some("doc-1")), " for target doc-1");
+        assert_eq!(rebuild_target_suffix(None), "");
+        assert_eq!(
+            render_rebuild_feedback("Queued {scope}{suffix}", "product", Some("p1")),
+            "Queued product for target p1"
+        );
+    }
+
+    #[test]
     fn css_class_helpers_are_stable() {
         assert_eq!(
             diagnostics_state_badge_class("healthy"),
@@ -296,4 +315,28 @@ pub fn tab_class(active: bool) -> &'static str {
     } else {
         "inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground"
     }
+}
+
+pub fn module_overview_href(route_segment: &str) -> String {
+    format!("/modules/{route_segment}")
+}
+
+pub fn module_section_href(route_segment: &str, section: &str) -> String {
+    format!("/modules/{route_segment}/{section}")
+}
+
+pub fn engine_option_label(label: &str, kind: &str) -> String {
+    format!("{} ({})", label, kind)
+}
+
+pub fn rebuild_target_suffix(target_id: Option<&str>) -> String {
+    target_id
+        .map(|id| format!(" for target {id}"))
+        .unwrap_or_default()
+}
+
+pub fn render_rebuild_feedback(template: &str, scope: &str, target_id: Option<&str>) -> String {
+    template
+        .replace("{scope}", scope)
+        .replace("{suffix}", rebuild_target_suffix(target_id).as_str())
 }

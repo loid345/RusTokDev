@@ -6,7 +6,7 @@
 ## Execution checkpoint
 
 - Current phase: plan_sync
-- Last checkpoint: Phase B pilot slice #14 moved admin tab/diagnostics/consistency CSS class mapping into `admin/src/core.rs` without changing native/GraphQL transport.
+- Last checkpoint: Phase B pilot slice #15 moved admin navigation/rebuild feedback/engine option rendering helpers into `admin/src/core.rs` without changing native/GraphQL transport.
 - Next step: Continue Phase B with the next smallest search UI/state helper extraction while preserving dual-path parity.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок.
@@ -103,3 +103,4 @@
 - [x] Slice 12: admin preview summary/preset rendering and diagnostics fallback text moved to core (`render_preview_summary`, `render_preview_preset`, `value_or_fallback`, `label_value_summary`).
 - [x] Slice 13: admin analytics/dictionaries error messages and timestamp fallbacks switched to existing core helpers (`error_with_context`, `value_or_fallback`).
 - [x] Slice 14: admin tab and diagnostics/consistency badge CSS class mapping moved to core (`tab_class`, `diagnostics_state_badge_class`, `consistency_issue_badge_class`).
+- [x] Slice 15: admin navigation href, engine option label and rebuild feedback rendering moved to core (`module_overview_href`, `module_section_href`, `engine_option_label`, `rebuild_target_suffix`, `render_rebuild_feedback`).

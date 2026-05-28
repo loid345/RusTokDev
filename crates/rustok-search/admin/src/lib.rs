@@ -279,16 +279,11 @@ pub fn SearchAdmin() -> impl IntoView {
                 .await
                 {
                     Ok(result) => {
-                        let suffix = result
-                            .target_id
-                            .as_ref()
-                            .map(|id| format!(" for target {id}"))
-                            .unwrap_or_default();
-                        set_rebuild_feedback.set(Some(
-                            rebuild_queued_template
-                                .replace("{scope}", result.target_type.as_str())
-                                .replace("{suffix}", suffix.as_str()),
-                        ));
+                        set_rebuild_feedback.set(Some(core::render_rebuild_feedback(
+                            rebuild_queued_template.as_str(),
+                            result.target_type.as_str(),
+                            result.target_id.as_deref(),
+                        )));
                         set_refresh_nonce.update(|value| *value += 1);
                     }
                     Err(err) => set_rebuild_feedback.set(Some(core::error_with_context(
@@ -312,10 +307,10 @@ pub fn SearchAdmin() -> impl IntoView {
                     </p>
                 </div>
                 <div class="flex flex-wrap gap-2">
-                    <A href=format!("/modules/{route_segment}") attr:class=core::tab_class(!on_playground && !on_diagnostics && !on_dictionaries)>{overview_label.clone()}</A>
-                    <A href=format!("/modules/{route_segment}/playground") attr:class=core::tab_class(on_playground)>{playground_label.clone()}</A>
-                    <A href=format!("/modules/{route_segment}/analytics") attr:class=core::tab_class(on_diagnostics)>{analytics_label.clone()}</A>
-                    <A href=format!("/modules/{route_segment}/dictionaries") attr:class=core::tab_class(on_dictionaries)>{dictionaries_label.clone()}</A>
+                    <A href=core::module_overview_href(route_segment.as_str()) attr:class=core::tab_class(!on_playground && !on_diagnostics && !on_dictionaries)>{overview_label.clone()}</A>
+                    <A href=core::module_section_href(route_segment.as_str(), "playground") attr:class=core::tab_class(on_playground)>{playground_label.clone()}</A>
+                    <A href=core::module_section_href(route_segment.as_str(), "analytics") attr:class=core::tab_class(on_diagnostics)>{analytics_label.clone()}</A>
+                    <A href=core::module_section_href(route_segment.as_str(), "dictionaries") attr:class=core::tab_class(on_dictionaries)>{dictionaries_label.clone()}</A>
                 </div>
             </header>
 
@@ -592,7 +587,7 @@ fn overview_view(
                         <span class="text-sm font-medium text-card-foreground">{t(locale, "search.settings.activeEngine", "Active engine")}</span>
                         <select class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" prop:value=settings_active_engine on:change=move |ev| set_settings_active_engine.set(event_target_value(&ev))>
                             {bootstrap.available_search_engines.iter().map(|engine| view! {
-                                <option value=engine.kind.clone()>{format!("{} ({})", engine.label, engine.kind)}</option>
+                                <option value=engine.kind.clone()>{core::engine_option_label(&engine.label, &engine.kind)}</option>
                             }).collect_view()}
                         </select>
                     </label>
@@ -600,7 +595,7 @@ fn overview_view(
                         <span class="text-sm font-medium text-card-foreground">{t(locale, "search.settings.fallbackEngine", "Fallback engine")}</span>
                         <select class="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm" prop:value=settings_fallback_engine on:change=move |ev| set_settings_fallback_engine.set(event_target_value(&ev))>
                             {bootstrap.available_search_engines.iter().map(|engine| view! {
-                                <option value=engine.kind.clone()>{format!("{} ({})", engine.label, engine.kind)}</option>
+                                <option value=engine.kind.clone()>{core::engine_option_label(&engine.label, &engine.kind)}</option>
                             }).collect_view()}
                         </select>
                     </label>
