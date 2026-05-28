@@ -8,14 +8,14 @@ packages и module metadata синхронизированы.
 ## Execution checkpoint
 
 - Current phase: phase_b_in_progress
-- Last checkpoint: FFA slice #69 completed (storefront published-posts readiness branch migrated to typed core enum `PublishedPostsReadyView<T>` via `core::published_posts_ready_typed_view(...)`, replacing Result-based branch mapping in UI).
+- Last checkpoint: FFA slice #70 completed (storefront core dedup baseline: duplicate typed helper definitions `post_link_typed_view` and `published_post_card_view` removed, keeping single canonical core helpers and preventing helper drift across UI surfaces).
 - Next step: Зафиксировать evidence по parity checklist и выбрать следующий один use-case для admin/storefront core extraction без изменения transport-контракта.
 - Open blockers: None.
 - Hand-off notes for next agent:
   1. Продолжать one-task-per-iteration: один helper/use-case -> storefront/admin -> docs double-check.
   2. Не менять dual-path контракт (`native #[server]` + GraphQL fallback) при FFA-декомпозиции.
   3. После каждого slice обновлять parity evidence (`docs/verification/ffa-ui-parity-checklist.md`).
-- Last updated at (UTC): 2026-05-25T18:02:00Z
+- Last updated at (UTC): 2026-05-25T18:26:00Z
 
 ## FFA/FBA status
 
@@ -192,6 +192,7 @@ packages и module metadata синхронизированы.
 - [x] Slice 67: storefront status-badge fragment now consumes typed payload `StatusBadgeView` via `core::status_badge_typed_view(...)` instead of tuple destructuring from `status_badge_view(...)`.
 - [x] Slice 68: storefront post-link fragment now consumes typed payload `PostLinkView` via `core::post_link_typed_view(...)`; `list_post_summary(...)` switched from tuple link destructuring to typed link payload consumption.
 - [x] Slice 69: storefront published-posts readiness branch now consumes typed payload enum `PublishedPostsReadyView<T>` via `core::published_posts_ready_typed_view(...)` instead of matching `Result<Vec<_>, String>` in UI.
+- [x] Slice 70: storefront core helper dedup completed — removed duplicate definitions of `post_link_typed_view(...)` and `published_post_card_view(...)`, preserving single canonical typed helper path for published-post card/link mapping without transport contract changes.
 - [x] Sync admin surface for the same helper family where applicable and attach parity evidence.
 - [ ] `cargo xtask module validate blog` / `cargo xtask module test blog` rerun after next slice touching runtime contract.
 
