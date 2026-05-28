@@ -4,23 +4,25 @@
 
 ## Execution checkpoint
 
-- Current phase: phase_c2_execution
-- Last checkpoint: C1 закрыт полностью: sitemap submission orchestration переведён на telemetry-friendly per-endpoint aggregation (`success/failure/timeout/invalid_endpoint`) с bounded partial-failure summary (`max_errors`, `max_timeout_details`) и deterministic ordering по endpoint без изменения public `SeoSitemapStatusRecord`; regression matrix для adapter path покрывает all-success, partial-failure, invalid-endpoint-skip и timeout/failure truncation.
-- Next step: Продолжать C2 (cross-linking foundation) от текущего read-only baseline: расширять suggestion heuristics, remediation UX и owner-module integration без автоматических HTML mutation.
-- Open blockers: Для полноценных provider-specific adapters (Google Indexing API и др.) нужен отдельный tenant-secret contract и policy для secret rotation; для production-grade cross-link relevance понадобятся owner-module signals beyond bulk summaries (вне текущего C2 foundation scope).
-- Hand-off notes for next agent: C1 verify/doc gates уже синхронизированы; в C2 держать read-only contract (`seoCrossLinkSuggestions` + `/api/seo/cross-link-suggestions`) и diagnostics `cross_link_gap` aggregates, не добавляя auto-link writer до отдельного quality track.
-- Last updated at (UTC): 2026-05-28T21:45:00Z
+- Current phase: phase_c3_execution
+- Last checkpoint: C3 baseline закрыт: boundary contract `rustok-media::MediaImageDescriptor` внедрён в `rustok-seo-targets` (`SeoTargetImageRecord` alias), built-in owner providers (`pages/product/blog/forum`) перешли на descriptor-driven OG/Twitter/schema fallback и image-aware template fields; diagnostics дополнился issue codes `missing_image_alt`/`missing_image_size` с агрегатами в существующей модели.
+- Next step: Держать Next route coverage guardrail до появления реального route ownership surface в `apps/next-frontend`; после появления маршрутов выполнить отдельный C4 инкремент с минимальным расширением coverage.
+- Open blockers: В этой VM отсутствует `cargo` в PATH, поэтому локальные verification gates из плана не были запущены вручную; требуется отдельный CI/runner прогон.
+- Hand-off notes for next agent: не обходить `MediaImageDescriptor` boundary и не возвращать raw media/blob glue в SEO providers; guardrail по Next routes пока оставлять в состоянии deferred-with-reason.
+- Last updated at (UTC): 2026-05-28T23:25:00Z
 
 ## FFA/FBA status block
 
 - FFA status: `in_progress`
 - FBA status: `in_progress`
 - Last verification evidence:
-  - `cargo check -p rustok-seo --tests --config profile.dev.debug=0`
-  - `cargo test -p rustok-seo --lib sitemaps`
-  - `cargo check -p rustok-seo-admin --features ssr --config profile.dev.debug=0`
-  - `cargo check -p rustok-server --lib --config profile.dev.debug=0`
-  - `cargo check -p rustok-seo-admin-support --tests --config profile.dev.debug=0`
+  - `cargo xtask module validate seo` *(blocked in this VM: `cargo` binary unavailable in PATH)*
+  - `cargo check -p rustok-media --tests --config profile.dev.debug=0` *(blocked in this VM: `cargo` binary unavailable in PATH)*
+  - `cargo check -p rustok-seo --tests --config profile.dev.debug=0` *(blocked in this VM: `cargo` binary unavailable in PATH)*
+  - `cargo check -p rustok-seo-admin --features ssr --config profile.dev.debug=0` *(blocked in this VM: `cargo` binary unavailable in PATH)*
+  - `cargo check -p rustok-seo-admin-support --tests --config profile.dev.debug=0` *(blocked in this VM: `cargo` binary unavailable in PATH)*
+  - `cargo check -p rustok-storefront --config profile.dev.debug=0` *(blocked in this VM: `cargo` binary unavailable in PATH)*
+  - `cargo check -p rustok-server --lib --config profile.dev.debug=0` *(blocked in this VM: `cargo` binary unavailable in PATH)*
 - Scope note: module-owned UI остаётся infrastructure control-plane (`rustok-seo-admin` + owner-side SEO panels в `pages/product/blog/forum`); transport boundary развивается через GraphQL + REST `/api/seo/page-context` и read-only cross-link contract (`seoCrossLinkSuggestions` + `/api/seo/cross-link-suggestions`).
 
 ## Область работ
@@ -43,16 +45,18 @@
 - `rustok-seo-admin` разбит на `lib/component/model/api/i18n/sections` и больше не содержит central entity metadata editor;
 - owner-side SEO panels встроены в `rustok-pages/admin`, `rustok-product/admin`, `rustok-blog/admin`, `rustok-forum/admin`;
 - target extensibility идёт через `rustok-seo-targets` и runtime registration providers;
-- tenant templates и diagnostics уже являются first-class read/control-plane слоями; diagnostics покрывает issue aggregates, canonical redirect chains/loops, hreflang gaps и `cross_link_gap` remediation hints;
+- tenant templates и diagnostics уже являются first-class read/control-plane слоями; diagnostics покрывает issue aggregates, canonical redirect chains/loops, hreflang gaps, `cross_link_gap` remediation hints и image descriptor quality checks (`missing_image_alt`, `missing_image_size`);
 - read-only cross-link contract добавлен как foundation surface (`seoCrossLinkSuggestions` + `/api/seo/cross-link-suggestions`) с tenant/RBAC parity;
-- `SeoDocument.structured_data_blocks` больше не является raw JSON passthrough: JSON-LD нормализуется в typed schema blocks с `schema_kind`, `schema_type`, legacy `kind`, `source` и payload.
+- `SeoDocument.structured_data_blocks` больше не является raw JSON passthrough: JSON-LD нормализуется в typed schema blocks с `schema_kind`, `schema_type`, legacy `kind`, `source` и payload;
+- boundary contract C3 закреплён через `rustok-media::MediaImageDescriptor` -> `rustok-seo-targets::SeoTargetImageRecord`, owner providers заполняют OG/Twitter/schema/template image fields без raw blob glue.
 
 ## Итог последней exploration-сессии
 
 - baseline runtime и control-plane для templates/bulk/diagnostics подтверждён как завершённый;
 - C1 закрыт: sitemap submit имеет provider seam + telemetry-friendly per-endpoint aggregation и deterministic bounded partial-failure summary;
 - C2 foundation закрыт: read-only cross-link suggestions доступны через GraphQL/REST, diagnostics включает `cross_link_gap` issue code и remediation entrypoint в текущем SEO control-plane;
-- следующая крупная итерация Phase C — C3 (image SEO hooks), дополнительные SEO surface-расширения для Next/storefront не должны опережать реальное появление route ownership в host-приложениях.
+- C3 закрыт: `rustok-media` ↔ `rustok-seo` image boundary переведён на typed descriptors, owner providers обновлены, diagnostics получил image quality issue aggregates;
+- guardrail по Next route coverage остаётся отложенным, потому что в `apps/next-frontend` пока нет production route ownership surface сверх home route (`src/app/[locale]/page.tsx`).
 
 ## Этапы
 
@@ -156,28 +160,29 @@
     - `cargo check -p rustok-seo-admin --features ssr --config profile.dev.debug=0`
     - `cargo check -p rustok-server --lib --config profile.dev.debug=0`
 
-- [ ] **Iteration C3 — image SEO hooks через `rustok-media`**
-  - [ ] Зафиксировать module boundary contract: `rustok-media` отдаёт typed image descriptors (url/alt/size/mime), `rustok-seo` только потребляет их для OG/Twitter/schema fallback.
-  - [ ] Обновить built-in owner providers (`pages/product/blog/forum`) для заполнения image-aware template/schema fields без raw blob glue.
-  - [ ] Добавить diagnostics checks для missing image alt/size в SEO-critical targets.
+- [x] **Iteration C3 — image SEO hooks через `rustok-media`**
+  - [x] Зафиксировать module boundary contract: `rustok-media` отдаёт typed image descriptors (url/alt/size/mime), `rustok-seo` только потребляет их для OG/Twitter/schema fallback.
+  - [x] Обновить built-in owner providers (`pages/product/blog/forum`) для заполнения image-aware template/schema fields без raw blob glue.
+  - [x] Добавить diagnostics checks для missing image alt/size в SEO-critical targets.
   - Проверка инкремента:
-    - `cargo check -p rustok-media --tests --config profile.dev.debug=0`
-    - `cargo check -p rustok-seo --tests --config profile.dev.debug=0`
-    - `cargo check -p rustok-storefront --config profile.dev.debug=0`
+    - `cargo check -p rustok-media --tests --config profile.dev.debug=0` *(blocked in this VM: `cargo` binary unavailable in PATH)*
+    - `cargo check -p rustok-seo --tests --config profile.dev.debug=0` *(blocked in this VM: `cargo` binary unavailable in PATH)*
+    - `cargo check -p rustok-storefront --config profile.dev.debug=0` *(blocked in this VM: `cargo` binary unavailable in PATH)*
 
 - [ ] Расширять Next route coverage только вместе с появлением реальных storefront routes и после фиксации C1–C3 baseline.
+  - Guardrail status (2026-05-28): **deferred intentionally** — `apps/next-frontend` пока содержит только home route ownership surface (`src/app/[locale]/page.tsx`), безопасного baseline для расширения coverage по `product/blog/forum/pages` ещё нет.
+  - Следующий checkpoint для этого пункта: `phase_c4_next_routes_ready` после появления реальных Next storefront route owners.
 
 
 ## Осталось сделать (оценка на 2026-05-28)
 
-- **Phase C — indexing и linking automation**: 1/3 итерации в статусе open (`C3`), `C1` и `C2` закрыты.
-- **Незавершённые checklist-пункты в Phase C**: **4**
-  - C3: 3 пункта
-  - Next coverage guardrail (расширение Next routes только после C1–C3): 1 пункт
-- **Quality backlog**: 0 open пунктов (tests/docs и verification gates синхронизированы в рамках C1.3/C2 foundation).
-- **Итого open пунктов в документе**: **4**.
+- **Phase C — indexing и linking automation**: `C1`, `C2`, `C3` закрыты; открыт только guardrail по Next route coverage.
+- **Незавершённые checklist-пункты в Phase C**: **1**
+  - Next coverage guardrail (расширение Next routes только после C1–C3): 1 пункт (deferred-with-reason)
+- **Quality backlog**: 0 open пунктов по коду/документации внутри C3 scope; verification gates ожидают внешний runner, так как локально `cargo` недоступен.
+- **Итого open пунктов в документе**: **1**.
 
-Приоритет исполнения: завершить C3 (image SEO hooks через `rustok-media`), после чего открывать расширение Next route coverage.
+Приоритет исполнения: дождаться реального Next storefront route ownership surface и выполнить `phase_c4_next_routes_ready`.
 
 ## Проверка
 

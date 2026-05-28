@@ -28,6 +28,7 @@ rustok-events.workspace = true
 rustok-outbox.workspace = true
 rustok-profiles.workspace = true
 rustok-seo-targets.workspace = true
+rustok-media.workspace = true
 rustok-taxonomy.workspace = true
 sea-orm.workspace = true
 sea-orm-migration.workspace = true

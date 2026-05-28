@@ -27,3 +27,4 @@ uuid.workspace = true
 
 rustok-core = { workspace = true, optional = true }
 rustok-outbox = { workspace = true, optional = true }
+rustok-media.workspace = true

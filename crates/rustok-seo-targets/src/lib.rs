@@ -22,14 +22,33 @@ use thiserror::Error;
 use uuid::Uuid;
 
 pub mod schema {
+    use super::SeoTargetImageRecord;
     use serde_json::{json, Map, Value};
 
     pub fn web_page(name: &str, description: Option<&str>, in_language: &str) -> Value {
-        base_page("WebPage", name, description, in_language)
+        web_page_with_image(name, description, None, in_language)
+    }
+
+    pub fn web_page_with_image(
+        name: &str,
+        description: Option<&str>,
+        image: Option<&SeoTargetImageRecord>,
+        in_language: &str,
+    ) -> Value {
+        base_page("WebPage", name, description, image, in_language)
     }
 
     pub fn collection_page(name: &str, description: Option<&str>, in_language: &str) -> Value {
-        base_page("CollectionPage", name, description, in_language)
+        collection_page_with_image(name, description, None, in_language)
+    }
+
+    pub fn collection_page_with_image(
+        name: &str,
+        description: Option<&str>,
+        image: Option<&SeoTargetImageRecord>,
+        in_language: &str,
+    ) -> Value {
+        base_page("CollectionPage", name, description, image, in_language)
     }
 
     pub fn product(
@@ -38,10 +57,20 @@ pub mod schema {
         image_url: Option<&str>,
         in_language: &str,
     ) -> Value {
+        let image = image_from_url(image_url);
+        product_with_image(name, description, image.as_ref(), in_language)
+    }
+
+    pub fn product_with_image(
+        name: &str,
+        description: Option<&str>,
+        image: Option<&SeoTargetImageRecord>,
+        in_language: &str,
+    ) -> Value {
         let mut object = schema_object("Product");
         insert_string(&mut object, "name", Some(name));
         insert_string(&mut object, "description", description);
-        insert_string(&mut object, "image", image_url);
+        insert_image(&mut object, "image", image);
         insert_string(&mut object, "inLanguage", Some(in_language));
         Value::Object(object)
     }
@@ -54,10 +83,29 @@ pub mod schema {
         date_published: Option<Value>,
         date_modified: Option<Value>,
     ) -> Value {
+        let image = image_from_url(image_url);
+        blog_posting_with_image(
+            headline,
+            description,
+            image.as_ref(),
+            in_language,
+            date_published,
+            date_modified,
+        )
+    }
+
+    pub fn blog_posting_with_image(
+        headline: &str,
+        description: Option<&str>,
+        image: Option<&SeoTargetImageRecord>,
+        in_language: &str,
+        date_published: Option<Value>,
+        date_modified: Option<Value>,
+    ) -> Value {
         let mut object = schema_object("BlogPosting");
         insert_string(&mut object, "headline", Some(headline));
         insert_string(&mut object, "description", description);
-        insert_string(&mut object, "image", image_url);
+        insert_image(&mut object, "image", image);
         insert_string(&mut object, "inLanguage", Some(in_language));
         insert_value(&mut object, "datePublished", date_published);
         insert_value(&mut object, "dateModified", date_modified);
@@ -72,10 +120,31 @@ pub mod schema {
         date_published: Option<Value>,
         date_modified: Option<Value>,
     ) -> Value {
+        discussion_forum_posting_with_image(
+            headline,
+            article_body,
+            description,
+            None,
+            in_language,
+            date_published,
+            date_modified,
+        )
+    }
+
+    pub fn discussion_forum_posting_with_image(
+        headline: &str,
+        article_body: &str,
+        description: Option<&str>,
+        image: Option<&SeoTargetImageRecord>,
+        in_language: &str,
+        date_published: Option<Value>,
+        date_modified: Option<Value>,
+    ) -> Value {
         let mut object = schema_object("DiscussionForumPosting");
         insert_string(&mut object, "headline", Some(headline));
         insert_string(&mut object, "articleBody", Some(article_body));
         insert_string(&mut object, "description", description);
+        insert_image(&mut object, "image", image);
         insert_string(&mut object, "inLanguage", Some(in_language));
         insert_value(&mut object, "datePublished", date_published);
         insert_value(&mut object, "dateModified", date_modified);
@@ -176,12 +245,45 @@ pub mod schema {
         Value::Object(object)
     }
 
-    fn base_page(kind: &str, name: &str, description: Option<&str>, in_language: &str) -> Value {
+    fn base_page(
+        kind: &str,
+        name: &str,
+        description: Option<&str>,
+        image: Option<&SeoTargetImageRecord>,
+        in_language: &str,
+    ) -> Value {
         let mut object = schema_object(kind);
         insert_string(&mut object, "name", Some(name));
         insert_string(&mut object, "description", description);
+        insert_image(&mut object, "image", image);
         insert_string(&mut object, "inLanguage", Some(in_language));
         Value::Object(object)
+    }
+
+    fn image_from_url(image_url: Option<&str>) -> Option<SeoTargetImageRecord> {
+        image_url.and_then(|url| {
+            SeoTargetImageRecord::from_parts(url.to_string(), None, None, None, None)
+        })
+    }
+
+    fn schema_image_value(image: &SeoTargetImageRecord) -> Value {
+        let has_metadata = image.has_alt() || image.has_size() || image.mime_type.is_some();
+        if !has_metadata {
+            return Value::String(image.url.clone());
+        }
+        let mut object = typed_object("ImageObject");
+        insert_string(&mut object, "url", Some(image.url.as_str()));
+        insert_string(&mut object, "caption", image.alt.as_deref());
+        insert_integer(&mut object, "width", image.width);
+        insert_integer(&mut object, "height", image.height);
+        insert_string(&mut object, "encodingFormat", image.mime_type.as_deref());
+        Value::Object(object)
+    }
+
+    fn insert_image(object: &mut Map<String, Value>, key: &str, image: Option<&SeoTargetImageRecord>) {
+        if let Some(image) = image {
+            object.insert(key.to_string(), schema_image_value(image));
+        }
     }
 
     fn schema_object(kind: &str) -> Map<String, Value> {
@@ -206,6 +308,12 @@ pub mod schema {
     fn insert_value(object: &mut Map<String, Value>, key: &str, value: Option<Value>) {
         if let Some(value) = value.filter(|value| !value.is_null()) {
             object.insert(key.to_string(), value);
+        }
+    }
+
+    fn insert_integer(object: &mut Map<String, Value>, key: &str, value: Option<i32>) {
+        if let Some(value) = value.filter(|value| *value > 0) {
+            object.insert(key.to_string(), json!(value));
         }
     }
 
@@ -496,14 +604,7 @@ pub struct SeoTargetAlternateRoute {
     pub route: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Default)]
-pub struct SeoTargetImageRecord {
-    pub url: String,
-    pub alt: Option<String>,
-    pub width: Option<i32>,
-    pub height: Option<i32>,
-    pub mime_type: Option<String>,
-}
+pub type SeoTargetImageRecord = rustok_media::MediaImageDescriptor;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Default)]
 pub struct SeoTargetOpenGraphRecord {
@@ -530,6 +631,41 @@ impl SeoTemplateFieldMap {
         }
         self.values.insert(key, value);
     }
+}
+
+pub fn populate_image_template_fields(
+    fields: &mut SeoTemplateFieldMap,
+    images: &[SeoTargetImageRecord],
+) {
+    fields.insert("image_count", images.len().to_string());
+
+    let Some(primary) = images.first() else {
+        return;
+    };
+    fields.insert("image_url", primary.url.clone());
+    if let Some(alt) = primary.alt.as_deref() {
+        fields.insert("image_alt", alt);
+    }
+    if let Some(width) = primary.width {
+        fields.insert("image_width", width.to_string());
+    }
+    if let Some(height) = primary.height {
+        fields.insert("image_height", height.to_string());
+    }
+    if let Some(mime_type) = primary.mime_type.as_deref() {
+        fields.insert("image_mime", mime_type);
+    }
+    if let Some(extension) = primary.file_extension() {
+        fields.insert("image_extension", extension);
+    }
+    if let Some(pixel_count) = primary.pixel_count() {
+        fields.insert("image_pixel_count", pixel_count.to_string());
+    }
+    if let Some(aspect_ratio) = primary.aspect_ratio() {
+        fields.insert("image_aspect_ratio", format!("{aspect_ratio:.4}"));
+    }
+    fields.insert("image_has_alt", primary.has_alt().to_string());
+    fields.insert("image_has_size", primary.has_size().to_string());
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -857,6 +993,56 @@ mod tests {
         assert_eq!(faq["@type"], json!("FAQPage"));
         assert_eq!(faq["mainEntity"][0]["@type"], json!("Question"));
         assert_eq!(faq["mainEntity"].as_array().map(Vec::len), Some(1));
+
+        let descriptor = SeoTargetImageRecord::from_parts(
+            "https://cdn.test/hero.webp",
+            Some("Hero".to_string()),
+            Some(1200),
+            Some(630),
+            Some("image/webp".to_string()),
+        )
+        .expect("image descriptor should be created");
+        let schema_with_descriptor =
+            schema::product_with_image("Demo", Some("Desc"), Some(&descriptor), "en-US");
+        assert_eq!(schema_with_descriptor["image"]["@type"], json!("ImageObject"));
+        assert_eq!(schema_with_descriptor["image"]["url"], json!("https://cdn.test/hero.webp"));
+        assert_eq!(schema_with_descriptor["image"]["caption"], json!("Hero"));
+        assert_eq!(schema_with_descriptor["image"]["width"], json!(1200));
+        assert_eq!(schema_with_descriptor["image"]["height"], json!(630));
+    }
+
+    #[test]
+    fn image_template_fields_are_populated_from_descriptor() {
+        let descriptor = SeoTargetImageRecord::from_parts(
+            "https://cdn.test/hero.webp",
+            Some("Hero".to_string()),
+            Some(1200),
+            Some(630),
+            Some("image/webp".to_string()),
+        )
+        .expect("descriptor should exist");
+        let mut fields = SeoTemplateFieldMap::default();
+
+        populate_image_template_fields(&mut fields, &[descriptor]);
+
+        assert_eq!(fields.values.get("image_count"), Some(&"1".to_string()));
+        assert_eq!(
+            fields.values.get("image_url"),
+            Some(&"https://cdn.test/hero.webp".to_string())
+        );
+        assert_eq!(fields.values.get("image_alt"), Some(&"Hero".to_string()));
+        assert_eq!(fields.values.get("image_width"), Some(&"1200".to_string()));
+        assert_eq!(fields.values.get("image_height"), Some(&"630".to_string()));
+        assert_eq!(
+            fields.values.get("image_mime"),
+            Some(&"image/webp".to_string())
+        );
+        assert_eq!(
+            fields.values.get("image_pixel_count"),
+            Some(&"756000".to_string())
+        );
+        assert_eq!(fields.values.get("image_has_alt"), Some(&"true".to_string()));
+        assert_eq!(fields.values.get("image_has_size"), Some(&"true".to_string()));
     }
 
     #[test]

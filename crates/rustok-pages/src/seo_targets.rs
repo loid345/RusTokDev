@@ -2,16 +2,21 @@ use anyhow::Result as AnyResult;
 use async_trait::async_trait;
 use rustok_content::entities::node::ContentStatus;
 use rustok_core::SecurityContext;
+use rustok_media::MediaImageDescriptor;
 use rustok_seo_targets::{
-    builtin_slug, schema, SeoBulkSummaryRecord, SeoLoadedTargetRecord, SeoRouteMatchRecord,
-    SeoSitemapCandidateRecord, SeoTargetAlternateRoute, SeoTargetBulkListRequest,
-    SeoTargetCapabilities, SeoTargetLoadRequest, SeoTargetLoadScope, SeoTargetOpenGraphRecord,
-    SeoTargetProvider, SeoTargetRouteResolveRequest, SeoTargetRuntimeContext,
-    SeoTargetSitemapRequest, SeoTargetSlug, SeoTemplateFieldMap,
+    builtin_slug, populate_image_template_fields, schema, SeoBulkSummaryRecord,
+    SeoLoadedTargetRecord, SeoRouteMatchRecord, SeoSitemapCandidateRecord,
+    SeoTargetAlternateRoute, SeoTargetBulkListRequest, SeoTargetCapabilities,
+    SeoTargetLoadRequest, SeoTargetLoadScope, SeoTargetOpenGraphRecord, SeoTargetProvider,
+    SeoTargetRouteResolveRequest, SeoTargetRuntimeContext, SeoTargetSitemapRequest,
+    SeoTargetSlug, SeoTemplateFieldMap,
 };
 use url::Url;
 
-use crate::{ListPagesFilter, PageListItem, PageResponse, PageService, PageTranslationResponse};
+use crate::{
+    BlockPayload, ListPagesFilter, PageListItem, PageResponse, PageService,
+    PageTranslationResponse,
+};
 
 const BULK_FETCH_SIZE: u64 = 48;
 
@@ -276,6 +281,8 @@ fn map_page_response(page: PageResponse, requested_locale: &str) -> SeoLoadedTar
                 .and_then(|body| summarize_text(body.content.as_str()))
         })
         .or_else(|| translation.title.as_deref().and_then(summarize_text));
+    let primary_image = page_primary_image_descriptor(&page, title.as_str());
+    let open_graph_images = primary_image.clone().into_iter().collect::<Vec<_>>();
     let canonical_route = page_route_for_slug(translation.slug.as_deref());
     let structured_name = translation.title.clone().unwrap_or_else(|| title.clone());
     let mut template_fields = SeoTemplateFieldMap::default();
@@ -286,6 +293,7 @@ fn map_page_response(page: PageResponse, requested_locale: &str) -> SeoLoadedTar
     if let Some(slug) = translation.slug.as_deref() {
         template_fields.insert("slug", slug);
     }
+    populate_image_template_fields(&mut template_fields, open_graph_images.as_slice());
 
     SeoLoadedTargetRecord {
         target_kind: SeoTargetSlug::new(builtin_slug::PAGE)
@@ -313,16 +321,66 @@ fn map_page_response(page: PageResponse, requested_locale: &str) -> SeoLoadedTar
             site_name: None,
             url: None,
             locale: Some(effective_locale.clone()),
-            images: Vec::new(),
+            images: open_graph_images,
         },
-        structured_data: schema::web_page(
+        structured_data: schema::web_page_with_image(
             structured_name.as_str(),
             description.as_deref(),
+            primary_image.as_ref(),
             effective_locale.as_str(),
         ),
         fallback_source: "pages".to_string(),
         template_fields,
     }
+}
+
+fn page_primary_image_descriptor(
+    page: &PageResponse,
+    fallback_alt: &str,
+) -> Option<MediaImageDescriptor> {
+    let fallback_alt = normalize_image_text(Some(fallback_alt.to_string()));
+
+    for block in &page.blocks {
+        let Ok(payload) = BlockPayload::from_block_type(&block.block_type, block.data.clone()) else {
+            continue;
+        };
+        let descriptor = match payload {
+            BlockPayload::Hero(data) => data.background_image_url.and_then(|url| {
+                MediaImageDescriptor::from_parts(url, fallback_alt.clone(), None, None, None)
+            }),
+            BlockPayload::Image(data) => MediaImageDescriptor::from_parts(
+                data.src,
+                normalize_image_text(data.alt).or_else(|| normalize_image_text(data.caption)).or_else(|| fallback_alt.clone()),
+                None,
+                None,
+                None,
+            ),
+            BlockPayload::Gallery(data) => data.images.into_iter().find_map(|image| {
+                MediaImageDescriptor::from_parts(
+                    image.src,
+                    normalize_image_text(image.alt)
+                        .or_else(|| normalize_image_text(image.caption))
+                        .or_else(|| fallback_alt.clone()),
+                    None,
+                    None,
+                    None,
+                )
+            }),
+            _ => None,
+        };
+
+        if descriptor.is_some() {
+            return descriptor;
+        }
+    }
+
+    None
+}
+
+fn normalize_image_text(value: Option<String>) -> Option<String> {
+    value
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 fn fallback_page_translation() -> PageTranslationResponse {

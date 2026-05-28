@@ -11,7 +11,7 @@
 - keep public forum topic SEO resolution channel-aware when a topic is restricted by forum channel access
 - resolve effective metadata through explicit SEO > template-generated SEO > domain/entity fallback
 - run bulk remediation with safe apply modes for preview, missing-only materialization, generated-only overwrite, and explicit-force overwrite
-- expose diagnostics with readiness scoring, issue aggregates, hreflang gap detection, canonical redirect chain/loop detection, and `cross_link_gap` hints with control-plane remediation entrypoints
+- expose diagnostics with readiness scoring, issue aggregates, hreflang gap detection, canonical redirect chain/loop detection, `cross_link_gap` hints, and image descriptor quality checks (`missing_image_alt`, `missing_image_size`) for SEO-critical targets
 - normalize JSON-LD into typed `SeoStructuredDataBlock` records with schema kind, source state, and `@graph` expansion
 - manage manual redirects and canonical overrides
 - generate sitemap files, serve `robots.txt`, and submit sitemap indexes via runtime adapters with per-endpoint aggregation and bounded partial-failure summaries
@@ -36,6 +36,7 @@
 
 - reads canonical routing substrate from `rustok-content`
 - reads page/blog/product/forum content from `rustok-pages`, `rustok-blog`, `rustok-product`, and `rustok-forum`
+- consumes `rustok-media::MediaImageDescriptor` as the typed image boundary for OG/Twitter/schema fallback
 - consumes tenant/module settings from `rustok-tenant`
 - is mounted by `apps/server`, consumed by `apps/storefront`, and shared with `apps/next-frontend`
 - reuses host-provided `RequestContext.channel_slug` on REST/GraphQL/Leptos SSR paths so restricted forum topics only resolve SEO in the matching public channel

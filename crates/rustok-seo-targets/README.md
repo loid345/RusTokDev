@@ -11,6 +11,7 @@
 - Carry owner-aware registry metadata (`display_name`, `owner_module_slug`) so shared operator surfaces do not hardcode target labels.
 - Keep target extensibility module-owned without introducing a second tenant-aware SEO module.
 - Provide typed backend records for route resolution, loaded target state, bulk summaries, and sitemap candidates.
+- Re-export `SeoTargetImageRecord` from `rustok-media::MediaImageDescriptor` so SEO surfaces consume one typed image descriptor boundary (`url/alt/size/mime` + derived helpers).
 - Provide small JSON-LD schema builders for owner providers so built-in targets do not hand-roll raw schema blobs.
 
 ## Interactions
@@ -26,6 +27,7 @@
 - `SeoTargetSlug`
 - `SeoTargetProvider`
 - `SeoTargetRegistry`
-- `schema::{web_page, collection_page, product, blog_posting, discussion_forum_posting}`
+- `schema::{web_page, web_page_with_image, collection_page, collection_page_with_image, product, product_with_image, blog_posting, blog_posting_with_image, discussion_forum_posting, discussion_forum_posting_with_image}`
+- `populate_image_template_fields`
 - `register_seo_target_provider`
 - `seo_target_registry_from_extensions`

@@ -1,12 +1,14 @@
 use anyhow::Result as AnyResult;
 use async_trait::async_trait;
 use rustok_core::SecurityContext;
+use rustok_media::MediaImageDescriptor;
 use rustok_seo_targets::{
-    builtin_slug, schema, SeoBulkSummaryRecord, SeoLoadedTargetRecord, SeoRouteMatchRecord,
-    SeoSitemapCandidateRecord, SeoTargetAlternateRoute, SeoTargetBulkListRequest,
-    SeoTargetCapabilities, SeoTargetLoadRequest, SeoTargetLoadScope, SeoTargetOpenGraphRecord,
-    SeoTargetProvider, SeoTargetRouteResolveRequest, SeoTargetRuntimeContext,
-    SeoTargetSitemapRequest, SeoTargetSlug, SeoTemplateFieldMap,
+    builtin_slug, populate_image_template_fields, schema, SeoBulkSummaryRecord,
+    SeoLoadedTargetRecord, SeoRouteMatchRecord, SeoSitemapCandidateRecord,
+    SeoTargetAlternateRoute, SeoTargetBulkListRequest, SeoTargetCapabilities,
+    SeoTargetLoadRequest, SeoTargetLoadScope, SeoTargetOpenGraphRecord, SeoTargetProvider,
+    SeoTargetRouteResolveRequest, SeoTargetRuntimeContext, SeoTargetSitemapRequest,
+    SeoTargetSlug, SeoTemplateFieldMap,
 };
 use url::Url;
 use uuid::Uuid;
@@ -495,6 +497,8 @@ fn map_category_response(category: CategoryResponse) -> SeoLoadedTargetRecord {
         .description
         .clone()
         .or_else(|| summarize_text(category.name.as_str()));
+    let primary_image = category_image_descriptor(&category, title.as_str());
+    let open_graph_images = primary_image.clone().into_iter().collect::<Vec<_>>();
     let canonical_route = format!("/modules/forum?category={}", category.id);
     let mut template_fields = SeoTemplateFieldMap::default();
     template_fields.insert("title", title.clone());
@@ -502,6 +506,7 @@ fn map_category_response(category: CategoryResponse) -> SeoLoadedTargetRecord {
     template_fields.insert("locale", category.effective_locale.clone());
     template_fields.insert("route", canonical_route.clone());
     template_fields.insert("category_id", category.id.to_string());
+    populate_image_template_fields(&mut template_fields, open_graph_images.as_slice());
 
     SeoLoadedTargetRecord {
         target_kind: SeoTargetSlug::new(builtin_slug::FORUM_CATEGORY)
@@ -527,11 +532,12 @@ fn map_category_response(category: CategoryResponse) -> SeoLoadedTargetRecord {
             site_name: None,
             url: None,
             locale: Some(category.effective_locale.clone()),
-            images: Vec::new(),
+            images: open_graph_images,
         },
-        structured_data: schema::collection_page(
+        structured_data: schema::collection_page_with_image(
             category.name.as_str(),
             description.as_deref(),
+            primary_image.as_ref(),
             category.effective_locale.as_str(),
         ),
         fallback_source: "forum_category".to_string(),
@@ -543,6 +549,8 @@ fn map_topic_response(topic: TopicResponse) -> SeoLoadedTargetRecord {
     let title = topic.title.clone();
     let description =
         summarize_text(topic.body.as_str()).or_else(|| summarize_text(title.as_str()));
+    let primary_image = topic_image_descriptor(&topic, title.as_str());
+    let open_graph_images = primary_image.clone().into_iter().collect::<Vec<_>>();
     let canonical_route = format!(
         "/modules/forum?category={}&topic={}",
         topic.category_id, topic.id
@@ -554,6 +562,7 @@ fn map_topic_response(topic: TopicResponse) -> SeoLoadedTargetRecord {
     template_fields.insert("route", canonical_route.clone());
     template_fields.insert("topic_id", topic.id.to_string());
     template_fields.insert("category_id", topic.category_id.to_string());
+    populate_image_template_fields(&mut template_fields, open_graph_images.as_slice());
 
     SeoLoadedTargetRecord {
         target_kind: SeoTargetSlug::new(builtin_slug::FORUM_TOPIC)
@@ -579,12 +588,13 @@ fn map_topic_response(topic: TopicResponse) -> SeoLoadedTargetRecord {
             site_name: None,
             url: None,
             locale: Some(topic.effective_locale.clone()),
-            images: Vec::new(),
+            images: open_graph_images,
         },
-        structured_data: schema::discussion_forum_posting(
+        structured_data: schema::discussion_forum_posting_with_image(
             topic.title.as_str(),
             topic.body.as_str(),
             description.as_deref(),
+            primary_image.as_ref(),
             topic.effective_locale.as_str(),
             serde_json::to_value(topic.created_at).ok(),
             serde_json::to_value(topic.updated_at).ok(),
@@ -592,6 +602,103 @@ fn map_topic_response(topic: TopicResponse) -> SeoLoadedTargetRecord {
         fallback_source: "forum_topic".to_string(),
         template_fields,
     }
+}
+
+fn category_image_descriptor(
+    category: &CategoryResponse,
+    fallback_alt: &str,
+) -> Option<MediaImageDescriptor> {
+    let icon = category.icon.as_deref()?.trim();
+    if icon.is_empty() || (!icon.starts_with('/') && !icon.contains("://")) {
+        return None;
+    }
+    MediaImageDescriptor::from_parts(
+        icon.to_string(),
+        Some(fallback_alt.to_string()),
+        None,
+        None,
+        None,
+    )
+}
+
+fn topic_image_descriptor(topic: &TopicResponse, fallback_alt: &str) -> Option<MediaImageDescriptor> {
+    image_descriptor_from_metadata(topic.metadata.get("featured_image"), fallback_alt)
+        .or_else(|| image_descriptor_from_metadata(topic.metadata.get("featured_image_url"), fallback_alt))
+        .or_else(|| image_descriptor_from_metadata(topic.metadata.get("og_image"), fallback_alt))
+        .or_else(|| first_markdown_image_descriptor(topic.body.as_str(), fallback_alt))
+}
+
+fn image_descriptor_from_metadata(
+    value: Option<&serde_json::Value>,
+    fallback_alt: &str,
+) -> Option<MediaImageDescriptor> {
+    let value = value?;
+    if let Some(url) = value.as_str() {
+        return MediaImageDescriptor::from_parts(
+            url.to_string(),
+            Some(fallback_alt.to_string()),
+            None,
+            None,
+            None,
+        );
+    }
+
+    let object = value.as_object()?;
+    let url = object
+        .get("url")
+        .and_then(serde_json::Value::as_str)
+        .or_else(|| object.get("src").and_then(serde_json::Value::as_str))?;
+    let alt = object
+        .get("alt")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .or_else(|| Some(fallback_alt.to_string()));
+    let width = object
+        .get("width")
+        .and_then(serde_json::Value::as_i64)
+        .and_then(|value| i32::try_from(value).ok());
+    let height = object
+        .get("height")
+        .and_then(serde_json::Value::as_i64)
+        .and_then(|value| i32::try_from(value).ok());
+    let mime_type = object
+        .get("mime_type")
+        .and_then(serde_json::Value::as_str)
+        .map(ToOwned::to_owned)
+        .or_else(|| {
+            object
+                .get("mime")
+                .and_then(serde_json::Value::as_str)
+                .map(ToOwned::to_owned)
+        });
+
+    MediaImageDescriptor::from_parts(url.to_string(), alt, width, height, mime_type)
+}
+
+fn first_markdown_image_descriptor(body: &str, fallback_alt: &str) -> Option<MediaImageDescriptor> {
+    let start = body.find("![")?;
+    let alt_start = start + 2;
+    let alt_end = body[alt_start..].find(']')? + alt_start;
+    let after_alt = alt_end + 1;
+    let path_open = body[after_alt..].find('(')? + after_alt;
+    let path_start = path_open + 1;
+    let path_end = body[path_start..].find(')')? + path_start;
+
+    let alt = body[alt_start..alt_end].trim();
+    let url = body[path_start..path_end].trim();
+    MediaImageDescriptor::from_parts(
+        url.to_string(),
+        if alt.is_empty() {
+            Some(fallback_alt.to_string())
+        } else {
+            Some(alt.to_string())
+        },
+        None,
+        None,
+        None,
+    )
 }
 
 enum ForumRoute {

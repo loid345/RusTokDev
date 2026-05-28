@@ -1,17 +1,14 @@
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-/// Input for uploading a new media asset.
 pub struct UploadInput {
     pub tenant_id: Uuid,
     pub uploaded_by: Option<Uuid>,
-    /// Original filename as provided by the client.
     pub original_name: String,
     pub content_type: String,
     pub data: bytes::Bytes,
 }
 
-/// Represents a stored media asset returned by the service.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MediaItem {
     pub id: Uuid,
@@ -30,7 +27,6 @@ pub struct MediaItem {
     pub created_at: chrono::DateTime<chrono::Utc>,
 }
 
-/// Input for updating alt-text / title for a locale.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpsertTranslationInput {
     pub locale: String,
@@ -49,8 +45,138 @@ pub struct MediaTranslationItem {
     pub caption: Option<String>,
 }
 
-/// Allowed MIME type groups.
+#[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Default)]
+pub struct MediaImageDescriptor {
+    pub url: String,
+    pub alt: Option<String>,
+    pub width: Option<i32>,
+    pub height: Option<i32>,
+    pub mime_type: Option<String>,
+}
+
+impl MediaImageDescriptor {
+    pub fn from_parts(
+        url: impl Into<String>,
+        alt: Option<String>,
+        width: Option<i32>,
+        height: Option<i32>,
+        mime_type: Option<String>,
+    ) -> Option<Self> {
+        let url = normalize_string(Some(url.into()))?;
+        let width = normalize_dimension(width);
+        let height = normalize_dimension(height);
+        let mime_type = normalize_string(mime_type).or_else(|| infer_mime_type(url.as_str()));
+
+        Some(Self {
+            url,
+            alt: normalize_string(alt),
+            width,
+            height,
+            mime_type,
+        })
+    }
+
+    pub fn from_media_item(item: &MediaItem, alt: Option<String>) -> Option<Self> {
+        Self::from_parts(
+            item.public_url.clone(),
+            alt,
+            item.width,
+            item.height,
+            Some(item.mime_type.clone()),
+        )
+    }
+
+    pub fn has_alt(&self) -> bool {
+        self.alt
+            .as_deref()
+            .map(str::trim)
+            .is_some_and(|value| !value.is_empty())
+    }
+
+    pub fn has_size(&self) -> bool {
+        self.width.is_some() && self.height.is_some()
+    }
+
+    pub fn pixel_count(&self) -> Option<i64> {
+        let width = self.width?;
+        let height = self.height?;
+        Some(i64::from(width) * i64::from(height))
+    }
+
+    pub fn aspect_ratio(&self) -> Option<f64> {
+        let width = f64::from(self.width?);
+        let height = f64::from(self.height?);
+        if height <= 0.0 {
+            return None;
+        }
+        Some(width / height)
+    }
+
+    pub fn file_extension(&self) -> Option<String> {
+        file_extension(self.url.as_str())
+    }
+}
+
+fn normalize_string(value: Option<String>) -> Option<String> {
+    value
+        .map(|item| item.trim().to_string())
+        .filter(|item| !item.is_empty())
+}
+
+fn normalize_dimension(value: Option<i32>) -> Option<i32> {
+    value.filter(|value| *value > 0)
+}
+
+fn infer_mime_type(url: &str) -> Option<String> {
+    let path = url.split('#').next().unwrap_or(url);
+    let path = path.split('?').next().unwrap_or(path);
+    mime_guess::from_path(path)
+        .first_raw()
+        .map(ToOwned::to_owned)
+}
+
+fn file_extension(url: &str) -> Option<String> {
+    let path = url.split('#').next().unwrap_or(url);
+    let path = path.split('?').next().unwrap_or(path);
+    std::path::Path::new(path)
+        .extension()
+        .and_then(|value| value.to_str())
+        .map(|value| value.to_ascii_lowercase())
+}
+
 pub const ALLOWED_MIME_PREFIXES: &[&str] = &["image/", "video/", "audio/", "application/pdf"];
 
-/// Default maximum upload size: 50 MiB.
 pub const DEFAULT_MAX_SIZE: u64 = 50 * 1024 * 1024;
+
+#[cfg(test)]
+mod tests {
+    use super::MediaImageDescriptor;
+
+    #[test]
+    fn media_image_descriptor_normalizes_mime_and_derived_fields() {
+        let descriptor = MediaImageDescriptor::from_parts(
+            "https://cdn.example.com/assets/hero.webp?version=2",
+            Some(" Hero image ".to_string()),
+            Some(1200),
+            Some(630),
+            None,
+        )
+        .expect("descriptor should be created for valid URL");
+
+        assert_eq!(descriptor.alt.as_deref(), Some("Hero image"));
+        assert_eq!(descriptor.mime_type.as_deref(), Some("image/webp"));
+        assert_eq!(descriptor.file_extension().as_deref(), Some("webp"));
+        assert!(descriptor.has_alt());
+        assert!(descriptor.has_size());
+        assert_eq!(descriptor.pixel_count(), Some(756000));
+        assert_eq!(descriptor.aspect_ratio(), Some(1200.0 / 630.0));
+    }
+
+    #[test]
+    fn media_image_descriptor_rejects_empty_url() {
+        assert!(
+            MediaImageDescriptor::from_parts("   ", None, None, None, None).is_none(),
+            "empty URL should not create descriptor"
+        );
+    }
+}

@@ -20,6 +20,7 @@ rustok-events.workspace = true
 rustok-content.workspace = true
 rustok-outbox.workspace = true
 rustok-seo-targets.workspace = true
+rustok-media.workspace = true
 rustok-telemetry.workspace = true
 rustok-tenant.workspace = true
 sea-orm.workspace = true

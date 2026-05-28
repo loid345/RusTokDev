@@ -1,12 +1,14 @@
 use anyhow::Result as AnyResult;
 use async_trait::async_trait;
 use rustok_core::SecurityContext;
+use rustok_media::MediaImageDescriptor;
 use rustok_seo_targets::{
-    builtin_slug, schema, SeoBulkSummaryRecord, SeoLoadedTargetRecord, SeoRouteMatchRecord,
-    SeoSitemapCandidateRecord, SeoTargetAlternateRoute, SeoTargetBulkListRequest,
-    SeoTargetCapabilities, SeoTargetImageRecord, SeoTargetLoadRequest, SeoTargetLoadScope,
-    SeoTargetOpenGraphRecord, SeoTargetProvider, SeoTargetRouteResolveRequest,
-    SeoTargetRuntimeContext, SeoTargetSitemapRequest, SeoTargetSlug, SeoTemplateFieldMap,
+    builtin_slug, populate_image_template_fields, schema, SeoBulkSummaryRecord,
+    SeoLoadedTargetRecord, SeoRouteMatchRecord, SeoSitemapCandidateRecord,
+    SeoTargetAlternateRoute, SeoTargetBulkListRequest, SeoTargetCapabilities,
+    SeoTargetLoadRequest, SeoTargetLoadScope, SeoTargetOpenGraphRecord, SeoTargetProvider,
+    SeoTargetRouteResolveRequest, SeoTargetRuntimeContext, SeoTargetSitemapRequest,
+    SeoTargetSlug, SeoTemplateFieldMap,
 };
 use url::Url;
 
@@ -275,6 +277,8 @@ fn map_post_response(post: PostResponse) -> SeoLoadedTargetRecord {
         .or_else(|| post.excerpt.clone())
         .or_else(|| summarize_text(post.body.as_str()))
         .or_else(|| summarize_text(post.title.as_str()));
+    let primary_image = primary_post_image_descriptor(&post, title.as_str());
+    let open_graph_images = primary_image.clone().into_iter().collect::<Vec<_>>();
     let canonical_route = format!("/modules/blog?slug={}", post.slug);
     let mut template_fields = SeoTemplateFieldMap::default();
     template_fields.insert("title", title.clone());
@@ -282,6 +286,7 @@ fn map_post_response(post: PostResponse) -> SeoLoadedTargetRecord {
     template_fields.insert("slug", post.slug.clone());
     template_fields.insert("locale", post.effective_locale.clone());
     template_fields.insert("route", canonical_route.clone());
+    populate_image_template_fields(&mut template_fields, open_graph_images.as_slice());
 
     SeoLoadedTargetRecord {
         target_kind: SeoTargetSlug::new(builtin_slug::BLOG_POST)
@@ -307,24 +312,12 @@ fn map_post_response(post: PostResponse) -> SeoLoadedTargetRecord {
             site_name: None,
             url: None,
             locale: Some(post.effective_locale.clone()),
-            images: post
-                .featured_image_url
-                .clone()
-                .map(|url| {
-                    vec![SeoTargetImageRecord {
-                        url,
-                        alt: Some(post.title.clone()),
-                        width: None,
-                        height: None,
-                        mime_type: None,
-                    }]
-                })
-                .unwrap_or_default(),
+            images: open_graph_images,
         },
-        structured_data: schema::blog_posting(
+        structured_data: schema::blog_posting_with_image(
             post.title.as_str(),
             description.as_deref(),
-            post.featured_image_url.as_deref(),
+            primary_image.as_ref(),
             post.effective_locale.as_str(),
             serde_json::to_value(post.published_at).ok(),
             serde_json::to_value(post.updated_at).ok(),
@@ -332,6 +325,25 @@ fn map_post_response(post: PostResponse) -> SeoLoadedTargetRecord {
         fallback_source: "blog".to_string(),
         template_fields,
     }
+}
+
+fn primary_post_image_descriptor(post: &PostResponse, fallback_alt: &str) -> Option<MediaImageDescriptor> {
+    let alt = post
+        .metadata
+        .get("featured_image_alt")
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .or_else(|| Some(fallback_alt.to_string()));
+
+    MediaImageDescriptor::from_parts(
+        post.featured_image_url.clone()?,
+        alt,
+        None,
+        None,
+        None,
+    )
 }
 
 fn parse_blog_route(route: &str) -> AnyResult<Option<String>> {

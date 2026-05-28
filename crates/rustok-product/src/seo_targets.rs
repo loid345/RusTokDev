@@ -1,13 +1,17 @@
 use anyhow::Result as AnyResult;
 use async_trait::async_trait;
-use rustok_commerce_foundation::dto::{ProductResponse, ProductTranslationResponse};
+use rustok_commerce_foundation::dto::{
+    ProductImageResponse, ProductResponse, ProductTranslationResponse,
+};
 use rustok_commerce_foundation::entities::product::ProductStatus;
+use rustok_media::MediaImageDescriptor;
 use rustok_seo_targets::{
-    builtin_slug, schema, SeoBulkSummaryRecord, SeoLoadedTargetRecord, SeoRouteMatchRecord,
-    SeoSitemapCandidateRecord, SeoTargetAlternateRoute, SeoTargetBulkListRequest,
-    SeoTargetCapabilities, SeoTargetImageRecord, SeoTargetLoadRequest, SeoTargetLoadScope,
-    SeoTargetOpenGraphRecord, SeoTargetProvider, SeoTargetRouteResolveRequest,
-    SeoTargetRuntimeContext, SeoTargetSitemapRequest, SeoTargetSlug, SeoTemplateFieldMap,
+    builtin_slug, populate_image_template_fields, schema, SeoBulkSummaryRecord,
+    SeoLoadedTargetRecord, SeoRouteMatchRecord, SeoSitemapCandidateRecord,
+    SeoTargetAlternateRoute, SeoTargetBulkListRequest, SeoTargetCapabilities,
+    SeoTargetLoadRequest, SeoTargetLoadScope, SeoTargetOpenGraphRecord, SeoTargetProvider,
+    SeoTargetRouteResolveRequest, SeoTargetRuntimeContext, SeoTargetSitemapRequest,
+    SeoTargetSlug, SeoTemplateFieldMap,
 };
 use url::Url;
 
@@ -258,7 +262,8 @@ fn map_product_response(
         .clone()
         .or_else(|| translation.description.clone())
         .or_else(|| summarize_text(translation.title.as_str()));
-    let image = product.images.first().cloned();
+    let primary_image = resolve_primary_product_image(product.images.as_slice(), effective_locale.as_str());
+    let open_graph_images = primary_image.clone().into_iter().collect::<Vec<_>>();
     let canonical_route = format!("/modules/product?handle={}", translation.handle);
     let mut template_fields = SeoTemplateFieldMap::default();
     template_fields.insert("title", title.clone());
@@ -266,6 +271,7 @@ fn map_product_response(
     template_fields.insert("handle", translation.handle.clone());
     template_fields.insert("locale", effective_locale.clone());
     template_fields.insert("route", canonical_route.clone());
+    populate_image_template_fields(&mut template_fields, open_graph_images.as_slice());
 
     SeoLoadedTargetRecord {
         target_kind: SeoTargetSlug::new(builtin_slug::PRODUCT)
@@ -291,27 +297,38 @@ fn map_product_response(
             site_name: None,
             url: None,
             locale: None,
-            images: image
-                .map(|image| {
-                    vec![SeoTargetImageRecord {
-                        url: image.url,
-                        alt: image.alt_text,
-                        width: None,
-                        height: None,
-                        mime_type: None,
-                    }]
-                })
-                .unwrap_or_default(),
+            images: open_graph_images,
         },
-        structured_data: schema::product(
+        structured_data: schema::product_with_image(
             translation.title.as_str(),
             translation.description.as_deref(),
-            product.images.first().map(|image| image.url.as_str()),
+            primary_image.as_ref(),
             effective_locale.as_str(),
         ),
         fallback_source: "product".to_string(),
         template_fields,
     }
+}
+
+fn resolve_primary_product_image(
+    images: &[ProductImageResponse],
+    locale: &str,
+) -> Option<MediaImageDescriptor> {
+    let image = images.first()?;
+    let alt = localized_product_image_alt(image, locale).or_else(|| image.alt_text.clone());
+    MediaImageDescriptor::from_parts(image.url.clone(), alt, None, None, None)
+}
+
+fn localized_product_image_alt(image: &ProductImageResponse, locale: &str) -> Option<String> {
+    let requested = rustok_core::normalize_locale_tag(locale).unwrap_or_else(|| locale.to_string());
+    image
+        .translations
+        .iter()
+        .find(|translation| {
+            rustok_core::normalize_locale_tag(translation.locale.as_str())
+                .is_some_and(|normalized| normalized == requested)
+        })
+        .and_then(|translation| translation.alt_text.clone())
 }
 
 fn resolve_product_translation<'a>(

@@ -5,12 +5,12 @@
 
 ## Execution checkpoint
 
-- Current phase: plan_sync
-- Last checkpoint: Initial bootstrap by registry workflow.
-- Next step: Синхронизировать план с текущим кодом и выбрать первый незавершённый пункт.
-- Open blockers: None.
-- Hand-off notes for next agent: После каждого инкремента обновлять этот блок.
-- Last updated at (UTC): 2026-05-20T00:00:00Z
+- Current phase: contract_stability_c1
+- Last checkpoint: Зафиксирован typed image boundary `MediaImageDescriptor` (`url/alt/size/mime` + derived helpers) для cross-module SEO consumers; README/docs синхронизированы с новым контрактом.
+- Next step: Добавить targeted tests на descriptor normalization + интеграционные проверки owner-module SEO providers, которые используют descriptor contract.
+- Open blockers: Runtime verification gates не запущены локально в этой VM (отсутствует `cargo` в PATH).
+- Hand-off notes for next agent: держать `MediaImageDescriptor` единственным image payload для cross-module SEO/runtime интеграций, не добавляя blob-level coupling.
+- Last updated at (UTC): 2026-05-28T23:10:00Z
 
 ## Область работ
 
@@ -23,7 +23,8 @@
 - `MediaService`, entities, DTOs и transport adapters уже реализованы;
 - media metadata хранится в module-owned tables, а бинарные файлы остаются в `rustok-storage`;
 - upload остаётся REST-first path, GraphQL покрывает read/write flows без multipart semantics;
-- module-owned admin UI и observability surface уже входят в модульный contract.
+- module-owned admin UI и observability surface уже входят в модульный contract;
+- typed `MediaImageDescriptor` введён как cross-module boundary для SEO image payload (`url/alt/size/mime` + derived helpers).
 
 ## Этапы
 

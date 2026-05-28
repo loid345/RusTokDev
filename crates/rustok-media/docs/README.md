@@ -13,6 +13,7 @@
 ## Зона ответственности
 
 - `MediaService`, media entities/DTOs и translation upsert contract;
+- typed cross-module image contract `MediaImageDescriptor` (`url/alt/size/mime` + derived helpers);
 - GraphQL и REST adapters модуля;
 - upload validation по size/MIME policy и tenant isolation;
 - module-owned admin UI package `rustok-media-admin`;
@@ -23,7 +24,8 @@
 - использует `rustok-storage` как storage backend contract;
 - `apps/server` остаётся composition root и wiring-слоем для media routes/graphql;
 - runtime guard опирается на tenant-scoped module enablement для public surfaces;
-- upload остаётся REST-first path, а GraphQL сохраняется для read/mutation flows без multipart expansion.
+- upload остаётся REST-first path, а GraphQL сохраняется для read/mutation flows без multipart expansion;
+- `rustok-seo` и owner SEO providers потребляют `MediaImageDescriptor` как единственный image boundary для OG/Twitter/schema fallback.
 
 ## Проверка
 

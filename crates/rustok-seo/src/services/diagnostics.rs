@@ -1,12 +1,13 @@
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 
 use rustok_api::TenantContext;
-use rustok_seo_targets::{SeoTargetBulkListRequest, SeoTargetCapabilityKind};
+use rustok_seo_targets::{builtin_slug, SeoTargetBulkListRequest, SeoTargetCapabilityKind};
 use url::Url;
 
 use crate::dto::{
     SeoDiagnosticCountRecord, SeoDiagnosticIssueRecord, SeoDiagnosticSeverity,
-    SeoDiagnosticsSummaryRecord, SeoFieldSource, SeoRedirectMatchType,
+    SeoDiagnosticsSummaryRecord, SeoFieldSource, SeoImageAsset, SeoPageContext,
+    SeoRedirectMatchType,
 };
 use crate::{SeoError, SeoResult};
 
@@ -15,6 +16,8 @@ use super::SeoService;
 
 const MAX_EXPOSED_ISSUES: usize = 50;
 const CROSS_LINK_GAP_REMEDIATION_MESSAGE: &str = "No cross-link suggestions were generated for this target. Use seoCrossLinkSuggestions or GET /api/seo/cross-link-suggestions to review remediation candidates.";
+const MISSING_IMAGE_ALT_REMEDIATION_MESSAGE: &str = "Open Graph/Twitter image descriptors are missing alt text in SEO-critical targets.";
+const MISSING_IMAGE_SIZE_REMEDIATION_MESSAGE: &str = "Open Graph/Twitter image descriptors are missing width/height in SEO-critical targets.";
 
 type CanonicalUsageEntry = (
     rustok_seo_targets::SeoTargetSlug,
@@ -255,6 +258,15 @@ impl SeoService {
                     ));
                 }
 
+                append_image_descriptor_diagnostics(
+                    &mut issues,
+                    &summary,
+                    page_context.as_ref(),
+                    effective_canonical.clone(),
+                    meta.source.clone(),
+                    locale.as_str(),
+                );
+
                 let schema_blocks = meta
                     .structured_data
                     .as_ref()
@@ -434,6 +446,107 @@ fn issue(
     }
 }
 
+fn append_image_descriptor_diagnostics(
+    issues: &mut Vec<SeoDiagnosticIssueRecord>,
+    summary: &rustok_seo_targets::SeoBulkSummaryRecord,
+    page_context: Option<&SeoPageContext>,
+    canonical_url: Option<String>,
+    source: String,
+    locale: &str,
+) {
+    if !is_image_seo_critical_target(summary.target_kind.as_str()) {
+        return;
+    }
+    let Some(page_context) = page_context else {
+        return;
+    };
+
+    let (missing_alt_count, missing_size_count) = collect_missing_image_descriptor_counts(page_context);
+    if missing_alt_count > 0 {
+        issues.push(issue(
+            "missing_image_alt",
+            SeoDiagnosticSeverity::Warning,
+            summary,
+            format!(
+                "{} Missing alt text for {} image descriptor(s).",
+                MISSING_IMAGE_ALT_REMEDIATION_MESSAGE, missing_alt_count
+            )
+            .as_str(),
+            canonical_url.clone(),
+            source.clone(),
+            locale,
+        ));
+    }
+    if missing_size_count > 0 {
+        issues.push(issue(
+            "missing_image_size",
+            SeoDiagnosticSeverity::Warning,
+            summary,
+            format!(
+                "{} Missing width/height for {} image descriptor(s).",
+                MISSING_IMAGE_SIZE_REMEDIATION_MESSAGE, missing_size_count
+            )
+            .as_str(),
+            canonical_url,
+            source,
+            locale,
+        ));
+    }
+}
+
+fn is_image_seo_critical_target(target_kind: &str) -> bool {
+    matches!(
+        target_kind,
+        builtin_slug::PAGE | builtin_slug::PRODUCT | builtin_slug::BLOG_POST | builtin_slug::FORUM_TOPIC
+    )
+}
+
+fn collect_missing_image_descriptor_counts(page_context: &SeoPageContext) -> (usize, usize) {
+    let mut unique_urls = HashSet::new();
+    let mut missing_alt_count = 0_usize;
+    let mut missing_size_count = 0_usize;
+
+    let open_graph_images = page_context
+        .document
+        .open_graph
+        .as_ref()
+        .map(|open_graph| open_graph.images.as_slice())
+        .unwrap_or_default();
+    let twitter_images = page_context
+        .document
+        .twitter
+        .as_ref()
+        .map(|twitter| twitter.images.as_slice())
+        .unwrap_or_default();
+
+    for image in open_graph_images.iter().chain(twitter_images.iter()) {
+        if !register_unique_image(image, &mut unique_urls) {
+            continue;
+        }
+        if image
+            .alt
+            .as_deref()
+            .map(str::trim)
+            .is_none_or(|value| value.is_empty())
+        {
+            missing_alt_count += 1;
+        }
+        if image.width.is_none() || image.height.is_none() {
+            missing_size_count += 1;
+        }
+    }
+
+    (missing_alt_count, missing_size_count)
+}
+
+fn register_unique_image(image: &SeoImageAsset, unique_urls: &mut HashSet<String>) -> bool {
+    let url = image.url.trim();
+    if url.is_empty() {
+        return false;
+    }
+    unique_urls.insert(url.to_string())
+}
+
 #[derive(Debug, Clone, Eq, PartialEq)]
 enum RedirectTrace {
     Single { target: String },
@@ -530,9 +643,11 @@ fn count_by_key<'a>(keys: impl Iterator<Item = &'a str>) -> Vec<SeoDiagnosticCou
 #[cfg(test)]
 mod tests {
     use super::{
+        collect_missing_image_descriptor_counts, is_image_seo_critical_target,
         redirect_lookup_route, trace_redirects, RedirectTrace,
         CROSS_LINK_GAP_REMEDIATION_MESSAGE,
     };
+    use crate::dto::{SeoDocument, SeoImageAsset, SeoOpenGraph, SeoPageContext, SeoTwitterCard};
     use std::collections::HashMap;
 
     #[test]
@@ -579,6 +694,58 @@ mod tests {
                 at: "/a".to_string(),
             })
         );
+    }
+
+    #[test]
+    fn collect_missing_image_descriptor_counts_deduplicates_images_by_url() {
+        let context = SeoPageContext {
+            route: Default::default(),
+            document: SeoDocument {
+                open_graph: Some(SeoOpenGraph {
+                    images: vec![
+                        SeoImageAsset {
+                            url: "https://cdn.example.com/a.jpg".to_string(),
+                            alt: None,
+                            width: Some(1200),
+                            height: None,
+                            mime_type: Some("image/jpeg".to_string()),
+                        },
+                        SeoImageAsset {
+                            url: "https://cdn.example.com/b.jpg".to_string(),
+                            alt: Some("Cover".to_string()),
+                            width: Some(800),
+                            height: Some(800),
+                            mime_type: Some("image/jpeg".to_string()),
+                        },
+                    ],
+                    ..SeoOpenGraph::default()
+                }),
+                twitter: Some(SeoTwitterCard {
+                    images: vec![SeoImageAsset {
+                        url: "https://cdn.example.com/a.jpg".to_string(),
+                        alt: Some("Already counted".to_string()),
+                        width: Some(1200),
+                        height: Some(630),
+                        mime_type: Some("image/jpeg".to_string()),
+                    }],
+                    ..SeoTwitterCard::default()
+                }),
+                ..SeoDocument::default()
+            },
+        };
+
+        let counts = collect_missing_image_descriptor_counts(&context);
+
+        assert_eq!(counts, (1, 1));
+    }
+
+    #[test]
+    fn image_seo_critical_target_filter_matches_builtins() {
+        assert!(is_image_seo_critical_target("page"));
+        assert!(is_image_seo_critical_target("product"));
+        assert!(is_image_seo_critical_target("blog_post"));
+        assert!(is_image_seo_critical_target("forum_topic"));
+        assert!(!is_image_seo_critical_target("forum_category"));
     }
 
     #[test]
