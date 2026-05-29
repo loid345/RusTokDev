@@ -18,10 +18,12 @@ use rustok_events::DomainEvent;
 use rustok_outbox::TransactionalEventBus;
 
 use crate::dto::{
-    CancelOrderReturnInput, CompleteOrderReturnInput, CreateOrderAdjustmentInput, CreateOrderInput,
+    ApplyOrderChangeInput, CancelOrderChangeInput, CancelOrderReturnInput,
+    CompleteOrderReturnInput, CreateOrderAdjustmentInput, CreateOrderChangeInput, CreateOrderInput,
     CreateOrderLineItemInput, CreateOrderReturnInput, CreateOrderTaxLineInput,
-    ListOrderReturnsInput, ListOrdersInput, OrderAdjustmentResponse, OrderLineItemResponse,
-    OrderResponse, OrderReturnItemResponse, OrderReturnResponse, OrderTaxLineResponse,
+    ListOrderChangesInput, ListOrderReturnsInput, ListOrdersInput, OrderAdjustmentResponse,
+    OrderChangeResponse, OrderLineItemResponse, OrderResponse, OrderReturnItemResponse,
+    OrderReturnResponse, OrderTaxLineResponse,
 };
 use crate::entities;
 use crate::error::{OrderError, OrderResult};
@@ -35,6 +37,9 @@ const STATUS_CANCELLED: &str = "cancelled";
 const RETURN_STATUS_PENDING: &str = "pending";
 const RETURN_STATUS_COMPLETED: &str = "completed";
 const RETURN_STATUS_CANCELLED: &str = "cancelled";
+const ORDER_CHANGE_STATUS_PENDING: &str = "pending";
+const ORDER_CHANGE_STATUS_APPLIED: &str = "applied";
+const ORDER_CHANGE_STATUS_CANCELLED: &str = "cancelled";
 
 mod order_field_definitions_storage {
     rustok_core::define_field_definitions_entity!("order_field_definitions");
@@ -924,6 +929,24 @@ fn adjustment_total(adjustments: &[entities::order_adjustment::Model]) -> Decima
         .fold(Decimal::ZERO, |acc, adjustment| acc + adjustment.amount)
 }
 
+fn map_order_change_response(change: entities::order_change::Model) -> OrderChangeResponse {
+    OrderChangeResponse {
+        id: change.id,
+        tenant_id: change.tenant_id,
+        order_id: change.order_id,
+        created_by: change.created_by,
+        change_type: change.change_type,
+        status: change.status,
+        description: change.description,
+        preview: change.preview,
+        metadata: change.metadata,
+        created_at: change.created_at.into(),
+        updated_at: change.updated_at.into(),
+        applied_at: change.applied_at.map(Into::into),
+        cancelled_at: change.cancelled_at.map(Into::into),
+    }
+}
+
 fn map_order_return_response(
     value: entities::order_return::Model,
     items: Vec<entities::order_return_item::Model>,
@@ -1153,6 +1176,61 @@ fn normalize_tax_provider_id(value: &str) -> OrderResult<String> {
     Ok(normalized)
 }
 
+fn normalize_json_object(value: Value, field_name: &str) -> OrderResult<Value> {
+    match value {
+        Value::Null => Ok(serde_json::json!({})),
+        Value::Object(_) => Ok(value),
+        _ => Err(OrderError::Validation(format!(
+            "{field_name} must be a JSON object"
+        ))),
+    }
+}
+
+fn normalize_order_change_type(value: &str) -> OrderResult<String> {
+    let normalized = value.trim().to_ascii_lowercase().replace('-', "_");
+    if normalized.is_empty() {
+        return Err(OrderError::Validation(
+            "change_type must not be empty".to_string(),
+        ));
+    }
+    if normalized.len() > 64
+        || !normalized
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+    {
+        return Err(OrderError::Validation(
+            "change_type must use lowercase ASCII, digits, underscore, or hyphen".to_string(),
+        ));
+    }
+    Ok(normalized)
+}
+
+fn normalize_optional_order_change_type(value: &str) -> OrderResult<Option<String>> {
+    if value.trim().is_empty() {
+        return Ok(None);
+    }
+    normalize_order_change_type(value).map(Some)
+}
+
+fn normalize_order_change_status_filter(status: &str) -> OrderResult<String> {
+    let normalized = status.trim().to_ascii_lowercase();
+    if normalized.is_empty()
+        || matches!(
+            normalized.as_str(),
+            ORDER_CHANGE_STATUS_PENDING
+                | ORDER_CHANGE_STATUS_APPLIED
+                | ORDER_CHANGE_STATUS_CANCELLED
+        )
+    {
+        return Ok(normalized);
+    }
+
+    Err(OrderError::Validation(
+        "invalid order change status filter: expected one of pending, applied, cancelled"
+            .to_string(),
+    ))
+}
+
 fn trim_optional_text(value: Option<String>) -> Option<String> {
     value.and_then(|raw| {
         let trimmed = raw.trim();
@@ -1261,6 +1339,185 @@ where
 
     Ok(default_locale)
 }
+impl OrderService {
+    #[instrument(skip(self, input), fields(tenant_id = %tenant_id, order_id = %order_id, actor_id = %actor_id))]
+    pub async fn create_order_change(
+        &self,
+        tenant_id: Uuid,
+        actor_id: Uuid,
+        order_id: Uuid,
+        input: CreateOrderChangeInput,
+    ) -> OrderResult<OrderChangeResponse> {
+        input
+            .validate()
+            .map_err(|error| OrderError::Validation(error.to_string()))?;
+        self.load_order_model(tenant_id, order_id).await?;
+
+        let change_type = normalize_order_change_type(&input.change_type)?;
+        let now = Utc::now();
+        let row = entities::order_change::ActiveModel {
+            id: Set(generate_id()),
+            tenant_id: Set(tenant_id),
+            order_id: Set(order_id),
+            created_by: Set(actor_id),
+            change_type: Set(change_type),
+            status: Set(ORDER_CHANGE_STATUS_PENDING.to_string()),
+            description: Set(trim_optional_text(input.description)),
+            preview: Set(normalize_json_object(input.preview, "preview")?),
+            metadata: Set(normalize_json_object(input.metadata, "metadata")?),
+            created_at: Set(now.into()),
+            updated_at: Set(now.into()),
+            applied_at: Set(None),
+            cancelled_at: Set(None),
+        }
+        .insert(&self.db)
+        .await?;
+
+        Ok(map_order_change_response(row))
+    }
+
+    pub async fn get_order_change(
+        &self,
+        tenant_id: Uuid,
+        change_id: Uuid,
+    ) -> OrderResult<OrderChangeResponse> {
+        let row = self.load_order_change_model(tenant_id, change_id).await?;
+        Ok(map_order_change_response(row))
+    }
+
+    pub async fn list_order_changes(
+        &self,
+        tenant_id: Uuid,
+        input: ListOrderChangesInput,
+    ) -> OrderResult<(Vec<OrderChangeResponse>, u64)> {
+        let page = input.page.max(1);
+        let per_page = input.per_page.clamp(1, 100);
+        let mut query = entities::order_change::Entity::find()
+            .filter(entities::order_change::Column::TenantId.eq(tenant_id))
+            .order_by_desc(entities::order_change::Column::CreatedAt);
+
+        if let Some(order_id) = input.order_id {
+            query = query.filter(entities::order_change::Column::OrderId.eq(order_id));
+        }
+        if let Some(status) = input.status {
+            let normalized = normalize_order_change_status_filter(&status)?;
+            if !normalized.is_empty() {
+                query = query.filter(entities::order_change::Column::Status.eq(normalized));
+            }
+        }
+        if let Some(change_type) = input.change_type {
+            let normalized = normalize_optional_order_change_type(&change_type)?;
+            if let Some(normalized) = normalized {
+                query = query.filter(entities::order_change::Column::ChangeType.eq(normalized));
+            }
+        }
+
+        let paginator = query.paginate(&self.db, per_page);
+        let total = paginator.num_items().await?;
+        let rows = paginator.fetch_page(page.saturating_sub(1)).await?;
+        Ok((
+            rows.into_iter().map(map_order_change_response).collect(),
+            total,
+        ))
+    }
+
+    pub async fn apply_order_change(
+        &self,
+        tenant_id: Uuid,
+        change_id: Uuid,
+        input: ApplyOrderChangeInput,
+    ) -> OrderResult<OrderChangeResponse> {
+        input
+            .validate()
+            .map_err(|error| OrderError::Validation(error.to_string()))?;
+        self.transition_order_change(
+            tenant_id,
+            change_id,
+            ORDER_CHANGE_STATUS_PENDING,
+            ORDER_CHANGE_STATUS_APPLIED,
+            normalize_json_object(input.metadata, "metadata")?,
+            |active, now| {
+                active.applied_at = Set(Some(now.into()));
+            },
+        )
+        .await
+    }
+
+    pub async fn cancel_order_change(
+        &self,
+        tenant_id: Uuid,
+        change_id: Uuid,
+        input: CancelOrderChangeInput,
+    ) -> OrderResult<OrderChangeResponse> {
+        input
+            .validate()
+            .map_err(|error| OrderError::Validation(error.to_string()))?;
+        let reason = trim_optional_text(input.reason);
+        let mut metadata = normalize_json_object(input.metadata, "metadata")?;
+        if let Some(reason) = reason {
+            if let Value::Object(ref mut object) = metadata {
+                object.insert("cancellation_reason".to_string(), Value::String(reason));
+            }
+        }
+        self.transition_order_change(
+            tenant_id,
+            change_id,
+            ORDER_CHANGE_STATUS_PENDING,
+            ORDER_CHANGE_STATUS_CANCELLED,
+            metadata,
+            |active, now| {
+                active.cancelled_at = Set(Some(now.into()));
+            },
+        )
+        .await
+    }
+
+    async fn load_order_change_model(
+        &self,
+        tenant_id: Uuid,
+        change_id: Uuid,
+    ) -> OrderResult<entities::order_change::Model> {
+        entities::order_change::Entity::find_by_id(change_id)
+            .filter(entities::order_change::Column::TenantId.eq(tenant_id))
+            .one(&self.db)
+            .await?
+            .ok_or(OrderError::OrderChangeNotFound(change_id))
+    }
+
+    async fn transition_order_change<F>(
+        &self,
+        tenant_id: Uuid,
+        change_id: Uuid,
+        expected_from: &str,
+        next_status: &str,
+        metadata_patch: Value,
+        mutate: F,
+    ) -> OrderResult<OrderChangeResponse>
+    where
+        F: FnOnce(&mut entities::order_change::ActiveModel, chrono::DateTime<Utc>),
+    {
+        let existing = self.load_order_change_model(tenant_id, change_id).await?;
+        if existing.status != expected_from {
+            return Err(OrderError::InvalidTransition {
+                from: existing.status,
+                to: next_status.to_string(),
+            });
+        }
+
+        let mut active: entities::order_change::ActiveModel = existing.into();
+        let now = Utc::now();
+        active.status = Set(next_status.to_string());
+        active.metadata = Set(merge_metadata_patch(
+            active.metadata.clone().take(),
+            metadata_patch,
+        ));
+        active.updated_at = Set(now.into());
+        mutate(&mut active, now);
+        let updated = active.update(&self.db).await?;
+        Ok(map_order_change_response(updated))
+    }
+}
+
 impl OrderService {
     #[instrument(skip(self, input), fields(tenant_id = %tenant_id, order_id = %order_id))]
     pub async fn create_return(

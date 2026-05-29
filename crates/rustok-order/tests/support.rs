@@ -1,6 +1,6 @@
 use rustok_order::entities::{
-    order, order_adjustment, order_line_item, order_line_item_translation, order_return,
-    order_return_item, order_tax_line,
+    order, order_adjustment, order_change, order_line_item, order_line_item_translation,
+    order_return, order_return_item, order_tax_line,
 };
 use sea_orm::{ConnectionTrait, DatabaseConnection, DbBackend, Schema};
 
@@ -59,6 +59,12 @@ pub async fn ensure_order_schema(db: &DatabaseConnection) {
         db,
         &builder,
         schema.create_table_from_entity(order_tax_line::Entity),
+    )
+    .await;
+    create_entity_table(
+        db,
+        &builder,
+        schema.create_table_from_entity(order_change::Entity),
     )
     .await;
     create_entity_table(

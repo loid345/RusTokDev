@@ -2,8 +2,9 @@ use chrono::Utc;
 use flex::attached;
 use rust_decimal::Decimal;
 use rustok_order::dto::{
-    CreateOrderAdjustmentInput, CreateOrderInput, CreateOrderLineItemInput, CreateOrderReturnInput,
-    CreateOrderReturnItemInput, ListOrderReturnsInput,
+    ApplyOrderChangeInput, CancelOrderChangeInput, CreateOrderAdjustmentInput,
+    CreateOrderChangeInput, CreateOrderInput, CreateOrderLineItemInput, CreateOrderReturnInput,
+    CreateOrderReturnItemInput, ListOrderChangesInput, ListOrderReturnsInput,
 };
 use rustok_order::entities::{order, order_tax_line};
 use rustok_order::error::OrderError;
@@ -328,6 +329,181 @@ async fn invalid_transition_is_rejected() {
         OrderError::InvalidTransition { from, to } => {
             assert_eq!(from, "pending");
             assert_eq!(to, "shipped");
+        }
+        other => panic!("expected invalid transition, got {other:?}"),
+    }
+}
+
+#[tokio::test]
+async fn create_list_apply_and_cancel_order_changes() {
+    let service = setup().await;
+    let tenant_id = Uuid::new_v4();
+    let actor_id = Uuid::new_v4();
+    let order = service
+        .create_order(tenant_id, actor_id, create_order_input())
+        .await
+        .expect("order should be created");
+
+    let created = service
+        .create_order_change(
+            tenant_id,
+            actor_id,
+            order.id,
+            CreateOrderChangeInput {
+                change_type: "  Draft-Edit  ".to_string(),
+                description: Some("  update line quantity  ".to_string()),
+                preview: serde_json::json!({
+                    "operations": [{"op": "set_quantity", "line_item_id": order.line_items[0].id, "quantity": 1}],
+                    "totals": {"before": "43.98", "after": "24.00"}
+                }),
+                metadata: serde_json::json!({"source": "order-change-test"}),
+            },
+        )
+        .await
+        .expect("order change should be created");
+
+    assert_eq!(created.status, "pending");
+    assert_eq!(created.change_type, "draft_edit");
+    assert_eq!(created.description.as_deref(), Some("update line quantity"));
+    assert_eq!(created.order_id, order.id);
+    assert_eq!(created.created_by, actor_id);
+    assert!(created.applied_at.is_none());
+
+    let (rows, total) = service
+        .list_order_changes(
+            tenant_id,
+            ListOrderChangesInput {
+                page: 1,
+                per_page: 20,
+                order_id: Some(order.id),
+                status: Some(" PENDING ".to_string()),
+                change_type: Some("draft-edit".to_string()),
+            },
+        )
+        .await
+        .expect("order changes should list");
+    assert_eq!(total, 1);
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].id, created.id);
+
+    let applied = service
+        .apply_order_change(
+            tenant_id,
+            created.id,
+            ApplyOrderChangeInput {
+                metadata: serde_json::json!({"applied_by": "test"}),
+            },
+        )
+        .await
+        .expect("order change should apply");
+    assert_eq!(applied.status, "applied");
+    assert!(applied.applied_at.is_some());
+    assert_eq!(
+        applied.metadata["source"],
+        serde_json::json!("order-change-test")
+    );
+    assert_eq!(applied.metadata["applied_by"], serde_json::json!("test"));
+
+    let second = service
+        .create_order_change(
+            tenant_id,
+            actor_id,
+            order.id,
+            CreateOrderChangeInput {
+                change_type: "claim".to_string(),
+                description: None,
+                preview: serde_json::json!({}),
+                metadata: serde_json::json!({}),
+            },
+        )
+        .await
+        .expect("second order change should be created");
+    let cancelled = service
+        .cancel_order_change(
+            tenant_id,
+            second.id,
+            CancelOrderChangeInput {
+                reason: Some(" duplicate request ".to_string()),
+                metadata: serde_json::json!({"cancelled_by": "test"}),
+            },
+        )
+        .await
+        .expect("order change should cancel");
+    assert_eq!(cancelled.status, "cancelled");
+    assert_eq!(
+        cancelled.metadata["cancellation_reason"],
+        serde_json::json!("duplicate request")
+    );
+    assert!(cancelled.cancelled_at.is_some());
+}
+
+#[tokio::test]
+async fn order_change_rejects_invalid_payloads_and_transitions() {
+    let service = setup().await;
+    let tenant_id = Uuid::new_v4();
+    let actor_id = Uuid::new_v4();
+    let order = service
+        .create_order(tenant_id, actor_id, create_order_input())
+        .await
+        .expect("order should be created");
+
+    let invalid_preview = service
+        .create_order_change(
+            tenant_id,
+            actor_id,
+            order.id,
+            CreateOrderChangeInput {
+                change_type: "draft_edit".to_string(),
+                description: None,
+                preview: serde_json::json!(["not", "object"]),
+                metadata: serde_json::json!({}),
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(invalid_preview, OrderError::Validation(message) if message.contains("preview must be a JSON object"))
+    );
+
+    let change = service
+        .create_order_change(
+            tenant_id,
+            actor_id,
+            order.id,
+            CreateOrderChangeInput {
+                change_type: "exchange".to_string(),
+                description: None,
+                preview: serde_json::json!({}),
+                metadata: serde_json::json!({}),
+            },
+        )
+        .await
+        .expect("order change should be created");
+    service
+        .apply_order_change(
+            tenant_id,
+            change.id,
+            ApplyOrderChangeInput {
+                metadata: serde_json::json!({}),
+            },
+        )
+        .await
+        .expect("order change should apply");
+    let error = service
+        .cancel_order_change(
+            tenant_id,
+            change.id,
+            CancelOrderChangeInput {
+                reason: None,
+                metadata: serde_json::json!({}),
+            },
+        )
+        .await
+        .unwrap_err();
+    match error {
+        OrderError::InvalidTransition { from, to } => {
+            assert_eq!(from, "applied");
+            assert_eq!(to, "cancelled");
         }
         other => panic!("expected invalid transition, got {other:?}"),
     }

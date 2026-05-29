@@ -6,12 +6,12 @@ outbox publication и module-owned admin UI, а post-order и transport parity
 
 ## Execution checkpoint
 
-- Current phase: post_order_returns_foundation
-- Last checkpoint: Slice 10.1 продвинут: `order_returns` получил item-level `order_return_items`, validation количества/принадлежности line-item к заказу, tenant-scoped show/list contract с lines и admin REST/GraphQL transport parity через umbrella `rustok-commerce`.
-- Next step: Связать returns orchestration с refund/exchange decision tree без переноса payment logic в `rustok-order` и добавить customer-safe ownership checks для item lines.
+- Current phase: post_order_change_groundwork
+- Last checkpoint: Slice 10.3 начат: `rustok-order` получил order-owned `order_changes` storage/service skeleton с preview JSON, `change_type`, lifecycle `pending -> applied|cancelled`, validation и targeted service tests без переноса payment/fulfillment side effects в order boundary.
+- Next step: опубликовать admin REST/GraphQL transport для order-change preview/apply/cancel через umbrella `rustok-commerce` и затем связать returns/refunds/exchanges decision tree без переноса payment logic в `rustok-order`.
 - Open blockers: серверный OpenAPI contract test под default features упирается в существующие compile errors вне order/commerce (`rustok-pages-admin`, server build service/module lifecycle/graphql mutations); targeted order lifecycle и `rustok-commerce` check проходят.
 - Hand-off notes for next agent: После каждого returns/refund/exchange инкремента обновлять FFA/FBA evidence, README/admin docs и central registry в том же PR.
-- Last updated at (UTC): 2026-05-29T00:00:00Z
+- Last updated at (UTC): 2026-05-29T18:45:00Z
 
 ## FFA/FBA status
 
@@ -20,7 +20,7 @@ outbox publication и module-owned admin UI, а post-order и transport parity
 - Evidence:
   - модуль ведётся в ускоренном FFA/FBA migration track как часть ecommerce family;
   - любые изменения UI/transport boundary должны фиксироваться с parity/boundary evidence в этом же инкременте.
-- Last verified at (UTC): 2026-05-24T00:00:00Z
+- Last verified at (UTC): 2026-05-29T18:45:00Z
 - Owner: `rustok-order` module team
 
 ## Область работ
@@ -54,11 +54,11 @@ outbox publication и module-owned admin UI, а post-order и transport parity
 
 - [~] развивать returns, refunds, exchanges и order changes как отдельный следующий слой; (started: `order_returns` + `order_return_items` storage, item validation + `OrderService::{create_return,get_return,list_returns,complete_return,cancel_return}` foundation)
 - [x] покрывать lifecycle transitions и failure semantics targeted tests; (return lifecycle `pending -> completed|cancelled`, second-transition guard, tenant-scoped show)
-- [ ] удерживать compatibility с payment/fulfillment orchestration без размывания order ownership.
+- [~] удерживать compatibility с payment/fulfillment orchestration без размывания order ownership. (started: `order_changes` skeleton хранит preview/apply/cancel state без payment/fulfillment side effects)
 
 ### 3. Operability
 
-- [~] документировать новые order guarantees одновременно с изменением runtime surface; (returns lifecycle и item-level lines checkpoint зафиксированы)
+- [~] документировать новые order guarantees одновременно с изменением runtime surface; (returns lifecycle, item-level lines и order-change skeleton checkpoint зафиксированы)
 - [ ] удерживать local docs и `README.md` синхронизированными;
 - [ ] обновлять umbrella commerce docs при изменении order/post-order scope.
 

@@ -59,14 +59,14 @@ capability crate-ов и host-приложений в RusToK.
 | `blog` | admin + storefront | `in_progress` | `in_progress` | `crates/rustok-blog/docs/implementation-plan.md` (slice #71: admin form normalization uses shared UI helpers) |
 | `search` | admin + storefront | `in_progress` | `in_progress` | `crates/rustok-search/docs/implementation-plan.md` (slices #17-19: admin preview request normalization plus shared UI input/query helpers) |
 | `cart` | storefront | `in_progress` | `in_progress` | `crates/rustok-cart/docs/implementation-plan.md` |
-| `commerce` | admin + storefront | `in_progress` | `in_progress` | `crates/rustok-commerce/docs/implementation-plan.md` |
+| `commerce` | admin + storefront | `in_progress` | `in_progress` | `crates/rustok-commerce/docs/implementation-plan.md` (slice 10.3: order-change storage/service skeleton started after storefront returns parity) |
 | `workflow` | admin | `in_progress` | `in_progress` | `crates/rustok-workflow/docs/implementation-plan.md` |
 | `region` | admin + storefront | `in_progress` | `in_progress` | `crates/rustok-region/docs/implementation-plan.md` (slice #1: нормализация admin-формы использует shared UI helper) |
 | `product` | admin + storefront | `in_progress` | `in_progress` | `crates/rustok-product/docs/implementation-plan.md` |
 | `customer` | admin | `in_progress` | `in_progress` | `crates/rustok-customer/docs/implementation-plan.md` |
 | `pricing` | admin + storefront | `in_progress` | `in_progress` | `crates/rustok-pricing/docs/implementation-plan.md` |
 | `inventory` | admin | `in_progress` | `in_progress` | `crates/rustok-inventory/docs/implementation-plan.md` |
-| `order` | admin | `in_progress` | `in_progress` | `crates/rustok-order/docs/implementation-plan.md` |
+| `order` | admin | `in_progress` | `in_progress` | `crates/rustok-order/docs/implementation-plan.md` (slice 10.3: order_changes preview/apply/cancel skeleton) |
 | `payment` | no module-owned UI | `in_progress` | `in_progress` | `crates/rustok-payment/docs/implementation-plan.md` |
 | `fulfillment` | admin | `in_progress` | `in_progress` | `crates/rustok-fulfillment/docs/implementation-plan.md` |
 | `seo` | admin + storefront contracts | `in_progress` | `in_progress` | `crates/rustok-seo/docs/implementation-plan.md` |
@@ -235,10 +235,10 @@ graph TD
 | `region` | `rustok-region` | — | Region, country, currency, tax baseline, region-owned admin CRUD UI и storefront discovery UI |
 | `pricing` | `rustok-pricing` | `product` | Pricing domain baseline, pricing-owned admin visibility UI и storefront pricing atlas UI |
 | `inventory` | `rustok-inventory` | `product` | Inventory, stock availability baseline и inventory-owned admin visibility UI |
-| `order` | `rustok-order` | — | Order lifecycle, order snapshots with canonical `seller_id`, typed order adjustments, order returns lifecycle foundation с item-level return lines и order-owned admin operations UI |
+| `order` | `rustok-order` | — | Order lifecycle, order snapshots with canonical `seller_id`, typed order adjustments, order returns lifecycle foundation с item-level return lines, order-change preview/apply/cancel skeleton и order-owned admin operations UI |
 | `payment` | `rustok-payment` | — | Payment collections и payments |
 | `fulfillment` | `rustok-fulfillment` | — | Shipping options, fulfillments и fulfillment-owned shipping-option admin UI |
-| `commerce` | `rustok-commerce` | `cart`, `customer`, `product`, `region`, `pricing`, `inventory`, `order`, `payment`, `fulfillment` | Umbrella/root ecommerce orchestration, typed shipping-profile registry, aggregate cart-promotion operator surface, admin returns transport parity с item-level lines и marketplace foundation вокруг canonical `seller_id` |
+| `commerce` | `rustok-commerce` | `cart`, `customer`, `product`, `region`, `pricing`, `inventory`, `order`, `payment`, `fulfillment` | Umbrella/root ecommerce orchestration, typed shipping-profile registry, aggregate cart-promotion operator surface, admin + storefront returns transport parity с item-level lines и marketplace foundation вокруг canonical `seller_id` |
 | `blog` | `rustok-blog` | `content`, `comments`, `taxonomy` | Blog domain, posts, categories, tags, transport/UI |
 | `forum` | `rustok-forum` | `content`, `taxonomy` | Forum domain, topics, replies, moderation, transport/UI |
 | `comments` | `rustok-comments` | — | Generic comments domain |
