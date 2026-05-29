@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use async_graphql::{Context, FieldError, Object, Result};
+use async_graphql::{Context, ErrorExtensions, FieldError, Object, Result};
 use chrono::{Duration, Utc};
 use rustok_core::{ModuleRegistry, Permission};
 use rustok_telemetry::metrics;
@@ -10,6 +10,7 @@ use sea_orm::{
 };
 use semver::{Version, VersionReq};
 use std::time::Instant;
+use uuid::Uuid;
 
 use crate::common::RequestContext;
 use crate::context::{AuthContext, TenantContext};
@@ -19,8 +20,8 @@ use crate::graphql::errors::GraphQLError;
 use crate::graphql::types::ResolvedCanonicalRoute;
 use crate::graphql::types::{
     ActivityItem, ActivityUser, BuildJob, DashboardStats, InstalledModule, MarketplaceModule,
-    MarketplaceModuleVersion, ModuleRegistryItem, ModuleSettingField, ReleaseInfo, Tenant,
-    TenantModule, User, UserConnection, UserEdge, UsersFilter,
+    MarketplaceModuleVersion, ModuleOperationRecoveryPlan, ModuleRegistryItem, ModuleSettingField,
+    ReleaseInfo, Tenant, TenantModule, User, UserConnection, UserEdge, UsersFilter,
 };
 use crate::models::_entities::tenant_modules::Column as TenantModulesColumn;
 use crate::models::_entities::tenant_modules::Entity as TenantModulesEntity;
@@ -33,6 +34,7 @@ use crate::services::build_service::BuildService;
 use crate::services::effective_module_policy::EffectiveModulePolicyService;
 use crate::services::marketplace_catalog::marketplace_catalog_from_context;
 use crate::services::marketplace_catalog::MarketplaceCatalogQuery;
+use crate::services::module_lifecycle::{ModuleLifecycleService, ModuleOperationRecoveryError};
 use crate::services::platform_composition::PlatformCompositionService;
 use crate::services::rbac_service::RbacService;
 use crate::services::registry_governance::{
@@ -674,6 +676,48 @@ fn source_matches(module: &MarketplaceModule, source: Option<&str>) -> bool {
     source.is_none_or(|source| module.source.eq_ignore_ascii_case(source))
 }
 
+fn map_module_operation_recovery_error(error: ModuleOperationRecoveryError) -> FieldError {
+    match error {
+        ModuleOperationRecoveryError::OperationNotFound => {
+            <FieldError as GraphQLError>::bad_user_input("Module operation not found")
+        }
+        ModuleOperationRecoveryError::NotRetryable(reason) => {
+            FieldError::new(format!("Module operation is not retryable: {reason}"))
+                .extend_with(|_, ext| {
+                    ext.set("code", "MODULE_OPERATION_NOT_RETRYABLE");
+                    ext.set("retryable_issue", false);
+                })
+        }
+        ModuleOperationRecoveryError::StateMismatch {
+            requested_enabled,
+            current_enabled,
+        } => FieldError::new(format!(
+            "Module operation state mismatch: requested enabled={requested_enabled}, current enabled={current_enabled}"
+        ))
+        .extend_with(|_, ext| {
+            ext.set("code", "MODULE_OPERATION_STATE_MISMATCH");
+            ext.set("retryable_issue", false);
+        }),
+        ModuleOperationRecoveryError::PostHookFailed(err) => {
+            FieldError::new(format!("Module hook failed: {err}"))
+                .extend_with(|_, ext| {
+                    ext.set("code", "MODULE_HOOK_FAILED");
+                    ext.set("retryable_issue", true);
+                    ext.set("operation_issue", "post_hook_failed");
+                })
+        }
+        ModuleOperationRecoveryError::Database(err) => {
+            <FieldError as GraphQLError>::internal_error(&err.to_string())
+        }
+        ModuleOperationRecoveryError::Policy(err) => {
+            <FieldError as GraphQLError>::internal_error(&err)
+        }
+        ModuleOperationRecoveryError::Toggle(err) => {
+            <FieldError as GraphQLError>::internal_error(&err.to_string())
+        }
+    }
+}
+
 async fn ensure_modules_read_permission(ctx: &Context<'_>) -> Result<()> {
     let auth = ctx
         .data::<AuthContext>()
@@ -1132,6 +1176,66 @@ impl RootQuery {
             .map(registry_module_lifecycle_from_snapshot);
 
         Ok(Some(module))
+    }
+
+    async fn module_operation_recovery_plan(
+        &self,
+        ctx: &Context<'_>,
+        operation_id: Uuid,
+    ) -> Result<Option<ModuleOperationRecoveryPlan>> {
+        ensure_modules_read_permission(ctx).await?;
+
+        let app_ctx = ctx.data::<loco_rs::app::AppContext>()?;
+        let tenant = ctx.data::<TenantContext>()?;
+        let plan =
+            match ModuleLifecycleService::module_operation_recovery_plan(&app_ctx.db, operation_id)
+                .await
+            {
+                Ok(plan) => plan,
+                Err(ModuleOperationRecoveryError::OperationNotFound) => return Ok(None),
+                Err(err) => return Err(map_module_operation_recovery_error(err)),
+            };
+
+        if plan.tenant_id != tenant.id {
+            return Ok(None);
+        }
+
+        Ok(Some(ModuleOperationRecoveryPlan::from(&plan)))
+    }
+
+    async fn failed_module_operation_recovery_plans(
+        &self,
+        ctx: &Context<'_>,
+        module_slug: Option<String>,
+        limit: Option<i32>,
+    ) -> Result<Vec<ModuleOperationRecoveryPlan>> {
+        ensure_modules_read_permission(ctx).await?;
+
+        let app_ctx = ctx.data::<loco_rs::app::AppContext>()?;
+        let tenant = ctx.data::<TenantContext>()?;
+        let requested_limit = requested_collection_limit(limit);
+        let limit = clamp_collection_limit(limit);
+        let plans = ModuleLifecycleService::failed_module_operation_recovery_plans(
+            &app_ctx.db,
+            tenant.id,
+            module_slug.as_deref(),
+        )
+        .await
+        .map_err(map_module_operation_recovery_error)?
+        .into_iter()
+        .take(limit)
+        .map(|plan| ModuleOperationRecoveryPlan::from(&plan))
+        .collect::<Vec<_>>();
+
+        metrics::record_read_path_budget(
+            "graphql",
+            "root.failed_module_operation_recovery_plans",
+            requested_limit,
+            limit as u64,
+            plans.len(),
+        );
+
+        Ok(plans)
     }
 
     async fn active_build(&self, ctx: &Context<'_>) -> Result<Option<BuildJob>> {

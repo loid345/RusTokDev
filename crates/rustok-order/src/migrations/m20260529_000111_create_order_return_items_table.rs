@@ -68,24 +68,41 @@ impl MigrationTrait for Migration {
                             .to(OrderLineItems::Table, OrderLineItems::Id)
                             .on_delete(ForeignKeyAction::Restrict),
                     )
-                    .index(
-                        Index::create()
-                            .name("idx_order_return_items_return_id")
-                            .col(OrderReturnItems::ReturnId),
-                    )
-                    .index(
-                        Index::create()
-                            .name("idx_order_return_items_order_id")
-                            .col(OrderReturnItems::OrderId),
-                    )
-                    .index(
-                        Index::create()
-                            .name("idx_order_return_items_line_item_id")
-                            .col(OrderReturnItems::LineItemId),
-                    )
                     .to_owned(),
             )
-            .await
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_order_return_items_return_id")
+                    .table(OrderReturnItems::Table)
+                    .col(OrderReturnItems::ReturnId)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_order_return_items_order_id")
+                    .table(OrderReturnItems::Table)
+                    .col(OrderReturnItems::OrderId)
+                    .to_owned(),
+            )
+            .await?;
+
+        manager
+            .create_index(
+                Index::create()
+                    .name("idx_order_return_items_line_item_id")
+                    .table(OrderReturnItems::Table)
+                    .col(OrderReturnItems::LineItemId)
+                    .to_owned(),
+            )
+            .await?;
+
+        Ok(())
     }
 
     async fn down(&self, manager: &SchemaManager) -> Result<(), DbErr> {
