@@ -20,7 +20,8 @@ use crate::graphql::errors::GraphQLError;
 ))]
 use crate::graphql::schema::module_slug;
 use crate::graphql::types::{
-    BuildJob, CreateUserInput, DeleteUserPayload, TenantModule, UpdateUserInput, User,
+    BuildJob, CreateUserInput, DeleteUserPayload, ModuleOperationRecoveryPlan, TenantModule,
+    UpdateUserInput, User,
 };
 #[cfg(all(
     feature = "mod-content",
@@ -55,7 +56,8 @@ use crate::services::flex_attached_values::{
     FlexAttachedValuesService, PreparedAttachedValuesWrite,
 };
 use crate::services::module_lifecycle::{
-    ModuleLifecycleService, ToggleModuleError, UpdateModuleSettingsError,
+    ModuleLifecycleService, ModuleOperationRecoveryError, ToggleModuleError,
+    UpdateModuleSettingsError,
 };
 use crate::services::platform_composition::{
     PlatformCompositionBuildError, PlatformCompositionBuildService, PlatformCompositionError,
@@ -361,6 +363,46 @@ fn map_toggle_module_error(error: ToggleModuleError) -> FieldError {
                 ext.set("operation_issue", "post_hook_failed");
             }),
         ToggleModuleError::Policy(err) => <FieldError as GraphQLError>::internal_error(&err),
+    }
+}
+
+fn map_module_operation_recovery_error(error: ModuleOperationRecoveryError) -> FieldError {
+    match error {
+        ModuleOperationRecoveryError::OperationNotFound => {
+            <FieldError as GraphQLError>::bad_user_input("Module operation not found")
+        }
+        ModuleOperationRecoveryError::NotRetryable(reason) => {
+            FieldError::new(format!("Module operation is not retryable: {reason}"))
+                .extend_with(|_, ext| {
+                    ext.set("code", "MODULE_OPERATION_NOT_RETRYABLE");
+                    ext.set("retryable_issue", false);
+                })
+        }
+        ModuleOperationRecoveryError::StateMismatch {
+            requested_enabled,
+            current_enabled,
+        } => FieldError::new(format!(
+            "Module operation state mismatch: requested enabled={requested_enabled}, current enabled={current_enabled}"
+        ))
+        .extend_with(|_, ext| {
+            ext.set("code", "MODULE_OPERATION_STATE_MISMATCH");
+            ext.set("retryable_issue", false);
+        }),
+        ModuleOperationRecoveryError::PostHookFailed(err) => {
+            FieldError::new(format!("Module hook failed: {err}"))
+                .extend_with(|_, ext| {
+                    ext.set("code", "MODULE_HOOK_FAILED");
+                    ext.set("retryable_issue", true);
+                    ext.set("operation_issue", "post_hook_failed");
+                })
+        }
+        ModuleOperationRecoveryError::Database(err) => {
+            <FieldError as GraphQLError>::internal_error(&err.to_string())
+        }
+        ModuleOperationRecoveryError::Policy(err) => {
+            <FieldError as GraphQLError>::internal_error(&err)
+        }
+        ModuleOperationRecoveryError::Toggle(err) => map_toggle_module_error(err),
     }
 }
 
@@ -1062,6 +1104,75 @@ impl RootMutation {
         )
         .await
         .map_err(map_toggle_module_error)?;
+
+        Ok(TenantModule {
+            module_slug: module.module_slug,
+            enabled: module.enabled,
+            settings: module.settings.to_string(),
+        })
+    }
+
+    async fn retry_failed_module_operation_post_hook(
+        &self,
+        ctx: &Context<'_>,
+        operation_id: Uuid,
+    ) -> Result<ModuleOperationRecoveryPlan> {
+        let (auth, tenant) = ensure_modules_manage_permission(ctx).await?;
+        let app_ctx = ctx.data::<loco_rs::app::AppContext>()?;
+        let registry = ctx.data::<ModuleRegistry>()?;
+
+        let existing_plan =
+            ModuleLifecycleService::module_operation_recovery_plan(&app_ctx.db, operation_id)
+                .await
+                .map_err(map_module_operation_recovery_error)?;
+        if existing_plan.tenant_id != tenant.id {
+            return Err(map_module_operation_recovery_error(
+                ModuleOperationRecoveryError::OperationNotFound,
+            ));
+        }
+
+        let operation = ModuleLifecycleService::retry_failed_post_hook_operation(
+            &app_ctx.db,
+            registry,
+            operation_id,
+            Some(auth.user_id.to_string()),
+        )
+        .await
+        .map_err(map_module_operation_recovery_error)?;
+        let plan = crate::services::module_lifecycle::ModuleOperationRecoveryPlan::from_operation(
+            &operation,
+        );
+
+        Ok(ModuleOperationRecoveryPlan::from(&plan))
+    }
+
+    async fn compensate_failed_module_operation(
+        &self,
+        ctx: &Context<'_>,
+        operation_id: Uuid,
+    ) -> Result<TenantModule> {
+        let (auth, tenant) = ensure_modules_manage_permission(ctx).await?;
+        let app_ctx = ctx.data::<loco_rs::app::AppContext>()?;
+        let registry = ctx.data::<ModuleRegistry>()?;
+
+        let existing_plan =
+            ModuleLifecycleService::module_operation_recovery_plan(&app_ctx.db, operation_id)
+                .await
+                .map_err(map_module_operation_recovery_error)?;
+        if existing_plan.tenant_id != tenant.id {
+            return Err(map_module_operation_recovery_error(
+                ModuleOperationRecoveryError::OperationNotFound,
+            ));
+        }
+
+        let module = ModuleLifecycleService::compensate_failed_operation(
+            &app_ctx.db,
+            registry,
+            operation_id,
+            Some(auth.user_id.to_string()),
+        )
+        .await
+        .map_err(map_module_operation_recovery_error)?;
 
         Ok(TenantModule {
             module_slug: module.module_slug,
