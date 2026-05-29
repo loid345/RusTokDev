@@ -892,3 +892,9 @@ rollback-стратегии и Definition of Done по итерациям.
 - Закрыт следующий слой compile-blockers, проявившийся при `cargo test -p rustok-server module_lifecycle`: исправлены Leptos `Fn`/`FnMut` ownership regressions в module-owned admin UI (`rustok-pages/admin`, `rustok-channel/admin`) и восстановлена storefront native shipping-selection parity в `rustok-commerce/storefront` под актуальный `CartShippingSelectionInput` contract.
 - Для `apps/admin` восстановлены SSR native registry governance REST helpers (`GET`/mutation request через canonical `api_base_url`, bearer token и tenant header), чтобы registry publish decision server functions снова компилировались после удаления старых helper entrypoints.
 - Повторный `cargo test -p rustok-server module_lifecycle` дошёл до `rustok-admin` compilation и остановился на environment blocker `No space left on device`; функционального control-plane failure на этом шаге не обнаружено. Чекбокс минимального verification bundle остаётся `[ ]` до повторного strict-прогона после очистки/увеличения build storage.
+
+### Актуализация 2026-05-29 (итерация 72)
+
+- Устранён SQLite blocker в новом order return-items migration: inline `CREATE TABLE` index definitions заменены на отдельные `create_index` вызовы с явным `.table(...)`, чтобы SeaORM генерировал переносимый SQL для SQLite smoke-прогона.
+- `cargo test -p migration` снова проходит полностью, включая `tests/ecommerce_schema_smoke.rs` (10/10), а diagnostic `sqlite_migrations_apply_incrementally` подтверждает, что весь migration chain до `m20260529_000111_create_order_return_items_table` и последующий `product_tags` применяется без SQLite syntax error.
+- Strict minimal runner всё ещё не закрыт как полный зелёный bundle: `cargo fmt --all -- --check` показывает pre-existing workspace rustfmt drift вне текущего migration fix, а повторный `module_lifecycle` run ранее упирался в storage pressure при компиляции `rustok-admin`.
