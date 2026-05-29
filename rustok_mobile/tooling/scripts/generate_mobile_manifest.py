@@ -152,7 +152,13 @@ def _parse_builder_surface(data: dict[str, object]) -> dict[str, object] | None:
     degraded_modes = _parse_string_dict(consumer.get("degraded_modes"))
     toggle_profiles = _parse_toggle_profiles(consumer.get("toggle_profiles"))
 
-    if not (provider_module and contract_version and builder_contract_version):
+    if not (
+        provider_module
+        and contract
+        and contract_version
+        and builder_contract_version
+        and capabilities
+    ):
         return None
 
     return {
@@ -380,35 +386,34 @@ def to_snapshot(modules: list[dict[str, object]]) -> list[dict[str, object]]:
     snapshot: list[dict[str, object]] = []
     for module in modules:
         route_segment = str(module["route_segment"])
-        snapshot.append(
-            {
-                "module_slug": str(
-                    module.get("module_slug")
-                    or str(module["module_key"]).removeprefix("rustok_")
-                ),
-                "surface_kind": "admin_mobile",
-                "route_segment": route_segment,
-                "nav_icon": str(module.get("icon") or "module"),
-                "permissions": list(module.get("permissions", [])),
-                "locale_namespace": str(
-                    module.get("locale_namespace")
-                    or module.get("module_slug")
-                    or route_segment
-                ),
-                "child_pages": [
-                    {
-                        "subpath": str(page["subpath"]),
-                        "title": str(page["title"]),
-                        "nav_label": str(page.get("nav_label") or page["title"]),
-                    }
-                    for page in module.get("child_pages", [])
-                    if isinstance(page, dict)
-                ],
-                "builder_surface": _snapshot_builder_surface(
-                    module.get("builder_surface")
-                ),
-            }
-        )
+        item = {
+            "module_slug": str(
+                module.get("module_slug")
+                or str(module["module_key"]).removeprefix("rustok_")
+            ),
+            "surface_kind": "admin_mobile",
+            "route_segment": route_segment,
+            "nav_icon": str(module.get("icon") or "module"),
+            "permissions": list(module.get("permissions", [])),
+            "locale_namespace": str(
+                module.get("locale_namespace")
+                or module.get("module_slug")
+                or route_segment
+            ),
+            "child_pages": [
+                {
+                    "subpath": str(page["subpath"]),
+                    "title": str(page["title"]),
+                    "nav_label": str(page.get("nav_label") or page["title"]),
+                }
+                for page in module.get("child_pages", [])
+                if isinstance(page, dict)
+            ],
+        }
+        builder_surface = _snapshot_builder_surface(module.get("builder_surface"))
+        if builder_surface is not None:
+            item["builder_surface"] = builder_surface
+        snapshot.append(item)
     return snapshot
 
 

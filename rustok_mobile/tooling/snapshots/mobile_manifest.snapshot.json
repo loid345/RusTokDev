@@ -17,8 +17,7 @@
         "title": "All Blog Posts",
         "nav_label": "All Posts"
       }
-    ],
-    "builder_surface": null
+    ]
   },
   {
     "module_slug": "channel",
@@ -38,8 +37,7 @@
         "title": "Channel Targets",
         "nav_label": "Targets"
       }
-    ],
-    "builder_surface": null
+    ]
   },
   {
     "module_slug": "comments",
@@ -48,8 +46,7 @@
     "nav_icon": "chat",
     "permissions": [],
     "locale_namespace": "comments",
-    "child_pages": [],
-    "builder_surface": null
+    "child_pages": []
   },
   {
     "module_slug": "commerce",
@@ -58,8 +55,7 @@
     "nav_icon": "module",
     "permissions": [],
     "locale_namespace": "commerce",
-    "child_pages": [],
-    "builder_surface": null
+    "child_pages": []
   },
   {
     "module_slug": "customer",
@@ -68,8 +64,7 @@
     "nav_icon": "people",
     "permissions": [],
     "locale_namespace": "customer",
-    "child_pages": [],
-    "builder_surface": null
+    "child_pages": []
   },
   {
     "module_slug": "forum",
@@ -89,49 +84,7 @@
         "title": "Forum Topics",
         "nav_label": "Topics"
       }
-    ],
-    "builder_surface": {
-      "provider_module": "page-builder",
-      "contract": "",
-      "contract_version": "1.0",
-      "builder_contract_version": "1.0",
-      "capabilities": [],
-      "degraded_modes": {
-        "builder_disabled": "forum_widgets_readonly_keep_forum_routes",
-        "preview_disabled": "forum_widget_preview_hidden_keep_forum_routes",
-        "publish_disabled": "forum_widget_publish_feature_disabled_keep_forum_routes"
-      },
-      "toggle_profiles": {
-        "all_on": [
-          "builder.enabled=true",
-          "builder.legacy_bridge_readonly=true",
-          "builder.preview.enabled=true",
-          "builder.properties.enabled=true",
-          "builder.publish.enabled=true"
-        ],
-        "builder_off": [
-          "builder.enabled=false",
-          "builder.legacy_bridge_readonly=true",
-          "builder.preview.enabled=false",
-          "builder.properties.enabled=false",
-          "builder.publish.enabled=false"
-        ],
-        "preview_off": [
-          "builder.enabled=true",
-          "builder.legacy_bridge_readonly=true",
-          "builder.preview.enabled=false",
-          "builder.properties.enabled=true",
-          "builder.publish.enabled=false"
-        ],
-        "publish_off": [
-          "builder.enabled=true",
-          "builder.legacy_bridge_readonly=true",
-          "builder.preview.enabled=true",
-          "builder.properties.enabled=true",
-          "builder.publish.enabled=false"
-        ]
-      }
-    }
+    ]
   },
   {
     "module_slug": "fulfillment",
@@ -140,8 +93,7 @@
     "nav_icon": "module",
     "permissions": [],
     "locale_namespace": "fulfillment",
-    "child_pages": [],
-    "builder_surface": null
+    "child_pages": []
   },
   {
     "module_slug": "index",
@@ -150,8 +102,7 @@
     "nav_icon": "module",
     "permissions": [],
     "locale_namespace": "index",
-    "child_pages": [],
-    "builder_surface": null
+    "child_pages": []
   },
   {
     "module_slug": "inventory",
@@ -160,8 +111,7 @@
     "nav_icon": "inventory",
     "permissions": [],
     "locale_namespace": "inventory",
-    "child_pages": [],
-    "builder_surface": null
+    "child_pages": []
   },
   {
     "module_slug": "media",
@@ -170,8 +120,7 @@
     "nav_icon": "perm_media",
     "permissions": [],
     "locale_namespace": "media",
-    "child_pages": [],
-    "builder_surface": null
+    "child_pages": []
   },
   {
     "module_slug": "order",
@@ -180,8 +129,7 @@
     "nav_icon": "receipt_long",
     "permissions": [],
     "locale_namespace": "order",
-    "child_pages": [],
-    "builder_surface": null
+    "child_pages": []
   },
   {
     "module_slug": "outbox",
@@ -190,8 +138,7 @@
     "nav_icon": "module",
     "permissions": [],
     "locale_namespace": "outbox",
-    "child_pages": [],
-    "builder_surface": null
+    "child_pages": []
   },
   {
     "module_slug": "pages",
@@ -267,8 +214,7 @@
     "nav_icon": "module",
     "permissions": [],
     "locale_namespace": "pricing",
-    "child_pages": [],
-    "builder_surface": null
+    "child_pages": []
   },
   {
     "module_slug": "product",
@@ -277,8 +223,7 @@
     "nav_icon": "inventory_2",
     "permissions": [],
     "locale_namespace": "product",
-    "child_pages": [],
-    "builder_surface": null
+    "child_pages": []
   },
   {
     "module_slug": "rbac",
@@ -287,8 +232,7 @@
     "nav_icon": "shield",
     "permissions": [],
     "locale_namespace": "rbac",
-    "child_pages": [],
-    "builder_surface": null
+    "child_pages": []
   },
   {
     "module_slug": "region",
@@ -297,8 +241,7 @@
     "nav_icon": "module",
     "permissions": [],
     "locale_namespace": "region",
-    "child_pages": [],
-    "builder_surface": null
+    "child_pages": []
   },
   {
     "module_slug": "search",
@@ -328,8 +271,7 @@
         "title": "Search Playground",
         "nav_label": "Playground"
       }
-    ],
-    "builder_surface": null
+    ]
   },
   {
     "module_slug": "seo",
@@ -344,8 +286,7 @@
         "title": "SEO Overview",
         "nav_label": "Overview"
       }
-    ],
-    "builder_surface": null
+    ]
   },
   {
     "module_slug": "tenant",
@@ -354,8 +295,7 @@
     "nav_icon": "apartment",
     "permissions": [],
     "locale_namespace": "tenant",
-    "child_pages": [],
-    "builder_surface": null
+    "child_pages": []
   },
   {
     "module_slug": "workflow",
@@ -370,7 +310,6 @@
         "title": "Workflow Templates",
         "nav_label": "Templates"
       }
-    ],
-    "builder_surface": null
+    ]
   }
 ]

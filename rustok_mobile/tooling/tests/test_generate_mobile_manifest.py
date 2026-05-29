@@ -117,6 +117,7 @@ class GenerateMobileManifestTests(unittest.TestCase):
         self.assertIn('"route_segment": "blog"', payload)
         self.assertIn('"nav_icon": "article"', payload)
         self.assertIn('"child_pages"', payload)
+        self.assertNotIn('"builder_surface"', payload)
 
     def test_scan_modules_includes_builder_surface_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -160,6 +161,30 @@ class GenerateMobileManifestTests(unittest.TestCase):
                 builder_surface["toggle_profiles"],
                 {"builder_off": ["builder.enabled=false"]},
             )
+
+    def test_scan_modules_omits_incomplete_builder_surface_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            write_module_manifest(
+                root,
+                "mod-a",
+                """
+                [module]
+                slug = "forum"
+
+                [dependencies]
+                page_builder = { version_req = ">=0.1.0" }
+
+                [provides.admin_ui]
+                route_segment = "forum"
+
+                [fba.builder_consumer]
+                builder_contract_version = "1.0"
+                """,
+            )
+
+            modules = scan_modules(root)
+            self.assertIsNone(modules[0]["builder_surface"])
 
     def test_render_includes_builder_surface_metadata(self):
         content = render(

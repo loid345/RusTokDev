@@ -81,47 +81,6 @@ const generatedMobileManifest = <MobileModuleEntry>[
         navLabel: 'Topics',
       ),
     ],
-    builderSurface: MobileBuilderSurfaceMeta(
-      providerModule: 'page-builder',
-      contract: '',
-      contractVersion: '1.0',
-      builderContractVersion: '1.0',
-      degradedModes: <String, String>{
-        'builder_disabled': 'forum_widgets_readonly_keep_forum_routes',
-        'preview_disabled': 'forum_widget_preview_hidden_keep_forum_routes',
-        'publish_disabled': 'forum_widget_publish_feature_disabled_keep_forum_routes',
-      },
-      toggleProfiles: <String, List<String>>{
-        'all_on': <String>[
-          'builder.enabled=true',
-          'builder.legacy_bridge_readonly=true',
-          'builder.preview.enabled=true',
-          'builder.properties.enabled=true',
-          'builder.publish.enabled=true',
-        ],
-        'builder_off': <String>[
-          'builder.enabled=false',
-          'builder.legacy_bridge_readonly=true',
-          'builder.preview.enabled=false',
-          'builder.properties.enabled=false',
-          'builder.publish.enabled=false',
-        ],
-        'preview_off': <String>[
-          'builder.enabled=true',
-          'builder.legacy_bridge_readonly=true',
-          'builder.preview.enabled=false',
-          'builder.properties.enabled=true',
-          'builder.publish.enabled=false',
-        ],
-        'publish_off': <String>[
-          'builder.enabled=true',
-          'builder.legacy_bridge_readonly=true',
-          'builder.preview.enabled=true',
-          'builder.properties.enabled=true',
-          'builder.publish.enabled=false',
-        ],
-      },
-    ),
   ),
   MobileModuleEntry(
     moduleKey: 'rustok_fulfillment',
