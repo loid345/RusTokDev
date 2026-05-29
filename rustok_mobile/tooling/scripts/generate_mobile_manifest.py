@@ -11,6 +11,7 @@ import tomllib
 
 _PERMISSION_RE = re.compile(r"^[a-z0-9_.:]+$")
 
+
 _ICON_RULES: tuple[tuple[str, str], ...] = (
     ("auth", "shield"),
     ("rbac", "shield"),
@@ -67,22 +68,29 @@ def _pick_icon(slug: str) -> str:
     return "module"
 
 
-def _parse_permissions(admin_ui: dict[str, object]) -> list[str]:
-    raw = admin_ui.get("permissions")
+def _parse_string_list(
+    raw: object, *, pattern: re.Pattern[str] | None = None
+) -> list[str]:
     if not isinstance(raw, list):
         return []
 
-    permissions: list[str] = []
+    values: list[str] = []
     seen: set[str] = set()
     for item in raw:
         if not isinstance(item, str):
             continue
         value = item.strip().lower()
-        if not value or not _PERMISSION_RE.fullmatch(value) or value in seen:
+        if not value or value in seen:
+            continue
+        if pattern is not None and not pattern.fullmatch(value):
             continue
         seen.add(value)
-        permissions.append(value)
-    return sorted(permissions)
+        values.append(value)
+    return sorted(values)
+
+
+def _parse_permissions(admin_ui: dict[str, object]) -> list[str]:
+    return _parse_string_list(admin_ui.get("permissions"), pattern=_PERMISSION_RE)
 
 
 def _parse_locale_namespace(admin_ui: dict[str, object], module_slug: str) -> str:
@@ -95,6 +103,8 @@ def _parse_locale_namespace(admin_ui: dict[str, object], module_slug: str) -> st
 
 def _parse_child_pages(admin_ui: dict[str, object]) -> list[dict[str, str]]:
     pages_raw = admin_ui.get("child_pages")
+    if not isinstance(pages_raw, list):
+        pages_raw = admin_ui.get("pages")
     if not isinstance(pages_raw, list):
         return []
 
@@ -148,7 +158,6 @@ def scan_modules(repo_root: pathlib.Path) -> list[dict[str, object]]:
         ).strip()
         nav_label = nav_label or slug.title()
         module_key = f"rustok_{_normalize_key(slug.replace('-', '_'))}"
-
         modules.append(
             {
                 "module_key": module_key,
@@ -181,6 +190,19 @@ def render(modules: list[dict[str, object]]) -> str:
                 "  MobileModuleEntry(",
                 f"    moduleKey: '{_dart_escape(module['module_key'])}',",
                 f"    routeSegment: '{_dart_escape(module['route_segment'])}',",
+            ]
+        )
+        locale_namespace = module.get("locale_namespace")
+        if isinstance(locale_namespace, str) and locale_namespace:
+            lines.append(f"    localeNamespace: '{_dart_escape(locale_namespace)}',")
+        permissions = module.get("permissions")
+        if isinstance(permissions, list) and permissions:
+            lines.append("    permissions: <String>[")
+            for permission in permissions:
+                lines.append(f"      '{_dart_escape(str(permission))}',")
+            lines.append("    ],")
+        lines.extend(
+            [
                 (
                     "    nav: MobileNavMeta("
                     f"title: '{_dart_escape(module['nav_label'])}', icon: '{_dart_escape(module['icon'])}'),"
@@ -202,7 +224,8 @@ def render(modules: list[dict[str, object]]) -> str:
                 if isinstance(nav_label, str):
                     lines.append(f"        navLabel: '{_dart_escape(nav_label)}',")
                 lines.append("      ),")
-        lines.extend(["    ],", "  ),"])
+        lines.append("    ],")
+        lines.append("  ),")
     lines.append("];")
     lines.append("")
     return "\n".join(lines)
@@ -212,32 +235,31 @@ def to_snapshot(modules: list[dict[str, object]]) -> list[dict[str, object]]:
     snapshot: list[dict[str, object]] = []
     for module in modules:
         route_segment = str(module["route_segment"])
-        snapshot.append(
-            {
-                "module_slug": str(
-                    module.get("module_slug")
-                    or str(module["module_key"]).removeprefix("rustok_")
-                ),
-                "surface_kind": "admin_mobile",
-                "route_segment": route_segment,
-                "nav_icon": str(module.get("icon") or "module"),
-                "permissions": list(module.get("permissions", [])),
-                "locale_namespace": str(
-                    module.get("locale_namespace")
-                    or module.get("module_slug")
-                    or route_segment
-                ),
-                "child_pages": [
-                    {
-                        "subpath": str(page["subpath"]),
-                        "title": str(page["title"]),
-                        "nav_label": str(page.get("nav_label") or page["title"]),
-                    }
-                    for page in module.get("child_pages", [])
-                    if isinstance(page, dict)
-                ],
-            }
-        )
+        item = {
+            "module_slug": str(
+                module.get("module_slug")
+                or str(module["module_key"]).removeprefix("rustok_")
+            ),
+            "surface_kind": "admin_mobile",
+            "route_segment": route_segment,
+            "nav_icon": str(module.get("icon") or "module"),
+            "permissions": list(module.get("permissions", [])),
+            "locale_namespace": str(
+                module.get("locale_namespace")
+                or module.get("module_slug")
+                or route_segment
+            ),
+            "child_pages": [
+                {
+                    "subpath": str(page["subpath"]),
+                    "title": str(page["title"]),
+                    "nav_label": str(page.get("nav_label") or page["title"]),
+                }
+                for page in module.get("child_pages", [])
+                if isinstance(page, dict)
+            ],
+        }
+        snapshot.append(item)
     return snapshot
 
 

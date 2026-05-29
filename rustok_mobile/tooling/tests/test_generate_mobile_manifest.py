@@ -77,7 +77,7 @@ class GenerateMobileManifestTests(unittest.TestCase):
         )
         self.assertIn("Owner\\'s", content)
 
-    def test_render_includes_child_pages(self):
+    def test_render_includes_child_pages_and_contract_metadata(self):
         content = render(
             [
                 {
@@ -85,12 +85,17 @@ class GenerateMobileManifestTests(unittest.TestCase):
                     "route_segment": "test",
                     "nav_label": "Test",
                     "icon": "module",
+                    "locale_namespace": "test_module",
+                    "permissions": ["test.read"],
                     "child_pages": [
                         {"subpath": "items", "title": "Items", "nav_label": "All items"}
                     ],
                 }
             ]
         )
+        self.assertIn("localeNamespace: 'test_module'", content)
+        self.assertIn("permissions: <String>[", content)
+        self.assertIn("'test.read'", content)
         self.assertIn("childPages: <MobileChildPage>[", content)
         self.assertIn("subpath: 'items'", content)
         self.assertIn("navLabel: 'All items'", content)
@@ -112,6 +117,67 @@ class GenerateMobileManifestTests(unittest.TestCase):
         self.assertIn('"route_segment": "blog"', payload)
         self.assertIn('"nav_icon": "article"', payload)
         self.assertIn('"child_pages"', payload)
+
+    def test_scan_modules_reads_legacy_pages_alias_for_child_pages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            write_module_manifest(
+                root,
+                "mod-a",
+                """
+                [module]
+                slug = "legacy"
+
+                [provides.admin_ui]
+                route_segment = "legacy"
+
+                [[provides.admin_ui.pages]]
+                subpath = "Overview"
+                title = "Legacy Overview"
+                nav_label = "Overview"
+                """,
+            )
+
+            modules = scan_modules(root)
+            self.assertEqual(
+                modules[0]["child_pages"],
+                [
+                    {
+                        "subpath": "overview",
+                        "title": "Legacy Overview",
+                        "nav_label": "Overview",
+                    }
+                ],
+            )
+
+    def test_scan_modules_prefers_child_pages_over_legacy_pages_alias(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            write_module_manifest(
+                root,
+                "mod-a",
+                """
+                [module]
+                slug = "canonical"
+
+                [provides.admin_ui]
+                route_segment = "canonical"
+
+                [[provides.admin_ui.child_pages]]
+                subpath = "current"
+                title = "Current Page"
+
+                [[provides.admin_ui.pages]]
+                subpath = "legacy"
+                title = "Legacy Page"
+                """,
+            )
+
+            modules = scan_modules(root)
+            self.assertEqual(
+                modules[0]["child_pages"],
+                [{"subpath": "current", "title": "Current Page"}],
+            )
 
     def test_scan_modules_raises_on_duplicate_route_segment(self):
         with tempfile.TemporaryDirectory() as tmp:

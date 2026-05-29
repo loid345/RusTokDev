@@ -1117,7 +1117,7 @@ _Легенда статусов: `⬜ Planned` — не начато, `🟡 In 
 |---|---|---|---|---|
 | 🟡 In progress | **Phase 0 — Foundation** | Создать `host app`, app shell, тему, auth session store, GraphQL client factory, route contracts и сразу зафиксировать FFA-baseline для Flutter (единый product/capability contract без Flutter-specific API). | [Базовый каркас приложения](#базовый-каркас-приложения), [Маршрутизация](#маршрутизация), [Стандартное подключение GraphQL для RusTok](#стандартное-подключение-graphql-для-rustok), [Авторизация и refresh](#авторизация-и-refresh) | Работают login + `me` + `currentTenant`, есть базовый shell и deep-link вход в защищённый экран; FFA-baseline зафиксирован с начала разработки. |
 | 🟡 In progress | **Phase 1 — Pilot module** | Внедрить один module-owned пакет (рекомендовано: `modules` или `blog`) с реальным E2E флоу. | [Файловая структура и размещение UI-компонентов](#файловая-структура-и-размещение-ui-компонентов), [DI и registry-driven подключение модулей](#di-и-registry-driven-подключение-модулей), [Шаблоны экранов и виджетов](#шаблоны-экранов-и-виджетов) | Один бизнес-сценарий модуля проходит end-to-end в мобильном host без feature-local transport-клиентов. |
-| 🟡 In progress | **Phase 2 — Registry/codegen** | Подключить generated mobile registry из manifest/export и убрать ручное wiring в host. Заранее заложить расширяемость registry под сложные модульные поверхности (в т.ч. page builder: child pages/typed surface metadata), без отдельного «плана-повтора». | [Предлагаемый registry-driven поток подключения модулей](#предлагаемый-registry-driven-поток-подключения-модулей), [Предлагаемые самописные библиотеки и модули](#предлагаемые-самописные-библиотеки-и-модули) | Новый модуль подключается через manifest/codegen без правок в навигационном каркасе host; контракты registry готовы к page-builder сценариям (nested routes и surface metadata). |
+| 🟡 In progress | **Phase 2 — Registry/codegen** | Подключить generated mobile registry из manifest/export и убрать ручное wiring в host. Заложить расширяемость только под mobile-safe host metadata: nested routes, nav, locale namespace и permission gates. | [Предлагаемый registry-driven поток подключения модулей](#предлагаемый-registry-driven-поток-подключения-модулей), [Предлагаемые самописные библиотеки и модули](#предлагаемые-самописные-библиотеки-и-модули) | Новый модуль подключается через manifest/codegen без правок в навигационном каркасе host; registry не содержит server-side FBA/provider metadata. |
 | ⬜ Planned | **Phase 3 — Parity expansion** | Перенести остальные high-value модули, закрепить route/i18n/permission parity и единые error/loading/empty паттерны. | [Где размещать UI-компоненты и как дублировать UI модулей платформы](#где-размещать-ui-компоненты-и-как-дублировать-ui-модулей-платформы), [Кэширование, обработка ошибок и subscriptions](#кэширование-обработка-ошибок-и-subscriptions) | Покрыты основные operator flows; контракты query keys/locale/permissions не расходятся с web-host правилами. |
 | ⬜ Planned | **Phase 4 — Hardening & release** | E2E, performance, observability, crash reporting, release pipeline (Android/iOS), rollout gates. | [Рекомендуемый pipeline для Flutter](#рекомендуемый-pipeline-для-flutter), [Шаблон GitHub Actions](#шаблон-github-actions), [Риски и митигации](#риски-и-митигации) | Готовы alpha/beta релизы, pipeline стабилен, критичные риски закрыты митигациями. |
 | ⬜ Planned | **Phase 5 — Offline/advanced sync (optional)** | Добавить офлайн-сценарии только после продуктового подтверждения требований. | [Open questions и ограничения](#open-questions-и-ограничения), [Риски и митигации](#риски-и-митигации) | Есть утверждённые offline requirements и реализована целевая стратегия sync/outbox. |
@@ -1214,7 +1214,7 @@ FFA-ограничение для этого шага: пакет `rustok_module
 | `surface_kind` | required | Допустимо расширение enum только backward-compatible значениями | Нормализует тип surface для host-клиентов |
 | `route_segment` | required | Изменение требует явного redirect/mapping в host routing | Поддерживает единый routing contract между host-ами |
 | `nav_icon` | required in snapshot / optional in source manifests | Отсутствие в manifest нормализуется в `module`; новые значения должны быть backward-compatible с host fallback mapping | Visual parity metadata без Flutter-specific API или transport contract |
-| `child_pages` | optional | Отсутствие трактуется как `[]`; новые элементы добавляются additive | Нужен для nested surfaces/page-builder сценариев |
+| `child_pages` | optional | Отсутствие трактуется как `[]`; новые элементы добавляются additive | Нужен для nested mobile/admin surfaces без server-side FBA metadata |
 | `permissions` | optional | Отсутствие трактуется как `[]`; новые permission strings additive | Capability-level gate, без mobile-only API |
 | `locale_namespace` | optional | Отсутствие означает fallback на module slug namespace | Сохраняет host-owned locale policy без feature-local fallback |
 
@@ -1255,25 +1255,14 @@ FFA-ограничение для этого шага: пакет `rustok_module
 
 ### Зависимости между планами (anti-drift guardrail)
 
-- Flutter-план для registry/codegen и module surfaces **зависит** от выполнения backend/page-builder этапов в:
-  - `docs/modules/tiptap-page-builder-implementation-plan.md`;
-  - `crates/rustok-pages/docs/implementation-plan.md` (Dedicated page-builder track).
 - Flutter host, базовый app shell и module-owned mobile UI пакеты нужно развивать в логике FFA (один product contract при разных runtime/topology), но **без** Flutter-специфичных API-контрактов поверх платформы.
+- FBA/provider-consumer metadata относится к серверным модулям и backend governance. Flutter registry/codegen не должен читать или дублировать `fba.*` manifest sections, `builder_contract_version`, provider capabilities или toggle profiles.
 - Для практики это означает:
-  - Flutter держит минимальные contract-safe каркасы (`preview/tree/properties/publish`) и registry wiring;
+  - Flutter держит только mobile-safe host metadata: route segment, nav, child pages, locale namespace и permissions;
   - canonical правила builder/state/validation/RBAC остаются на backend и в общем page-builder плане;
-  - parity проверяется по capability и data-contract, а не по буквальному UI-клону Leptos/Next.
-- Синхронизация milestone (2026-05-23): в web-admin стэках закрыты Phase 1 capability surfaces (`apps/admin` + `apps/next-admin`) и parity-note зафиксирован в `docs/modules/tiptap-page-builder-implementation-plan.md`; Flutter может двигать registry/codegen дальше без изменения platform contract.
-- FFA-baseline для Flutter остаётся закреплённым в **Phase 0 — Foundation** (см. таблицу фаз выше), и это правило не переносится в поздние builder-фазы.
-- Если в мобильном host добавить routing/registry под page-builder раньше, чем зафиксированы backend contract + parity для admin-стеков, появится drift:
-  - расхождение surface metadata;
-  - нестабильные GraphQL payload/contracts;
-  - повторные переделки route/query wiring в клиентах.
-- Поэтому при каждом PR по Flutter registry/module contracts агент должен явно отмечать:
-  1) что уже закрыто в backend/page-builder плане;
-  2) какой следующий шаг **заблокирован** до закрытия пунктов в `tiptap-page-builder-implementation-plan.md` и `rustok-pages` плане.
-
-- Актуальный dependency checkpoint (2026-05-25): central plan перешёл к `Section 8.5 / PB-FBA-1A..1D`; Flutter delivery остаётся в режиме contract-safe scaffolding до закрытия минимум `PB-FBA-1A` (contract freeze + CI anti-drift) и `PB-FBA-1B` (fallback evidence `all_on/publish_off/preview_off/builder_off`).
+  - parity проверяется по UI-facing GraphQL/REST contracts и host navigation semantics, а не по server-side FBA manifest fields.
+- Если когда-нибудь появится отдельный UI-facing page-builder contract для мобильного host, его нужно вводить отдельным Flutter-планом и не смешивать с server-side FBA metadata.
+- Чекпойнт реализации (2026-05-29): сгенерированный Flutter-реестр переносит из `rustok-module.toml` только mobile-safe host metadata: маршруты, навигацию, дочерние страницы, `locale_namespace` и `permissions`. FBA/provider-consumer metadata остаётся server/module concern и не попадает во Flutter snapshot; мобильный host не вводит `builder_surface` или page-builder-specific route guards.
 
 
 Ниже — то, что в постановке **не указано**, поэтому в отчёте я дал только разумные варианты, а не жёсткие требования:

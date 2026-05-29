@@ -105,7 +105,6 @@ void main() {
     expect(blog.childRoutes.map((c) => c.subpath), ['posts', 'new']);
   });
 
-
   test('normalizes case and rejects non-canonical segments', () {
     final entries = <MobileModuleEntry>[
       const MobileModuleEntry(
@@ -130,8 +129,6 @@ void main() {
     expect(media.childRoutes.single.subpath, 'library');
     expect(media.childRoutes.single.path, '/modules/media/library');
   });
-
-
 
   test('returns adaptation report with rejected module and child counters', () {
     final entries = <MobileModuleEntry>[
@@ -182,5 +179,4 @@ void main() {
     expect(adapted.localeNamespace, 'modules');
     expect(adapted.permissions, ['modules.read', 'modules.write']);
   });
-
 }

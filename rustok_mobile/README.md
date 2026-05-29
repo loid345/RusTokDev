@@ -16,7 +16,7 @@ Flutter workspace scaffold based on `docs/research/flutter.md`.
 ## Implemented now
 
 - Host app routing with `go_router` + `ShellRoute`.
-- Generated-manifest style module registry adapter (`mobile_manifest.g.dart`).
+- Generated-manifest style module registry adapter (`mobile_manifest.g.dart`) with locale, permissions, and nested routes.
 - Manifest-driven navigation icon mapping with metadata fallbacks for generic module icons.
 - Shared route contracts with snake_case query key constraints.
 - Shared GraphQL transport context/header builders (tenant/locale non-blank validation in request context).
@@ -60,8 +60,10 @@ python3 rustok_mobile/tooling/scripts/verify_mobile_manifest.py --repo-root /wor
 
 The verification command fails on stale generated files and prints a unified diff
 from the committed manifest/snapshot to the expected deterministic output. The
-snapshot includes normalized `nav_icon` metadata so navigation parity drift is
-visible in codegen checks.
+snapshot includes normalized `nav_icon`, locale, permissions, and child-page
+metadata so navigation parity drift is visible in codegen checks. The generator
+uses canonical `child_pages` metadata and still accepts legacy `pages` entries
+as a compatibility alias when `child_pages` is absent.
 
 ## Check deterministic codegen
 
