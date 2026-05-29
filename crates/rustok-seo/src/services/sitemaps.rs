@@ -15,6 +15,7 @@ use super::{normalize_effective_locale, SeoService, SITEMAP_CHUNK_SIZE};
 
 const SITEMAP_SUBMIT_TIMEOUT_SECS: u64 = 5;
 const SITEMAP_SUBMIT_MAX_ERROR_LEN: usize = 4000;
+const INDEXING_SUBMIT_MAX_URLS: usize = 25;
 
 impl SeoService {
     pub async fn generate_sitemaps(
@@ -43,17 +44,24 @@ impl SeoService {
 
         let urls = self.collect_sitemap_urls(tenant).await?;
         let file_models = self.persist_sitemap_files(tenant, &job, &urls, now).await?;
+        let mut submission_errors = Vec::new();
+        if let Err(error) = self.submit_sitemap_endpoints(tenant, &settings).await {
+            tracing::warn!(tenant_id = %tenant.id, error = %error, "SEO sitemap submission failed");
+            submission_errors.push(format!("sitemap submit failed: {error}"));
+        }
+        if let Err(error) = self
+            .submit_indexing_endpoints(tenant, &settings, urls.as_slice())
+            .await
+        {
+            tracing::warn!(tenant_id = %tenant.id, error = %error, "SEO indexing submission failed");
+            submission_errors.push(format!("indexing submit failed: {error}"));
+        }
+
         let mut active_job: seo_sitemap_job::ActiveModel = job.into();
         active_job.status = Set("completed".to_string());
         active_job.file_count = Set(file_models.len() as i32);
         active_job.completed_at = Set(Some(now));
-        active_job.last_error = match self.submit_sitemap_endpoints(tenant, &settings).await {
-            Ok(()) => Set(None),
-            Err(error) => {
-                tracing::warn!(tenant_id = %tenant.id, error = %error, "SEO sitemap submission failed");
-                Set(Some(error))
-            }
-        };
+        active_job.last_error = Set(join_submission_errors(submission_errors));
         active_job.updated_at = Set(now);
         active_job.update(&self.db).await?;
 
@@ -279,9 +287,11 @@ impl SeoService {
                 failures.push(format!("invalid endpoint: {endpoint}"));
                 continue;
             };
-            let response = client.get(url.clone()).send().await.map_err(|err| {
-                format!("request failed for endpoint `{endpoint}` with error: {err}")
-            });
+            let response = client
+                .get(url.clone())
+                .send()
+                .await
+                .map_err(|err| format!("request failed for endpoint `{endpoint}` with error: {err}"));
             match response {
                 Ok(response) if response.status().is_success() => {}
                 Ok(response) => failures.push(format!(
@@ -294,14 +304,91 @@ impl SeoService {
         if failures.is_empty() {
             Ok(())
         } else {
-            let mut message = failures.join("; ");
-            if message.len() > SITEMAP_SUBMIT_MAX_ERROR_LEN {
-                message.truncate(SITEMAP_SUBMIT_MAX_ERROR_LEN);
-                message.push_str("...");
-            }
-            Err(message)
+            Err(truncate_submission_error(failures.join("; ")))
         }
     }
+
+    async fn submit_indexing_endpoints(
+        &self,
+        tenant: &TenantContext,
+        settings: &crate::dto::SeoModuleSettings,
+        urls: &[String],
+    ) -> Result<(), String> {
+        if settings.indexing_submission_endpoints.is_empty() || urls.is_empty() {
+            return Ok(());
+        }
+
+        let unique_urls = urls
+            .iter()
+            .map(|value| value.trim())
+            .filter(|value| !value.is_empty())
+            .take(INDEXING_SUBMIT_MAX_URLS)
+            .map(ToOwned::to_owned)
+            .collect::<std::collections::BTreeSet<_>>()
+            .into_iter()
+            .collect::<Vec<_>>();
+        if unique_urls.is_empty() {
+            return Ok(());
+        }
+
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(SITEMAP_SUBMIT_TIMEOUT_SECS))
+            .build()
+            .map_err(|error| format!("failed to create indexing submission client: {error}"))?;
+
+        let mut failures = Vec::new();
+        for endpoint in &settings.indexing_submission_endpoints {
+            for url in &unique_urls {
+                let Some(notification_url) =
+                    build_indexing_submission_url(endpoint.as_str(), url.as_str(), tenant.id)
+                else {
+                    failures.push(format!("invalid indexing endpoint: {endpoint}"));
+                    break;
+                };
+
+                let response = client
+                    .get(notification_url.clone())
+                    .send()
+                    .await
+                    .map_err(|error| {
+                        format!(
+                            "request failed for indexing endpoint `{endpoint}` and url `{url}`: {error}"
+                        )
+                    });
+
+                match response {
+                    Ok(response) if response.status().is_success() => {}
+                    Ok(response) => failures.push(format!(
+                        "indexing endpoint `{endpoint}` responded with status {} for `{url}`",
+                        response.status()
+                    )),
+                    Err(message) => failures.push(message),
+                }
+            }
+        }
+
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            Err(truncate_submission_error(failures.join("; ")))
+        }
+    }
+}
+
+fn join_submission_errors(failures: Vec<String>) -> Option<String> {
+    if failures.is_empty() {
+        None
+    } else {
+        Some(truncate_submission_error(failures.join("; ")))
+    }
+}
+
+fn truncate_submission_error(mut message: String) -> String {
+    if message.len() > SITEMAP_SUBMIT_MAX_ERROR_LEN {
+        message.truncate(SITEMAP_SUBMIT_MAX_ERROR_LEN);
+        message.push_str("...");
+    }
+    message
 }
 
 fn disabled_sitemap_status() -> SeoSitemapStatusRecord {
@@ -405,7 +492,47 @@ fn build_sitemap_submission_url(endpoint: &str, sitemap_index_url: &str) -> Opti
     Some(parsed.to_string())
 }
 
+fn build_indexing_submission_url(endpoint: &str, url: &str, tenant_id: Uuid) -> Option<String> {
+    let normalized = endpoint.trim();
+    if normalized.is_empty() {
+        return None;
+    }
+
+    if normalized.contains("{url}") || normalized.contains("{tenant_id}") {
+        let encoded_url: String =
+            url::form_urlencoded::byte_serialize(url.as_bytes()).collect();
+        let replaced = normalized
+            .replace("{url}", encoded_url.as_str())
+            .replace("{tenant_id}", tenant_id.to_string().as_str());
+        let parsed = Url::parse(replaced.as_str()).ok()?;
+        if !matches!(parsed.scheme(), "http" | "https") {
+            return None;
+        }
+        return Some(parsed.to_string());
+    }
+
+    let mut parsed = Url::parse(normalized).ok()?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return None;
+    }
+    if !parsed
+        .query_pairs()
+        .any(|(name, _)| name.eq_ignore_ascii_case("url"))
+    {
+        parsed.query_pairs_mut().append_pair("url", url);
+    }
+    Some(parsed.to_string())
+}
+
 pub(super) fn normalize_sitemap_submission_endpoints(values: &[String]) -> Vec<String> {
+    normalize_submission_endpoints(values, &["{sitemap_url}"])
+}
+
+pub(super) fn normalize_indexing_submission_endpoints(values: &[String]) -> Vec<String> {
+    normalize_submission_endpoints(values, &["{url}", "{tenant_id}"])
+}
+
+fn normalize_submission_endpoints(values: &[String], placeholders: &[&str]) -> Vec<String> {
     use std::collections::BTreeSet;
 
     let mut unique = BTreeSet::new();
@@ -414,22 +541,47 @@ pub(super) fn normalize_sitemap_submission_endpoints(values: &[String]) -> Vec<S
         if trimmed.is_empty() {
             continue;
         }
-        let Ok(parsed) = url::Url::parse(trimmed) else {
+
+        let without_fragment = trimmed
+            .split_once('#')
+            .map(|(prefix, _)| prefix)
+            .unwrap_or(trimmed)
+            .trim();
+        if without_fragment.is_empty() {
+            continue;
+        }
+        if !(without_fragment.starts_with("http://") || without_fragment.starts_with("https://")) {
+            continue;
+        }
+
+        let mut parse_target = without_fragment.to_string();
+        for placeholder in placeholders {
+            parse_target = parse_target.replace(placeholder, "rustok");
+        }
+
+        let Ok(mut parsed) = Url::parse(parse_target.as_str()) else {
             continue;
         };
         if !matches!(parsed.scheme(), "http" | "https") {
             continue;
         }
-        let mut normalized = parsed;
-        normalized.set_fragment(None);
-        unique.insert(normalized.to_string());
+        parsed.set_fragment(None);
+
+        if placeholders.iter().all(|placeholder| !without_fragment.contains(placeholder)) {
+            unique.insert(parsed.to_string());
+        } else {
+            unique.insert(without_fragment.to_string());
+        }
     }
     unique.into_iter().collect()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{normalize_sitemap_submission_endpoints, render_robots_body};
+    use super::{
+        build_indexing_submission_url, normalize_indexing_submission_endpoints,
+        normalize_sitemap_submission_endpoints, render_robots_body,
+    };
     use crate::SeoService;
     use rustok_api::TenantContext;
     use rustok_tenant::entities::tenant_module;
@@ -538,6 +690,10 @@ mod tests {
         assert!(settings.allowed_canonical_hosts.is_empty());
         assert_eq!(settings.x_default_locale, None);
         assert!(settings.sitemap_submission_endpoints.is_empty());
+        assert!(settings.indexing_submission_endpoints.is_empty());
+        assert!(!settings.cross_linking_enabled);
+        assert_eq!(settings.cross_link_target_limit, 3);
+        assert_eq!(settings.cross_link_insertion_points, vec!["description"]);
     }
 
     #[tokio::test]
@@ -557,9 +713,18 @@ mod tests {
                 "sitemap_submission_endpoints": [
                     "https://www.google.com/ping?sitemap=https://store.example.com/sitemap.xml",
                     "http://localhost:8080/seo/ping#ignored-fragment",
+                    "https://indexnow.test/ping?source=seo&sitemap={sitemap_url}",
                     "invalid://endpoint",
                     "https://www.google.com/ping?sitemap=https://store.example.com/sitemap.xml"
-                ]
+                ],
+                "indexing_submission_endpoints": [
+                    "https://indexing.example.com/notify?url={url}&tenant={tenant_id}",
+                    "https://indexing.example.com/notify?url={url}&tenant={tenant_id}",
+                    "https://indexing.example.com/direct"
+                ],
+                "cross_linking_enabled": true,
+                "cross_link_target_limit": 25,
+                "cross_link_insertion_points": [" Description ", "Open Graph", "***"]
             }),
         )
         .await;
@@ -584,9 +749,23 @@ mod tests {
             settings.sitemap_submission_endpoints,
             vec![
                 "http://localhost:8080/seo/ping".to_string(),
+                "https://indexnow.test/ping?source=seo&sitemap={sitemap_url}".to_string(),
                 "https://www.google.com/ping?sitemap=https://store.example.com/sitemap.xml"
                     .to_string()
             ]
+        );
+        assert_eq!(
+            settings.indexing_submission_endpoints,
+            vec![
+                "https://indexing.example.com/direct".to_string(),
+                "https://indexing.example.com/notify?url={url}&tenant={tenant_id}".to_string(),
+            ]
+        );
+        assert!(settings.cross_linking_enabled);
+        assert_eq!(settings.cross_link_target_limit, 12);
+        assert_eq!(
+            settings.cross_link_insertion_points,
+            vec!["description", "open_graph"]
         );
     }
 
@@ -597,11 +776,34 @@ mod tests {
             "ftp://example.com/not-supported".to_string(),
             "not a url".to_string(),
             "https://example.com/ping?sitemap=https://store/sitemap.xml#fragment".to_string(),
+            "https://example.com/ping?sitemap={sitemap_url}".to_string(),
         ]);
 
         assert_eq!(
             normalized,
-            vec!["https://example.com/ping?sitemap=https://store/sitemap.xml".to_string()]
+            vec![
+                "https://example.com/ping?sitemap=https://store/sitemap.xml".to_string(),
+                "https://example.com/ping?sitemap={sitemap_url}".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn normalize_indexing_submission_endpoints_supports_url_placeholders() {
+        let normalized = normalize_indexing_submission_endpoints(&[
+            "https://indexing.example.com/notify?url={url}&tenant={tenant_id}".to_string(),
+            "https://indexing.example.com/notify?url={url}&tenant={tenant_id}#fragment"
+                .to_string(),
+            "https://indexing.example.com/direct".to_string(),
+            "mailto:bad@scheme".to_string(),
+        ]);
+
+        assert_eq!(
+            normalized,
+            vec![
+                "https://indexing.example.com/direct".to_string(),
+                "https://indexing.example.com/notify?url={url}&tenant={tenant_id}".to_string(),
+            ]
         );
     }
 
@@ -643,6 +845,32 @@ mod tests {
         let invalid_scheme =
             super::build_sitemap_submission_url("ftp://example.com/ping", "https://store.example.com/sitemap.xml");
         assert!(invalid_scheme.is_none());
+    }
+
+    #[test]
+    fn build_indexing_submission_url_supports_placeholder_and_query_append() {
+        let tenant_id = Uuid::parse_str("8fa12f03-4182-45d2-bc73-0fd5df6778a5").expect("uuid");
+        let placeholder = build_indexing_submission_url(
+            "https://indexing.example.com/notify?url={url}&tenant={tenant_id}",
+            "https://store.example.com/products/demo",
+            tenant_id,
+        )
+        .expect("indexing placeholder url");
+        assert_eq!(
+            placeholder,
+            "https://indexing.example.com/notify?url=https%3A%2F%2Fstore.example.com%2Fproducts%2Fdemo&tenant=8fa12f03-4182-45d2-bc73-0fd5df6778a5"
+        );
+
+        let appended = build_indexing_submission_url(
+            "https://indexing.example.com/notify?source=seo",
+            "https://store.example.com/products/demo",
+            tenant_id,
+        )
+        .expect("indexing query append url");
+        assert_eq!(
+            appended,
+            "https://indexing.example.com/notify?source=seo&url=https%3A%2F%2Fstore.example.com%2Fproducts%2Fdemo"
+        );
     }
 
     #[tokio::test]

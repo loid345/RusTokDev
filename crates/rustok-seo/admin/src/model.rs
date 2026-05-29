@@ -455,6 +455,11 @@ impl SeoSettingsForm {
                 twitter_description: trim_to_option(self.template_twitter_description.as_str()),
             },
             template_overrides: parse_template_overrides(self.template_overrides_json.as_str()),
+            sitemap_submission_endpoints: Vec::new(),
+            indexing_submission_endpoints: Vec::new(),
+            cross_linking_enabled: false,
+            cross_link_target_limit: 3,
+            cross_link_insertion_points: vec!["description".to_string()],
         }
     }
 }

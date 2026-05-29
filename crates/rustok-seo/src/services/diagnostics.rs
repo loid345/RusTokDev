@@ -221,6 +221,39 @@ impl SeoService {
                     ));
                 }
 
+                if let Some(open_graph) = meta.open_graph.as_ref() {
+                    if open_graph
+                        .images
+                        .iter()
+                        .any(|image| image.alt.as_deref().map(str::trim).is_none_or(|value| value.is_empty()))
+                    {
+                        issues.push(issue(
+                            "missing_image_alt",
+                            SeoDiagnosticSeverity::Warning,
+                            &summary,
+                            "Open Graph image metadata is missing alt text; enable media SEO hooks or provide explicit alt values.",
+                            effective_canonical.clone(),
+                            meta.source.clone(),
+                            locale.as_str(),
+                        ));
+                    }
+                    if open_graph
+                        .images
+                        .iter()
+                        .any(|image| image.width.is_none() || image.height.is_none())
+                    {
+                        issues.push(issue(
+                            "missing_image_dimensions",
+                            SeoDiagnosticSeverity::Info,
+                            &summary,
+                            "Open Graph image metadata is missing width/height and may reduce preview quality.",
+                            effective_canonical.clone(),
+                            meta.source.clone(),
+                            locale.as_str(),
+                        ));
+                    }
+                }
+
                 if matches!(meta.effective_state.title.source, SeoFieldSource::Fallback) {
                     issues.push(issue(
                         "fallback_only",

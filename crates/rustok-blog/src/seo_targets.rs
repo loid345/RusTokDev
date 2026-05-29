@@ -317,6 +317,7 @@ fn map_post_response(post: PostResponse) -> SeoLoadedTargetRecord {
                         width: None,
                         height: None,
                         mime_type: None,
+                        media_id: None,
                     }]
                 })
                 .unwrap_or_default(),

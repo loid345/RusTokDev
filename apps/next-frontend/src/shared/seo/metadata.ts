@@ -29,6 +29,7 @@ export type SeoImageAsset = {
   width?: number | null;
   height?: number | null;
   mimeType?: string | null;
+  mediaId?: string | null;
 };
 
 export type SeoOpenGraph = {

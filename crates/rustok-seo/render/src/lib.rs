@@ -356,6 +356,7 @@ mod tests {
                         width: Some(1200),
                         height: Some(630),
                         mime_type: Some("image/png".to_string()),
+                        media_id: None,
                     }],
                     ..SeoOpenGraph::default()
                 }),

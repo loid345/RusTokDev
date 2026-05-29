@@ -503,6 +503,7 @@ pub struct SeoTargetImageRecord {
     pub width: Option<i32>,
     pub height: Option<i32>,
     pub mime_type: Option<String>,
+    pub media_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Eq, PartialEq, Default)]

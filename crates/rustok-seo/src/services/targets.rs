@@ -82,7 +82,16 @@ impl SeoService {
                 ))
             })?;
 
-        Ok(record.map(map_loaded_target_record))
+        if let Some(record) = record {
+            let mut state = map_loaded_target_record(record);
+            self.enrich_target_state_with_media_hooks(tenant, &mut state)
+                .await?;
+            self.enrich_target_state_with_cross_links(tenant, &mut state)
+                .await?;
+            Ok(Some(state))
+        } else {
+            Ok(None)
+        }
     }
 
     pub(super) fn target_runtime(&self) -> SeoTargetRuntimeContext {
@@ -135,6 +144,7 @@ fn map_open_graph(record: SeoTargetOpenGraphRecord) -> SeoOpenGraph {
                 width: image.width,
                 height: image.height,
                 mime_type: image.mime_type,
+                media_id: image.media_id,
             })
             .collect(),
     }

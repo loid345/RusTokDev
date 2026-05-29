@@ -1,5 +1,7 @@
 mod bulk;
+mod cross_links;
 mod diagnostics;
+mod media_hooks;
 mod meta;
 mod redirects;
 mod robots;
@@ -161,6 +163,15 @@ impl SeoService {
         settings.sitemap_submission_endpoints =
             sitemaps::normalize_sitemap_submission_endpoints(
                 settings.sitemap_submission_endpoints.as_slice(),
+            );
+        settings.indexing_submission_endpoints =
+            sitemaps::normalize_indexing_submission_endpoints(
+                settings.indexing_submission_endpoints.as_slice(),
+            );
+        settings.cross_link_target_limit = settings.cross_link_target_limit.clamp(1, 12);
+        settings.cross_link_insertion_points =
+            cross_links::normalize_cross_link_insertion_points(
+                settings.cross_link_insertion_points.as_slice(),
             );
         settings
     }

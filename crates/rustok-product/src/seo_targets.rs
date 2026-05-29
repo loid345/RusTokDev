@@ -299,6 +299,7 @@ fn map_product_response(
                         width: None,
                         height: None,
                         mime_type: None,
+                        media_id: Some(image.media_id),
                     }]
                 })
                 .unwrap_or_default(),

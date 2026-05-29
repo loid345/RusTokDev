@@ -62,6 +62,7 @@ pub struct SeoImageAsset {
     pub width: Option<i32>,
     pub height: Option<i32>,
     pub mime_type: Option<String>,
+    pub media_id: Option<Uuid>,
 }
 
 #[derive(SimpleObject, Serialize, Deserialize, Debug, Clone, Default)]
@@ -765,6 +766,14 @@ pub struct SeoModuleSettings {
     pub template_overrides: BTreeMap<String, SeoTemplateRuleSet>,
     #[serde(default)]
     pub sitemap_submission_endpoints: Vec<String>,
+    #[serde(default)]
+    pub indexing_submission_endpoints: Vec<String>,
+    #[serde(default = "default_cross_linking_enabled")]
+    pub cross_linking_enabled: bool,
+    #[serde(default = "default_cross_link_target_limit")]
+    pub cross_link_target_limit: i32,
+    #[serde(default = "default_cross_link_insertion_points")]
+    pub cross_link_insertion_points: Vec<String>,
 }
 
 impl Default for SeoModuleSettings {
@@ -778,6 +787,10 @@ impl Default for SeoModuleSettings {
             template_defaults: SeoTemplateRuleSet::default(),
             template_overrides: BTreeMap::new(),
             sitemap_submission_endpoints: Vec::new(),
+            indexing_submission_endpoints: Vec::new(),
+            cross_linking_enabled: default_cross_linking_enabled(),
+            cross_link_target_limit: default_cross_link_target_limit(),
+            cross_link_insertion_points: default_cross_link_insertion_points(),
         }
     }
 }
@@ -847,4 +860,16 @@ fn default_robots() -> Vec<String> {
 
 fn default_sitemap_enabled() -> bool {
     true
+}
+
+fn default_cross_linking_enabled() -> bool {
+    false
+}
+
+fn default_cross_link_target_limit() -> i32 {
+    3
+}
+
+fn default_cross_link_insertion_points() -> Vec<String> {
+    vec!["description".to_string()]
 }

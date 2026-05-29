@@ -110,6 +110,7 @@ pub(super) fn image_assets_from_optional_url(url: Option<String>) -> Vec<SeoImag
             width: None,
             height: None,
             mime_type: None,
+            media_id: None,
         })
         .collect()
 }

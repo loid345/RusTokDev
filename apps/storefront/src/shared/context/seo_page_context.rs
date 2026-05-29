@@ -631,6 +631,7 @@ pub fn to_seo_page_context(value: &ResolvedSeoPageContext) -> rustok_seo::SeoPag
                             width: image.width,
                             height: image.height,
                             mime_type: image.mime_type.clone(),
+                            media_id: None,
                         })
                         .collect(),
                 }),
@@ -653,6 +654,7 @@ pub fn to_seo_page_context(value: &ResolvedSeoPageContext) -> rustok_seo::SeoPag
                             width: image.width,
                             height: image.height,
                             mime_type: image.mime_type.clone(),
+                            media_id: None,
                         })
                         .collect(),
                 }),
