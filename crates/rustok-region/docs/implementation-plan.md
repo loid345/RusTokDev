@@ -6,9 +6,9 @@
 
 ## Execution checkpoint
 
-- Current phase: ffa_storefront_error_verify_slice
-- Last checkpoint: FFA slice #9 расширила `verify:ffa:ui:migration:contract`: script теперь проверяет region error status descriptors, locale keys, DOM evidence attributes и README-documented status contract.
-- Next step: Продолжить FFA-first sequencing следующим минимальным smoke/checklist output, который исполняет UI path и подтверждает эти DOM attributes в rendered surface.
+- Current phase: ffa_storefront_error_smoke_slice
+- Last checkpoint: FFA slice #10 связала DOM evidence с framework-agnostic `RegionErrorDomEvidence` и добавила SSR smoke-тест Leptos error adapter, который рендерит `RegionErrorMessage` и проверяет `data-region-error-status` / `data-region-error-locale-key`.
+- Next step: Продолжить FFA-first sequencing к первому переносимому host-adapter контракту для storefront route/query plumbing без изменения native/GraphQL transport parity.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок; при изменении status code/locale key/DOM evidence сначала обновлять verify script и его test fixture.
 - Last updated at (UTC): 2026-05-30T07:00:00Z
@@ -29,7 +29,8 @@
   - FFA slice #6 добавила stable `RegionErrorStatusCode::as_str()` для machine-readable UI status и locale-aware status/body labels в storefront locale bundles;
   - FFA slice #7 добавила `RegionErrorStatusDescriptor` / `REGION_ERROR_STATUS_DESCRIPTORS`, который связывает stable code с locale key, и обновила central FFA checklist для error/status evidence;
   - FFA slice #8 добавила host-readable DOM evidence в `RegionErrorMessage`: `data-region-error-status` и `data-region-error-locale-key` берутся из core view-model/descriptor mapping;
-  - FFA slice #9 добавила automated guard в `verify-ffa-ui-migration-contract.mjs` и test fixture для status descriptors, locale keys, DOM attributes и README evidence.
+  - FFA slice #9 добавила automated guard в `verify-ffa-ui-migration-contract.mjs` и test fixture для status descriptors, locale keys, DOM attributes и README evidence;
+  - FFA slice #10 добавила `RegionErrorDomEvidence` как переносимый output для DOM status attributes и SSR smoke-тест Leptos error adapter, который подтверждает rendered attributes.
 - Last verified at (UTC): 2026-05-30T07:00:00Z
 - Owner: `rustok-region` module team
 
@@ -105,3 +106,4 @@
 - [x] Slice 7: `REGION_ERROR_STATUS_DESCRIPTORS` фиксирует host-visible mapping `stable_code -> locale_key`, а `docs/verification/ffa-ui-parity-checklist.md` требует evidence для изменённых error/status contracts; проверка: `cargo test -p rustok-region-storefront --lib`.
 - [x] Slice 8: `RegionErrorMessage` публикует host-readable DOM evidence (`data-region-error-status`, `data-region-error-locale-key`) из core view-model/descriptor mapping; проверка: `cargo test -p rustok-region-storefront --lib`.
 - [x] Slice 9: `verify-ffa-ui-migration-contract.mjs` проверяет `RegionErrorStatusDescriptor`, stable codes, locale keys, DOM evidence attributes и README evidence; test fixture обновлён, проверка: `node scripts/verify/verify-ffa-ui-migration-contract.test.mjs`.
+- [x] Slice 10: `RegionErrorDomEvidence` фиксирует переносимый output для DOM status attributes, а SSR smoke-тест Leptos adapter рендерит `RegionErrorMessage` и проверяет `data-region-error-status` / `data-region-error-locale-key`; проверка: `cargo test -p rustok-region-storefront --lib --features ssr region_error_message_ssr_exposes_host_visible_dom_evidence`.

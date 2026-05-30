@@ -4,6 +4,8 @@ use crate::model::{StorefrontRegion, StorefrontRegionCountryTaxPolicy, Storefron
 
 pub const DEFAULT_ROUTE_SEGMENT: &str = "regions";
 pub const DEFAULT_TAX_PROVIDER_ID: &str = "region_default";
+pub const REGION_ERROR_STATUS_DOM_ATTRIBUTE: &str = "data-region-error-status";
+pub const REGION_ERROR_LOCALE_KEY_DOM_ATTRIBUTE: &str = "data-region-error-locale-key";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegionStorefrontErrorPath {
@@ -70,6 +72,14 @@ pub struct RegionErrorViewModel {
     pub technical_detail: Option<String>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RegionErrorDomEvidence {
+    pub status_attribute: &'static str,
+    pub status_value: &'static str,
+    pub locale_key_attribute: &'static str,
+    pub locale_key_value: &'static str,
+}
+
 pub fn region_error_view_model(
     evidence: RegionErrorEvidence,
     title: String,
@@ -97,6 +107,15 @@ pub fn region_error_view_model(
         title,
         body,
         technical_detail,
+    }
+}
+
+pub fn region_error_dom_evidence(error: &RegionErrorViewModel) -> RegionErrorDomEvidence {
+    RegionErrorDomEvidence {
+        status_attribute: REGION_ERROR_STATUS_DOM_ATTRIBUTE,
+        status_value: error.status_code.as_str(),
+        locale_key_attribute: REGION_ERROR_LOCALE_KEY_DOM_ATTRIBUTE,
+        locale_key_value: error.status_locale_key,
     }
 }
 
@@ -340,6 +359,37 @@ mod tests {
         assert_eq!(
             region_error_status_descriptor(RegionErrorStatusCode::NativeUnavailable).stable_code,
             RegionErrorStatusCode::NativeUnavailable.as_str()
+        );
+    }
+
+    #[test]
+    fn region_error_dom_evidence_uses_stable_attribute_contract() {
+        let view_model = region_error_view_model(
+            RegionErrorEvidence {
+                failed_path: RegionStorefrontErrorPath::GraphqlFallback,
+                fallback_attempted: true,
+                native_error: Some("native failed".to_string()),
+                graphql_error: Some("graphql failed".to_string()),
+            },
+            "Failed to load".to_string(),
+            "Native path is unavailable.".to_string(),
+            "Native and GraphQL paths are unavailable.".to_string(),
+            "Native unavailable".to_string(),
+            "Fallback unavailable".to_string(),
+            "native".to_string(),
+            "graphql".to_string(),
+        );
+        let evidence = region_error_dom_evidence(&view_model);
+
+        assert_eq!(evidence.status_attribute, REGION_ERROR_STATUS_DOM_ATTRIBUTE);
+        assert_eq!(evidence.status_value, "fallback_unavailable");
+        assert_eq!(
+            evidence.locale_key_attribute,
+            REGION_ERROR_LOCALE_KEY_DOM_ATTRIBUTE
+        );
+        assert_eq!(
+            evidence.locale_key_value,
+            "region.error.status.fallbackUnavailable"
         );
     }
 

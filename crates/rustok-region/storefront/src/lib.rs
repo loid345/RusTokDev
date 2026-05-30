@@ -99,14 +99,17 @@ pub fn RegionView() -> impl IntoView {
 
 #[component]
 fn RegionErrorMessage(error: core::RegionErrorViewModel) -> impl IntoView {
-    let status_code = error.status_code.as_str();
-    let status_locale_key = error.status_locale_key;
+    region_error_message_view(error)
+}
+
+fn region_error_message_view(error: core::RegionErrorViewModel) -> impl IntoView {
+    let dom_evidence = core::region_error_dom_evidence(&error);
 
     view! {
         <div
             class="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
-            data-region-error-status=status_code
-            data-region-error-locale-key=status_locale_key
+            data-region-error-status=dom_evidence.status_value
+            data-region-error-locale-key=dom_evidence.locale_key_value
         >
             <div class="flex flex-wrap items-center gap-2">
                 <span class="rounded-full border border-destructive/30 px-2 py-0.5 font-mono text-[0.68rem] uppercase tracking-[0.16em]">{error.status_code.as_str()}</span>
@@ -294,4 +297,42 @@ fn RegionRail(items: Vec<StorefrontRegion>, total: usize) -> impl IntoView {
 #[component]
 fn MetricCard(title: String, value: String) -> impl IntoView {
     view! { <article class="rounded-2xl border border-border bg-card p-4"><div class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{title}</div><div class="mt-2 text-lg font-semibold text-card-foreground">{value}</div></article> }
+}
+
+#[cfg(all(test, feature = "ssr"))]
+mod ssr_tests {
+    use super::*;
+
+    #[test]
+    fn region_error_message_ssr_exposes_host_visible_dom_evidence() {
+        let error = core::region_error_view_model(
+            core::RegionErrorEvidence {
+                failed_path: core::RegionStorefrontErrorPath::GraphqlFallback,
+                fallback_attempted: true,
+                native_error: Some("native failed".to_string()),
+                graphql_error: Some("graphql failed".to_string()),
+            },
+            "Failed to load region storefront data".to_string(),
+            "The native region data path is unavailable for this request.".to_string(),
+            "Both native and GraphQL region data paths are unavailable for this request."
+                .to_string(),
+            "Native unavailable".to_string(),
+            "Fallback unavailable".to_string(),
+            "native".to_string(),
+            "graphql".to_string(),
+        );
+
+        let html = region_error_message_view(error).into_view().to_html();
+
+        assert!(
+            html.contains(r#"data-region-error-status="fallback_unavailable""#),
+            "rendered error message should expose stable status code: {html}"
+        );
+        assert!(
+            html.contains(
+                r#"data-region-error-locale-key="region.error.status.fallbackUnavailable""#
+            ),
+            "rendered error message should expose status locale key: {html}"
+        );
+    }
 }
