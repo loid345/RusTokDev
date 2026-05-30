@@ -1,4 +1,4 @@
-use rustok_api::normalize_ui_text;
+use rustok_api::{normalize_ui_text, UiRouteQueryUpdate};
 
 use crate::model::{StorefrontRegion, StorefrontRegionCountryTaxPolicy, StorefrontRegionsData};
 
@@ -6,6 +6,7 @@ pub const DEFAULT_ROUTE_SEGMENT: &str = "regions";
 pub const DEFAULT_TAX_PROVIDER_ID: &str = "region_default";
 pub const REGION_ERROR_STATUS_DOM_ATTRIBUTE: &str = "data-region-error-status";
 pub const REGION_ERROR_LOCALE_KEY_DOM_ATTRIBUTE: &str = "data-region-error-locale-key";
+pub const SELECTED_REGION_QUERY_KEY: &str = "region";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegionStorefrontErrorPath {
@@ -158,6 +159,19 @@ fn region_error_technical_detail(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionRouteState {
+    pub route_segment: String,
+    pub selected_region_id: Option<String>,
+    pub selected_region_query_key: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionRouteSelectionUpdate {
+    pub query_key: &'static str,
+    pub update: UiRouteQueryUpdate,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegionMetric {
     pub title: String,
     pub value: String,
@@ -200,6 +214,28 @@ pub fn route_segment_or_default(route_segment: Option<&str>) -> String {
         .unwrap_or_else(|| DEFAULT_ROUTE_SEGMENT.to_string())
 }
 
+pub fn region_route_state(
+    route_segment: Option<&str>,
+    selected_region_id: Option<String>,
+) -> RegionRouteState {
+    RegionRouteState {
+        route_segment: route_segment_or_default(route_segment),
+        selected_region_id: normalize_selected_region_id(selected_region_id),
+        selected_region_query_key: SELECTED_REGION_QUERY_KEY,
+    }
+}
+
+pub fn selected_region_query_update(region_id: &str) -> RegionRouteSelectionUpdate {
+    let update = normalize_ui_text(region_id)
+        .map(UiRouteQueryUpdate::Replace)
+        .unwrap_or(UiRouteQueryUpdate::Clear);
+
+    RegionRouteSelectionUpdate {
+        query_key: SELECTED_REGION_QUERY_KEY,
+        update,
+    }
+}
+
 pub fn tax_mode_label(tax_included: bool, included_label: &str, excluded_label: &str) -> String {
     if tax_included {
         included_label.to_string()
@@ -231,7 +267,13 @@ pub fn countries_summary(countries: &[String], empty_label: &str) -> String {
 }
 
 pub fn region_href(module_route_base: &str, region_id: &str) -> String {
-    format!("{module_route_base}?region={region_id}")
+    match selected_region_query_update(region_id)
+        .update
+        .into_query_value()
+    {
+        Some(region_id) => format!("{module_route_base}?{SELECTED_REGION_QUERY_KEY}={region_id}"),
+        None => module_route_base.to_string(),
+    }
 }
 
 pub fn rail_country_summary(region: &StorefrontRegion, empty_countries_label: &str) -> String {
@@ -494,6 +536,35 @@ mod tests {
 
         assert_eq!(data.selected_region_id.as_deref(), Some("missing"));
         assert!(data.selected_region.is_none());
+    }
+
+    #[test]
+    fn region_route_state_normalizes_host_route_query_contract() {
+        let route_state = region_route_state(Some(" storefront "), Some(" eu ".to_string()));
+
+        assert_eq!(route_state.route_segment, "storefront");
+        assert_eq!(route_state.selected_region_id.as_deref(), Some("eu"));
+        assert_eq!(
+            route_state.selected_region_query_key,
+            SELECTED_REGION_QUERY_KEY
+        );
+
+        let replace_update = selected_region_query_update(" eu ");
+        assert_eq!(replace_update.query_key, SELECTED_REGION_QUERY_KEY);
+        assert_eq!(
+            replace_update.update.into_query_value().as_deref(),
+            Some("eu")
+        );
+
+        let clear_update = selected_region_query_update("   ");
+        assert_eq!(clear_update.query_key, SELECTED_REGION_QUERY_KEY);
+        assert_eq!(clear_update.update.into_query_value(), None);
+
+        assert_eq!(
+            region_href("/modules/regions", " eu "),
+            "/modules/regions?region=eu"
+        );
+        assert_eq!(region_href("/modules/regions", "   "), "/modules/regions");
     }
 
     #[test]

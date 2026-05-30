@@ -14,7 +14,11 @@ use crate::model::{StorefrontRegion, StorefrontRegionsData};
 #[component]
 pub fn RegionView() -> impl IntoView {
     let route_context = use_context::<UiRouteContext>().unwrap_or_default();
-    let selected_region_id = read_route_query_value(&route_context, "region");
+    let selected_region_id =
+        read_route_query_value(&route_context, core::SELECTED_REGION_QUERY_KEY);
+    let route_state =
+        core::region_route_state(route_context.route_segment.as_deref(), selected_region_id);
+    let selected_region_id = route_state.selected_region_id.clone();
     let selected_locale = route_context.locale.clone();
     let badge = t(selected_locale.as_deref(), "region.badge", "region");
     let title = t(
@@ -244,8 +248,8 @@ fn SelectedRegionCard(region: Option<StorefrontRegion>) -> impl IntoView {
 fn RegionRail(items: Vec<StorefrontRegion>, total: usize) -> impl IntoView {
     let route_context = use_context::<UiRouteContext>().unwrap_or_default();
     let locale = route_context.locale.clone();
-    let route_segment = core::route_segment_or_default(route_context.route_segment.as_deref());
-    let module_route_base = route_context.module_route_base(route_segment.as_str());
+    let route_state = core::region_route_state(route_context.route_segment.as_deref(), None);
+    let module_route_base = route_context.module_route_base(route_state.route_segment.as_str());
 
     if items.is_empty() {
         return view! { <article class="rounded-3xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">{t(locale.as_deref(), "region.list.empty", "No regions are available for storefront discovery yet.")}</article> }.into_any();
