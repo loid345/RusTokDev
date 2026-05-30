@@ -39,6 +39,7 @@ void main() {
             (ref) async => const BootstrapProbeResult.authenticated(
               userEmail: 'operator@example.com',
               tenantSlug: 'default',
+              grantedPermissions: ['modules:manage'],
             ),
           ),
         ],

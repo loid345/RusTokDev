@@ -24,7 +24,7 @@ Flutter workspace scaffold based on `docs/research/flutter.md`.
 - Auth session scaffolding (`AuthSessionStore`, `AuthSessionManager`, in-memory store, refresh service contract).
 - Manifest generator script from `crates/*/rustok-module.toml`.
 - Phase 1 pilot modules package with GraphQL-backed list/detail shell navigation evidence.
-- First mutation-backed modules operator action via the canonical `toggleModule` GraphQL mutation, gated by host-provided `modules:manage` capability context.
+- First mutation-backed modules operator action via the canonical `toggleModule` GraphQL mutation, gated by GraphQL-hydrated `me.permissions` capability context.
 - Separate Flutter storefront mobile host scaffold with host-owned tenant/locale/GraphQL context.
 
 
@@ -81,4 +81,4 @@ signal that exercises the generator CLI itself.
 1. Replace in-memory auth session store with secure storage and connect refresh flow to sign-in lifecycle.
 2. Add module-owned storefront mobile packages for catalog/cart surfaces.
 3. Add deterministic generated-file checks to the mobile CI pipeline.
-4. Replace the temporary `RUSTOK_CAN_MANAGE_MODULES` bootstrap flag with hydrated RBAC permissions from the authenticated session.
+4. Expand the modules pilot with mutation recovery feedback for lifecycle post-hook failures.

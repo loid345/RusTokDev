@@ -118,7 +118,8 @@ class _ModuleCardState extends ConsumerState<_ModuleCard> {
     final module = widget.module;
     final path = widget.path;
     final toggleLabel = module.enabled ? 'Disable' : 'Enable';
-    final canToggle = widget.canManageModules && module.isOptional;
+    final disabledReason = _toggleDisabledReason(module);
+    final canToggle = disabledReason == null;
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -142,7 +143,9 @@ class _ModuleCardState extends ConsumerState<_ModuleCard> {
                 if (_toggleError != null) ...[
                   Text(
                     'Toggle failed: $_toggleError',
-                    style: TextStyle(color: Theme.of(context).colorScheme.error),
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
                   ),
                   const SizedBox(height: 8),
                 ],
@@ -162,11 +165,7 @@ class _ModuleCardState extends ConsumerState<_ModuleCard> {
                                 ? Icons.pause_circle_outline
                                 : Icons.play_circle_outline,
                           ),
-                    label: Text(
-                      canToggle
-                          ? toggleLabel
-                          : 'Requires $_modulesManagePermission',
-                    ),
+                    label: Text(canToggle ? toggleLabel : disabledReason!),
                   ),
                 ),
               ],
@@ -175,6 +174,16 @@ class _ModuleCardState extends ConsumerState<_ModuleCard> {
         ],
       ),
     );
+  }
+
+  String? _toggleDisabledReason(ModuleSummary module) {
+    if (!module.isOptional) {
+      return 'Core module';
+    }
+    if (!widget.canManageModules) {
+      return 'Requires $_modulesManagePermission';
+    }
+    return null;
   }
 
   Future<void> _toggleModule(bool enabled) async {

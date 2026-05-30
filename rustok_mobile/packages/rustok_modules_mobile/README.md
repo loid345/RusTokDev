@@ -24,7 +24,8 @@ first mutation-backed operator toggle action mounted by the
 - `apps/rustok_admin_mobile` overrides `modulesRepositoryProvider` with
   `GraphQlModulesRepository` built from the host `graphQlClientProvider`.
 - The host resolves module detail navigation through the generated mobile
-  manifest routes.
+  manifest routes and passes the GraphQL-hydrated `modules:manage` permission
+  state into the action UI.
 - This package does not create its own auth, tenant, locale, or GraphQL client
   fallback chain.
 

@@ -75,6 +75,40 @@ void main() {
     expect(find.text('Enable'), findsOneWidget);
   });
 
+
+  testWidgets('gates toggle action when modules manage permission is missing', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          modulesRepositoryProvider.overrideWithValue(
+            const _FakeModulesRepository([
+              ModuleSummary(
+                slug: 'blog',
+                name: 'Blog Module',
+                description: 'Editorial content',
+                version: '1.2.3',
+                kind: 'optional',
+                enabled: true,
+                ownership: 'platform',
+                trustLevel: 'trusted',
+                recommendedAdminSurfaces: ['posts'],
+                showcaseAdminSurfaces: [],
+              ),
+            ]),
+          ),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(body: ModulesMobileScreen()),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Requires modules:manage'), findsOneWidget);
+  });
+
   testWidgets('shows retryable error state', (tester) async {
     await tester.pumpWidget(
       ProviderScope(

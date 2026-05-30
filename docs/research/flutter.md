@@ -1123,18 +1123,18 @@ _Легенда статусов: `⬜ Planned` — не начато, `🟡 In 
 | ⬜ Planned | **Phase 5 — Offline/advanced sync (optional)** | Добавить офлайн-сценарии только после продуктового подтверждения требований. | [Open questions и ограничения](#open-questions-и-ограничения), [Риски и митигации](#риски-и-митигации) | Есть утверждённые offline requirements и реализована целевая стратегия sync/outbox. |
 
 
-#### Операционный статус плана (обновлено: 2026-05-30, Phase 1 pilot mutation action)
+#### Операционный статус плана (обновлено: 2026-05-30, Phase 1 RBAC-hydrated mutation action)
 
 - **FFA в плане отмечен:** ✅ Да. FFA-baseline явно зафиксирован в `Phase 0 — Foundation` и отдельно закреплён в anti-drift guardrail разделе.
-- **Текущий фокус выполнения:** `Phase 1 — Pilot module` (статус `🟡 In progress`) поверх закрытого host adapter seam; первый mutation-backed operator action для `modules` добавлен через canonical GraphQL `toggleModule`, без feature-local transport-клиентов. `Phase 2 — Registry/codegen` остаётся в поддерживающем режиме без изменения platform contract. В отдельном host-треке добавлен `rustok_frontend_mobile` как customer storefront shell, чтобы не смешивать admin/operator и storefront UX.
-- **Следующая точка контроля:** заменить временный host bootstrap flag для `modules:manage` на hydrated RBAC permissions из authenticated session, а storefront mobile — расширить к первому module-owned catalog/cart package, не добавляя feature-local transport-клиентов.
+- **Текущий фокус выполнения:** `Phase 1 — Pilot module` (статус `🟡 In progress`) поверх закрытого host adapter seam; первый mutation-backed operator action для `modules` добавлен через canonical GraphQL `toggleModule`, а permission gate берётся из GraphQL `me.permissions` без feature-local transport-клиентов. `Phase 2 — Registry/codegen` остаётся в поддерживающем режиме без изменения platform contract. В отдельном host-треке добавлен `rustok_frontend_mobile` как customer storefront shell, чтобы не смешивать admin/operator и storefront UX.
+- **Следующая точка контроля:** добавить recovery/feedback для lifecycle post-hook failures в modules pilot, а storefront mobile — расширить к первому module-owned catalog/cart package, не добавляя feature-local transport-клиентов.
 
 #### Ближайший execution backlog (Phase 1 pilot)
 
 1. **Registry schema freeze (FFA-safe):** зафиксировать минимальный mobile registry contract (`module_slug`, `surface_kind`, `route_segment`, `child_pages`, `permissions`, `locale_namespace`) без Flutter-only полей.
 2. **Codegen pipeline:** добавить reproducible генерацию `mobile_manifest.g.dart` из manifest snapshot + CI-проверку diff generated-файлов (в работе: локальная verify-команда уже фиксирует stale-state для manifest + snapshot).
 3. **Host integration seam:** подключить registry через единый adapter-слой (`module_entry_adapter`) и убрать ручное перечисление модулей в shell routing/nav.
-4. **Pilot gate:** `Phase 1 — Pilot module` переведён в `🟡 In progress`; первый mutation-backed operator action реализован через `toggleModule`, следующий шаг — заменить временный permission bootstrap на hydrated RBAC session context.
+4. **Pilot gate:** `Phase 1 — Pilot module` переведён в `🟡 In progress`; первый mutation-backed operator action реализован через `toggleModule`, permission gate подключён к hydrated `me.permissions`, следующий шаг — lifecycle recovery feedback.
 
 
 
@@ -1200,11 +1200,11 @@ FFA-ограничение для этого шага: пакет `rustok_module
 Pilot-флоу `modules` расширен от read-only list/detail evidence к первому operator action:
 - data boundary — `ModulesRepository.toggleModule(...)` добавляет write-side контракт рядом с `listModules()`;
 - transport implementation — `GraphQlModulesRepository` использует существующую canonical GraphQL mutation `toggleModule(moduleSlug, enabled)` и возвращает typed `ModuleToggleResult`;
-- UI action — `ModulesMobileScreen` показывает enable/disable action только для optional modules и host-provided `modules:manage` capability context;
+- UI action — `ModulesMobileScreen` показывает enable/disable action только для optional modules и GraphQL-hydrated `modules:manage` capability context;
 - refresh evidence — после успешной mutation UI инвалидирует `modulesControllerProvider` и перечитывает `moduleRegistry`;
 - test evidence — `modules_mobile_screen_test.dart` проверяет mutation request и refresh state without feature-local GraphQL client.
 
-Ограничение шага: permission source пока является host-level bootstrap seam (`RUSTOK_CAN_MANAGE_MODULES`) до появления hydrated RBAC session permissions; это не новый Flutter-specific backend API и не feature-local fallback chain.
+Permission source теперь hydrated через GraphQL `me.permissions` в host bootstrap probe; это не новый Flutter-specific backend API и не feature-local fallback chain.
 
 #### PR-A evidence pack (registry contract freeze)
 
