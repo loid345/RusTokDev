@@ -3,11 +3,11 @@
 ## Execution checkpoint
 
 - Current phase: post_order_transport_publication
-- Last checkpoint: Phase 10.4 claims scope зафиксирован в transport-neutral decision tree: `PostOrderOrchestrationService` теперь поддерживает `claim` как order-change-backed return decision рядом с `return_only/refund/exchange`, а REST/GraphQL adapters получают тот же payload shape без host-owned rules.
+- Last checkpoint: Phase 10.4 claim decision work hardened: `graphql_runtime_parity_test` больше не блокирует package-wide filtered commerce runs, потому что stale refund/payment/tax helpers приведены к актуальным DTO/API contracts; `PostOrderOrchestrationService` продолжает держать `claim` как order-change-backed return decision рядом с `return_only/refund/exchange`.
 - Next step: расширить post-order operator UX поверх decision-tree контракта и связать завершение return с `exchange/claim` order-change lifecycle (`apply/cancel`) без переноса domain logic в umbrella UI.
-- Open blockers: OpenAPI contract test под default server features блокируется существующими compile errors вне commerce (`rustok-pages-admin` Fn/FnOnce и server build/lifecycle/graphql ошибки); package-wide `cargo test -p rustok-commerce ...` также упирается в существующие compile errors `graphql_runtime_parity_test` (устаревшие refund/payment/tax helper contracts и format string); targeted `rustok-commerce` post-order/checkout tests и `cargo check -p rustok-commerce` проходят.
+- Open blockers: OpenAPI contract test под default server features блокируется существующими compile errors вне commerce (`rustok-pages-admin` Fn/FnOnce и server build/lifecycle/graphql ошибки); commerce `graphql_runtime_parity_test` target, package-wide filtered post-order run, targeted bridge/checkout tests и `cargo check -p rustok-commerce` проходят.
 - Hand-off notes for next agent: После каждого returns/order-change инкремента обновлять этот блок и central readiness/registry evidence.
-- Last updated at (UTC): 2026-05-30T09:22:58Z
+- Last updated at (UTC): 2026-05-30T09:58:38Z
 
 
 ## FFA/FBA status
@@ -18,7 +18,7 @@
   - module plan синхронизирован с central FFA/FBA readiness board; UI surface уже опубликован и ведётся в migration/backlog ритме;
   - admin return decision tree теперь имеет transport parity (`/admin/orders/{id}/returns/decision` ↔ `createOrderReturnDecision`) над единым `PostOrderOrchestrationService`, включая `return_only/refund/exchange/claim`, без дублирования rules в host/UI adapters;
   - дальнейшее повышение статуса выполняется только вместе с verification evidence и обновлением local+central docs.
-- Last verified at (UTC): 2026-05-30T09:22:58Z
+- Last verified at (UTC): 2026-05-30T09:58:38Z
 - Owner: `rustok-commerce` module team
 
 ## Статус документа
