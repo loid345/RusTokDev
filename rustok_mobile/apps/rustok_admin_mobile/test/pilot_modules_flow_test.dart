@@ -82,4 +82,16 @@ class _FakeModulesRepository implements ModulesRepository {
       showcaseAdminSurfaces: [],
     ),
   ];
+
+  @override
+  Future<ModuleToggleResult> toggleModule({
+    required String moduleSlug,
+    required bool enabled,
+  }) async {
+    return ModuleToggleResult(
+      moduleSlug: moduleSlug,
+      enabled: enabled,
+      settings: '{}',
+    );
+  }
 }

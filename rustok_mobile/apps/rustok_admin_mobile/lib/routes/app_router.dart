@@ -10,6 +10,11 @@ import '../registry/module_entry_adapter.dart';
 import '../registry/registry_adaptation_summary.dart';
 import 'registry_warnings_card.dart';
 
+const _canManageModules = bool.fromEnvironment(
+  'RUSTOK_CAN_MANAGE_MODULES',
+  defaultValue: true,
+);
+
 const _routeCodec = RouteCodec(
   RouteSanitizer({
     QueryKeys.tab,
@@ -47,6 +52,7 @@ GoRouter buildRouter(
                   moduleRoutes,
                   module.slug,
                 ),
+                canManageModules: _canManageModules,
                 onOpenModule: (context, module) {
                   final path = _resolveModulePath(moduleRoutes, module.slug);
                   if (path != null) {

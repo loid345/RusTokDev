@@ -30,6 +30,7 @@ void main() {
         child: MaterialApp(
           home: Scaffold(
             body: ModulesMobileScreen(
+              canManageModules: true,
               resolveModulePath: (module) => '/modules/${module.slug}',
             ),
           ),
@@ -42,6 +43,36 @@ void main() {
     expect(find.text('Blog Module'), findsOneWidget);
     expect(find.textContaining('mobile route: /modules/blog'), findsOneWidget);
     expect(find.text('Enabled'), findsOneWidget);
+  });
+
+
+  testWidgets('runs mutation-backed toggle action and refreshes registry', (
+    tester,
+  ) async {
+    final repository = _MutableModulesRepository();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          modulesRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: ModulesMobileScreen(canManageModules: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Enabled'), findsOneWidget);
+
+    await tester.tap(find.text('Disable'));
+    await tester.pumpAndSettle();
+
+    expect(repository.toggleRequests, const [false]);
+    expect(find.text('Disabled'), findsOneWidget);
+    expect(find.text('Enable'), findsOneWidget);
   });
 
   testWidgets('shows retryable error state', (tester) async {
@@ -69,6 +100,53 @@ class _FakeModulesRepository implements ModulesRepository {
 
   @override
   Future<List<ModuleSummary>> listModules() async => modules;
+
+  @override
+  Future<ModuleToggleResult> toggleModule({
+    required String moduleSlug,
+    required bool enabled,
+  }) async {
+    return ModuleToggleResult(
+      moduleSlug: moduleSlug,
+      enabled: enabled,
+      settings: '{}',
+    );
+  }
+}
+
+class _MutableModulesRepository implements ModulesRepository {
+  final List<bool> toggleRequests = <bool>[];
+  bool _enabled = true;
+
+  @override
+  Future<List<ModuleSummary>> listModules() async => [
+    ModuleSummary(
+      slug: 'blog',
+      name: 'Blog Module',
+      description: 'Editorial content',
+      version: '1.2.3',
+      kind: 'optional',
+      enabled: _enabled,
+      ownership: 'platform',
+      trustLevel: 'trusted',
+      recommendedAdminSurfaces: const ['posts'],
+      showcaseAdminSurfaces: const [],
+    ),
+  ];
+
+  @override
+  Future<ModuleToggleResult> toggleModule({
+    required String moduleSlug,
+    required bool enabled,
+  }) async {
+    toggleRequests.add(enabled);
+    _enabled = enabled;
+    return ModuleToggleResult(
+      moduleSlug: moduleSlug,
+      enabled: enabled,
+      settings: '{}',
+    );
+  }
 }
 
 class _FailingRepository implements ModulesRepository {
@@ -76,6 +154,14 @@ class _FailingRepository implements ModulesRepository {
 
   @override
   Future<List<ModuleSummary>> listModules() async {
+    throw StateError('registry unavailable');
+  }
+
+  @override
+  Future<ModuleToggleResult> toggleModule({
+    required String moduleSlug,
+    required bool enabled,
+  }) async {
     throw StateError('registry unavailable');
   }
 }

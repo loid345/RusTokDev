@@ -20,8 +20,23 @@ const moduleRegistryQuery = r'''
   }
 ''';
 
+const toggleModuleMutation = r'''
+  mutation ToggleModule($moduleSlug: String!, $enabled: Boolean!) {
+    toggleModule(moduleSlug: $moduleSlug, enabled: $enabled) {
+      moduleSlug
+      enabled
+      settings
+    }
+  }
+''';
+
 abstract interface class ModulesRepository {
   Future<List<ModuleSummary>> listModules();
+
+  Future<ModuleToggleResult> toggleModule({
+    required String moduleSlug,
+    required bool enabled,
+  });
 }
 
 class GraphQlModulesRepository implements ModulesRepository {
@@ -51,4 +66,56 @@ class GraphQlModulesRepository implements ModulesRepository {
       payload.whereType<Map<String, dynamic>>().map(ModuleSummary.fromJson),
     );
   }
+
+  @override
+  Future<ModuleToggleResult> toggleModule({
+    required String moduleSlug,
+    required bool enabled,
+  }) async {
+    final result = await _client.mutate(
+      MutationOptions(
+        document: gql(toggleModuleMutation),
+        variables: <String, dynamic>{
+          'moduleSlug': moduleSlug,
+          'enabled': enabled,
+        },
+      ),
+    );
+
+    if (result.hasException) {
+      throw result.exception!;
+    }
+
+    final payload = result.data?['toggleModule'];
+    if (payload is! Map<String, dynamic>) {
+      throw const FormatException('toggleModule response payload is missing.');
+    }
+
+    return ModuleToggleResult.fromJson(payload);
+  }
+}
+
+class ModuleToggleResult {
+  const ModuleToggleResult({
+    required this.moduleSlug,
+    required this.enabled,
+    required this.settings,
+  });
+
+  final String moduleSlug;
+  final bool enabled;
+  final String settings;
+
+  factory ModuleToggleResult.fromJson(Map<String, dynamic> json) {
+    return ModuleToggleResult(
+      moduleSlug: _readToggleString(json, 'moduleSlug'),
+      enabled: json['enabled'] == true,
+      settings: _readToggleString(json, 'settings'),
+    );
+  }
+}
+
+String _readToggleString(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  return value is String ? value : '';
 }

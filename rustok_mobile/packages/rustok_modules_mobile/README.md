@@ -5,17 +5,19 @@ Module-owned Flutter pilot package for the RusTok modules registry surface.
 ## Purpose
 
 This package provides the first Phase 1 mobile pilot flow from
-`docs/research/flutter.md`: a GraphQL-backed module registry list that is
-mounted by the `rustok_admin_mobile` host shell.
+`docs/research/flutter.md`: a GraphQL-backed module registry list plus the
+first mutation-backed operator toggle action mounted by the
+`rustok_admin_mobile` host shell.
 
 ## Responsibilities
 
 - Own the mobile presentation for the modules registry pilot screen.
 - Keep module data access behind `ModulesRepository` so the host supplies the
   shared GraphQL client and auth/tenant/locale context.
-- Reuse the platform `moduleRegistry` GraphQL contract without introducing a
-  Flutter-only API.
-- Expose retryable loading/error/empty states for host-level E2E evidence.
+- Reuse the platform `moduleRegistry` query and `toggleModule` mutation
+  contracts without introducing a Flutter-only API.
+- Expose retryable loading/error/empty states and action-level failure feedback
+  for host-level E2E evidence.
 
 ## Interactions
 
@@ -30,7 +32,7 @@ mounted by the `rustok_admin_mobile` host shell.
 
 - `ModulesMobileScreen` — registry list UI.
 - `ModulesRepository` — data boundary for tests and host injection.
-- `GraphQlModulesRepository` — `moduleRegistry` GraphQL implementation.
+- `GraphQlModulesRepository` — `moduleRegistry` and `toggleModule` GraphQL implementation.
 - `modulesControllerProvider` — Riverpod async controller.
 
 ## Documentation
