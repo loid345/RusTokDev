@@ -1,9 +1,177 @@
-use rustok_api::normalize_ui_text;
+use rustok_api::{normalize_ui_text, UiRouteQueryUpdate};
 
 use crate::model::{StorefrontRegion, StorefrontRegionCountryTaxPolicy, StorefrontRegionsData};
 
 pub const DEFAULT_ROUTE_SEGMENT: &str = "regions";
 pub const DEFAULT_TAX_PROVIDER_ID: &str = "region_default";
+pub const REGION_ERROR_STATUS_DOM_ATTRIBUTE: &str = "data-region-error-status";
+pub const REGION_ERROR_LOCALE_KEY_DOM_ATTRIBUTE: &str = "data-region-error-locale-key";
+pub const SELECTED_REGION_QUERY_KEY: &str = "region";
+pub const REGION_ROUTE_QUERY_KEY_DOM_ATTRIBUTE: &str = "data-region-route-query-key";
+pub const REGION_ROUTE_QUERY_VALUE_DOM_ATTRIBUTE: &str = "data-region-route-query-value";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegionStorefrontErrorPath {
+    NativeServer,
+    GraphqlFallback,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegionErrorStatusCode {
+    NativeUnavailable,
+    FallbackUnavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RegionErrorStatusDescriptor {
+    pub code: RegionErrorStatusCode,
+    pub stable_code: &'static str,
+    pub locale_key: &'static str,
+}
+
+const REGION_ERROR_STATUS_DESCRIPTORS: [RegionErrorStatusDescriptor; 2] = [
+    RegionErrorStatusDescriptor {
+        code: RegionErrorStatusCode::NativeUnavailable,
+        stable_code: "native_unavailable",
+        locale_key: "region.error.status.nativeUnavailable",
+    },
+    RegionErrorStatusDescriptor {
+        code: RegionErrorStatusCode::FallbackUnavailable,
+        stable_code: "fallback_unavailable",
+        locale_key: "region.error.status.fallbackUnavailable",
+    },
+];
+
+fn region_error_status_descriptor(
+    code: RegionErrorStatusCode,
+) -> &'static RegionErrorStatusDescriptor {
+    REGION_ERROR_STATUS_DESCRIPTORS
+        .iter()
+        .find(|descriptor| descriptor.code == code)
+        .expect("every RegionErrorStatusCode must have a descriptor")
+}
+
+impl RegionErrorStatusCode {
+    pub fn as_str(self) -> &'static str {
+        region_error_status_descriptor(self).stable_code
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionErrorEvidence {
+    pub failed_path: RegionStorefrontErrorPath,
+    pub fallback_attempted: bool,
+    pub native_error: Option<String>,
+    pub graphql_error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionErrorViewModel {
+    pub status_code: RegionErrorStatusCode,
+    pub status_locale_key: &'static str,
+    pub status_label: String,
+    pub title: String,
+    pub body: String,
+    pub technical_detail: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RegionErrorDomEvidence {
+    pub status_attribute: &'static str,
+    pub status_value: &'static str,
+    pub locale_key_attribute: &'static str,
+    pub locale_key_value: &'static str,
+}
+
+pub fn region_error_view_model(
+    evidence: RegionErrorEvidence,
+    title: String,
+    native_unavailable_body: String,
+    fallback_unavailable_body: String,
+    native_status_label: String,
+    fallback_status_label: String,
+    native_label: String,
+    graphql_label: String,
+) -> RegionErrorViewModel {
+    let status_code = region_error_status_code(&evidence);
+    let status_locale_key = region_error_status_descriptor(status_code).locale_key;
+    let (status_label, body) = match status_code {
+        RegionErrorStatusCode::NativeUnavailable => (native_status_label, native_unavailable_body),
+        RegionErrorStatusCode::FallbackUnavailable => {
+            (fallback_status_label, fallback_unavailable_body)
+        }
+    };
+    let technical_detail = region_error_technical_detail(&evidence, &native_label, &graphql_label);
+
+    RegionErrorViewModel {
+        status_code,
+        status_locale_key,
+        status_label,
+        title,
+        body,
+        technical_detail,
+    }
+}
+
+pub fn region_error_dom_evidence(error: &RegionErrorViewModel) -> RegionErrorDomEvidence {
+    RegionErrorDomEvidence {
+        status_attribute: REGION_ERROR_STATUS_DOM_ATTRIBUTE,
+        status_value: error.status_code.as_str(),
+        locale_key_attribute: REGION_ERROR_LOCALE_KEY_DOM_ATTRIBUTE,
+        locale_key_value: error.status_locale_key,
+    }
+}
+
+pub fn region_error_status_code(evidence: &RegionErrorEvidence) -> RegionErrorStatusCode {
+    if evidence.fallback_attempted
+        || evidence.failed_path == RegionStorefrontErrorPath::GraphqlFallback
+    {
+        RegionErrorStatusCode::FallbackUnavailable
+    } else {
+        RegionErrorStatusCode::NativeUnavailable
+    }
+}
+
+fn region_error_technical_detail(
+    evidence: &RegionErrorEvidence,
+    native_label: &str,
+    graphql_label: &str,
+) -> Option<String> {
+    let mut parts = Vec::new();
+    if let Some(native_error) = evidence
+        .native_error
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
+        parts.push(format!("{native_label}: {native_error}"));
+    }
+    if let Some(graphql_error) = evidence
+        .graphql_error
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
+        parts.push(format!("{graphql_label}: {graphql_error}"));
+    }
+
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join(" | "))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionRouteState {
+    pub route_segment: String,
+    pub selected_region_id: Option<String>,
+    pub selected_region_query_key: &'static str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionRouteSelectionUpdate {
+    pub query_key: &'static str,
+    pub update: UiRouteQueryUpdate,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegionMetric {
@@ -14,6 +182,10 @@ pub struct RegionMetric {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegionRailItemViewModel {
     pub href: String,
+    pub query_key_attribute: &'static str,
+    pub query_value_attribute: &'static str,
+    pub query_key: &'static str,
+    pub query_value: Option<String>,
     pub tax_mode_label: String,
     pub country_summary: String,
     pub tax_summary: String,
@@ -48,6 +220,28 @@ pub fn route_segment_or_default(route_segment: Option<&str>) -> String {
         .unwrap_or_else(|| DEFAULT_ROUTE_SEGMENT.to_string())
 }
 
+pub fn region_route_state(
+    route_segment: Option<&str>,
+    selected_region_id: Option<String>,
+) -> RegionRouteState {
+    RegionRouteState {
+        route_segment: route_segment_or_default(route_segment),
+        selected_region_id: normalize_selected_region_id(selected_region_id),
+        selected_region_query_key: SELECTED_REGION_QUERY_KEY,
+    }
+}
+
+pub fn selected_region_query_update(region_id: &str) -> RegionRouteSelectionUpdate {
+    let update = normalize_ui_text(region_id)
+        .map(UiRouteQueryUpdate::Replace)
+        .unwrap_or(UiRouteQueryUpdate::Clear);
+
+    RegionRouteSelectionUpdate {
+        query_key: SELECTED_REGION_QUERY_KEY,
+        update,
+    }
+}
+
 pub fn tax_mode_label(tax_included: bool, included_label: &str, excluded_label: &str) -> String {
     if tax_included {
         included_label.to_string()
@@ -79,7 +273,21 @@ pub fn countries_summary(countries: &[String], empty_label: &str) -> String {
 }
 
 pub fn region_href(module_route_base: &str, region_id: &str) -> String {
-    format!("{module_route_base}?region={region_id}")
+    let selection_update = selected_region_query_update(region_id);
+    region_href_from_selection_update(module_route_base, &selection_update)
+}
+
+pub fn region_href_from_selection_update(
+    module_route_base: &str,
+    selection_update: &RegionRouteSelectionUpdate,
+) -> String {
+    match selection_update.clone().update.into_query_value() {
+        Some(region_id) => format!(
+            "{module_route_base}?{}={region_id}",
+            selection_update.query_key
+        ),
+        None => module_route_base.to_string(),
+    }
 }
 
 pub fn rail_country_summary(region: &StorefrontRegion, empty_countries_label: &str) -> String {
@@ -158,8 +366,15 @@ pub fn rail_item_view_model(
     tax_rate_label: &str,
     tax_provider_label: &str,
 ) -> RegionRailItemViewModel {
+    let selection_update = selected_region_query_update(&region.id);
+    let query_value = selection_update.clone().update.into_query_value();
+
     RegionRailItemViewModel {
         href: region_href(module_route_base, &region.id),
+        query_key_attribute: REGION_ROUTE_QUERY_KEY_DOM_ATTRIBUTE,
+        query_value_attribute: REGION_ROUTE_QUERY_VALUE_DOM_ATTRIBUTE,
+        query_key: selection_update.query_key,
+        query_value,
         tax_mode_label: tax_mode_label(region.tax_included, included_label, excluded_label),
         country_summary: rail_country_summary(region, empty_countries_label),
         tax_summary: rail_tax_summary(region, tax_rate_label, tax_provider_label),
@@ -186,6 +401,130 @@ mod tests {
             }],
             countries: vec!["DE".to_string(), "FR".to_string()],
         }
+    }
+
+    #[test]
+    fn region_error_status_descriptors_are_host_visible_contract() {
+        let descriptors = REGION_ERROR_STATUS_DESCRIPTORS;
+
+        assert_eq!(descriptors.len(), 2);
+        assert_eq!(
+            descriptors.map(|descriptor| descriptor.stable_code),
+            ["native_unavailable", "fallback_unavailable"]
+        );
+        assert_eq!(
+            descriptors.map(|descriptor| descriptor.locale_key),
+            [
+                "region.error.status.nativeUnavailable",
+                "region.error.status.fallbackUnavailable",
+            ]
+        );
+        assert_eq!(
+            region_error_status_descriptor(RegionErrorStatusCode::NativeUnavailable).stable_code,
+            RegionErrorStatusCode::NativeUnavailable.as_str()
+        );
+    }
+
+    #[test]
+    fn region_error_dom_evidence_uses_stable_attribute_contract() {
+        let view_model = region_error_view_model(
+            RegionErrorEvidence {
+                failed_path: RegionStorefrontErrorPath::GraphqlFallback,
+                fallback_attempted: true,
+                native_error: Some("native failed".to_string()),
+                graphql_error: Some("graphql failed".to_string()),
+            },
+            "Failed to load".to_string(),
+            "Native path is unavailable.".to_string(),
+            "Native and GraphQL paths are unavailable.".to_string(),
+            "Native unavailable".to_string(),
+            "Fallback unavailable".to_string(),
+            "native".to_string(),
+            "graphql".to_string(),
+        );
+        let evidence = region_error_dom_evidence(&view_model);
+
+        assert_eq!(evidence.status_attribute, REGION_ERROR_STATUS_DOM_ATTRIBUTE);
+        assert_eq!(evidence.status_value, "fallback_unavailable");
+        assert_eq!(
+            evidence.locale_key_attribute,
+            REGION_ERROR_LOCALE_KEY_DOM_ATTRIBUTE
+        );
+        assert_eq!(
+            evidence.locale_key_value,
+            "region.error.status.fallbackUnavailable"
+        );
+    }
+
+    #[test]
+    fn region_error_view_model_preserves_fallback_evidence_for_ui() {
+        let view_model = region_error_view_model(
+            RegionErrorEvidence {
+                failed_path: RegionStorefrontErrorPath::GraphqlFallback,
+                fallback_attempted: true,
+                native_error: Some("tenant context missing".to_string()),
+                graphql_error: Some("network unavailable".to_string()),
+            },
+            "Failed to load".to_string(),
+            "Native path is unavailable.".to_string(),
+            "Native and GraphQL paths are unavailable.".to_string(),
+            "Native unavailable".to_string(),
+            "Fallback unavailable".to_string(),
+            "native".to_string(),
+            "graphql".to_string(),
+        );
+
+        assert_eq!(
+            view_model.status_code,
+            RegionErrorStatusCode::FallbackUnavailable
+        );
+        assert_eq!(view_model.status_code.as_str(), "fallback_unavailable");
+        assert_eq!(
+            view_model.status_locale_key,
+            "region.error.status.fallbackUnavailable"
+        );
+        assert_eq!(view_model.status_label, "Fallback unavailable");
+        assert_eq!(view_model.title, "Failed to load");
+        assert_eq!(view_model.body, "Native and GraphQL paths are unavailable.");
+        assert_eq!(
+            view_model.technical_detail.as_deref(),
+            Some("native: tenant context missing | graphql: network unavailable")
+        );
+    }
+
+    #[test]
+    fn region_error_view_model_classifies_native_only_error() {
+        let view_model = region_error_view_model(
+            RegionErrorEvidence {
+                failed_path: RegionStorefrontErrorPath::NativeServer,
+                fallback_attempted: false,
+                native_error: Some("ssr required".to_string()),
+                graphql_error: None,
+            },
+            "Failed to load".to_string(),
+            "Native path is unavailable.".to_string(),
+            "Native and GraphQL paths are unavailable.".to_string(),
+            "Native unavailable".to_string(),
+            "Fallback unavailable".to_string(),
+            "native".to_string(),
+            "graphql".to_string(),
+        );
+
+        assert_eq!(
+            view_model.status_code,
+            RegionErrorStatusCode::NativeUnavailable
+        );
+        assert_eq!(view_model.status_code.as_str(), "native_unavailable");
+        assert_eq!(
+            view_model.status_locale_key,
+            "region.error.status.nativeUnavailable"
+        );
+        assert_eq!(view_model.status_label, "Native unavailable");
+        assert_eq!(view_model.body, "Native path is unavailable.");
+        assert_eq!(
+            view_model.technical_detail.as_deref(),
+            Some("native: ssr required")
+        );
     }
 
     #[test]
@@ -221,6 +560,35 @@ mod tests {
     }
 
     #[test]
+    fn region_route_state_normalizes_host_route_query_contract() {
+        let route_state = region_route_state(Some(" storefront "), Some(" eu ".to_string()));
+
+        assert_eq!(route_state.route_segment, "storefront");
+        assert_eq!(route_state.selected_region_id.as_deref(), Some("eu"));
+        assert_eq!(
+            route_state.selected_region_query_key,
+            SELECTED_REGION_QUERY_KEY
+        );
+
+        let replace_update = selected_region_query_update(" eu ");
+        assert_eq!(replace_update.query_key, SELECTED_REGION_QUERY_KEY);
+        assert_eq!(
+            replace_update.update.into_query_value().as_deref(),
+            Some("eu")
+        );
+
+        let clear_update = selected_region_query_update("   ");
+        assert_eq!(clear_update.query_key, SELECTED_REGION_QUERY_KEY);
+        assert_eq!(clear_update.update.into_query_value(), None);
+
+        assert_eq!(
+            region_href("/modules/regions", " eu "),
+            "/modules/regions?region=eu"
+        );
+        assert_eq!(region_href("/modules/regions", "   "), "/modules/regions");
+    }
+
+    #[test]
     fn route_segment_falls_back_without_ui_runtime() {
         assert_eq!(route_segment_or_default(Some(" storefront ")), "storefront");
         assert_eq!(route_segment_or_default(Some("   ")), DEFAULT_ROUTE_SEGMENT);
@@ -241,6 +609,16 @@ mod tests {
         );
 
         assert_eq!(view_model.href, "/modules/regions?region=eu");
+        assert_eq!(
+            view_model.query_key_attribute,
+            REGION_ROUTE_QUERY_KEY_DOM_ATTRIBUTE
+        );
+        assert_eq!(
+            view_model.query_value_attribute,
+            REGION_ROUTE_QUERY_VALUE_DOM_ATTRIBUTE
+        );
+        assert_eq!(view_model.query_key, SELECTED_REGION_QUERY_KEY);
+        assert_eq!(view_model.query_value.as_deref(), Some("eu"));
         assert_eq!(view_model.tax_mode_label, "tax included");
         assert_eq!(view_model.country_summary, "EUR | DE, FR");
         assert_eq!(view_model.tax_summary, "20 tax rate | tax provider default");
