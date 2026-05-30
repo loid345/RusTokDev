@@ -11,6 +11,7 @@ Leptos storefront UI package for the `rustok-region` module.
 - Exposes the typed region tax provider snapshot alongside currency and tax
   baseline data.
 - Uses native Leptos `#[server]` entry points in parallel with the existing GraphQL transport.
+- Keeps route/tax/country summary formatting and selected-region metric view-model helpers in `storefront/src/core.rs`, outside the Leptos render layer.
 - Ships package-owned `storefront/locales/en.json` and `storefront/locales/ru.json` bundles declared through `[provides.storefront_ui.i18n]`.
 
 ## Entry Points
