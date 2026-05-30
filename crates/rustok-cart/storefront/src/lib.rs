@@ -1,17 +1,30 @@
 mod api;
+mod core;
 mod i18n;
 mod model;
+mod transport;
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_ui_routing::read_route_query_value;
 use rustok_api::UiRouteContext;
 
+use crate::core::{
+    cart_adjustment_view_model, cart_delivery_group_view_model, cart_line_item_view_model,
+    cart_summary_view_model, error_with_context, CartDisplayFallbacks,
+};
 use crate::i18n::t;
 use crate::model::{
     StorefrontCart, StorefrontCartAdjustment, StorefrontCartData, StorefrontCartDeliveryGroup,
     StorefrontCartLineItem,
 };
+
+fn cart_display_fallbacks(locale: Option<&str>) -> CartDisplayFallbacks {
+    CartDisplayFallbacks::new(
+        t(locale, "cart.summary.empty", "not set"),
+        t(locale, "cart.summary.guest", "guest"),
+    )
+}
 
 #[component]
 pub fn CartView() -> impl IntoView {
@@ -52,7 +65,7 @@ pub fn CartView() -> impl IntoView {
                 refresh_nonce.get(),
             )
         },
-        move |(cart_id, locale, _)| async move { api::fetch_storefront_cart(cart_id, locale).await },
+        move |(cart_id, locale, _)| async move { transport::fetch_cart(cart_id, locale).await },
     );
 
     let on_decrement = {
@@ -63,11 +76,10 @@ pub fn CartView() -> impl IntoView {
                 set_mutation_busy.set(true);
                 set_mutation_error.set(None);
                 spawn_local(async move {
-                    match api::decrement_storefront_cart_line_item(cart_id, line_item_id, quantity)
-                        .await
-                    {
+                    match transport::decrement_line_item(cart_id, line_item_id, quantity).await {
                         Ok(()) => set_refresh_nonce.update(|value| *value += 1),
-                        Err(err) => set_mutation_error.set(Some(format!("{update_error}: {err}"))),
+                        Err(err) => set_mutation_error
+                            .set(Some(error_with_context(&update_error, &err.to_string()))),
                     }
                     set_mutation_busy.set(false);
                 });
@@ -82,9 +94,10 @@ pub fn CartView() -> impl IntoView {
             set_mutation_busy.set(true);
             set_mutation_error.set(None);
             spawn_local(async move {
-                match api::remove_storefront_cart_line_item(cart_id, line_item_id).await {
+                match transport::remove_line_item(cart_id, line_item_id).await {
                     Ok(()) => set_refresh_nonce.update(|value| *value += 1),
-                    Err(err) => set_mutation_error.set(Some(format!("{update_error}: {err}"))),
+                    Err(err) => set_mutation_error
+                        .set(Some(error_with_context(&update_error, &err.to_string()))),
                 }
                 set_mutation_busy.set(false);
             });
@@ -125,7 +138,7 @@ pub fn CartView() -> impl IntoView {
                                     />
                                 }
                                 .into_any(),
-                                Err(err) => view! { <div class="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{format!("{}: {err}", load_error)}</div> }.into_any(),
+                                Err(err) => view! { <div class="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{error_with_context(&load_error, &err.to_string())}</div> }.into_any(),
                             }
                         })
                     }}
@@ -192,24 +205,7 @@ fn CartWorkspace(
 #[component]
 fn CartSummaryCard(cart: StorefrontCart) -> impl IntoView {
     let locale = use_context::<UiRouteContext>().unwrap_or_default().locale;
-    let email = cart
-        .email
-        .unwrap_or_else(|| t(locale.as_deref(), "cart.summary.empty", "not set"));
-    let channel = cart
-        .channel_slug
-        .unwrap_or_else(|| t(locale.as_deref(), "cart.summary.empty", "not set"));
-    let customer = cart
-        .customer_id
-        .unwrap_or_else(|| t(locale.as_deref(), "cart.summary.guest", "guest"));
-    let region = cart
-        .region_id
-        .unwrap_or_else(|| t(locale.as_deref(), "cart.summary.empty", "not set"));
-    let country = cart
-        .country_code
-        .unwrap_or_else(|| t(locale.as_deref(), "cart.summary.empty", "not set"));
-    let locale_code = cart
-        .locale_code
-        .unwrap_or_else(|| t(locale.as_deref(), "cart.summary.empty", "not set"));
+    let view_model = cart_summary_view_model(&cart, &cart_display_fallbacks(locale.as_deref()));
 
     view! {
         <article class="rounded-3xl border border-border bg-background p-8">
@@ -217,23 +213,23 @@ fn CartSummaryCard(cart: StorefrontCart) -> impl IntoView {
                 <span class="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
                     {t(locale.as_deref(), "cart.summary.badge", "cart snapshot")}
                 </span>
-                <h3 class="text-2xl font-semibold text-card-foreground">{cart.id}</h3>
+                <h3 class="text-2xl font-semibold text-card-foreground">{view_model.id}</h3>
                 <p class="text-sm leading-7 text-muted-foreground">
                     {t(locale.as_deref(), "cart.summary.subtitle", "Cart state, identity, and locale/channel snapshot now come directly from the cart module.")}
                 </p>
             </div>
             <div class="mt-6 grid gap-3 md:grid-cols-2">
-                <MetricCard title=t(locale.as_deref(), "cart.summary.status", "Status") value=cart.status />
-                <MetricCard title=t(locale.as_deref(), "cart.summary.subtotal", "Subtotal") value=format!("{} {}", cart.currency_code, cart.subtotal_amount) />
-                <MetricCard title=t(locale.as_deref(), "cart.summary.adjustments", "Adjustments") value=format!("{} {}", cart.currency_code, cart.adjustment_total) />
-                <MetricCard title=t(locale.as_deref(), "cart.summary.shipping", "Shipping") value=format!("{} {}", cart.currency_code, cart.shipping_total) />
-                <MetricCard title=t(locale.as_deref(), "cart.summary.total", "Total") value=format!("{} {}", cart.currency_code, cart.total_amount) />
-                <MetricCard title=t(locale.as_deref(), "cart.summary.email", "Email") value=email />
-                <MetricCard title=t(locale.as_deref(), "cart.summary.channel", "Channel") value=channel />
-                <MetricCard title=t(locale.as_deref(), "cart.summary.customer", "Customer") value=customer />
-                <MetricCard title=t(locale.as_deref(), "cart.summary.region", "Region") value=region />
-                <MetricCard title=t(locale.as_deref(), "cart.summary.country", "Country") value=country />
-                <MetricCard title=t(locale.as_deref(), "cart.summary.locale", "Locale") value=locale_code />
+                <MetricCard title=t(locale.as_deref(), "cart.summary.status", "Status") value=view_model.status />
+                <MetricCard title=t(locale.as_deref(), "cart.summary.subtotal", "Subtotal") value=view_model.subtotal />
+                <MetricCard title=t(locale.as_deref(), "cart.summary.adjustments", "Adjustments") value=view_model.adjustments />
+                <MetricCard title=t(locale.as_deref(), "cart.summary.shipping", "Shipping") value=view_model.shipping />
+                <MetricCard title=t(locale.as_deref(), "cart.summary.total", "Total") value=view_model.total />
+                <MetricCard title=t(locale.as_deref(), "cart.summary.email", "Email") value=view_model.email />
+                <MetricCard title=t(locale.as_deref(), "cart.summary.channel", "Channel") value=view_model.channel />
+                <MetricCard title=t(locale.as_deref(), "cart.summary.customer", "Customer") value=view_model.customer />
+                <MetricCard title=t(locale.as_deref(), "cart.summary.region", "Region") value=view_model.region />
+                <MetricCard title=t(locale.as_deref(), "cart.summary.country", "Country") value=view_model.country />
+                <MetricCard title=t(locale.as_deref(), "cart.summary.locale", "Locale") value=view_model.locale />
             </div>
         </article>
     }
@@ -260,24 +256,24 @@ fn AdjustmentsCard(adjustments: Vec<StorefrontCartAdjustment>) -> impl IntoView 
                     <div class="mt-4 space-y-3">
                         {adjustments.into_iter().map(|adjustment| {
                             let locale = locale.clone();
-                            let source = adjustment.source_id.unwrap_or_else(|| t(locale.as_deref(), "cart.summary.empty", "not set"));
-                            let line_item = adjustment.line_item_id.unwrap_or_else(|| t(locale.as_deref(), "cart.summary.empty", "not set"));
-                            let scope = adjustment.scope.clone().unwrap_or_else(|| t(locale.as_deref(), "cart.summary.empty", "not set"));
-                            let metadata = adjustment.metadata.clone();
+                            let view_model = cart_adjustment_view_model(
+                                adjustment,
+                                &cart_display_fallbacks(locale.as_deref()),
+                            );
                             view! {
                                 <article class="rounded-2xl border border-border bg-card p-4">
-                                    <div class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{adjustment.source_type}</div>
+                                    <div class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{view_model.source_type}</div>
                                     <div class="mt-2 grid gap-2 md:grid-cols-4">
-                                        <MetricCard title=t(locale.as_deref(), "cart.adjustments.source", "Source") value=source />
-                                        <MetricCard title=t(locale.as_deref(), "cart.adjustments.scope", "Scope") value=scope />
-                                        <MetricCard title=t(locale.as_deref(), "cart.adjustments.lineItem", "Line item") value=line_item />
-                                        <MetricCard title=t(locale.as_deref(), "cart.adjustments.amount", "Amount") value=format!("{} {}", adjustment.currency_code, adjustment.amount) />
+                                        <MetricCard title=t(locale.as_deref(), "cart.adjustments.source", "Source") value=view_model.source />
+                                        <MetricCard title=t(locale.as_deref(), "cart.adjustments.scope", "Scope") value=view_model.scope />
+                                        <MetricCard title=t(locale.as_deref(), "cart.adjustments.lineItem", "Line item") value=view_model.line_item />
+                                        <MetricCard title=t(locale.as_deref(), "cart.adjustments.amount", "Amount") value=view_model.amount />
                                     </div>
                                     <div class="mt-3 rounded-2xl border border-border/60 bg-background/60 p-3">
                                         <div class="text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
                                             {t(locale.as_deref(), "cart.adjustments.metadata", "Metadata")}
                                         </div>
-                                        <pre class="mt-2 whitespace-pre-wrap break-all text-xs text-muted-foreground">{metadata}</pre>
+                                        <pre class="mt-2 whitespace-pre-wrap break-all text-xs text-muted-foreground">{view_model.metadata}</pre>
                                     </div>
                                 </article>
                             }
@@ -310,18 +306,21 @@ fn DeliveryGroupsCard(groups: Vec<StorefrontCartDeliveryGroup>) -> impl IntoView
                     <div class="mt-4 space-y-3">
                         {groups.into_iter().map(|group| {
                             let locale = locale.clone();
-                            let shipping_option = group.selected_shipping_option_id.unwrap_or_else(|| t(locale.as_deref(), "cart.summary.empty", "not set"));
-                            let seller_identity = group.seller_id.clone().or_else(|| group.seller_scope.clone());
+                            let view_model = cart_delivery_group_view_model(
+                                group,
+                                &cart_display_fallbacks(locale.as_deref()),
+                            );
+                            let seller_identity = view_model.seller_identity.clone();
                             view! {
                                 <article class="rounded-2xl border border-border bg-card p-4">
-                                    <div class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{group.shipping_profile_slug}</div>
+                                    <div class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{view_model.shipping_profile_slug}</div>
                                     {seller_identity.map(|seller_identity| view! {
                                         <div class="mt-2 text-xs text-muted-foreground break-all">{seller_identity}</div>
                                     })}
                                     <div class="mt-2 grid gap-2 md:grid-cols-3">
-                                        <MetricCard title=t(locale.as_deref(), "cart.groups.items", "Line items") value=group.line_item_count.to_string() />
-                                        <MetricCard title=t(locale.as_deref(), "cart.groups.selected", "Selected shipping option") value=shipping_option />
-                                        <MetricCard title=t(locale.as_deref(), "cart.groups.available", "Available shipping options") value=group.available_option_count.to_string() />
+                                        <MetricCard title=t(locale.as_deref(), "cart.groups.items", "Line items") value=view_model.line_item_count />
+                                        <MetricCard title=t(locale.as_deref(), "cart.groups.selected", "Selected shipping option") value=view_model.selected_shipping_option />
+                                        <MetricCard title=t(locale.as_deref(), "cart.groups.available", "Available shipping options") value=view_model.available_option_count />
                                     </div>
                                 </article>
                             }
@@ -366,40 +365,27 @@ fn LineItemsRail(
                     <div class="space-y-3">
                         {items.into_iter().map(|item| {
                             let locale = locale.clone();
-                            let StorefrontCartLineItem {
-                                id,
-                                title,
-                                sku,
-                                quantity,
-                                unit_price,
-                                total_price,
-                                currency_code,
-                                shipping_profile_slug,
-                                seller_id,
-                                seller_scope,
-                            } = item;
-                            let sku = sku.unwrap_or_else(|| t(locale.as_deref(), "cart.summary.empty", "not set"));
-                            let seller_identity = seller_id
-                                .or(seller_scope)
-                                .unwrap_or_else(|| t(locale.as_deref(), "cart.summary.empty", "not set"));
+                            let view_model = cart_line_item_view_model(
+                                item,
+                                &cart_display_fallbacks(locale.as_deref()),
+                            );
                             let decrement_cart_id = cart_id.clone();
-                            let decrement_line_item_id = id.clone();
-                            let decrement_quantity = quantity;
+                            let decrement_line_item_id = view_model.id.clone();
+                            let decrement_quantity = view_model.quantity;
                             let remove_cart_id = cart_id.clone();
-                            let remove_line_item_id = id;
+                            let remove_line_item_id = view_model.id.clone();
                             let decrement_label_locale = locale.clone();
                             let remove_label_locale = locale.clone();
                             let decrement_busy_label = busy_label.clone();
                             let remove_busy_label = busy_label.clone();
-                            let unit_price_value = format!("{} {}", currency_code.clone(), unit_price);
-                            let total_price_value = format!("{} {}", currency_code, total_price);
+
                             view! {
                                 <article class="rounded-2xl border border-border bg-background p-5">
                                     <div class="flex flex-wrap items-start justify-between gap-3">
                                         <div>
-                                            <div class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{shipping_profile_slug}</div>
-                                            <h4 class="mt-2 text-base font-semibold text-card-foreground">{title}</h4>
-                                            <div class="mt-1 text-xs text-muted-foreground break-all">{seller_identity}</div>
+                                            <div class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{view_model.shipping_profile_slug}</div>
+                                            <h4 class="mt-2 text-base font-semibold text-card-foreground">{view_model.title}</h4>
+                                            <div class="mt-1 text-xs text-muted-foreground break-all">{view_model.seller_identity}</div>
                                         </div>
                                         <div class="flex flex-wrap gap-2">
                                             <button
@@ -432,10 +418,10 @@ fn LineItemsRail(
                                         </div>
                                     </div>
                                     <div class="mt-4 grid gap-3 md:grid-cols-2">
-                                        <MetricCard title=t(locale.as_deref(), "cart.items.sku", "SKU") value=sku />
-                                        <MetricCard title=t(locale.as_deref(), "cart.items.quantity", "Quantity") value=quantity.to_string() />
-                                        <MetricCard title=t(locale.as_deref(), "cart.items.unitPrice", "Unit price") value=unit_price_value />
-                                        <MetricCard title=t(locale.as_deref(), "cart.items.totalPrice", "Total price") value=total_price_value />
+                                        <MetricCard title=t(locale.as_deref(), "cart.items.sku", "SKU") value=view_model.sku />
+                                        <MetricCard title=t(locale.as_deref(), "cart.items.quantity", "Quantity") value=view_model.quantity_label />
+                                        <MetricCard title=t(locale.as_deref(), "cart.items.unitPrice", "Unit price") value=view_model.unit_price />
+                                        <MetricCard title=t(locale.as_deref(), "cart.items.totalPrice", "Total price") value=view_model.total_price />
                                     </div>
                                 </article>
                             }
