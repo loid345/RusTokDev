@@ -157,9 +157,6 @@ fn SelectedRegionCard(region: Option<StorefrontRegion>) -> impl IntoView {
         }.into_any();
     };
 
-    let country_tax_policies = region.country_tax_policies.clone();
-    let country_tax_policies_for_show = country_tax_policies.clone();
-    let country_tax_policies_for_list = country_tax_policies.clone();
     let tax_included_label = t(
         locale.as_deref(),
         "region.common.taxIncluded",
@@ -170,17 +167,16 @@ fn SelectedRegionCard(region: Option<StorefrontRegion>) -> impl IntoView {
         "region.common.taxExcluded",
         "tax excluded",
     );
-    let tax_mode_label = core::tax_mode_label(
-        region.tax_included,
+    let view_model = core::selected_region_card_view_model(
+        &region,
         tax_included_label.as_str(),
         tax_excluded_label.as_str(),
-    );
-    let countries_count_label = core::country_count_label(
-        region.countries.len(),
         &t(locale.as_deref(), "region.common.countries", "countries"),
-    );
-    let metrics = core::selected_region_metrics(
-        &region,
+        &t(
+            locale.as_deref(),
+            "region.selected.noCountries",
+            "No countries configured",
+        ),
         t(locale.as_deref(), "region.selected.currency", "Currency"),
         t(locale.as_deref(), "region.selected.taxRate", "Tax rate"),
         t(
@@ -195,47 +191,37 @@ fn SelectedRegionCard(region: Option<StorefrontRegion>) -> impl IntoView {
             "Country policies",
         ),
     );
-    let countries_summary = core::countries_summary(
-        &region.countries,
-        &t(
-            locale.as_deref(),
-            "region.selected.noCountries",
-            "No countries configured",
-        ),
-    );
+    let country_policy_summaries = view_model.country_policy_summaries.clone();
+    let has_country_policy_summaries = !country_policy_summaries.is_empty();
 
     view! {
         <article class="rounded-3xl border border-border bg-background p-8">
             <div class="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                <span>{region.currency_code.clone()}</span>
+                <span>{view_model.currency_code.clone()}</span>
                 <span>"|"</span>
-                <span>{tax_mode_label}</span>
+                <span>{view_model.tax_mode_label.clone()}</span>
                 <span>"|"</span>
-                <span>{countries_count_label}</span>
+                <span>{view_model.countries_count_label.clone()}</span>
             </div>
-            <h3 class="mt-4 text-3xl font-semibold text-foreground">{region.name.clone()}</h3>
+            <h3 class="mt-4 text-3xl font-semibold text-foreground">{view_model.name.clone()}</h3>
             <p class="mt-4 text-sm leading-7 text-muted-foreground">
                 {t(locale.as_deref(), "region.selected.body", "This region defines the storefront baseline for supported countries, currency, and tax semantics.")}
             </p>
             <div class="mt-6 grid gap-3 md:grid-cols-3">
-                {metrics.into_iter().map(|metric| view! {
+                {view_model.metrics.clone().into_iter().map(|metric| view! {
                     <MetricCard title=metric.title value=metric.value />
                 }).collect_view()}
             </div>
             <div class="mt-6 rounded-2xl border border-border bg-card p-5">
                 <h4 class="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">{t(locale.as_deref(), "region.selected.countries", "Supported countries")}</h4>
-                <p class="mt-3 text-sm text-muted-foreground">{countries_summary}</p>
+                <p class="mt-3 text-sm text-muted-foreground">{view_model.countries_summary.clone()}</p>
             </div>
-            <Show when=move || !country_tax_policies_for_show.is_empty()>
+            <Show when=move || has_country_policy_summaries>
                 <div class="mt-6 rounded-2xl border border-border bg-card p-5">
                     <h4 class="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">{t(locale.as_deref(), "region.selected.countryPolicies", "Country-specific tax policies")}</h4>
                     <div class="mt-3 space-y-2 text-sm text-muted-foreground">
-                        {country_tax_policies_for_list.iter().map(|policy| view! {
-                            <p>{core::country_policy_summary(
-                                policy,
-                                tax_included_label.as_str(),
-                                tax_excluded_label.as_str(),
-                            )}</p>
+                        {country_policy_summaries.iter().map(|summary| view! {
+                            <p>{summary.clone()}</p>
                         }).collect_view()}
                     </div>
                 </div>
@@ -250,51 +236,80 @@ fn RegionRail(items: Vec<StorefrontRegion>, total: usize) -> impl IntoView {
     let locale = route_context.locale.clone();
     let route_state = core::region_route_state(route_context.route_segment.as_deref(), None);
     let module_route_base = route_context.module_route_base(route_state.route_segment.as_str());
+    let view_model = core::region_rail_view_model(
+        module_route_base.as_str(),
+        &items,
+        total,
+        core::RegionRailLabels {
+            title: t(locale.as_deref(), "region.list.title", "Available regions"),
+            total_template: t(locale.as_deref(), "region.list.total", "{count} total"),
+            empty_message: t(
+                locale.as_deref(),
+                "region.list.empty",
+                "No regions are available for storefront discovery yet.",
+            ),
+            open_label: t(locale.as_deref(), "region.list.open", "Open"),
+            tax_included_label: t(
+                locale.as_deref(),
+                "region.common.taxIncluded",
+                "tax included",
+            ),
+            tax_excluded_label: t(
+                locale.as_deref(),
+                "region.common.taxExcluded",
+                "tax excluded",
+            ),
+            empty_countries_label: t(
+                locale.as_deref(),
+                "region.common.noCountries",
+                "no countries",
+            ),
+            tax_rate_label: t(locale.as_deref(), "region.common.taxRate", "tax rate"),
+            tax_provider_label: t(
+                locale.as_deref(),
+                "region.common.taxProvider",
+                "tax provider",
+            ),
+        },
+    );
 
-    if items.is_empty() {
-        return view! { <article class="rounded-3xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">{t(locale.as_deref(), "region.list.empty", "No regions are available for storefront discovery yet.")}</article> }.into_any();
+    if view_model.items.is_empty() {
+        return view! { <article class="rounded-3xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">{view_model.empty_message}</article> }.into_any();
     }
+
+    let open_label = view_model.open_label.clone();
 
     view! {
         <div class="space-y-4">
             <div class="flex items-center justify-between gap-3">
-                <h3 class="text-lg font-semibold text-card-foreground">{t(locale.as_deref(), "region.list.title", "Available regions")}</h3>
+                <h3 class="text-lg font-semibold text-card-foreground">{view_model.title.clone()}</h3>
                 <span class="text-sm text-muted-foreground">
-                    {core::count_label(&t(locale.as_deref(), "region.list.total", "{count} total"), total)}
+                    {view_model.total_label.clone()}
                 </span>
             </div>
             <div class="space-y-3">
-                {items.into_iter().map(|region| {
-                    let locale = locale.clone();
-                    let view_model = core::rail_item_view_model(
-                        module_route_base.as_str(),
-                        &region,
-                        &t(locale.as_deref(), "region.common.taxIncluded", "tax included"),
-                        &t(locale.as_deref(), "region.common.taxExcluded", "tax excluded"),
-                        &t(locale.as_deref(), "region.common.noCountries", "no countries"),
-                        &t(locale.as_deref(), "region.common.taxRate", "tax rate"),
-                        &t(locale.as_deref(), "region.common.taxProvider", "tax provider"),
-                    );
+                {view_model.items.into_iter().map(|item| {
+                    let open_label = open_label.clone();
                     view! {
                         <article class="rounded-2xl border border-border bg-background p-5">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="space-y-2">
                                     <div class="flex flex-wrap items-center gap-2">
-                                        <h4 class="text-base font-semibold text-card-foreground">{region.name.clone()}</h4>
+                                        <h4 class="text-base font-semibold text-card-foreground">{item.name.clone()}</h4>
                                         <span class="inline-flex rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-                                            {view_model.tax_mode_label.clone()}
+                                            {item.tax_mode_label.clone()}
                                         </span>
                                     </div>
-                                    <p class="text-sm text-muted-foreground">{view_model.country_summary.clone()}</p>
-                                    <p class="text-xs text-muted-foreground">{view_model.tax_summary.clone()}</p>
+                                    <p class="text-sm text-muted-foreground">{item.country_summary.clone()}</p>
+                                    <p class="text-xs text-muted-foreground">{item.tax_summary.clone()}</p>
                                 </div>
                                 <a
                                     class="inline-flex text-sm font-medium text-primary hover:underline"
-                                    href=view_model.href
-                                    data-region-route-query-key=view_model.query_key
-                                    data-region-route-query-value=view_model.query_value.clone().unwrap_or_default()
+                                    href=item.href
+                                    data-region-route-query-key=item.query_key
+                                    data-region-route-query-value=item.query_value.clone().unwrap_or_default()
                                 >
-                                    {t(locale.as_deref(), "region.list.open", "Open")}
+                                    {open_label}
                                 </a>
                             </div>
                         </article>

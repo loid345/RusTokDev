@@ -6,8 +6,8 @@
 
 ## Execution checkpoint
 
-- Current phase: ffa_storefront_route_query_ssr_smoke_slice
-- Last checkpoint: FFA slice #13 добавила SSR smoke-тест rail adapter: `RegionRail` рендерится без host runtime и проверяет href плюс `data-region-route-query-key` / `data-region-route-query-value`, построенные из core route/query contract.
+- Current phase: ffa_storefront_rail_view_model_slice
+- Last checkpoint: FFA slice #15 вынесла render-ready rail list state в framework-agnostic `RegionRailViewModel`: title/total/empty/open labels и rail item rows собираются в core, а Leptos rail adapter только рендерит модель и DOM route/query evidence.
 - Next step: Продолжить FFA-first sequencing к thin host-adapter smoke для route/query writer или вынести следующий storefront render fragment из Leptos-only слоя в core view-model.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок; при изменении status code/locale key/DOM evidence сначала обновлять verify script и его test fixture.
@@ -33,7 +33,9 @@
   - FFA slice #10 добавила `RegionErrorDomEvidence` как переносимый output для DOM status attributes и SSR smoke-тест Leptos error adapter, который подтверждает rendered attributes;
   - FFA slice #11 добавила core-owned route/query state contract (`RegionRouteState`, `RegionRouteSelectionUpdate`, `SELECTED_REGION_QUERY_KEY`) для selected-region navigation без Leptos-owned query policy;
   - FFA slice #12 добавила host-visible route/query DOM evidence на rail links и verifier guard для route/query core contract + README evidence;
-  - FFA slice #13 добавила SSR smoke-тест Leptos rail adapter, который подтверждает rendered href и route/query DOM evidence без полноценного host runtime.
+  - FFA slice #13 добавила SSR smoke-тест Leptos rail adapter, который подтверждает rendered href и route/query DOM evidence без полноценного host runtime;
+  - FFA slice #14 добавила `SelectedRegionCardViewModel`, чтобы selected-region card presentation data собирались вне Leptos render слоя;
+  - FFA slice #15 добавила `RegionRailViewModel` / `RegionRailLabels`, чтобы rail list title, total, empty state, open label и item rows собирались вне Leptos render слоя.
 - Last verified at (UTC): 2026-05-30T07:00:00Z
 - Owner: `rustok-region` module team
 
@@ -113,3 +115,5 @@
 - [x] Slice 11: `RegionRouteState` / `RegionRouteSelectionUpdate` и `SELECTED_REGION_QUERY_KEY` фиксируют переносимый route/query contract для selected-region navigation; Leptos adapter читает query key из core, нормализует selected id через core и строит rail href через core `selected_region_query_update`; проверка: `cargo test -p rustok-region-storefront --lib region_route_state_normalizes_host_route_query_contract`.
 - [x] Slice 12: `RegionRailItemViewModel` включает `query_key` / `query_value`, Leptos rail links публикуют `data-region-route-query-key` / `data-region-route-query-value`, а `verify-ffa-ui-migration-contract.mjs` проверяет route/query contract и README evidence; проверка: `npm run verify:ffa:ui:migration`.
 - [x] Slice 13: SSR smoke-тест `region_rail_ssr_exposes_route_query_dom_evidence` рендерит Leptos rail adapter и проверяет href + `data-region-route-query-key` / `data-region-route-query-value`; проверка: `cargo test -p rustok-region-storefront --lib --features ssr region_rail_ssr_exposes_route_query_dom_evidence`.
+- [x] Slice 14: `SelectedRegionCardViewModel` переносит selected-region header labels, metric list, countries summary и country policy row strings в core; Leptos selected card потребляет готовую модель; проверка: `cargo test -p rustok-region-storefront --lib selected_region_card_view_model_collects_render_ready_sections`.
+- [x] Slice 15: `RegionRailViewModel` / `RegionRailLabels` переносит rail title, total label, empty state, open label и item rows в core; Leptos rail adapter рендерит готовую модель и сохраняет route/query DOM evidence; проверка: `cargo test -p rustok-region-storefront --lib region_rail_view_model_collects_render_ready_list_state`.
