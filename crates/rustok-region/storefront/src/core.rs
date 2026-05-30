@@ -191,7 +191,21 @@ pub struct SelectedRegionCardViewModel {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionRailLabels {
+    pub title: String,
+    pub total_template: String,
+    pub empty_message: String,
+    pub open_label: String,
+    pub tax_included_label: String,
+    pub tax_excluded_label: String,
+    pub empty_countries_label: String,
+    pub tax_rate_label: String,
+    pub tax_provider_label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegionRailItemViewModel {
+    pub name: String,
     pub href: String,
     pub query_key_attribute: &'static str,
     pub query_value_attribute: &'static str,
@@ -201,6 +215,15 @@ pub struct RegionRailItemViewModel {
     pub country_summary: String,
     pub tax_summary: String,
     pub tax_provider_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionRailViewModel {
+    pub title: String,
+    pub total_label: String,
+    pub empty_message: String,
+    pub open_label: String,
+    pub items: Vec<RegionRailItemViewModel>,
 }
 
 pub fn normalize_selected_region_id(selected_region_id: Option<String>) -> Option<String> {
@@ -415,6 +438,7 @@ pub fn rail_item_view_model(
     let query_value = selection_update.clone().update.into_query_value();
 
     RegionRailItemViewModel {
+        name: region.name.clone(),
         href: region_href(module_route_base, &region.id),
         query_key_attribute: REGION_ROUTE_QUERY_KEY_DOM_ATTRIBUTE,
         query_value_attribute: REGION_ROUTE_QUERY_VALUE_DOM_ATTRIBUTE,
@@ -424,6 +448,36 @@ pub fn rail_item_view_model(
         country_summary: rail_country_summary(region, empty_countries_label),
         tax_summary: rail_tax_summary(region, tax_rate_label, tax_provider_label),
         tax_provider_id: tax_provider_id_or_default(region.tax_provider_id.as_deref()),
+    }
+}
+
+pub fn region_rail_view_model(
+    module_route_base: &str,
+    regions: &[StorefrontRegion],
+    total: usize,
+    labels: RegionRailLabels,
+) -> RegionRailViewModel {
+    let items = regions
+        .iter()
+        .map(|region| {
+            rail_item_view_model(
+                module_route_base,
+                region,
+                labels.tax_included_label.as_str(),
+                labels.tax_excluded_label.as_str(),
+                labels.empty_countries_label.as_str(),
+                labels.tax_rate_label.as_str(),
+                labels.tax_provider_label.as_str(),
+            )
+        })
+        .collect();
+
+    RegionRailViewModel {
+        title: labels.title,
+        total_label: count_label(&labels.total_template, total),
+        empty_message: labels.empty_message,
+        open_label: labels.open_label,
+        items,
     }
 }
 
@@ -653,6 +707,7 @@ mod tests {
             "tax provider",
         );
 
+        assert_eq!(view_model.name, "Europe");
         assert_eq!(view_model.href, "/modules/regions?region=eu");
         assert_eq!(
             view_model.query_key_attribute,
@@ -668,6 +723,36 @@ mod tests {
         assert_eq!(view_model.country_summary, "EUR | DE, FR");
         assert_eq!(view_model.tax_summary, "20 tax rate | tax provider default");
         assert_eq!(view_model.tax_provider_id, "default");
+    }
+
+    #[test]
+    fn region_rail_view_model_collects_render_ready_list_state() {
+        let regions = vec![sample_region()];
+        let view_model = region_rail_view_model(
+            "/modules/regions",
+            &regions,
+            1,
+            RegionRailLabels {
+                title: "Available regions".to_string(),
+                total_template: "{count} total".to_string(),
+                empty_message: "No regions".to_string(),
+                open_label: "Open".to_string(),
+                tax_included_label: "tax included".to_string(),
+                tax_excluded_label: "tax excluded".to_string(),
+                empty_countries_label: "none".to_string(),
+                tax_rate_label: "tax rate".to_string(),
+                tax_provider_label: "tax provider".to_string(),
+            },
+        );
+
+        assert_eq!(view_model.title, "Available regions");
+        assert_eq!(view_model.total_label, "1 total");
+        assert_eq!(view_model.empty_message, "No regions");
+        assert_eq!(view_model.open_label, "Open");
+        assert_eq!(view_model.items.len(), 1);
+        assert_eq!(view_model.items[0].name, "Europe");
+        assert_eq!(view_model.items[0].href, "/modules/regions?region=eu");
+        assert_eq!(view_model.items[0].country_summary, "EUR | DE, FR");
     }
 
     #[test]

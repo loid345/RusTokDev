@@ -236,51 +236,80 @@ fn RegionRail(items: Vec<StorefrontRegion>, total: usize) -> impl IntoView {
     let locale = route_context.locale.clone();
     let route_state = core::region_route_state(route_context.route_segment.as_deref(), None);
     let module_route_base = route_context.module_route_base(route_state.route_segment.as_str());
+    let view_model = core::region_rail_view_model(
+        module_route_base.as_str(),
+        &items,
+        total,
+        core::RegionRailLabels {
+            title: t(locale.as_deref(), "region.list.title", "Available regions"),
+            total_template: t(locale.as_deref(), "region.list.total", "{count} total"),
+            empty_message: t(
+                locale.as_deref(),
+                "region.list.empty",
+                "No regions are available for storefront discovery yet.",
+            ),
+            open_label: t(locale.as_deref(), "region.list.open", "Open"),
+            tax_included_label: t(
+                locale.as_deref(),
+                "region.common.taxIncluded",
+                "tax included",
+            ),
+            tax_excluded_label: t(
+                locale.as_deref(),
+                "region.common.taxExcluded",
+                "tax excluded",
+            ),
+            empty_countries_label: t(
+                locale.as_deref(),
+                "region.common.noCountries",
+                "no countries",
+            ),
+            tax_rate_label: t(locale.as_deref(), "region.common.taxRate", "tax rate"),
+            tax_provider_label: t(
+                locale.as_deref(),
+                "region.common.taxProvider",
+                "tax provider",
+            ),
+        },
+    );
 
-    if items.is_empty() {
-        return view! { <article class="rounded-3xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">{t(locale.as_deref(), "region.list.empty", "No regions are available for storefront discovery yet.")}</article> }.into_any();
+    if view_model.items.is_empty() {
+        return view! { <article class="rounded-3xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">{view_model.empty_message}</article> }.into_any();
     }
+
+    let open_label = view_model.open_label.clone();
 
     view! {
         <div class="space-y-4">
             <div class="flex items-center justify-between gap-3">
-                <h3 class="text-lg font-semibold text-card-foreground">{t(locale.as_deref(), "region.list.title", "Available regions")}</h3>
+                <h3 class="text-lg font-semibold text-card-foreground">{view_model.title.clone()}</h3>
                 <span class="text-sm text-muted-foreground">
-                    {core::count_label(&t(locale.as_deref(), "region.list.total", "{count} total"), total)}
+                    {view_model.total_label.clone()}
                 </span>
             </div>
             <div class="space-y-3">
-                {items.into_iter().map(|region| {
-                    let locale = locale.clone();
-                    let view_model = core::rail_item_view_model(
-                        module_route_base.as_str(),
-                        &region,
-                        &t(locale.as_deref(), "region.common.taxIncluded", "tax included"),
-                        &t(locale.as_deref(), "region.common.taxExcluded", "tax excluded"),
-                        &t(locale.as_deref(), "region.common.noCountries", "no countries"),
-                        &t(locale.as_deref(), "region.common.taxRate", "tax rate"),
-                        &t(locale.as_deref(), "region.common.taxProvider", "tax provider"),
-                    );
+                {view_model.items.into_iter().map(|item| {
+                    let open_label = open_label.clone();
                     view! {
                         <article class="rounded-2xl border border-border bg-background p-5">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="space-y-2">
                                     <div class="flex flex-wrap items-center gap-2">
-                                        <h4 class="text-base font-semibold text-card-foreground">{region.name.clone()}</h4>
+                                        <h4 class="text-base font-semibold text-card-foreground">{item.name.clone()}</h4>
                                         <span class="inline-flex rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-                                            {view_model.tax_mode_label.clone()}
+                                            {item.tax_mode_label.clone()}
                                         </span>
                                     </div>
-                                    <p class="text-sm text-muted-foreground">{view_model.country_summary.clone()}</p>
-                                    <p class="text-xs text-muted-foreground">{view_model.tax_summary.clone()}</p>
+                                    <p class="text-sm text-muted-foreground">{item.country_summary.clone()}</p>
+                                    <p class="text-xs text-muted-foreground">{item.tax_summary.clone()}</p>
                                 </div>
                                 <a
                                     class="inline-flex text-sm font-medium text-primary hover:underline"
-                                    href=view_model.href
-                                    data-region-route-query-key=view_model.query_key
-                                    data-region-route-query-value=view_model.query_value.clone().unwrap_or_default()
+                                    href=item.href
+                                    data-region-route-query-key=item.query_key
+                                    data-region-route-query-value=item.query_value.clone().unwrap_or_default()
                                 >
-                                    {t(locale.as_deref(), "region.list.open", "Open")}
+                                    {open_label}
                                 </a>
                             </div>
                         </article>
