@@ -277,7 +277,7 @@ fn apply_build_progress_to_job(job: &mut BuildJob, event: &api::BuildProgressEve
 fn recovery_plan_action_label(plan: &ModuleOperationRecoveryPlan) -> &'static str {
     match plan.recommended_action.as_str() {
         "retry_post_hook" => "Retry post-hook",
-        "compensate" => "Compensate",
+        "compensating_toggle" | "compensate" => "Compensate",
         _ if plan.retryable => "Retry available",
         _ => "Manual review",
     }
@@ -1425,6 +1425,7 @@ pub fn ModulesList(
                             let status_label = humanize_label(&plan.status);
                             let action_label = recovery_plan_action_label(&plan);
                             let retryable = plan.retryable;
+                            let compensatable = plan.issue == "post_hook_failed";
                             let correlation_id = plan.correlation_id.clone();
                             let correlation_id_for_badge = correlation_id.clone();
                             view! {
@@ -1453,7 +1454,7 @@ pub fn ModulesList(
                                             <button
                                                 type="button"
                                                 class="inline-flex items-center justify-center rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
-                                                disabled=move || recovery_action_operation_id.get().as_deref() == Some(operation_id.get_value().as_str())
+                                                disabled=move || recovery_action_operation_id.get().as_deref() == Some(operation_id.get_value().as_str()) || !compensatable
                                                 on:click=move |_| on_compensate_recovery.run(operation_id_for_compensate.get_value())
                                             >
                                                 "Compensate"

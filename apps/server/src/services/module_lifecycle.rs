@@ -487,6 +487,24 @@ impl ModuleLifecycleService {
             .ok_or(ModuleOperationRecoveryError::OperationNotFound)?;
         let plan = ModuleOperationRecoveryPlan::from_operation(&failed_operation);
 
+        if plan.issue != ModuleOperationIssue::PostHookFailed {
+            return Err(ModuleOperationRecoveryError::NotRetryable(
+                plan.issue.as_str().to_string(),
+            ));
+        }
+
+        let enabled_set =
+            EffectiveModulePolicyService::resolve_enabled(db, registry, plan.tenant_id)
+                .await
+                .map_err(|error| ModuleOperationRecoveryError::Policy(error.to_string()))?;
+        let current_enabled = enabled_set.contains(plan.module_slug.as_str());
+        if current_enabled != plan.requested_enabled {
+            return Err(ModuleOperationRecoveryError::StateMismatch {
+                requested_enabled: plan.requested_enabled,
+                current_enabled,
+            });
+        }
+
         Self::toggle_module_with_actor(
             db,
             registry,

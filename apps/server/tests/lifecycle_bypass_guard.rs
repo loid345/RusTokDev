@@ -453,6 +453,18 @@ fn lifecycle_operation_status_model_is_exposed_through_recovery_surface() {
         );
     }
 
+    for service_fragment in [
+        "if plan.issue != ModuleOperationIssue::PostHookFailed",
+        "ModuleOperationRecoveryError::NotRetryable",
+        "current_enabled != plan.requested_enabled",
+        "plan.previous_effective_enabled",
+    ] {
+        assert!(
+            service.contains(service_fragment),
+            "compensation must be limited to failed committed post-hook operations and restore previous state via `{service_fragment}`"
+        );
+    }
+
     for admin_fragment in [
         "status issue retryable recommendedAction correlationId requestedBy errorMessage",
         "retryFailedModuleOperationPostHook(operationId: $operationId)",

@@ -1136,6 +1136,8 @@ fn module_recovery_helpers_use_canonical_graphql_surface() {
         "Lifecycle recovery",
         "Recovery retry processed",
         "Compensation applied",
+        "let compensatable = plan.issue == \"post_hook_failed\";",
+        "|| !compensatable",
     ] {
         assert!(
             modules_list.contains(required_ui_fragment),

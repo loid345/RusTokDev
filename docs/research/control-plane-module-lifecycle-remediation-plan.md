@@ -970,3 +970,9 @@ rollback-стратегии и Definition of Done по итерациям.
 - Сделан ещё один bounded прогон `timeout 600s cargo test -p rustok-server module_lifecycle` именно как error-discovery pass после исправления admin callback ownership.
 - Новых compile/test ошибок в этом окне не выявлено: команда снова завершилась `124` на cold compile phase до сборки `rustok-server`/запуска `module_lifecycle` тестов, поэтому исправлять по результату нечего.
 - Чекбоксы minimal verification остаются открытыми: следующий безопасный шаг — не продолжать локально длинную компиляцию без лимита, а закрывать план только после завершённого CI/long-window прогона `scripts/verify/run-control-plane-remediation-minimal.sh` и зелёного `--fail-on-open`.
+
+### Актуализация 2026-05-30 (итерация 85)
+
+- Проведён ручной source-level review всех закрытых пунктов плана на предмет пропущенных архитектурных хвостов: progress-report подтверждает только `open=2` по финальному minimal verification bundle, а остальные чекбоксы имеют source/guard evidence.
+- Найден и закрыт важный recovery safety gap: compensating operation теперь server-side разрешена только для `post_hook_failed` операций, когда текущий effective state всё ещё совпадает с committed requested state; это предотвращает случайную компенсацию pre-hook/non-failed/stale operations по одному `operation_id`.
+- Admin Lifecycle Recovery UI синхронизирован с contract: кнопка `Compensate` доступна только для `post_hook_failed`, а guard-тесты фиксируют server-side compensation gate и UI gating как non-regression. Длинный execution gate по-прежнему остаётся за CI/long-window прогоном.
