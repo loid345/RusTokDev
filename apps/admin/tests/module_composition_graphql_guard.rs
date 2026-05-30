@@ -1246,6 +1246,124 @@ fn extract_function_block_returns_none_when_body_brace_missing() {
 }
 
 #[test]
+fn manifest_hash_ref_revision_contract_is_shared_across_surfaces() {
+    let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let repo_root = crate_root
+        .parent()
+        .and_then(Path::parent)
+        .expect("workspace root");
+    let admin_api_path = crate_root.join("src/features/modules/api.rs");
+    let admin_api = fs::read_to_string(&admin_api_path).expect("read admin api.rs");
+    let server_composition_path =
+        repo_root.join("apps/server/src/services/platform_composition.rs");
+    let server_composition =
+        fs::read_to_string(&server_composition_path).expect("read server platform_composition.rs");
+    let server_mutations_path = repo_root.join("apps/server/src/graphql/mutations.rs");
+    let server_mutations =
+        fs::read_to_string(&server_mutations_path).expect("read server graphql mutations.rs");
+    let server_build_tests_path =
+        repo_root.join("apps/server/tests/platform_composition_build_service.rs");
+    let server_build_tests = fs::read_to_string(&server_build_tests_path)
+        .expect("read server platform composition build tests");
+    let shared_api_path = crate_root.join("src/shared/api/mod.rs");
+    let shared_api = fs::read_to_string(&shared_api_path).expect("read shared api.rs");
+
+    let admin_hash_helper = extract_function_block(
+        &admin_api,
+        "fn runtime_manifest_hash(manifest: &RuntimeModulesManifest) -> String",
+    )
+    .expect("runtime_manifest_hash helper should exist");
+    assert!(
+        admin_hash_helper.contains("rustok_api::manifest_hash::hash_manifest(manifest)"),
+        "admin SSR runtime manifest hashing must use the shared typed hash helper"
+    );
+
+    let server_hash_helper = extract_function_block(
+        &server_composition,
+        "pub fn manifest_hash(manifest: &ModulesManifest) -> String",
+    )
+    .expect("server manifest_hash helper should exist");
+    assert!(
+        server_hash_helper.contains("hash_manifest(manifest)"),
+        "server composition hashing must use the shared typed hash helper"
+    );
+
+    for mutation_decl in [
+        "pub const INSTALL_MODULE_MUTATION: &str = \"",
+        "pub const UNINSTALL_MODULE_MUTATION: &str = \"",
+        "pub const UPGRADE_MODULE_MUTATION: &str = \"",
+    ] {
+        let mutation = extract_const_string_literal(&admin_api, mutation_decl)
+            .unwrap_or_else(|| panic!("mutation declaration not found: {mutation_decl}"));
+        for required in ["manifestRef", "manifestHash", "manifestRevision"] {
+            assert!(
+                mutation.contains(required),
+                "GraphQL mutation `{mutation_decl}` must request build manifest field `{required}`"
+            );
+        }
+    }
+
+    for helper in [
+        (
+            "pub async fn install_module(",
+            "Ok(response.install_module)",
+        ),
+        (
+            "pub async fn uninstall_module(",
+            "Ok(response.uninstall_module)",
+        ),
+        (
+            "pub async fn upgrade_module(",
+            "Ok(response.upgrade_module)",
+        ),
+    ] {
+        let helper_body = extract_function_block(&admin_api, helper.0)
+            .unwrap_or_else(|| panic!("helper signature not found: {}", helper.0));
+        assert!(
+            helper_body.contains(helper.1),
+            "{} must return canonical GraphQL build payload directly",
+            helper.0
+        );
+        assert!(
+            !helper_body.contains("manifest_ref")
+                && !helper_body.contains("platform_state:")
+                && !helper_body.contains("manifest_revision"),
+            "{} must not locally parse manifest ref/revision contract",
+            helper.0
+        );
+    }
+
+    for server_fragment in [
+        "persist_manifest_and_request_build(",
+        "format!(\"platform_state:{}\", result.snapshot.revision)",
+        "assert_eq!(result.build.manifest_revision, result.snapshot.revision)",
+        "successful_enqueue_keeps_hash_parity_between_snapshot_and_build",
+        "successful_enqueue_keeps_manifest_snapshot_parity_with_hash",
+        "same_manifest_keeps_hash_and_snapshot_stable_across_revisions",
+    ] {
+        let haystack = if server_fragment == "persist_manifest_and_request_build(" {
+            server_mutations.as_str()
+        } else {
+            server_build_tests.as_str()
+        };
+        assert!(
+            haystack.contains(server_fragment),
+            "server composition surface must preserve manifest parity fragment `{server_fragment}`"
+        );
+    }
+
+    for adapter_test in [
+        "composition_runtime_taxonomy_matrix_is_forwarded_without_remapping",
+        "composition_manifest_fragments_are_forwarded_without_local_parsing",
+    ] {
+        assert!(
+            shared_api.contains(adapter_test),
+            "Leptos SSR adapter parity test `{adapter_test}` must remain present"
+        );
+    }
+}
+
+#[test]
 fn runtime_manifest_hash_uses_shared_typed_hash_helper() {
     let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let api_path = crate_root.join("src/features/modules/api.rs");
