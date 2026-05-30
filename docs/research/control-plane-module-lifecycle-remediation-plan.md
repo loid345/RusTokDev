@@ -568,7 +568,7 @@ rollback-стратегии и Definition of Done по итерациям.
 - [x] Новый сервисный слой (или расширение существующего) с public методом вида
       `apply_manifest_and_enqueue_build(expected_revision, actor, reason, source)`.
 - [x] Удалены/ограничены raw SQL path-ы, которые отдельно пишут `platform_state` и `builds`.
-- [ ] Единая error taxonomy для GraphQL и Leptos SSR (conflict/validation/internal).
+- [x] Единая error taxonomy для GraphQL и Leptos SSR (conflict/validation/internal): canonical codes закреплены как `BAD_USER_INPUT` для validation/conflict user-paths, `MODULE_HOOK_FAILED` для lifecycle hook failures и `INTERNAL_ERROR` для internal paths; Leptos SSR adapter сохраняет GraphQL payload без local remap, а server guard запрещает legacy `INTERNAL_SERVER_ERROR`.
 
 **Негативные сценарии, обязательные до merge.**
 
@@ -922,3 +922,9 @@ rollback-стратегии и Definition of Done по итерациям.
 - Progress-report получил явный финальный completion gate: теперь он считает `open = [~] + [ ]`, печатает `is_complete` и поддерживает `--fail-on-open` (`exit 3`), чтобы точно отвечать “план завершён?” без ручного подсчёта хвостов.
 - Smoke-тест progress-report расширен проверками `open`/`is_complete`, `--fail-on-open` и complete-fixture сценария; документация `scripts/verify/README.md` описывает новый gate.
 - Текущий snapshot после итерации: `completed=100`, `in_progress=12`, `pending=2`, `open=14`, `is_complete=false`; значит план ещё не завершён. Закрытием плана будет `open=0` и успешный `--fail-on-open`.
+
+### Актуализация 2026-05-30 (итерация 77)
+
+- Закрыт pending-пункт P2 по единой error taxonomy GraphQL/Leptos SSR: server-side control-plane tests выровнены на canonical `INTERNAL_ERROR` вместо legacy `INTERNAL_SERVER_ERROR`, а `lifecycle_bypass_guard` получил source-level guard против возврата legacy-кода.
+- Текущая taxonomy contract теперь явно разделяет conflict/validation user-paths (`BAD_USER_INPUT`), lifecycle hook failures (`MODULE_HOOK_FAILED`) и internal paths (`INTERNAL_ERROR`), при этом Leptos SSR/admin helpers продолжают passthrough без локального remap.
+- Текущий snapshot после итерации: `pending=1` (только полный minimal verification bundle), остальные открытые элементы — `[~]` parity/read-side хвосты, которые требуют либо дополнительных lightweight guard cutover, либо отдельного короткого test window.

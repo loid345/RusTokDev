@@ -325,6 +325,32 @@ fn lifecycle_hook_phases_adr_is_linked_from_indexes_and_backlog() {
 }
 
 #[test]
+fn control_plane_graphql_taxonomy_uses_canonical_error_codes() {
+    let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .expect("workspace root");
+    let mutations_rs = repo_root.join("apps/server/src/graphql/mutations.rs");
+    let content = fs::read_to_string(&mutations_rs).expect("mutations.rs should be readable");
+
+    for required in [
+        r#"Some("BAD_USER_INPUT")"#,
+        r#"Some("MODULE_HOOK_FAILED")"#,
+        r#"Some("INTERNAL_ERROR")"#,
+    ] {
+        assert!(
+            content.contains(required),
+            "control-plane GraphQL taxonomy must preserve canonical code fragment `{required}`"
+        );
+    }
+
+    assert!(
+        !content.contains("INTERNAL_SERVER_ERROR"),
+        "control-plane GraphQL taxonomy must use INTERNAL_ERROR, not legacy INTERNAL_SERVER_ERROR"
+    );
+}
+
+#[test]
 fn toggle_graphql_error_mapper_uses_typed_error_categories() {
     let repo_root = Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()

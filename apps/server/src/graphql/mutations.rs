@@ -1644,13 +1644,13 @@ mod tests {
             Case {
                 name: "serialize failure",
                 error: PlatformCompositionError::Serialize("serde exploded".to_string()),
-                expected_code: "INTERNAL_SERVER_ERROR",
+                expected_code: "INTERNAL_ERROR",
                 message_fragment: "serde exploded",
             },
             Case {
                 name: "deserialize failure",
                 error: PlatformCompositionError::Deserialize("bad snapshot".to_string()),
-                expected_code: "INTERNAL_SERVER_ERROR",
+                expected_code: "INTERNAL_ERROR",
                 message_fragment: "bad snapshot",
             },
             Case {
@@ -1658,7 +1658,7 @@ mod tests {
                 error: PlatformCompositionError::Database(sea_orm::DbErr::Custom(
                     "db is unavailable".to_string(),
                 )),
-                expected_code: "INTERNAL_SERVER_ERROR",
+                expected_code: "INTERNAL_ERROR",
                 message_fragment: "db is unavailable",
             },
             Case {
@@ -1710,7 +1710,7 @@ mod tests {
             Case {
                 name: "build enqueue failure",
                 error: PlatformCompositionBuildError::Build("enqueue failed".to_string()),
-                expected_code: "INTERNAL_SERVER_ERROR",
+                expected_code: "INTERNAL_ERROR",
                 expected_message_fragment: "enqueue failed",
                 exact_message: None,
             },
@@ -1730,7 +1730,7 @@ mod tests {
                 error: PlatformCompositionBuildError::Composition(
                     PlatformCompositionError::Serialize("serde exploded".to_string()),
                 ),
-                expected_code: "INTERNAL_SERVER_ERROR",
+                expected_code: "INTERNAL_ERROR",
                 expected_message_fragment: "serde exploded",
                 exact_message: None,
             },
@@ -1739,7 +1739,7 @@ mod tests {
                 error: PlatformCompositionBuildError::Composition(
                     PlatformCompositionError::Deserialize("bad snapshot".to_string()),
                 ),
-                expected_code: "INTERNAL_SERVER_ERROR",
+                expected_code: "INTERNAL_ERROR",
                 expected_message_fragment: "bad snapshot",
                 exact_message: None,
             },
@@ -1750,7 +1750,7 @@ mod tests {
                         "db is unavailable".to_string(),
                     )),
                 ),
-                expected_code: "INTERNAL_SERVER_ERROR",
+                expected_code: "INTERNAL_ERROR",
                 expected_message_fragment: "db is unavailable",
                 exact_message: None,
             },
