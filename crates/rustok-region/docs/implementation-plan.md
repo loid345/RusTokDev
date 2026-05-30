@@ -6,12 +6,12 @@
 
 ## Execution checkpoint
 
-- Current phase: ffa_storefront_transport_error_slice
-- Last checkpoint: FFA slice #4 ввела typed transport error envelope (`RegionTransportError`) с явным failed path, fallback flag и сохранением native+GraphQL error evidence при неуспешном fallback.
-- Next step: Продолжить FFA-first sequencing следующим минимальным выделением UI-facing error classification/view-model без нарушения native/GraphQL parity.
+- Current phase: ffa_storefront_error_view_model_slice
+- Last checkpoint: FFA slice #5 добавила UI-facing error evidence/view-model в `storefront/src/core.rs`; Leptos слой теперь рендерит `RegionErrorMessage` без string-only transport formatting.
+- Next step: Продолжить FFA-first sequencing следующим минимальным выделением locale-aware error classification/status codes без нарушения native/GraphQL parity.
 - Open blockers: None.
-- Hand-off notes for next agent: После каждого инкремента обновлять этот блок; не сводить transport ошибки обратно к строкам до boundary/view-model слоя и не терять native error evidence при GraphQL fallback failure.
-- Last updated at (UTC): 2026-05-30T02:00:00Z
+- Hand-off notes for next agent: После каждого инкремента обновлять этот блок; transport errors должны переходить в UI только через `RegionErrorEvidence`/`RegionErrorViewModel`, без прямого `format!("{err}")` в component tree.
+- Last updated at (UTC): 2026-05-30T03:00:00Z
 
 
 ## FFA/FBA status
@@ -24,8 +24,9 @@
   - FFA slice #1 вынесла нормализацию admin-формы региона в module-local core и переиспользовала `rustok-api::normalize_ui_text` без изменений транспорта;
   - FFA slice #2 вынесла storefront route segment fallback, tax-provider fallback, country/tax summaries, policy-row formatting и selected-region metric view-model в `storefront/src/core.rs` с unit-тестами без Leptos runtime;
   - FFA slice #3 ввела явный `transport/` facade с `native_server_adapter` и `graphql_adapter`, сохранила policy `NativeThenGraphql`, а resolution выбранного региона перенесла в core с unit-тестами;
-  - FFA slice #4 добавила сериализуемый `RegionTransportError`/`RegionTransportPath`, который сохраняет failed path, fallback_attempted и обе причины ошибки при падении native+GraphQL fallback.
-- Last verified at (UTC): 2026-05-30T02:00:00Z
+  - FFA slice #4 добавила сериализуемый `RegionTransportError`/`RegionTransportPath`, который сохраняет failed path, fallback_attempted и обе причины ошибки при падении native+GraphQL fallback;
+  - FFA slice #5 добавила framework-agnostic `RegionErrorEvidence`/`RegionErrorViewModel`, conversion из transport envelope и Leptos `RegionErrorMessage` render adapter без прямого string-only error formatting.
+- Last verified at (UTC): 2026-05-30T03:00:00Z
 - Owner: `rustok-region` module team
 
 ## Область работ
@@ -42,7 +43,7 @@
 - tenant locale policy остаётся platform-level concern вне `rustok-region`;
 - storefront region transport всё ещё публикуется через `rustok-commerce`;
 - admin route для region list/detail/create/update теперь живёт в `rustok-region/admin` и использует native Leptos server functions поверх `RegionService`.
-- storefront route для region discovery теперь живёт в `rustok-region/storefront` и использует native Leptos server functions с GraphQL fallback поверх существующего `storefrontRegions` transport; route/tax/country presentation helpers и selection resolution живут в framework-agnostic storefront core, transport разделён на facade + native/GraphQL adapters, ошибки transport проходят через typed envelope с fallback evidence, а Leptos component остаётся bind/render слоем.
+- storefront route для region discovery теперь живёт в `rustok-region/storefront` и использует native Leptos server functions с GraphQL fallback поверх существующего `storefrontRegions` transport; route/tax/country presentation helpers, selection resolution и error view-model живут в framework-agnostic storefront core, transport разделён на facade + native/GraphQL adapters, ошибки transport проходят через typed envelope с fallback evidence, а Leptos component остаётся bind/render слоем.
 
 ## Этапы
 
@@ -95,3 +96,4 @@
 - [x] Slice 2: storefront route/tax/country summary helpers, policy-row formatting и selected-region metric view-model перенесены в `storefront/src/core.rs`; native/GraphQL transport не изменён, проверка: `cargo test -p rustok-region-storefront --lib`.
 - [x] Slice 3: storefront transport facade разделён на `transport/native_server_adapter.rs` и `transport/graphql_adapter.rs`, fallback policy явно закреплена как `NativeThenGraphql`, а selected-region resolution перенесён в core; проверка: `cargo test -p rustok-region-storefront --lib`.
 - [x] Slice 4: transport facade возвращает typed `RegionTransportError` с `RegionTransportPath`, `fallback_attempted`, native error evidence и GraphQL error evidence; проверка: `cargo test -p rustok-region-storefront --lib`.
+- [x] Slice 5: transport error envelope конвертируется в framework-agnostic `RegionErrorEvidence`/`RegionErrorViewModel`, а Leptos слой рендерит `RegionErrorMessage` без прямого string-only formatting; проверка: `cargo test -p rustok-region-storefront --lib`.

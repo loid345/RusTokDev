@@ -5,6 +5,79 @@ use crate::model::{StorefrontRegion, StorefrontRegionCountryTaxPolicy, Storefron
 pub const DEFAULT_ROUTE_SEGMENT: &str = "regions";
 pub const DEFAULT_TAX_PROVIDER_ID: &str = "region_default";
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegionStorefrontErrorPath {
+    NativeServer,
+    GraphqlFallback,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionErrorEvidence {
+    pub failed_path: RegionStorefrontErrorPath,
+    pub fallback_attempted: bool,
+    pub native_error: Option<String>,
+    pub graphql_error: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionErrorViewModel {
+    pub title: String,
+    pub body: String,
+    pub technical_detail: Option<String>,
+}
+
+pub fn region_error_view_model(
+    evidence: RegionErrorEvidence,
+    title: String,
+    native_unavailable_body: String,
+    fallback_unavailable_body: String,
+    native_label: String,
+    graphql_label: String,
+) -> RegionErrorViewModel {
+    let body = if evidence.fallback_attempted
+        || evidence.failed_path == RegionStorefrontErrorPath::GraphqlFallback
+    {
+        fallback_unavailable_body
+    } else {
+        native_unavailable_body
+    };
+    let technical_detail = region_error_technical_detail(&evidence, &native_label, &graphql_label);
+
+    RegionErrorViewModel {
+        title,
+        body,
+        technical_detail,
+    }
+}
+
+fn region_error_technical_detail(
+    evidence: &RegionErrorEvidence,
+    native_label: &str,
+    graphql_label: &str,
+) -> Option<String> {
+    let mut parts = Vec::new();
+    if let Some(native_error) = evidence
+        .native_error
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
+        parts.push(format!("{native_label}: {native_error}"));
+    }
+    if let Some(graphql_error) = evidence
+        .graphql_error
+        .as_deref()
+        .filter(|value| !value.is_empty())
+    {
+        parts.push(format!("{graphql_label}: {graphql_error}"));
+    }
+
+    if parts.is_empty() {
+        None
+    } else {
+        Some(parts.join(" | "))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegionMetric {
     pub title: String,
@@ -186,6 +259,53 @@ mod tests {
             }],
             countries: vec!["DE".to_string(), "FR".to_string()],
         }
+    }
+
+    #[test]
+    fn region_error_view_model_preserves_fallback_evidence_for_ui() {
+        let view_model = region_error_view_model(
+            RegionErrorEvidence {
+                failed_path: RegionStorefrontErrorPath::GraphqlFallback,
+                fallback_attempted: true,
+                native_error: Some("tenant context missing".to_string()),
+                graphql_error: Some("network unavailable".to_string()),
+            },
+            "Failed to load".to_string(),
+            "Native path is unavailable.".to_string(),
+            "Native and GraphQL paths are unavailable.".to_string(),
+            "native".to_string(),
+            "graphql".to_string(),
+        );
+
+        assert_eq!(view_model.title, "Failed to load");
+        assert_eq!(view_model.body, "Native and GraphQL paths are unavailable.");
+        assert_eq!(
+            view_model.technical_detail.as_deref(),
+            Some("native: tenant context missing | graphql: network unavailable")
+        );
+    }
+
+    #[test]
+    fn region_error_view_model_classifies_native_only_error() {
+        let view_model = region_error_view_model(
+            RegionErrorEvidence {
+                failed_path: RegionStorefrontErrorPath::NativeServer,
+                fallback_attempted: false,
+                native_error: Some("ssr required".to_string()),
+                graphql_error: None,
+            },
+            "Failed to load".to_string(),
+            "Native path is unavailable.".to_string(),
+            "Native and GraphQL paths are unavailable.".to_string(),
+            "native".to_string(),
+            "graphql".to_string(),
+        );
+
+        assert_eq!(view_model.body, "Native path is unavailable.");
+        assert_eq!(
+            view_model.technical_detail.as_deref(),
+            Some("native: ssr required")
+        );
     }
 
     #[test]

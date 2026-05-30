@@ -33,8 +33,10 @@ pub fn RegionView() -> impl IntoView {
         "Failed to load region storefront data",
     );
 
+    let resource_locale = selected_locale.clone();
+    let error_locale = selected_locale.clone();
     let resource = Resource::new_blocking(
-        move || (selected_region_id.clone(), selected_locale.clone()),
+        move || (selected_region_id.clone(), resource_locale.clone()),
         move |(selected_region_id, locale)| async move {
             transport::fetch_regions(selected_region_id, locale).await
         },
@@ -53,16 +55,48 @@ pub fn RegionView() -> impl IntoView {
                     {move || {
                         let resource = resource;
                         let load_error = load_error.clone();
+                        let error_locale = error_locale.clone();
                         Suspend::new(async move {
                             match resource.await {
                                 Ok(data) => view! { <RegionShowcase data /> }.into_any(),
-                                Err(err) => view! { <div class="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{format!("{}: {err}", load_error)}</div> }.into_any(),
+                                Err(err) => {
+                                    let error_view_model = core::region_error_view_model(
+                                        (&err).into(),
+                                        load_error,
+                                        t(
+                                            error_locale.as_deref(),
+                                            "region.error.nativeUnavailable",
+                                            "The native region data path is unavailable for this request.",
+                                        ),
+                                        t(
+                                            error_locale.as_deref(),
+                                            "region.error.fallbackUnavailable",
+                                            "Both native and GraphQL region data paths are unavailable for this request.",
+                                        ),
+                                        t(error_locale.as_deref(), "region.error.nativeLabel", "native"),
+                                        t(error_locale.as_deref(), "region.error.graphqlLabel", "graphql"),
+                                    );
+                                    view! { <RegionErrorMessage error=error_view_model /> }.into_any()
+                                },
                             }
                         })
                     }}
                 </Suspense>
             </div>
         </section>
+    }
+}
+
+#[component]
+fn RegionErrorMessage(error: core::RegionErrorViewModel) -> impl IntoView {
+    view! {
+        <div class="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <p class="font-medium">{error.title}</p>
+            <p class="mt-1">{error.body}</p>
+            {error.technical_detail.map(|detail| view! {
+                <p class="mt-2 font-mono text-xs opacity-80">{detail}</p>
+            })}
+        </div>
     }
 }
 

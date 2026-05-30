@@ -6,6 +6,7 @@ use std::fmt::{Display, Formatter};
 use serde::{Deserialize, Serialize};
 
 use crate::api::ApiError;
+use crate::core::{RegionErrorEvidence, RegionStorefrontErrorPath};
 use crate::model::StorefrontRegionsData;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -77,6 +78,20 @@ impl Display for RegionTransportError {
 
 impl std::error::Error for RegionTransportError {}
 
+impl From<&RegionTransportError> for RegionErrorEvidence {
+    fn from(value: &RegionTransportError) -> Self {
+        Self {
+            failed_path: match value.failed_path {
+                RegionTransportPath::NativeServer => RegionStorefrontErrorPath::NativeServer,
+                RegionTransportPath::GraphqlFallback => RegionStorefrontErrorPath::GraphqlFallback,
+            },
+            fallback_attempted: value.fallback_attempted,
+            native_error: value.native_error.clone(),
+            graphql_error: value.graphql_error.clone(),
+        }
+    }
+}
+
 pub const DEFAULT_FALLBACK_POLICY: RegionFetchFallbackPolicy =
     RegionFetchFallbackPolicy::NativeThenGraphql;
 
@@ -138,6 +153,23 @@ mod tests {
             error.to_string(),
             "region GraphQL fallback failed after native transport error (native: tenant context missing): network unavailable"
         );
+    }
+
+    #[test]
+    fn transport_error_converts_to_ui_error_evidence() {
+        let error = RegionTransportError::fallback_failed(
+            ApiError::ServerFn("native failed".to_string()),
+            ApiError::Graphql("graphql failed".to_string()),
+        );
+        let evidence = RegionErrorEvidence::from(&error);
+
+        assert_eq!(
+            evidence.failed_path,
+            RegionStorefrontErrorPath::GraphqlFallback
+        );
+        assert!(evidence.fallback_attempted);
+        assert_eq!(evidence.native_error.as_deref(), Some("native failed"));
+        assert_eq!(evidence.graphql_error.as_deref(), Some("graphql failed"));
     }
 
     #[test]
