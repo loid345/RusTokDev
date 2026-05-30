@@ -30,12 +30,35 @@ const toggleModuleMutation = r'''
   }
 ''';
 
+const failedModuleOperationRecoveryPlansQuery = r'''
+  query FailedModuleOperationRecoveryPlans($moduleSlug: String!, $limit: Int!) {
+    failedModuleOperationRecoveryPlans(moduleSlug: $moduleSlug, limit: $limit) {
+      operationId
+      moduleSlug
+      requestedEnabled
+      previousEffectiveEnabled
+      status
+      issue
+      retryable
+      recommendedAction
+      correlationId
+      requestedBy
+      errorMessage
+    }
+  }
+''';
+
 abstract interface class ModulesRepository {
   Future<List<ModuleSummary>> listModules();
 
   Future<ModuleToggleResult> toggleModule({
     required String moduleSlug,
     required bool enabled,
+  });
+
+  Future<List<ModuleOperationRecoveryPlan>> failedRecoveryPlans({
+    required String moduleSlug,
+    int limit = 1,
   });
 }
 
@@ -93,6 +116,38 @@ class GraphQlModulesRepository implements ModulesRepository {
 
     return ModuleToggleResult.fromJson(payload);
   }
+
+  @override
+  Future<List<ModuleOperationRecoveryPlan>> failedRecoveryPlans({
+    required String moduleSlug,
+    int limit = 1,
+  }) async {
+    final result = await _client.query(
+      QueryOptions(
+        document: gql(failedModuleOperationRecoveryPlansQuery),
+        fetchPolicy: FetchPolicy.networkOnly,
+        variables: <String, dynamic>{
+          'moduleSlug': moduleSlug,
+          'limit': limit,
+        },
+      ),
+    );
+
+    if (result.hasException) {
+      throw result.exception!;
+    }
+
+    final payload = result.data?['failedModuleOperationRecoveryPlans'];
+    if (payload is! List) {
+      return const <ModuleOperationRecoveryPlan>[];
+    }
+
+    return List.unmodifiable(
+      payload
+          .whereType<Map<String, dynamic>>()
+          .map(ModuleOperationRecoveryPlan.fromJson),
+    );
+  }
 }
 
 class ModuleToggleResult {
@@ -115,7 +170,56 @@ class ModuleToggleResult {
   }
 }
 
+class ModuleOperationRecoveryPlan {
+  const ModuleOperationRecoveryPlan({
+    required this.operationId,
+    required this.moduleSlug,
+    required this.requestedEnabled,
+    required this.previousEffectiveEnabled,
+    required this.status,
+    required this.issue,
+    required this.retryable,
+    required this.recommendedAction,
+    this.correlationId,
+    this.requestedBy,
+    this.errorMessage,
+  });
+
+  final String operationId;
+  final String moduleSlug;
+  final bool requestedEnabled;
+  final bool previousEffectiveEnabled;
+  final String status;
+  final String issue;
+  final bool retryable;
+  final String recommendedAction;
+  final String? correlationId;
+  final String? requestedBy;
+  final String? errorMessage;
+
+  factory ModuleOperationRecoveryPlan.fromJson(Map<String, dynamic> json) {
+    return ModuleOperationRecoveryPlan(
+      operationId: _readToggleString(json, 'operationId'),
+      moduleSlug: _readToggleString(json, 'moduleSlug'),
+      requestedEnabled: json['requestedEnabled'] == true,
+      previousEffectiveEnabled: json['previousEffectiveEnabled'] == true,
+      status: _readToggleString(json, 'status'),
+      issue: _readToggleString(json, 'issue'),
+      retryable: json['retryable'] == true,
+      recommendedAction: _readToggleString(json, 'recommendedAction'),
+      correlationId: _readOptionalToggleString(json, 'correlationId'),
+      requestedBy: _readOptionalToggleString(json, 'requestedBy'),
+      errorMessage: _readOptionalToggleString(json, 'errorMessage'),
+    );
+  }
+}
+
 String _readToggleString(Map<String, dynamic> json, String key) {
   final value = json[key];
   return value is String ? value : '';
+}
+
+String? _readOptionalToggleString(Map<String, dynamic> json, String key) {
+  final value = json[key];
+  return value is String && value.isNotEmpty ? value : null;
 }

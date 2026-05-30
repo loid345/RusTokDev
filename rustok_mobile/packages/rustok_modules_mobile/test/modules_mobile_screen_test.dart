@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:graphql/client.dart';
 import 'package:rustok_modules_mobile/rustok_modules_mobile.dart';
 
 void main() {
@@ -45,7 +46,6 @@ void main() {
     expect(find.text('Enabled'), findsOneWidget);
   });
 
-
   testWidgets('runs mutation-backed toggle action and refreshes registry', (
     tester,
   ) async {
@@ -75,6 +75,33 @@ void main() {
     expect(find.text('Enable'), findsOneWidget);
   });
 
+  testWidgets('shows recovery feedback for retryable post-hook failures', (
+    tester,
+  ) async {
+    final repository = _PostHookFailureRepository();
+
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          modulesRepositoryProvider.overrideWithValue(repository),
+        ],
+        child: const MaterialApp(
+          home: Scaffold(
+            body: ModulesMobileScreen(canManageModules: true),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Disable'));
+    await tester.pumpAndSettle();
+
+    expect(repository.recoveryQueries, const ['blog']);
+    expect(find.text('Recovery available'), findsOneWidget);
+    expect(find.textContaining('post hook timed out'), findsOneWidget);
+    expect(find.text('Recommended action: retry_post_hook'), findsOneWidget);
+  });
 
   testWidgets('gates toggle action when modules manage permission is missing', (
     tester,
@@ -146,6 +173,14 @@ class _FakeModulesRepository implements ModulesRepository {
       settings: '{}',
     );
   }
+
+  @override
+  Future<List<ModuleOperationRecoveryPlan>> failedRecoveryPlans({
+    required String moduleSlug,
+    int limit = 1,
+  }) async {
+    return const <ModuleOperationRecoveryPlan>[];
+  }
 }
 
 class _MutableModulesRepository implements ModulesRepository {
@@ -181,6 +216,73 @@ class _MutableModulesRepository implements ModulesRepository {
       settings: '{}',
     );
   }
+
+  @override
+  Future<List<ModuleOperationRecoveryPlan>> failedRecoveryPlans({
+    required String moduleSlug,
+    int limit = 1,
+  }) async {
+    return const <ModuleOperationRecoveryPlan>[];
+  }
+}
+
+class _PostHookFailureRepository implements ModulesRepository {
+  final List<String> recoveryQueries = <String>[];
+
+  @override
+  Future<List<ModuleSummary>> listModules() async => const [
+    ModuleSummary(
+      slug: 'blog',
+      name: 'Blog Module',
+      description: 'Editorial content',
+      version: '1.2.3',
+      kind: 'optional',
+      enabled: true,
+      ownership: 'platform',
+      trustLevel: 'trusted',
+      recommendedAdminSurfaces: ['posts'],
+      showcaseAdminSurfaces: [],
+    ),
+  ];
+
+  @override
+  Future<ModuleToggleResult> toggleModule({
+    required String moduleSlug,
+    required bool enabled,
+  }) async {
+    throw OperationException(
+      graphqlErrors: [
+        GraphQLError(
+          message: 'Module post-hook failed',
+          extensions: {
+            'retryable_issue': true,
+            'operation_issue': 'post_hook_failed',
+          },
+        ),
+      ],
+    );
+  }
+
+  @override
+  Future<List<ModuleOperationRecoveryPlan>> failedRecoveryPlans({
+    required String moduleSlug,
+    int limit = 1,
+  }) async {
+    recoveryQueries.add(moduleSlug);
+    return const [
+      ModuleOperationRecoveryPlan(
+        operationId: 'op-1',
+        moduleSlug: 'blog',
+        requestedEnabled: false,
+        previousEffectiveEnabled: true,
+        status: 'failed',
+        issue: 'post_hook_failed',
+        retryable: true,
+        recommendedAction: 'retry_post_hook',
+        errorMessage: 'post hook timed out',
+      ),
+    ];
+  }
 }
 
 class _FailingRepository implements ModulesRepository {
@@ -195,6 +297,14 @@ class _FailingRepository implements ModulesRepository {
   Future<ModuleToggleResult> toggleModule({
     required String moduleSlug,
     required bool enabled,
+  }) async {
+    throw StateError('registry unavailable');
+  }
+
+  @override
+  Future<List<ModuleOperationRecoveryPlan>> failedRecoveryPlans({
+    required String moduleSlug,
+    int limit = 1,
   }) async {
     throw StateError('registry unavailable');
   }

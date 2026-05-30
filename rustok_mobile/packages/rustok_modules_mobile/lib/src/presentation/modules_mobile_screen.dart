@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:graphql/client.dart';
 
 import '../module_summary.dart';
 import '../modules_controller.dart';
+import '../modules_repository.dart';
 
 const _modulesManagePermission = 'modules:manage';
 
@@ -111,6 +113,7 @@ class _ModuleCard extends ConsumerStatefulWidget {
 
 class _ModuleCardState extends ConsumerState<_ModuleCard> {
   Object? _toggleError;
+  ModuleOperationRecoveryPlan? _recoveryPlan;
   bool _isToggling = false;
 
   @override
@@ -147,6 +150,10 @@ class _ModuleCardState extends ConsumerState<_ModuleCard> {
                       color: Theme.of(context).colorScheme.error,
                     ),
                   ),
+                  const SizedBox(height: 8),
+                ],
+                if (_recoveryPlan != null) ...[
+                  _RecoveryPlanNotice(plan: _recoveryPlan!),
                   const SizedBox(height: 8),
                 ],
                 Align(
@@ -190,23 +197,62 @@ class _ModuleCardState extends ConsumerState<_ModuleCard> {
     setState(() {
       _isToggling = true;
       _toggleError = null;
+      _recoveryPlan = null;
     });
 
     try {
-      await ref.read(modulesRepositoryProvider).toggleModule(
-            moduleSlug: widget.module.slug,
-            enabled: enabled,
-          );
+      final repository = ref.read(modulesRepositoryProvider);
+      await repository.toggleModule(
+        moduleSlug: widget.module.slug,
+        enabled: enabled,
+      );
       ref.invalidate(modulesControllerProvider);
     } catch (error) {
+      final recoveryPlan = await _loadRecoveryPlan(error);
       if (mounted) {
-        setState(() => _toggleError = error);
+        setState(() {
+          if (recoveryPlan == null) {
+            _toggleError = error;
+          } else {
+            _recoveryPlan = recoveryPlan;
+          }
+        });
+      }
+      if (recoveryPlan != null) {
+        ref.invalidate(modulesControllerProvider);
       }
     } finally {
       if (mounted) {
         setState(() => _isToggling = false);
       }
     }
+  }
+
+  Future<ModuleOperationRecoveryPlan?> _loadRecoveryPlan(Object error) async {
+    if (!_isRetryablePostHookFailure(error)) {
+      return null;
+    }
+
+    try {
+      final repository = ref.read(modulesRepositoryProvider);
+      final plans = await repository.failedRecoveryPlans(
+        moduleSlug: widget.module.slug,
+      );
+      return plans.isEmpty ? null : plans.first;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool _isRetryablePostHookFailure(Object error) {
+    if (error is! OperationException) {
+      return false;
+    }
+    return error.graphqlErrors.any((graphqlError) {
+      final extensions = graphqlError.extensions;
+      return extensions?['retryable_issue'] == true &&
+          extensions?['operation_issue'] == 'post_hook_failed';
+    });
   }
 
   String _buildSubtitle(ModuleSummary module, String? path) {
@@ -217,6 +263,51 @@ class _ModuleCardState extends ConsumerState<_ModuleCard> {
       if (path != null) 'mobile route: $path' else 'mobile route: not mounted',
     ];
     return parts.join('\n');
+  }
+}
+
+class _RecoveryPlanNotice extends StatelessWidget {
+  const _RecoveryPlanNotice({required this.plan});
+
+  final ModuleOperationRecoveryPlan plan;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final action = plan.recommendedAction.isEmpty
+        ? 'review operation recovery plan'
+        : plan.recommendedAction;
+    final message =
+        plan.errorMessage ?? 'Module state was committed, but a post-hook failed.';
+
+    return Material(
+      color: theme.colorScheme.errorContainer,
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Recovery available',
+              style: theme.textTheme.labelLarge?.copyWith(
+                color: theme.colorScheme.onErrorContainer,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              message,
+              style: TextStyle(color: theme.colorScheme.onErrorContainer),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Recommended action: $action',
+              style: TextStyle(color: theme.colorScheme.onErrorContainer),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 

@@ -95,4 +95,12 @@ class _FakeModulesRepository implements ModulesRepository {
       settings: '{}',
     );
   }
+
+  @override
+  Future<List<ModuleOperationRecoveryPlan>> failedRecoveryPlans({
+    required String moduleSlug,
+    int limit = 1,
+  }) async {
+    return const <ModuleOperationRecoveryPlan>[];
+  }
 }
