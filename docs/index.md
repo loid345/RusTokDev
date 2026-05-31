@@ -34,6 +34,7 @@
 - [FFA/FBA readiness board (внутри реестра модулей)](./modules/registry.md#ffafba-readiness-board-module-owned-ui)
 - [Реестр crate-ов модульной платформы](./modules/crates-registry.md)
 - [Runtime-контракт `rustok-page-builder`](../crates/rustok-page-builder/docs/README.md)
+- [Machine-readable FBA registry page-builder](../crates/rustok-page-builder/contracts/page-builder-fba-registry.json)
 - [Индекс документации по модулям](./modules/_index.md)
 - [Реестр implementation plans](./modules/implementation-plans-registry.md)
 - [Шаблон документации модуля](./templates/module_contract.md)

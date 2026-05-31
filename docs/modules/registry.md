@@ -55,7 +55,7 @@ capability crate-ов и host-приложений в RusToK.
 
 | Module slug | UI surfaces | FFA status | FBA status | Source plan |
 |---|---|---|---|---|
-| `pages` | admin + storefront | `in_progress` | `in_progress` | `crates/rustok-pages/docs/implementation-plan.md` (maintenance slice: нормализация create-page draft использует shared UI helpers) |
+| `pages` | admin + storefront | `in_progress` | `in_progress` | `crates/rustok-pages/docs/implementation-plan.md` (PB-FBA-1A: machine-readable builder registry + anti-drift gate зафиксировали `builder_contract_version`/`consumer_min_version`) |
 | `blog` | admin + storefront | `in_progress` | `in_progress` | `crates/rustok-blog/docs/implementation-plan.md` (slice #74: storefront transport adapters consume core-owned fetch request) |
 | `forum` | admin + storefront | `in_progress` | `in_progress` | `crates/rustok-forum/docs/implementation-plan.md` (FW-1 contract freeze: widget catalog v1, compatibility matrix and typed error mapping are machine-readable in manifest + REST/GraphQL contract surfaces) |
 | `search` | admin + storefront | `in_progress` | `in_progress` | `crates/rustok-search/docs/implementation-plan.md` (slice #25: consistency diagnostics table rows перенесены в core) |
@@ -243,8 +243,8 @@ graph TD
 | `blog` | `rustok-blog` | `content`, `comments`, `taxonomy` | Blog domain, posts, categories, tags, transport/UI |
 | `forum` | `rustok-forum` | `content`, `taxonomy` | Forum domain, topics, replies, moderation, transport/UI |
 | `comments` | `rustok-comments` | — | Generic comments domain |
-| `pages` | `rustok-pages` | `content`, `page_builder` | Pages, menus, page-builder surfaces |
-| `page_builder` | `rustok-page-builder` | — | Standalone FBA reference module for visual builder capabilities (`preview/tree/properties/publish`) |
+| `pages` | `rustok-pages` | `content`, `page_builder` | Pages, menus, page-builder surfaces; FBA consumer metadata синхронизирована с `crates/rustok-page-builder/contracts/page-builder-fba-registry.json` |
+| `page_builder` | `rustok-page-builder` | — | Standalone FBA reference module for visual builder capabilities (`preview/tree/properties/publish`); machine-readable FBA registry: `crates/rustok-page-builder/contracts/page-builder-fba-registry.json` |
 | `seo` | `rustok-seo` | `content` | Tenant-aware SEO runtime: explicit metadata overrides, template-generated SEO, bulk remediation modes, redirects, sitemap/robots generation, runtime sitemap submission adapters with per-endpoint aggregation, diagnostics/readiness scoring (включая `cross_link_gap`, `missing_image_alt`, `missing_image_size` aggregates), typed SEO events с delivery tracking (`seo_event_deliveries` + outbox envelope linkage), shared SEO capability contracts, cross-cutting SEO infrastructure UI, storefront-facing SSR page context, headless REST paths `/api/seo/page-context`, `/api/seo/cross-link-suggestions`, `/api/seo/diagnostics`, `/api/seo/sitemaps/status`, `/api/seo/sitemaps/jobs`, `/api/seo/sitemaps/jobs/{job_id}`, `/api/seo/bulk/jobs`, `/api/seo/bulk/jobs/{job_id}` и GraphQL `seoCrossLinkSuggestions`/`seoSitemapJobs`/`seoSitemapJob`; image fallback boundary потребляет `rustok-media::MediaImageDescriptor`, entity SEO authoring belongs to owner modules |
 | `taxonomy` | `rustok-taxonomy` | `content` | Shared vocabulary/dictionary layer |
 | `media` | `rustok-media` | — | Media lifecycle, upload, storage-facing API и typed image descriptor contract `MediaImageDescriptor` для cross-module SEO/media consumers |

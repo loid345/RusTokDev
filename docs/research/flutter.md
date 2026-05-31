@@ -1353,13 +1353,13 @@ Storefront catalog/cart package теперь получает cart data чере
 ### Зависимости между планами (anti-drift guardrail)
 
 - Flutter host, базовый app shell и module-owned mobile UI пакеты нужно развивать в логике FFA (один product contract при разных runtime/topology), но **без** Flutter-специфичных API-контрактов поверх платформы.
-- FBA/provider-consumer metadata относится к серверным модулям и backend governance. Flutter registry/codegen не должен читать или дублировать `fba.*` manifest sections, `builder_contract_version`, provider capabilities или toggle profiles.
+- FBA/provider-consumer metadata относится к серверным модулям и backend governance. Flutter registry/codegen не должен читать или дублировать `fba.*` manifest sections, `builder_contract_version`, `consumer_min_version`, machine-readable builder registry, provider capabilities или toggle profiles.
 - Для практики это означает:
   - Flutter держит только mobile-safe host metadata: route segment, nav, child pages, locale namespace и permissions;
   - canonical правила builder/state/validation/RBAC остаются на backend и в общем page-builder плане;
   - parity проверяется по UI-facing GraphQL/REST contracts и host navigation semantics, а не по server-side FBA manifest fields.
 - Если когда-нибудь появится отдельный UI-facing page-builder contract для мобильного host, его нужно вводить отдельным Flutter-планом и не смешивать с server-side FBA metadata.
-- Чекпойнт реализации (2026-05-29): сгенерированный Flutter-реестр переносит из `rustok-module.toml` только mobile-safe host metadata: маршруты, навигацию, дочерние страницы, `locale_namespace` и `permissions`. FBA/provider-consumer metadata остаётся server/module concern и не попадает во Flutter snapshot; мобильный host не вводит `builder_surface` или page-builder-specific route guards.
+- Чекпойнт реализации (2026-05-31): сгенерированный Flutter-реестр переносит из `rustok-module.toml` только mobile-safe host metadata: маршруты, навигацию, дочерние страницы, `locale_namespace` и `permissions`. FBA/provider-consumer metadata и `crates/rustok-page-builder/contracts/page-builder-fba-registry.json` остаются server/module concern и не попадают во Flutter snapshot; мобильный host не вводит `builder_surface` или page-builder-specific route guards.
 
 
 Ниже — то, что в постановке **не указано**, поэтому в отчёте я дал только разумные варианты, а не жёсткие требования:

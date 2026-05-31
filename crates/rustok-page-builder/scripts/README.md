@@ -10,6 +10,7 @@ Rules:
 ## Verification scripts
 
 - `verify/verify-page-builder-fba-baseline.mjs` runs the provider/consumer anti-drift gate.
+- `verify/verify-page-builder-contract-registry.mjs` compares `contracts/page-builder-fba-registry.json` with provider/consumer manifests and fails on version/capability drift.
 - `verify/verify-page-builder-fallback-matrix-docs.mjs` keeps central, provider, and pages fallback matrix docs aligned with `all_on`, `publish_off`, `preview_off`, and `builder_off` runtime profiles.
 
 - `verify/verify-page-builder-runtime-fallback-gate.mjs` runs the provider runtime fallback tests used by the CI baseline gate.

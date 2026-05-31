@@ -8,7 +8,7 @@
 
 - Current phase: phase_b_closed
 - Last checkpoint: FFA maintenance slice вынесла create-page draft normalization (`PageDraftFormInput` / `build_create_page_draft`) и route text checks на shared UI helpers из `rustok-api`.
-- Next step: Продолжить PB-FBA-1 (typed fallback matrix + error catalog parity + anti-drift CI checks) и не открывать новый pages slice без явной runtime/contract цели.
+- Next step: Продолжить PB-FBA-1B/PB-FBA-1C (fallback smoke evidence + control-plane audit trail) после закрытия PB-FBA-1A machine-readable registry/anti-drift gate.
 - Open blockers: None.
 - Hand-off notes for next agent:
   1. Перед любыми изменениями pages сначала сверить `docs/research/dioxus-ffa-pilot-connectivity-map.md` и этот файл; не открывать новый slice без явной цели в трекере.
@@ -26,6 +26,7 @@
 
 - PB-FBA-1 platform sync note: central plan `docs/modules/tiptap-page-builder-implementation-plan.md` now содержит delivery slices и exit criteria для Wave 0 hand-off; pages track должен обновляться синхронно по dependency notes.
 - PB-FBA-1 execution note: sync с central section `8.5 Execution backlog` принят как active queue (`PB-FBA-1A..1D`, фокус Week1=P0/P1, Week2=P2/P3).
+- PB-FBA-1A update: `consumer_min_version = "1.0"` добавлен в `fba.builder_consumer`, а machine-readable registry `crates/rustok-page-builder/contracts/page-builder-fba-registry.json` теперь проверяется через `verify-page-builder-contract-registry.mjs` и aggregate baseline gate.
 
 
 
@@ -53,6 +54,7 @@
 - [x] Typed fallback matrix: `builder_off`, `preview_off`, `publish_off` с ожидаемыми runtime/error outcomes.
 - [x] Unified builder error catalog для `validation/sanitize/runtime/feature-disabled` без расхождения между GraphQL, `#[server]` и UI adapters.
 - [x] CI fallback gate для профилей `builder.enabled=false` и `builder.publish.enabled=false`: provider runtime gate и `rustok-pages` consumer fallback gate подключены к baseline-проверке.
+- [x] Contract freeze anti-drift: `builder_contract_version`, `consumer_min_version`, capability set и fallback profile names зафиксированы в machine-readable registry и проверяются aggregate baseline gate.
 
 ### Fallback matrix (admin/list/read/publish snapshots)
 
@@ -163,6 +165,7 @@ Rollback trigger:
 
 - [x] Обновить runtime metadata/manifest: явно указать внешний `builder capability-provider` и поддерживаемые capability surfaces (`preview/tree/properties/publish`) — см. `rustok-module.toml` (`dependencies.page_builder`, `fba.builder_consumer`).
 - [x] Добавить contract-version marker для anti-drift проверок между `pages`, Next/Leptos adapters и reference builder (`contract_version = "1.0"` в metadata consumer/provider link).
+- [x] Добавить `consumer_min_version = "1.0"` и синхронизировать machine-readable registry `crates/rustok-page-builder/contracts/page-builder-fba-registry.json` с manifest provider/consumer contract values.
 - [x] Зафиксировать machine-readable degraded modes (`builder_disabled`, `publish_disabled`, `preview_disabled`) в `fba.builder_consumer.degraded_modes`.
 
 ### B2. Fallback & error semantics
@@ -179,7 +182,7 @@ Rollback trigger:
 
 ### B4. Verification gates
 
-- [x] Включить fallback regression checks в `cargo xtask module test pages` (или эквивалентный CI gate): `verify-page-builder-fba-baseline.mjs` запускает provider runtime gate и `rustok-pages` consumer fallback gate.
+- [x] Включить fallback regression checks в `cargo xtask module test pages` (или эквивалентный CI gate): `verify-page-builder-fba-baseline.mjs` запускает provider runtime gate, registry anti-drift gate и `rustok-pages` consumer fallback gate.
 - [x] Добавить targeted integration checks для `builder.publish.enabled=false` и `builder.enabled=false` на уровне `pages` service/transport boundary (`pages_builder_fallback_*` checks).
 - [ ] Зафиксировать evidence-template для Wave hand-off (platform + pages owner approval).
 

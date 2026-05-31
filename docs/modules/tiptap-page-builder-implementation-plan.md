@@ -734,8 +734,8 @@ Notes: <known deviations or waivers>
 Чтобы команда могла продолжить работу без дополнительного re-planning, фиксируется минимальный стартовый пакет на ближайшие 10 рабочих дней:
 
 1. **Contract registry update**
-   - [ ] создать/обновить machine-readable запись `builder_contract_version=v1` для provider и `consumer_min_version` для `rustok-pages`;
-   - [ ] добавить ссылку на запись в `docs/modules/registry.md` и локальный implementation-plan `crates/rustok-pages/docs/implementation-plan.md`.
+   - [x] создать/обновить machine-readable запись `builder_contract_version=1.0` для provider и `consumer_min_version=1.0` для `rustok-pages`;
+   - [x] добавить ссылку на запись в `docs/modules/registry.md` и локальный implementation-plan `crates/rustok-pages/docs/implementation-plan.md`.
 2. **Fallback smoke baseline**
    - [ ] выполнить smoke по профилям `all_on`, `publish_off`, `builder_off` на одном internal tenant;
    - [ ] приложить краткий отчёт с фактами по `admin list/read`, `storefront read`, `publish(dry)`.
@@ -787,7 +787,7 @@ Notes: <known deviations or waivers>
 Переход разрешён только при одновременном выполнении:
 
 1. **Contract integrity**
-   - [ ] `builder_contract_version` и `consumer_min_version` подтверждены CI anti-drift gate без waiver.
+   - [x] `builder_contract_version` и `consumer_min_version` подтверждены anti-drift gate без waiver (`verify-page-builder-contract-registry.mjs`; CI aggregate gate обновлён).
 2. **Fallback integrity**
    - [ ] проверены `all_on/publish_off/preview_off/builder_off` и нет 5xx в `admin list/read` + `storefront read`.
 3. **Operational integrity**
@@ -948,9 +948,9 @@ Notes: <known deviations or waivers>
 
 #### Week 1 — закрыть P0/P1
 
-- [ ] **PB-FBA-1A / Contract freeze:**
-  - [ ] зафиксировать `builder_contract_version=v1` и `consumer_min_version` в machine-readable registry;
-  - [ ] приложить anti-drift diff-check в CI (`fail-fast` при несовместимости).
+- [x] **PB-FBA-1A / Contract freeze:**
+  - [x] зафиксировать `builder_contract_version=1.0` и `consumer_min_version=1.0` в machine-readable registry `crates/rustok-page-builder/contracts/page-builder-fba-registry.json`;
+  - [x] приложить anti-drift diff-check в baseline gate (`verify-page-builder-contract-registry.mjs`, aggregate `verify-page-builder-fba-baseline.mjs`, fail-fast при несовместимости).
 - [ ] **PB-FBA-1B / Fallback hardening:**
   - [ ] подтвердить smoke-профили `all_on/publish_off/preview_off/builder_off` без `5xx` на `admin list/read` и `storefront read`;
   - [ ] собрать parity-таблицу typed errors для Next/Leptos/Flutter adapters.
@@ -966,7 +966,7 @@ Notes: <known deviations or waivers>
 
 #### Артефакты, обязательные для checkpoint update
 
-1. `metadata snapshot` (provider/consumer versions + fallback profile mapping);
+1. `metadata snapshot` (provider/consumer versions + fallback profile mapping): `crates/rustok-page-builder/contracts/page-builder-fba-registry.json`;
 2. `fallback smoke report` (`all_on`, `publish_off`, `preview_off`, `builder_off`);
 3. `toggle audit log` (change-set id, before/after, decision);
 4. `observability snapshot` (p95/error-rate/sanitize + traces).
@@ -974,7 +974,7 @@ Notes: <known deviations or waivers>
 #### Жёсткие ограничения на период backlog
 
 - Запрещено открывать delivery по `FW-1..FW-4` до полного закрытия `P5` (раздел 14.2).
-- Любой waiver по anti-drift или fallback-check автоматически ставит статус Wave 1 readiness в `hold`.
+- Любой waiver по anti-drift или fallback-check автоматически ставит статус Wave 1 readiness в `hold`; текущий PB-FBA-1A anti-drift gate должен проходить без waiver.
 - Любой change в builder-contract без синхронного обновления:
   - `crates/rustok-pages/docs/implementation-plan.md`;
   - `docs/modules/registry.md`;
