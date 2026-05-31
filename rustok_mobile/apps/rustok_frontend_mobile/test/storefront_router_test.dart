@@ -34,7 +34,9 @@ void main() {
   testWidgets('navigates to catalog and module placeholder routes', (
     tester,
   ) async {
-    final router = buildStorefrontRouter();
+    final router = buildStorefrontRouter(
+      catalogRepository: const StorefrontPreviewCatalogRepository(locale: 'en'),
+    );
 
     await tester.pumpWidget(
       ProviderScope(child: MaterialApp.router(routerConfig: router)),
@@ -44,7 +46,15 @@ void main() {
     await tester.tap(find.text('Catalog').last);
     await tester.pumpAndSettle();
     expect(
-      find.text('Product listing surface will mount here.'),
+      find.text('Module-owned mobile surface mounted by the storefront host.'),
+      findsOneWidget,
+    );
+    expect(find.text('Creator kit'), findsOneWidget);
+
+    await tester.tap(find.text('Cart').last);
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Customer checkout preview without admin affordances.'),
       findsOneWidget,
     );
 

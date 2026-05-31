@@ -13,6 +13,8 @@ dependencies:
   graphql: ^5.2.3
   app_graphql:
     path: ../../packages/app_graphql
+  rustok_catalog_mobile:
+    path: ../../packages/rustok_catalog_mobile
 
 dev_dependencies:
   flutter_test:

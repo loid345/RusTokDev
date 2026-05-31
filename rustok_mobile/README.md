@@ -12,6 +12,7 @@ Flutter workspace scaffold based on `docs/research/flutter.md`.
 - `packages/app_route_contracts` — typed route/query contracts.
 - `packages/app_module_contracts` — interfaces for module-owned mobile packages.
 - `packages/rustok_modules_mobile` — Phase 1 pilot package for the modules registry mobile surface.
+- `packages/rustok_catalog_mobile` — first module-owned storefront mobile package for catalog/cart surfaces.
 
 ## Implemented now
 
@@ -26,6 +27,7 @@ Flutter workspace scaffold based on `docs/research/flutter.md`.
 - Phase 1 pilot modules package with GraphQL-backed list/detail shell navigation evidence.
 - First mutation-backed modules operator action via the canonical `toggleModule` GraphQL mutation, gated by GraphQL-hydrated `me.permissions` capability context, with post-hook recovery feedback and retry/compensation actions.
 - Separate Flutter storefront mobile host scaffold with host-owned tenant/locale/GraphQL context.
+- Module-owned storefront catalog/cart mobile package mounted by `rustok_frontend_mobile` without package-local transport clients.
 
 
 Host-level providers now resolve sessions via `AuthSessionManager` and `RefreshTokenService` before building the authenticated GraphQL client. The refresh flow uses an HTTP-only GraphQL client to avoid unnecessary WebSocket initialization during bootstrap. Provider wiring is isolated in `apps/rustok_admin_mobile/lib/app_shell/auth_bootstrap.dart`.
@@ -79,6 +81,6 @@ signal that exercises the generator CLI itself.
 ## Next steps
 
 1. Replace in-memory auth session store with secure storage and connect refresh flow to sign-in lifecycle.
-2. Add module-owned storefront mobile packages for catalog/cart surfaces.
+2. Replace the storefront catalog/cart preview repository with a shared-transport backend implementation when the product/cart GraphQL surface is ready.
 3. Add deterministic generated-file checks to the mobile CI pipeline.
-4. Expand the modules pilot from inline recovery actions to a detailed operation history/recovery screen.
+4. Continue storefront parity with generated storefront registry wiring for module-owned packages.

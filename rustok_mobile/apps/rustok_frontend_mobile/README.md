@@ -14,12 +14,14 @@ UX do not drift into one host.
 - Keep tenant, locale, and GraphQL transport context host-owned.
 - Mirror the existing web storefront contract from `apps/storefront` and
   `apps/next-frontend` without introducing a Flutter-only backend API.
+- Mount module-owned catalog/cart mobile surfaces at `/catalog` and `/cart`.
 - Reserve manifest-driven module routes under `/modules/:routeSegment` for
-  future module-owned storefront mobile packages.
+  future generated storefront registry wiring.
 
 ## Interactions
 
 - Uses `apps/server` through the shared GraphQL client package.
+- Uses `packages/rustok_catalog_mobile` for customer catalog/cart screens through a host-provided repository boundary.
 - Keeps route semantics aligned with the storefront contract in `docs/UI/storefront.md`.
 - Shares the neutral mobile GraphQL foundation package (`app_graphql`) with other mobile hosts; route and UI-kit packages will be added when module-owned storefront surfaces need them.
 
@@ -27,9 +29,8 @@ UX do not drift into one host.
 
 - `lib/main.dart` — app bootstrap and provider wiring.
 - `lib/app_shell/storefront_shell_page.dart` — mobile storefront shell.
-- `lib/app_shell/storefront_context.dart` — host-owned runtime context and
-  GraphQL client configuration.
-- `lib/routes/storefront_router.dart` — route table and placeholder surfaces.
+- `lib/app_shell/storefront_context.dart` — host-owned runtime context, GraphQL client configuration, and catalog repository override.
+- `lib/routes/storefront_router.dart` — route table, module-owned catalog/cart mounting, and generic module placeholders.
 
 ## Documentation
 
