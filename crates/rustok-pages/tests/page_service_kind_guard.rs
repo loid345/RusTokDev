@@ -9,14 +9,36 @@ use rustok_pages::error::{
 };
 use rustok_pages::services::{BlockService, PageService};
 use rustok_pages::PagesModule;
+use rustok_tenant::entities::tenant_module;
 use rustok_test_utils::{
     db::setup_test_db,
     helpers::{admin_context, customer_context},
     mock_transactional_event_bus,
 };
-use sea_orm::{ConnectionTrait, DatabaseConnection, Statement};
+use sea_orm::{
+    ActiveModelTrait, ActiveValue::Set, ColumnTrait, ConnectionTrait, DatabaseConnection,
+    EntityTrait, QueryFilter, Statement,
+};
 use sea_orm_migration::SchemaManager;
 use uuid::Uuid;
+
+async fn ensure_tenant_modules_table(db: &DatabaseConnection) {
+    db.execute(Statement::from_string(
+        db.get_database_backend(),
+        "CREATE TABLE IF NOT EXISTS tenant_modules (
+            id TEXT PRIMARY KEY,
+            tenant_id TEXT NOT NULL,
+            module_slug TEXT NOT NULL,
+            enabled BOOLEAN NOT NULL DEFAULT TRUE,
+            settings TEXT NOT NULL DEFAULT '{}',
+            created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );"
+        .to_string(),
+    ))
+    .await
+    .expect("must create tenant_modules table");
+}
 
 async fn setup() -> (
     DatabaseConnection,
@@ -34,10 +56,11 @@ async fn setup() -> (
             .await
             .expect("failed to apply pages migrations");
     }
+    ensure_tenant_modules_table(&db).await;
 
     let event_bus = mock_transactional_event_bus();
     let page_service = PageService::new(db.clone(), event_bus.clone());
-    let block_service = BlockService::new(db, event_bus);
+    let block_service = BlockService::new(db.clone(), event_bus);
 
     (
         db,
@@ -76,6 +99,45 @@ async fn create_page(
         .expect("failed to create page")
 }
 
+async fn create_grapesjs_page(
+    page_service: &PageService,
+    tenant_id: Uuid,
+    security: SecurityContext,
+    title: &str,
+    slug: &str,
+) -> rustok_pages::dto::PageResponse {
+    page_service
+        .create(
+            tenant_id,
+            security,
+            CreatePageInput {
+                translations: vec![PageTranslationInput {
+                    locale: "en".to_string(),
+                    title: title.to_string(),
+                    slug: Some(slug.to_string()),
+                    meta_title: None,
+                    meta_description: None,
+                }],
+                template: Some("builder".to_string()),
+                body: Some(PageBodyInput {
+                    locale: "en".to_string(),
+                    content: String::new(),
+                    format: Some("grapesjs_v1".to_string()),
+                    content_json: Some(serde_json::json!({
+                        "pages": [{ "name": title, "frames": [] }],
+                        "assets": [],
+                        "styles": []
+                    })),
+                }),
+                blocks: None,
+                channel_slugs: None,
+                publish: false,
+            },
+        )
+        .await
+        .expect("failed to create grapesjs page")
+}
+
 async fn create_block(
     block_service: &BlockService,
     tenant_id: Uuid,
@@ -99,30 +161,30 @@ async fn create_block(
 }
 
 async fn seed_pages_module_settings(db: &DatabaseConnection, tenant_id: Uuid, settings: &str) {
-    db.execute(Statement::from_string(
-        db.get_database_backend(),
-        format!(
-            "CREATE TABLE IF NOT EXISTS tenant_modules (
-                id TEXT PRIMARY KEY,
-                tenant_id TEXT NOT NULL,
-                module_slug TEXT NOT NULL,
-                enabled BOOLEAN NOT NULL DEFAULT TRUE,
-                settings TEXT NOT NULL DEFAULT '{{}}',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-            );
-            DELETE FROM tenant_modules
-            WHERE tenant_id = '{}' AND module_slug = 'pages';
-            INSERT INTO tenant_modules (id, tenant_id, module_slug, enabled, settings)
-            VALUES ('{}', '{}', 'pages', 1, '{}');",
-            tenant_id,
-            Uuid::new_v4(),
-            tenant_id,
-            settings
-        ),
-    ))
+    ensure_tenant_modules_table(db).await;
+
+    tenant_module::Entity::delete_many()
+        .filter(tenant_module::Column::TenantId.eq(tenant_id))
+        .filter(tenant_module::Column::ModuleSlug.eq("pages"))
+        .exec(db)
+        .await
+        .expect("must remove previous pages module settings");
+
+    let settings_json: serde_json::Value =
+        serde_json::from_str(settings).expect("settings must be valid JSON");
+    let now = chrono::Utc::now().into();
+    tenant_module::ActiveModel {
+        id: Set(Uuid::new_v4()),
+        tenant_id: Set(tenant_id),
+        module_slug: Set("pages".to_string()),
+        enabled: Set(true),
+        settings: Set(settings_json),
+        created_at: Set(now),
+        updated_at: Set(now),
+    }
+    .insert(db)
     .await
-    .expect("must create and seed tenant_modules");
+    .expect("must seed pages module settings");
 }
 
 #[tokio::test]
@@ -192,7 +254,14 @@ async fn publish_returns_feature_disabled_when_builder_publish_toggle_is_false()
     )
     .await;
 
-    let page = create_page(&page_service, tenant_id, security.clone()).await;
+    let page = create_grapesjs_page(
+        &page_service,
+        tenant_id,
+        security.clone(),
+        "Builder publish-off page",
+        "builder-publish-off-page",
+    )
+    .await;
     let result = page_service.publish(tenant_id, security, page.id).await;
     assert!(matches!(
         result,
@@ -725,6 +794,89 @@ async fn publish_forbidden_user_gets_forbidden_before_builder_toggle_errors() {
         .await;
 
     assert!(matches!(result, Err(PagesError::Forbidden(_))));
+}
+
+#[tokio::test]
+async fn pages_builder_fallback_publish_off_blocks_grapesjs_publish_but_keeps_read_path() {
+    let (db, page_service, _block_service, tenant_id, security) = setup().await;
+    seed_pages_module_settings(&db, tenant_id, r#"{"builder":{"enabled":true}}"#).await;
+    let page = create_grapesjs_page(
+        &page_service,
+        tenant_id,
+        security.clone(),
+        "Fallback publish-off",
+        "fallback-publish-off",
+    )
+    .await;
+
+    seed_pages_module_settings(
+        &db,
+        tenant_id,
+        r#"{"builder":{"enabled":true,"publish":{"enabled":false}}}"#,
+    )
+    .await;
+
+    let publish_result = page_service
+        .publish(tenant_id, security.clone(), page.id)
+        .await;
+    assert!(matches!(
+        publish_result,
+        Err(PagesError::FeatureDisabled { feature }) if feature == FEATURE_BUILDER_PUBLISH_ENABLED
+    ));
+
+    let loaded = page_service
+        .get(tenant_id, security, page.id)
+        .await
+        .expect("read path must remain stable when builder publish is disabled");
+    assert_eq!(loaded.id, page.id);
+    assert_eq!(
+        loaded.body.expect("builder body must stay readable").format,
+        "grapesjs_v1"
+    );
+}
+
+#[tokio::test]
+async fn pages_builder_fallback_builder_off_keeps_read_and_list_paths() {
+    let (db, page_service, _block_service, tenant_id, security) = setup().await;
+    seed_pages_module_settings(&db, tenant_id, r#"{"builder":{"enabled":true}}"#).await;
+    let page = create_grapesjs_page(
+        &page_service,
+        tenant_id,
+        security.clone(),
+        "Fallback builder-off",
+        "fallback-builder-off",
+    )
+    .await;
+
+    seed_pages_module_settings(
+        &db,
+        tenant_id,
+        r#"{"builder":{"enabled":false,"preview":{"enabled":false},"properties":{"enabled":false},"publish":{"enabled":false}}}"#,
+    )
+    .await;
+
+    let loaded = page_service
+        .get(tenant_id, security.clone(), page.id)
+        .await
+        .expect("read path must remain stable when builder is disabled");
+    assert_eq!(loaded.id, page.id);
+    assert_eq!(
+        loaded.body.expect("builder body must stay readable").format,
+        "grapesjs_v1"
+    );
+
+    let (items, total) = page_service
+        .list(tenant_id, security.clone(), Default::default())
+        .await
+        .expect("list path must remain stable when builder is disabled");
+    assert_eq!(total, 1);
+    assert!(items.iter().any(|item| item.id == page.id));
+
+    let publish_result = page_service.publish(tenant_id, security, page.id).await;
+    assert!(matches!(
+        publish_result,
+        Err(PagesError::FeatureDisabled { feature }) if feature == FEATURE_BUILDER_ENABLED
+    ));
 }
 
 #[tokio::test]

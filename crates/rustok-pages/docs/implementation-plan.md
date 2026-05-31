@@ -50,9 +50,27 @@
 
 ### Sprint scope (must-have)
 
-- [ ] Typed fallback matrix: `builder_off`, `preview_off`, `publish_off` с ожидаемыми runtime/error outcomes.
+- [x] Typed fallback matrix: `builder_off`, `preview_off`, `publish_off` с ожидаемыми runtime/error outcomes.
 - [x] Unified builder error catalog для `validation/sanitize/runtime/feature-disabled` без расхождения между GraphQL, `#[server]` и UI adapters.
-- [ ] CI fallback gate для профилей `builder.enabled=false` и `builder.publish.enabled=false`.
+- [x] CI fallback gate для профилей `builder.enabled=false` и `builder.publish.enabled=false`: provider runtime gate и `rustok-pages` consumer fallback gate подключены к baseline-проверке.
+
+### Fallback matrix (admin/list/read/publish snapshots)
+
+Эта матрица является consumer-side snapshot для `rustok-pages` и должна совпадать с provider matrix в `rustok-page-builder::rollout`. Read/list/menu paths остаются owned by pages и не должны зависеть от доступности builder capability endpoint.
+
+| Профиль | Admin visual path | Preview | Properties/tree | Publish | Read/list/storefront paths | Disabled capabilities |
+|---|---|---|---|---|---|---|
+| `all_on` | `editable_builder` | `available` | `available` | `available` | `stable` | — |
+| `publish_off` | `editable_builder_publish_disabled` | `available` | `available` | `typed_feature_disabled_error` | `stable` | `publish` |
+| `preview_off` | `preview_hidden_properties_available` | `typed_feature_disabled_error` | `available` | `typed_feature_disabled_error` | `stable` | `preview`, `publish` |
+| `builder_off` | `readonly_fallback` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `stable` | `preview`, `tree`, `properties`, `publish` |
+
+Операционные заметки:
+
+1. `builder_off` не отключает pages-owned list/read/menu runtime; admin visual path обязан показать read-only fallback вместо 5xx.
+2. `publish_off` возвращает typed `feature-disabled`/`typed_feature_disabled_error` только на builder publish path; legacy/direct read paths остаются стабильными.
+3. `preview_off` скрывает или блокирует preview capability, но не должен запрещать properties/tree чтение, если `builder.properties.enabled=true`.
+
 - [ ] Wave 0 evidence template: flags snapshot + smoke output + observability snapshot + keep/rollback decision.
 
 ### Out of scope (for this sprint)
@@ -150,8 +168,8 @@ Rollback trigger:
 ### B2. Fallback & error semantics
 
 - [x] Закрепить единый typed error catalog для builder-related runtime ошибок (`validation/sanitize/runtime/feature-disabled`).
-- [ ] Добавить fallback snapshots в docs для admin/list/read/publish surfaces.
-- [ ] Убедиться, что partial disable не ломает page read/list/menu paths в storefront/admin.
+- [x] Добавить fallback snapshots в docs для admin/list/read/publish surfaces.
+- [x] Убедиться, что partial disable не ломает page read/list/menu paths в storefront/admin для `builder.enabled=false` и `builder.publish.enabled=false` на service fallback gate; UI adapter evidence остаётся в Wave hand-off.
 
 ### B3. Operability & rollout
 
@@ -161,8 +179,8 @@ Rollback trigger:
 
 ### B4. Verification gates
 
-- [ ] Включить fallback regression checks в `cargo xtask module test pages` (или эквивалентный CI gate).
-- [ ] Добавить targeted integration checks для `builder.publish.enabled=false` и `builder.enabled=false`.
+- [x] Включить fallback regression checks в `cargo xtask module test pages` (или эквивалентный CI gate): `verify-page-builder-fba-baseline.mjs` запускает provider runtime gate и `rustok-pages` consumer fallback gate.
+- [x] Добавить targeted integration checks для `builder.publish.enabled=false` и `builder.enabled=false` на уровне `pages` service/transport boundary (`pages_builder_fallback_*` checks).
 - [ ] Зафиксировать evidence-template для Wave hand-off (platform + pages owner approval).
 
 ## Wave 0 execution checklist (операционный минимум для `pages`)
@@ -170,9 +188,9 @@ Rollback trigger:
 ### C1. Toggle profiles (обязательно)
 
 - [ ] `all_on`: `builder.enabled=true`, `preview/properties/publish=true`.
-- [ ] `publish_off`: `builder.publish.enabled=false`, publish-path возвращает typed `feature-disabled` error.
+- [x] `publish_off`: `builder.publish.enabled=false`, publish-path возвращает typed `feature-disabled` error, read-path стабилен.
 - [ ] `preview_off`: preview capability недоступен, read/list surfaces не деградируют.
-- [ ] `builder_off`: admin visual path в read-only fallback, storefront read-path стабилен.
+- [x] `builder_off`: service read/list paths стабильны, publish-path возвращает typed `feature-disabled`; UI read-only fallback остаётся Wave evidence.
 
 ### C2. Evidence package для каждого профиля
 
