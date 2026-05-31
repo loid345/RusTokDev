@@ -48,6 +48,12 @@ pub fn parse_storefront_quantity(value: Option<&str>) -> Option<i32> {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectedProductEmptyViewModel {
+    pub title: String,
+    pub body: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SelectedProductViewModel {
     pub product_type: String,
     pub vendor: String,
@@ -60,6 +66,12 @@ pub struct SelectedProductViewModel {
     pub pricing_context: Option<String>,
     pub inventory: i32,
     pub pricing_href: String,
+    pub preview_context_label: String,
+    pub pricing_ownership_note: String,
+    pub catalog_snapshot_label: String,
+    pub pricing_preview_label: String,
+    pub inventory_label: String,
+    pub open_pricing_label: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -89,6 +101,23 @@ pub struct ProductCatalogRailViewModel {
     pub empty_message: String,
     pub open_label: String,
     pub items: Vec<ProductCatalogRailItemViewModel>,
+}
+
+pub fn build_selected_product_empty_view_model(
+    locale: Option<&str>,
+) -> SelectedProductEmptyViewModel {
+    SelectedProductEmptyViewModel {
+        title: t(
+            locale,
+            "product.selected.emptyTitle",
+            "No published product selected",
+        ),
+        body: t(
+            locale,
+            "product.selected.emptyBody",
+            "Publish a product from the product admin package or open one with `?handle=`.",
+        ),
+    }
 }
 
 pub fn build_selected_product_view_model(
@@ -158,6 +187,32 @@ pub fn build_selected_product_view_model(
         pricing_context,
         inventory: variant.map(|item| item.inventory_quantity).unwrap_or(0),
         pricing_href,
+        preview_context_label: t(
+            locale,
+            "product.selected.previewContext",
+            "pricing preview",
+        ),
+        pricing_ownership_note: t(
+            locale,
+            "product.selected.pricingOwnershipNote",
+            "Catalog snapshot stays product-owned; resolved pricing comes from the pricing module preview.",
+        ),
+        catalog_snapshot_label: t(
+            locale,
+            "product.selected.catalogSnapshot",
+            "Catalog snapshot",
+        ),
+        pricing_preview_label: t(
+            locale,
+            "product.selected.pricingPreview",
+            "Pricing module preview",
+        ),
+        inventory_label: t(locale, "product.selected.inventory", "Inventory"),
+        open_pricing_label: t(
+            locale,
+            "product.selected.openPricing",
+            "Open pricing module",
+        ),
     }
 }
 
@@ -631,6 +686,22 @@ mod tests {
         assert_eq!(
             view_model.pricing_href,
             "/pricing?handle=trail-boot&currency=USD&price_list_id=list-1&channel_slug=web&quantity=4",
+        );
+        assert_eq!(view_model.preview_context_label, "pricing preview");
+        assert_eq!(view_model.catalog_snapshot_label, "Catalog snapshot");
+        assert_eq!(view_model.pricing_preview_label, "Pricing module preview");
+        assert_eq!(view_model.inventory_label, "Inventory");
+        assert_eq!(view_model.open_pricing_label, "Open pricing module");
+    }
+
+    #[test]
+    fn selected_product_empty_view_model_is_built_without_ui_runtime() {
+        let view_model = build_selected_product_empty_view_model(Some("en"));
+
+        assert_eq!(view_model.title, "No published product selected");
+        assert_eq!(
+            view_model.body,
+            "Publish a product from the product admin package or open one with `?handle=`."
         );
     }
 }

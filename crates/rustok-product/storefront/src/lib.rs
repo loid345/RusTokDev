@@ -5,8 +5,8 @@ mod model;
 mod transport;
 
 use crate::core::{
-    build_product_catalog_rail_view_model, build_selected_product_view_model,
-    build_storefront_route_input, ProductCatalogRailLabels,
+    build_product_catalog_rail_view_model, build_selected_product_empty_view_model,
+    build_selected_product_view_model, build_storefront_route_input, ProductCatalogRailLabels,
 };
 use crate::i18n::t;
 use crate::model::{
@@ -142,16 +142,18 @@ fn SelectedProductCard(
     let route_context = use_context::<UiRouteContext>().unwrap_or_default();
     let locale = route_context.locale.clone();
     let Some(product) = product else {
+        let view_model = build_selected_product_empty_view_model(locale.as_deref());
         return view! {
             <article class="rounded-3xl border border-dashed border-border p-8">
                 <h3 class="text-lg font-semibold text-card-foreground">
-                    {t(locale.as_deref(), "product.selected.emptyTitle", "No published product selected")}
+                    {view_model.title}
                 </h3>
                 <p class="mt-2 text-sm text-muted-foreground">
-                    {t(locale.as_deref(), "product.selected.emptyBody", "Publish a product from the product admin package or open one with `?handle=`.")}
+                    {view_model.body}
                 </p>
             </article>
-        }.into_any();
+        }
+        .into_any();
     };
 
     let pricing_route_base = route_context.module_route_base("pricing");
@@ -179,33 +181,25 @@ fn SelectedProductCard(
             {view_model.pricing_context.as_ref().map(|pricing_context| view! {
                 <div class="mt-4 inline-flex flex-wrap items-center gap-2 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-2 text-xs text-primary">
                     <span class="font-semibold uppercase tracking-[0.16em]">
-                        {t(locale.as_deref(), "product.selected.previewContext", "pricing preview")}
+                        {view_model.preview_context_label.clone()}
                     </span>
                     <span>{pricing_context.clone()}</span>
                 </div>
             })}
             <p class="mt-4 text-xs text-muted-foreground">
-                {t(
-                    locale.as_deref(),
-                    "product.selected.pricingOwnershipNote",
-                    "Catalog snapshot stays product-owned; resolved pricing comes from the pricing module preview.",
-                )}
+                {view_model.pricing_ownership_note.clone()}
             </p>
             <div class="mt-6 grid gap-3 md:grid-cols-3">
-                <MetricCard title=t(locale.as_deref(), "product.selected.catalogSnapshot", "Catalog snapshot") value=view_model.catalog_snapshot />
-                <MetricCard title=t(locale.as_deref(), "product.selected.pricingPreview", "Pricing module preview") value=view_model.pricing_preview />
-                <MetricCard title=t(locale.as_deref(), "product.selected.inventory", "Inventory") value=view_model.inventory.to_string() />
+                <MetricCard title=view_model.catalog_snapshot_label.clone() value=view_model.catalog_snapshot />
+                <MetricCard title=view_model.pricing_preview_label.clone() value=view_model.pricing_preview />
+                <MetricCard title=view_model.inventory_label.clone() value=view_model.inventory.to_string() />
             </div>
             <div class="mt-4">
                 <a
                     class="inline-flex rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition hover:bg-accent"
                     href=view_model.pricing_href
                 >
-                    {t(
-                        locale.as_deref(),
-                        "product.selected.openPricing",
-                        "Open pricing module",
-                    )}
+                    {view_model.open_pricing_label}
                 </a>
             </div>
         </article>

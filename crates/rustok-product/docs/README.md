@@ -27,9 +27,10 @@
   `variants.prices` как resolved price, а держит отдельный pricing-module preview
   hook для `adminPricingProduct` / `storefrontPricingProduct`;
 - storefront FFA slices вынесли route/query normalization, selected-product view-model
-  composition, catalog rail presentation, pricing/seller labels и pricing deep-link
-  state в `storefront/src/core.rs`; Leptos `ProductView`/`CatalogRail` остаются
-  тонкими адаптерами host-context/render и вызывают transport/render через подготовленное core-состояние;
+  composition, selected-card labels/empty state, catalog rail presentation,
+  pricing/seller labels и pricing deep-link state в `storefront/src/core.rs`; Leptos
+  `ProductView`/`SelectedProductCard`/`CatalogRail` остаются тонкими адаптерами
+  host-context/render и вызывают transport/render через подготовленное core-состояние;
 - Общие DTO, entities и error surface приходят из `rustok-commerce-foundation`.
 - canonical vocabulary и attach semantics для product tags живут в
   `rustok-taxonomy` + `product_tags`, а public contract использует first-class
