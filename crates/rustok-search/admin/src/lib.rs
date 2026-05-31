@@ -1808,25 +1808,18 @@ fn DiagnosticsCard(
     ui_locale: Option<String>,
 ) -> impl IntoView {
     let locale = ui_locale.as_deref();
-    let badge_class = core::diagnostics_state_badge_class(diagnostics.state.as_str());
-    let state_label = match diagnostics.state.as_str() {
-        "healthy" => t(locale, "search.state.healthy", "healthy"),
-        "inconsistent" => t(locale, "search.state.inconsistent", "inconsistent"),
-        "lagging" => t(locale, "search.state.lagging", "lagging"),
-        other => other.to_string(),
+    let labels = core::SearchDiagnosticsLabels {
+        healthy: t(locale, "search.state.healthy", "healthy"),
+        inconsistent: t(locale, "search.state.inconsistent", "inconsistent"),
+        lagging: t(locale, "search.state.lagging", "lagging"),
+        not_indexed_yet: t(locale, "search.common.notIndexedYet", "not indexed yet"),
+        newest_indexed: t(locale, "search.diagnostics.newestIndexed", "Newest indexed"),
     };
-    let newest_indexed = core::value_or_fallback(
-        diagnostics.newest_indexed_at,
-        t(locale, "search.common.notIndexedYet", "not indexed yet").as_str(),
-    );
-    let newest_indexed_summary = core::label_value_summary(
-        t(locale, "search.diagnostics.newestIndexed", "Newest indexed").as_str(),
-        newest_indexed.as_str(),
-    );
+    let view_model = core::build_search_diagnostics_card_view_model(diagnostics, &labels);
     view! { <article class="rounded-2xl border border-border bg-card p-5 shadow-sm">
         <div class="text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">{t(locale, "search.diagnostics.indexState", "Index state")}</div>
-        <div class="mt-3"><span class=format!("inline-flex rounded-full border px-3 py-1 text-xs font-semibold {badge_class}")>{state_label}</span></div>
-        <p class="mt-3 text-sm text-muted-foreground">{newest_indexed_summary}</p>
+        <div class="mt-3"><span class=format!("inline-flex rounded-full border px-3 py-1 text-xs font-semibold {}", view_model.badge_class)>{view_model.state_label}</span></div>
+        <p class="mt-3 text-sm text-muted-foreground">{view_model.newest_indexed_summary}</p>
     </article> }
 }
 

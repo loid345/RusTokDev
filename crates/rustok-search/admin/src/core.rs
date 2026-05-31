@@ -4,7 +4,8 @@ use rustok_api::{
 
 use crate::model::{
     SearchAnalyticsInsightRowPayload, SearchAnalyticsQueryRowPayload,
-    SearchAnalyticsSummaryPayload, SearchFacetGroup, SearchPreviewFilters, SearchPreviewPayload,
+    SearchAnalyticsSummaryPayload, SearchDiagnosticsPayload, SearchFacetGroup,
+    SearchPreviewFilters, SearchPreviewPayload,
 };
 
 pub fn parse_csv(value: &str) -> Vec<String> {
@@ -445,6 +446,67 @@ mod tests {
     }
 
     #[test]
+    fn diagnostics_card_view_model_formats_state_and_newest_indexed() {
+        let labels = SearchDiagnosticsLabels {
+            healthy: "healthy".to_string(),
+            inconsistent: "inconsistent".to_string(),
+            lagging: "lagging".to_string(),
+            not_indexed_yet: "not indexed yet".to_string(),
+            newest_indexed: "Newest indexed".to_string(),
+        };
+        let diagnostics = SearchDiagnosticsPayload {
+            tenant_id: "tenant-1".to_string(),
+            total_documents: 10,
+            public_documents: 8,
+            content_documents: 4,
+            product_documents: 6,
+            stale_documents: 2,
+            missing_documents: 1,
+            orphaned_documents: 0,
+            newest_indexed_at: None,
+            oldest_indexed_at: Some("2026-05-30T00:00:00Z".to_string()),
+            max_lag_seconds: 42,
+            state: "lagging".to_string(),
+        };
+
+        let view_model = build_search_diagnostics_card_view_model(diagnostics, &labels);
+
+        assert_eq!(view_model.state_label, "lagging");
+        assert_eq!(
+            view_model.badge_class,
+            "border-amber-200 bg-amber-50 text-amber-700"
+        );
+        assert_eq!(
+            view_model.newest_indexed_summary,
+            "Newest indexed: not indexed yet"
+        );
+
+        let unknown = build_search_diagnostics_card_view_model(
+            SearchDiagnosticsPayload {
+                tenant_id: "tenant-1".to_string(),
+                total_documents: 0,
+                public_documents: 0,
+                content_documents: 0,
+                product_documents: 0,
+                stale_documents: 0,
+                missing_documents: 0,
+                orphaned_documents: 0,
+                newest_indexed_at: Some("2026-05-31T00:00:00Z".to_string()),
+                oldest_indexed_at: None,
+                max_lag_seconds: 0,
+                state: "custom".to_string(),
+            },
+            &labels,
+        );
+
+        assert_eq!(unknown.state_label, "custom");
+        assert_eq!(
+            unknown.newest_indexed_summary,
+            "Newest indexed: 2026-05-31T00:00:00Z"
+        );
+    }
+
+    #[test]
     fn relevance_editor_merge_helpers_are_stable() {
         let merged = merge_relevance_editor_config(
             RelevanceEditorConfigInput {
@@ -714,6 +776,47 @@ pub fn consistency_issue_badge_class(issue_kind: &str) -> &'static str {
         "border-rose-200 bg-rose-50 text-rose-700"
     } else {
         "border-orange-200 bg-orange-50 text-orange-700"
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchDiagnosticsLabels {
+    pub healthy: String,
+    pub inconsistent: String,
+    pub lagging: String,
+    pub not_indexed_yet: String,
+    pub newest_indexed: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchDiagnosticsCardViewModel {
+    pub badge_class: &'static str,
+    pub state_label: String,
+    pub newest_indexed_summary: String,
+}
+
+pub fn build_search_diagnostics_card_view_model(
+    diagnostics: SearchDiagnosticsPayload,
+    labels: &SearchDiagnosticsLabels,
+) -> SearchDiagnosticsCardViewModel {
+    let state_label = match diagnostics.state.as_str() {
+        "healthy" => labels.healthy.clone(),
+        "inconsistent" => labels.inconsistent.clone(),
+        "lagging" => labels.lagging.clone(),
+        other => other.to_string(),
+    };
+    let newest_indexed = value_or_fallback(
+        diagnostics.newest_indexed_at,
+        labels.not_indexed_yet.as_str(),
+    );
+
+    SearchDiagnosticsCardViewModel {
+        badge_class: diagnostics_state_badge_class(diagnostics.state.as_str()),
+        state_label,
+        newest_indexed_summary: label_value_summary(
+            labels.newest_indexed.as_str(),
+            newest_indexed.as_str(),
+        ),
     }
 }
 
