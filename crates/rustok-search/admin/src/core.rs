@@ -3,6 +3,7 @@ use rustok_api::{
 };
 
 use crate::model::{
+    SearchAnalyticsInsightRowPayload, SearchAnalyticsQueryRowPayload,
     SearchAnalyticsSummaryPayload, SearchFacetGroup, SearchPreviewFilters, SearchPreviewPayload,
 };
 
@@ -327,6 +328,51 @@ mod tests {
     }
 
     #[test]
+    fn analytics_row_view_models_format_table_values() {
+        let rows =
+            build_search_analytics_query_row_view_models(vec![SearchAnalyticsQueryRowPayload {
+                query: "boots".to_string(),
+                hits: 12,
+                zero_result_hits: 2,
+                clicks: 5,
+                avg_took_ms: 8.64,
+                avg_results: 3.25,
+                click_through_rate: 0.416,
+                abandonment_rate: 0.125,
+                last_seen_at: "2026-05-31T00:00:00Z".to_string(),
+            }]);
+
+        assert_eq!(rows[0].query, "boots");
+        assert_eq!(rows[0].hits, "12");
+        assert_eq!(rows[0].zero_result_hits, "2");
+        assert_eq!(rows[0].clicks, "5");
+        assert_eq!(rows[0].click_through_rate, "41.6%");
+        assert_eq!(rows[0].abandonment_rate, "12.5%");
+        assert_eq!(rows[0].avg_took_ms, "8.6 ms");
+        assert_eq!(rows[0].avg_results, "3.2");
+        assert_eq!(rows[0].last_seen_at, "2026-05-31T00:00:00Z");
+
+        let insights = build_search_analytics_insight_row_view_models(vec![
+            SearchAnalyticsInsightRowPayload {
+                query: "sneakers".to_string(),
+                hits: 20,
+                zero_result_hits: 0,
+                clicks: 3,
+                click_through_rate: 0.15,
+                abandonment_rate: 0.4,
+                recommendation: "Add synonym".to_string(),
+            },
+        ]);
+
+        assert_eq!(insights[0].query, "sneakers");
+        assert_eq!(insights[0].hits, "20");
+        assert_eq!(insights[0].zero_result_hits, "0");
+        assert_eq!(insights[0].clicks, "3");
+        assert_eq!(insights[0].click_through_rate, "15.0%");
+        assert_eq!(insights[0].recommendation, "Add synonym");
+    }
+
+    #[test]
     fn navigation_and_rebuild_helpers_are_stable() {
         assert_eq!(module_overview_href("search"), "/modules/search");
         assert_eq!(
@@ -566,6 +612,62 @@ pub fn build_search_analytics_summary_view_model(
         abandonment_queries: summary.abandonment_queries.to_string(),
         unique_queries: summary.unique_queries.to_string(),
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchAnalyticsQueryRowViewModel {
+    pub query: String,
+    pub hits: String,
+    pub zero_result_hits: String,
+    pub clicks: String,
+    pub click_through_rate: String,
+    pub abandonment_rate: String,
+    pub avg_took_ms: String,
+    pub avg_results: String,
+    pub last_seen_at: String,
+}
+
+pub fn build_search_analytics_query_row_view_models(
+    rows: Vec<SearchAnalyticsQueryRowPayload>,
+) -> Vec<SearchAnalyticsQueryRowViewModel> {
+    rows.into_iter()
+        .map(|row| SearchAnalyticsQueryRowViewModel {
+            query: row.query,
+            hits: row.hits.to_string(),
+            zero_result_hits: row.zero_result_hits.to_string(),
+            clicks: row.clicks.to_string(),
+            click_through_rate: format_percent_fraction(row.click_through_rate),
+            abandonment_rate: format_percent_fraction(row.abandonment_rate),
+            avg_took_ms: format_milliseconds(row.avg_took_ms),
+            avg_results: format_decimal_1(row.avg_results),
+            last_seen_at: row.last_seen_at,
+        })
+        .collect()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchAnalyticsInsightRowViewModel {
+    pub query: String,
+    pub hits: String,
+    pub zero_result_hits: String,
+    pub clicks: String,
+    pub click_through_rate: String,
+    pub recommendation: String,
+}
+
+pub fn build_search_analytics_insight_row_view_models(
+    rows: Vec<SearchAnalyticsInsightRowPayload>,
+) -> Vec<SearchAnalyticsInsightRowViewModel> {
+    rows.into_iter()
+        .map(|row| SearchAnalyticsInsightRowViewModel {
+            query: row.query,
+            hits: row.hits.to_string(),
+            zero_result_hits: row.zero_result_hits.to_string(),
+            clicks: row.clicks.to_string(),
+            click_through_rate: format_percent_fraction(row.click_through_rate),
+            recommendation: row.recommendation,
+        })
+        .collect()
 }
 
 pub fn document_source_path(document_id: &str, source_module: &str, entity_type: &str) -> String {

@@ -1083,6 +1083,7 @@ fn analytics_rows_table(
     ui_locale: Option<String>,
 ) -> impl IntoView {
     let locale = ui_locale.as_deref();
+    let rows = core::build_search_analytics_query_row_view_models(rows);
     if rows.is_empty() {
         return view! { <div class="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">{empty_message}</div> }.into_any();
     }
@@ -1105,10 +1106,10 @@ fn analytics_rows_table(
                 <td class="px-4 py-3 align-top text-xs text-muted-foreground">{row.hits}</td>
                 <td class="px-4 py-3 align-top text-xs text-muted-foreground">{row.zero_result_hits}</td>
                 <td class="px-4 py-3 align-top text-xs text-muted-foreground">{row.clicks}</td>
-                <td class="px-4 py-3 align-top text-xs text-muted-foreground">{core::format_percent_fraction(row.click_through_rate)}</td>
-                <td class="px-4 py-3 align-top text-xs text-muted-foreground">{core::format_percent_fraction(row.abandonment_rate)}</td>
-                <td class="px-4 py-3 align-top text-xs text-muted-foreground">{core::format_milliseconds(row.avg_took_ms)}</td>
-                <td class="px-4 py-3 align-top text-xs text-muted-foreground">{core::format_decimal_1(row.avg_results)}</td>
+                <td class="px-4 py-3 align-top text-xs text-muted-foreground">{row.click_through_rate}</td>
+                <td class="px-4 py-3 align-top text-xs text-muted-foreground">{row.abandonment_rate}</td>
+                <td class="px-4 py-3 align-top text-xs text-muted-foreground">{row.avg_took_ms}</td>
+                <td class="px-4 py-3 align-top text-xs text-muted-foreground">{row.avg_results}</td>
                 <td class="px-4 py-3 align-top text-xs text-muted-foreground">{row.last_seen_at}</td>
             </tr>
         }).collect_view()}</tbody>
@@ -1120,6 +1121,7 @@ fn intelligence_table(
     ui_locale: Option<String>,
 ) -> impl IntoView {
     let locale = ui_locale.as_deref();
+    let rows = core::build_search_analytics_insight_row_view_models(rows);
     if rows.is_empty() {
         return view! { <div class="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">{t(locale, "search.analytics.intelligence.empty", "No query-intelligence candidates surfaced in the current window.")}</div> }.into_any();
     }
@@ -1139,7 +1141,7 @@ fn intelligence_table(
                 <td class="px-4 py-3 align-top text-xs text-muted-foreground">{row.hits}</td>
                 <td class="px-4 py-3 align-top text-xs text-muted-foreground">{row.zero_result_hits}</td>
                 <td class="px-4 py-3 align-top text-xs text-muted-foreground">{row.clicks}</td>
-                <td class="px-4 py-3 align-top text-xs text-muted-foreground">{core::format_percent_fraction(row.click_through_rate)}</td>
+                <td class="px-4 py-3 align-top text-xs text-muted-foreground">{row.click_through_rate}</td>
                 <td class="px-4 py-3 align-top text-xs text-muted-foreground">{row.recommendation}</td>
             </tr>
         }).collect_view()}</tbody>

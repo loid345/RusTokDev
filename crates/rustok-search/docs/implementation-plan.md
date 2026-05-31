@@ -6,8 +6,8 @@
 ## Execution checkpoint
 
 - Current phase: phase_b_in_progress
-- Last checkpoint: Phase B slice #21 перенёс render-ready values для analytics summary cards во framework-agnostic `SearchAnalyticsSummaryViewModel` в `admin/src/core.rs`.
-- Next step: Продолжить Phase B: вынести следующий render-ready фрагмент analytics/dictionaries tables или diagnostics cards, сохраняя Leptos как thin adapter.
+- Last checkpoint: Phase B slice #22 перенёс render-ready values для analytics query/intelligence table rows во framework-agnostic row view-models в `admin/src/core.rs`.
+- Next step: Продолжить Phase B: вынести следующий render-ready фрагмент diagnostics/dictionaries tables или card state, сохраняя Leptos как thin adapter.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок и central readiness board.
 - Last updated at (UTC): 2026-05-31T00:00:00Z
@@ -23,7 +23,8 @@
   - Phase B slices #17-18 extracted admin route-query update semantics and preview form/request normalization into `admin/src/core.rs`; native/GraphQL transport was not modified;
   - Phase B slice #19 promoted reusable UI text/CSV and route-query update semantics to `rustok-api`, consumed by `leptos-ui-routing` and search admin core;
   - Phase B slice #20 перенёс render-ready labels, summary/preset text и представление result item-ов admin preview в `admin/src/core.rs`, оставив `admin/src/lib.rs` Leptos render adapter без изменений transport;
-  - Phase B slice #21 перенёс форматирование analytics summary card values в `SearchAnalyticsSummaryViewModel`, поэтому Leptos analytics panel больше не форматирует метрики inline.
+  - Phase B slice #21 перенёс форматирование analytics summary card values в `SearchAnalyticsSummaryViewModel`, поэтому Leptos analytics panel больше не форматирует метрики inline;
+  - Phase B slice #22 перенёс форматирование analytics query/intelligence table rows в core row view-models, сохранив transport/native+GraphQL paths без изменений.
 - Last verified at (UTC): 2026-05-31T00:00:00Z
 - Owner: `rustok-search` module team
 
@@ -114,3 +115,4 @@
 - [x] Slice 19: reusable UI text/CSV normalization and route-query update intent promoted to `rustok-api` (`normalize_ui_text`, `parse_ui_csv`, `UiRouteQueryUpdate`) and applied by `leptos-ui-routing`.
 - [x] Slice 20: render-ready view-model admin preview panel перенесён в core (`SearchPreviewLabels`, `SearchPreviewViewModel`, `build_search_preview_view_model`), поэтому Leptos panel только рендерит подготовленные поля и click actions.
 - [x] Slice 21: render-ready values analytics summary cards перенесены в core (`SearchAnalyticsSummaryViewModel`, `build_search_analytics_summary_view_model`), поэтому Leptos analytics panel передаёт в cards уже подготовленные строки.
+- [x] Slice 22: render-ready values analytics query/intelligence table rows перенесены в core (`SearchAnalyticsQueryRowViewModel`, `SearchAnalyticsInsightRowViewModel`), поэтому Leptos tables рендерят уже подготовленные строки без inline metric formatting.
