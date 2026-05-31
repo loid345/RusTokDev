@@ -1,26 +1,19 @@
 use crate::api::{self, ApiError};
+use crate::core::ProductStorefrontFetchRequest;
 use crate::model::StorefrontProductsData;
 
-#[allow(clippy::too_many_arguments)]
 pub async fn fetch_products(
-    selected_handle: Option<String>,
-    locale: Option<String>,
-    currency_code: Option<String>,
-    region_id: Option<String>,
-    price_list_id: Option<String>,
-    channel_id: Option<String>,
-    channel_slug: Option<String>,
-    quantity: Option<i32>,
+    request: ProductStorefrontFetchRequest,
 ) -> Result<StorefrontProductsData, ApiError> {
     api::fetch_storefront_products(
-        selected_handle,
-        locale,
-        currency_code,
-        region_id,
-        price_list_id,
-        channel_id,
-        channel_slug,
-        quantity,
+        request.selected_handle,
+        request.locale,
+        request.currency_code,
+        request.region_id,
+        request.price_list_id,
+        request.channel_id,
+        request.channel_slug,
+        request.quantity,
     )
     .await
 }

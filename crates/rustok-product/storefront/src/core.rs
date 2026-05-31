@@ -17,6 +17,26 @@ pub struct ProductStorefrontRouteInput {
     pub quantity: Option<i32>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProductStorefrontFetchRequest {
+    pub selected_handle: Option<String>,
+    pub locale: Option<String>,
+    pub currency_code: Option<String>,
+    pub region_id: Option<String>,
+    pub price_list_id: Option<String>,
+    pub channel_id: Option<String>,
+    pub channel_slug: Option<String>,
+    pub quantity: Option<i32>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProductStorefrontShellViewModel {
+    pub badge: String,
+    pub title: String,
+    pub subtitle: String,
+    pub load_error: String,
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn build_storefront_route_input(
     handle: Option<String>,
@@ -40,11 +60,55 @@ pub fn build_storefront_route_input(
     }
 }
 
+pub fn build_storefront_fetch_request(
+    input: &ProductStorefrontRouteInput,
+) -> ProductStorefrontFetchRequest {
+    ProductStorefrontFetchRequest {
+        selected_handle: input.handle.clone(),
+        locale: input.locale.clone(),
+        currency_code: input.currency_code.clone(),
+        region_id: input.region_id.clone(),
+        price_list_id: input.price_list_id.clone(),
+        channel_id: input.channel_id.clone(),
+        channel_slug: input.channel_slug.clone(),
+        quantity: input.quantity,
+    }
+}
+
+pub fn build_product_storefront_shell_view_model(
+    locale: Option<&str>,
+) -> ProductStorefrontShellViewModel {
+    ProductStorefrontShellViewModel {
+        badge: t(locale, "product.badge", "product"),
+        title: t(
+            locale,
+            "product.title",
+            "Published catalog from the product module",
+        ),
+        subtitle: t(
+            locale,
+            "product.subtitle",
+            "This storefront route reads published catalog data through the product-owned package, with GraphQL kept as a fallback path.",
+        ),
+        load_error: t(
+            locale,
+            "product.error.load",
+            "Failed to load storefront product data",
+        ),
+    }
+}
+
 pub fn parse_storefront_quantity(value: Option<&str>) -> Option<i32> {
     value
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .and_then(|value| value.parse::<i32>().ok())
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SelectedProductEmptyViewModel {
+    pub title: String,
+    pub body: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -60,6 +124,58 @@ pub struct SelectedProductViewModel {
     pub pricing_context: Option<String>,
     pub inventory: i32,
     pub pricing_href: String,
+    pub preview_context_label: String,
+    pub pricing_ownership_note: String,
+    pub catalog_snapshot_label: String,
+    pub pricing_preview_label: String,
+    pub inventory_label: String,
+    pub open_pricing_label: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProductCatalogRailLabels {
+    pub title: String,
+    pub total_template: String,
+    pub empty_message: String,
+    pub open_label: String,
+    pub catalog_fallback_label: String,
+    pub vendor_fallback_label: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProductCatalogRailItemViewModel {
+    pub product_type: String,
+    pub title: String,
+    pub vendor: String,
+    pub seller_boundary: String,
+    pub published_at: String,
+    pub href: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProductCatalogRailViewModel {
+    pub title: String,
+    pub total_label: String,
+    pub empty_message: String,
+    pub open_label: String,
+    pub items: Vec<ProductCatalogRailItemViewModel>,
+}
+
+pub fn build_selected_product_empty_view_model(
+    locale: Option<&str>,
+) -> SelectedProductEmptyViewModel {
+    SelectedProductEmptyViewModel {
+        title: t(
+            locale,
+            "product.selected.emptyTitle",
+            "No published product selected",
+        ),
+        body: t(
+            locale,
+            "product.selected.emptyBody",
+            "Publish a product from the product admin package or open one with `?handle=`.",
+        ),
+    }
 }
 
 pub fn build_selected_product_view_model(
@@ -129,6 +245,32 @@ pub fn build_selected_product_view_model(
         pricing_context,
         inventory: variant.map(|item| item.inventory_quantity).unwrap_or(0),
         pricing_href,
+        preview_context_label: t(
+            locale,
+            "product.selected.previewContext",
+            "pricing preview",
+        ),
+        pricing_ownership_note: t(
+            locale,
+            "product.selected.pricingOwnershipNote",
+            "Catalog snapshot stays product-owned; resolved pricing comes from the pricing module preview.",
+        ),
+        catalog_snapshot_label: t(
+            locale,
+            "product.selected.catalogSnapshot",
+            "Catalog snapshot",
+        ),
+        pricing_preview_label: t(
+            locale,
+            "product.selected.pricingPreview",
+            "Pricing module preview",
+        ),
+        inventory_label: t(locale, "product.selected.inventory", "Inventory"),
+        open_pricing_label: t(
+            locale,
+            "product.selected.openPricing",
+            "Open pricing module",
+        ),
     }
 }
 
@@ -307,6 +449,47 @@ pub fn format_pricing_context(locale: Option<&str>, context: &ProductPricingCont
     parts.join(" | ")
 }
 
+pub fn count_label(template: &str, total: u64) -> String {
+    template.replace("{count}", &total.to_string())
+}
+
+pub fn build_product_catalog_rail_view_model(
+    module_route_base: &str,
+    items: &[crate::model::ProductListItem],
+    total: u64,
+    locale: Option<&str>,
+    labels: ProductCatalogRailLabels,
+) -> ProductCatalogRailViewModel {
+    let items = items
+        .iter()
+        .map(|product| ProductCatalogRailItemViewModel {
+            product_type: product
+                .product_type
+                .clone()
+                .unwrap_or_else(|| labels.catalog_fallback_label.clone()),
+            title: product.title.clone(),
+            vendor: product
+                .vendor
+                .clone()
+                .unwrap_or_else(|| labels.vendor_fallback_label.clone()),
+            seller_boundary: format_seller_boundary(locale, product.seller_id.as_deref()),
+            published_at: product
+                .published_at
+                .clone()
+                .unwrap_or_else(|| product.created_at.clone()),
+            href: format!("{module_route_base}?handle={}", product.handle),
+        })
+        .collect();
+
+    ProductCatalogRailViewModel {
+        title: labels.title,
+        total_label: count_label(labels.total_template.as_str(), total),
+        empty_message: labels.empty_message,
+        open_label: labels.open_label,
+        items,
+    }
+}
+
 pub fn build_storefront_pricing_href(
     module_route_base: &str,
     handle: Option<&str>,
@@ -394,6 +577,31 @@ mod tests {
         assert_eq!(input.quantity, Some(3));
         assert_eq!(parse_storefront_quantity(Some("bad")), None);
         assert_eq!(parse_storefront_quantity(Some("   ")), None);
+
+        let request = build_storefront_fetch_request(&input);
+        assert_eq!(request.selected_handle.as_deref(), Some("boot"));
+        assert_eq!(request.locale.as_deref(), Some("en"));
+        assert_eq!(request.currency_code.as_deref(), Some("USD"));
+        assert_eq!(request.quantity, Some(3));
+    }
+
+    #[test]
+    fn storefront_shell_view_model_is_built_without_ui_runtime() {
+        let view_model = build_product_storefront_shell_view_model(Some("en"));
+
+        assert_eq!(view_model.badge, "product");
+        assert_eq!(
+            view_model.title,
+            "Published catalog from the product module"
+        );
+        assert_eq!(
+            view_model.subtitle,
+            "This storefront route reads product-owned catalog data and shows resolved pricing through a separate pricing-module hook, with GraphQL kept as a fallback path."
+        );
+        assert_eq!(
+            view_model.load_error,
+            "Failed to load storefront product data"
+        );
     }
 
     #[test]
@@ -450,6 +658,49 @@ mod tests {
             build_storefront_pricing_href("/products", Some("boot"), None, Some(&variant)),
             "/products?handle=boot&currency=USD".to_string(),
         );
+    }
+
+    #[test]
+    fn catalog_rail_view_model_is_built_without_ui_runtime() {
+        let item = crate::model::ProductListItem {
+            id: "product-1".to_string(),
+            status: "published".to_string(),
+            seller_id: Some("seller-1".to_string()),
+            vendor: None,
+            product_type: None,
+            tags: vec!["featured".to_string()],
+            title: "Trail boot".to_string(),
+            handle: "trail-boot".to_string(),
+            published_at: None,
+            created_at: "2026-05-29T00:00:00Z".to_string(),
+        };
+
+        let view_model = build_product_catalog_rail_view_model(
+            "/products",
+            &[item],
+            3,
+            Some("en"),
+            ProductCatalogRailLabels {
+                title: "Published products".to_string(),
+                total_template: "{count} total".to_string(),
+                empty_message: "No products".to_string(),
+                open_label: "Open".to_string(),
+                catalog_fallback_label: "catalog".to_string(),
+                vendor_fallback_label: "Independent label".to_string(),
+            },
+        );
+
+        assert_eq!(view_model.title, "Published products");
+        assert_eq!(view_model.total_label, "3 total");
+        assert_eq!(view_model.open_label, "Open");
+        assert_eq!(view_model.items.len(), 1);
+        let item = &view_model.items[0];
+        assert_eq!(item.product_type, "catalog");
+        assert_eq!(item.title, "Trail boot");
+        assert_eq!(item.vendor, "Independent label");
+        assert_eq!(item.seller_boundary, "seller id: seller-1");
+        assert_eq!(item.published_at, "2026-05-29T00:00:00Z");
+        assert_eq!(item.href, "/products?handle=trail-boot");
     }
 
     #[test]
@@ -518,6 +769,22 @@ mod tests {
         assert_eq!(
             view_model.pricing_href,
             "/pricing?handle=trail-boot&currency=USD&price_list_id=list-1&channel_slug=web&quantity=4",
+        );
+        assert_eq!(view_model.preview_context_label, "pricing preview");
+        assert_eq!(view_model.catalog_snapshot_label, "Catalog snapshot");
+        assert_eq!(view_model.pricing_preview_label, "Pricing module preview");
+        assert_eq!(view_model.inventory_label, "Inventory");
+        assert_eq!(view_model.open_pricing_label, "Open pricing module");
+    }
+
+    #[test]
+    fn selected_product_empty_view_model_is_built_without_ui_runtime() {
+        let view_model = build_selected_product_empty_view_model(Some("en"));
+
+        assert_eq!(view_model.title, "No published product selected");
+        assert_eq!(
+            view_model.body,
+            "Publish a product from the product admin package or open one with `?handle=`."
         );
     }
 }

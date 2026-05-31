@@ -5,7 +5,9 @@ mod model;
 mod transport;
 
 use crate::core::{
-    build_selected_product_view_model, build_storefront_route_input, format_seller_boundary,
+    build_product_catalog_rail_view_model, build_product_storefront_shell_view_model,
+    build_selected_product_empty_view_model, build_selected_product_view_model,
+    build_storefront_fetch_request, build_storefront_route_input, ProductCatalogRailLabels,
 };
 use crate::i18n::t;
 use crate::model::{
@@ -29,80 +31,26 @@ pub fn ProductView() -> impl IntoView {
         read_route_query_value(&route_context, "channel_slug"),
         read_route_query_value(&route_context, "quantity"),
     );
-    let selected_handle = route_input.handle.clone();
-    let selected_locale = route_input.locale.clone();
-    let selected_currency_code = route_input.currency_code.clone();
-    let selected_region_id = route_input.region_id.clone();
-    let selected_price_list_id = route_input.price_list_id.clone();
-    let selected_channel_id = route_input.channel_id.clone();
-    let selected_channel_slug = route_input.channel_slug.clone();
-    let selected_quantity = route_input.quantity;
-    let badge = t(selected_locale.as_deref(), "product.badge", "product");
-    let title = t(
-        selected_locale.as_deref(),
-        "product.title",
-        "Published catalog from the product module",
-    );
-    let subtitle = t(
-        selected_locale.as_deref(),
-        "product.subtitle",
-        "This storefront route reads published catalog data through the product-owned package, with GraphQL kept as a fallback path.",
-    );
-    let load_error = t(
-        selected_locale.as_deref(),
-        "product.error.load",
-        "Failed to load storefront product data",
-    );
+    let shell = build_product_storefront_shell_view_model(route_input.locale.as_deref());
+    let fetch_request = build_storefront_fetch_request(&route_input);
 
     let resource = Resource::new_blocking(
-        move || {
-            (
-                selected_handle.clone(),
-                selected_locale.clone(),
-                selected_currency_code.clone(),
-                selected_region_id.clone(),
-                selected_price_list_id.clone(),
-                selected_channel_id.clone(),
-                selected_channel_slug.clone(),
-                selected_quantity,
-            )
-        },
-        move |(
-            handle,
-            locale,
-            currency_code,
-            region_id,
-            price_list_id,
-            channel_id,
-            channel_slug,
-            quantity,
-        )| async move {
-            transport::fetch_products(
-                handle,
-                locale,
-                currency_code,
-                region_id,
-                price_list_id,
-                channel_id,
-                channel_slug,
-                quantity,
-            )
-            .await
-        },
+        move || fetch_request.clone(),
+        move |request| async move { transport::fetch_products(request).await },
     );
 
     view! {
         <section class="rounded-[2rem] border border-border bg-card p-8 shadow-sm">
             <div class="max-w-3xl space-y-3">
-                <span class="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">{badge}</span>
-                <h2 class="text-3xl font-semibold text-card-foreground">{title}</h2>
-                <p class="text-sm text-muted-foreground">{subtitle}</p>
+                <span class="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs font-medium uppercase tracking-[0.2em] text-muted-foreground">{shell.badge}</span>
+                <h2 class="text-3xl font-semibold text-card-foreground">{shell.title}</h2>
+                <p class="text-sm text-muted-foreground">{shell.subtitle}</p>
             </div>
             <div class="mt-8">
                 <Suspense fallback=|| view! { <div class="space-y-4"><div class="h-48 animate-pulse rounded-3xl bg-muted"></div><div class="grid gap-3 md:grid-cols-3"><div class="h-28 animate-pulse rounded-2xl bg-muted"></div><div class="h-28 animate-pulse rounded-2xl bg-muted"></div><div class="h-28 animate-pulse rounded-2xl bg-muted"></div></div></div> }>
                     {move || {
                         let resource = resource;
-                        let load_error = load_error.clone();
+                        let load_error = shell.load_error.clone();
                         Suspend::new(async move {
                             match resource.await {
                                 Ok(data) => view! { <ProductShowcase data /> }.into_any(),
@@ -141,16 +89,18 @@ fn SelectedProductCard(
     let route_context = use_context::<UiRouteContext>().unwrap_or_default();
     let locale = route_context.locale.clone();
     let Some(product) = product else {
+        let view_model = build_selected_product_empty_view_model(locale.as_deref());
         return view! {
             <article class="rounded-3xl border border-dashed border-border p-8">
                 <h3 class="text-lg font-semibold text-card-foreground">
-                    {t(locale.as_deref(), "product.selected.emptyTitle", "No published product selected")}
+                    {view_model.title}
                 </h3>
                 <p class="mt-2 text-sm text-muted-foreground">
-                    {t(locale.as_deref(), "product.selected.emptyBody", "Publish a product from the product admin package or open one with `?handle=`.")}
+                    {view_model.body}
                 </p>
             </article>
-        }.into_any();
+        }
+        .into_any();
     };
 
     let pricing_route_base = route_context.module_route_base("pricing");
@@ -178,33 +128,25 @@ fn SelectedProductCard(
             {view_model.pricing_context.as_ref().map(|pricing_context| view! {
                 <div class="mt-4 inline-flex flex-wrap items-center gap-2 rounded-2xl border border-primary/20 bg-primary/5 px-4 py-2 text-xs text-primary">
                     <span class="font-semibold uppercase tracking-[0.16em]">
-                        {t(locale.as_deref(), "product.selected.previewContext", "pricing preview")}
+                        {view_model.preview_context_label.clone()}
                     </span>
                     <span>{pricing_context.clone()}</span>
                 </div>
             })}
             <p class="mt-4 text-xs text-muted-foreground">
-                {t(
-                    locale.as_deref(),
-                    "product.selected.pricingOwnershipNote",
-                    "Catalog snapshot stays product-owned; resolved pricing comes from the pricing module preview.",
-                )}
+                {view_model.pricing_ownership_note.clone()}
             </p>
             <div class="mt-6 grid gap-3 md:grid-cols-3">
-                <MetricCard title=t(locale.as_deref(), "product.selected.catalogSnapshot", "Catalog snapshot") value=view_model.catalog_snapshot />
-                <MetricCard title=t(locale.as_deref(), "product.selected.pricingPreview", "Pricing module preview") value=view_model.pricing_preview />
-                <MetricCard title=t(locale.as_deref(), "product.selected.inventory", "Inventory") value=view_model.inventory.to_string() />
+                <MetricCard title=view_model.catalog_snapshot_label.clone() value=view_model.catalog_snapshot />
+                <MetricCard title=view_model.pricing_preview_label.clone() value=view_model.pricing_preview />
+                <MetricCard title=view_model.inventory_label.clone() value=view_model.inventory.to_string() />
             </div>
             <div class="mt-4">
                 <a
                     class="inline-flex rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition hover:bg-accent"
                     href=view_model.pricing_href
                 >
-                    {t(
-                        locale.as_deref(),
-                        "product.selected.openPricing",
-                        "Open pricing module",
-                    )}
+                    {view_model.open_pricing_label}
                 </a>
             </div>
         </article>
@@ -221,33 +163,59 @@ fn CatalogRail(items: Vec<ProductListItem>, total: u64) -> impl IntoView {
         .cloned()
         .unwrap_or_else(|| "products".to_string());
     let module_route_base = route_context.module_route_base(route_segment.as_str());
+    let view_model = build_product_catalog_rail_view_model(
+        module_route_base.as_str(),
+        &items,
+        total,
+        locale.as_deref(),
+        ProductCatalogRailLabels {
+            title: t(
+                locale.as_deref(),
+                "product.list.title",
+                "Published products",
+            ),
+            total_template: t(locale.as_deref(), "product.list.total", "{count} total"),
+            empty_message: t(
+                locale.as_deref(),
+                "product.list.empty",
+                "No published products are available yet.",
+            ),
+            open_label: t(locale.as_deref(), "product.list.open", "Open"),
+            catalog_fallback_label: t(locale.as_deref(), "product.selected.catalog", "catalog"),
+            vendor_fallback_label: t(
+                locale.as_deref(),
+                "product.list.vendorFallback",
+                "Independent label",
+            ),
+        },
+    );
 
-    if items.is_empty() {
-        return view! { <article class="rounded-3xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">{t(locale.as_deref(), "product.list.empty", "No published products are available yet.")}</article> }.into_any();
+    if view_model.items.is_empty() {
+        return view! { <article class="rounded-3xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">{view_model.empty_message}</article> }.into_any();
     }
+
+    let open_label = view_model.open_label.clone();
 
     view! {
         <div class="space-y-4">
             <div class="flex items-center justify-between gap-3">
-                <h3 class="text-lg font-semibold text-card-foreground">{t(locale.as_deref(), "product.list.title", "Published products")}</h3>
+                <h3 class="text-lg font-semibold text-card-foreground">{view_model.title.clone()}</h3>
                 <span class="text-sm text-muted-foreground">
-                    {t(locale.as_deref(), "product.list.total", "{count} total").replace("{count}", &total.to_string())}
+                    {view_model.total_label.clone()}
                 </span>
             </div>
             <div class="space-y-3">
-                {items.into_iter().map(|product| {
-                    let locale = locale.clone();
-                    let href = format!("{module_route_base}?handle={}", product.handle);
-                    let seller_boundary = format_seller_boundary(locale.as_deref(), product.seller_id.as_deref());
+                {view_model.items.into_iter().map(|product| {
+                    let open_label = open_label.clone();
                     view! {
                         <article class="rounded-2xl border border-border bg-background p-5">
-                            <div class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{product.product_type.unwrap_or_else(|| t(locale.as_deref(), "product.selected.catalog", "catalog"))}</div>
+                            <div class="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">{product.product_type}</div>
                             <h4 class="mt-2 text-base font-semibold text-card-foreground">{product.title}</h4>
-                            <p class="mt-2 text-sm text-muted-foreground">{product.vendor.unwrap_or_else(|| t(locale.as_deref(), "product.list.vendorFallback", "Independent label"))}</p>
-                            <p class="mt-1 text-xs text-muted-foreground">{seller_boundary}</p>
+                            <p class="mt-2 text-sm text-muted-foreground">{product.vendor}</p>
+                            <p class="mt-1 text-xs text-muted-foreground">{product.seller_boundary}</p>
                             <div class="mt-4 flex items-center justify-between gap-3">
-                                <span class="text-xs text-muted-foreground">{product.published_at.unwrap_or(product.created_at)}</span>
-                                <a class="inline-flex text-sm font-medium text-primary hover:underline" href=href>{t(locale.as_deref(), "product.list.open", "Open")}</a>
+                                <span class="text-xs text-muted-foreground">{product.published_at}</span>
+                                <a class="inline-flex text-sm font-medium text-primary hover:underline" href=product.href>{open_label}</a>
                             </div>
                         </article>
                     }
