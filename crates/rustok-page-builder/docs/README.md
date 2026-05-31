@@ -34,12 +34,12 @@
 
 Runtime provider-а фиксирует baseline fallback-профили в `src/rollout.rs`; consumer-модули и host adapters обязаны держать те же имена outcome.
 
-| Профиль | Admin visual path | Preview | Properties/tree | Publish | Read/list/storefront paths | Expected typed error |
+| Профиль | Admin visual path | Preview | Properties/tree | Publish | Read/list/storefront paths | Disabled capabilities |
 |---|---|---|---|---|---|---|
 | `all_on` | `editable_builder` | `available` | `available` | `available` | `stable` | — |
 | `publish_off` | `editable_builder_publish_disabled` | `available` | `available` | `typed_feature_disabled_error` | `stable` | `publish` |
-| `preview_off` | `preview_hidden_properties_available` | `typed_feature_disabled_error` | `available` | `typed_feature_disabled_error` | `stable` | `preview` |
-| `builder_off` | `readonly_fallback` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `stable` | `builder` |
+| `preview_off` | `preview_hidden_properties_available` | `typed_feature_disabled_error` | `available` | `typed_feature_disabled_error` | `stable` | `preview`, `publish` |
+| `builder_off` | `readonly_fallback` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `stable` | `preview`, `tree`, `properties`, `publish` |
 
 ## Проверка
 

@@ -52,18 +52,18 @@
 
 - [x] Typed fallback matrix: `builder_off`, `preview_off`, `publish_off` с ожидаемыми runtime/error outcomes.
 - [x] Unified builder error catalog для `validation/sanitize/runtime/feature-disabled` без расхождения между GraphQL, `#[server]` и UI adapters.
-- [ ] CI fallback gate для профилей `builder.enabled=false` и `builder.publish.enabled=false`.
+- [~] CI fallback gate для профилей `builder.enabled=false` и `builder.publish.enabled=false`: provider runtime gate добавлен, consumer-level integration gate остаётся в B4.
 
 ### Fallback matrix (admin/list/read/publish snapshots)
 
 Эта матрица является consumer-side snapshot для `rustok-pages` и должна совпадать с provider matrix в `rustok-page-builder::rollout`. Read/list/menu paths остаются owned by pages и не должны зависеть от доступности builder capability endpoint.
 
-| Профиль | Admin visual path | Preview | Properties/tree | Publish | Read/list/storefront paths | Expected typed error |
+| Профиль | Admin visual path | Preview | Properties/tree | Publish | Read/list/storefront paths | Disabled capabilities |
 |---|---|---|---|---|---|---|
 | `all_on` | `editable_builder` | `available` | `available` | `available` | `stable` | — |
 | `publish_off` | `editable_builder_publish_disabled` | `available` | `available` | `typed_feature_disabled_error` | `stable` | `publish` |
-| `preview_off` | `preview_hidden_properties_available` | `typed_feature_disabled_error` | `available` | `typed_feature_disabled_error` | `stable` | `preview` |
-| `builder_off` | `readonly_fallback` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `stable` | `builder` |
+| `preview_off` | `preview_hidden_properties_available` | `typed_feature_disabled_error` | `available` | `typed_feature_disabled_error` | `stable` | `preview`, `publish` |
+| `builder_off` | `readonly_fallback` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `stable` | `preview`, `tree`, `properties`, `publish` |
 
 Операционные заметки:
 
@@ -179,8 +179,8 @@ Rollback trigger:
 
 ### B4. Verification gates
 
-- [ ] Включить fallback regression checks в `cargo xtask module test pages` (или эквивалентный CI gate).
-- [ ] Добавить targeted integration checks для `builder.publish.enabled=false` и `builder.enabled=false`.
+- [~] Включить fallback regression checks в `cargo xtask module test pages` (или эквивалентный CI gate): provider gate подключён к `verify-page-builder-fba-baseline.mjs`, pages xtask-интеграция остаётся открытой.
+- [ ] Добавить targeted integration checks для `builder.publish.enabled=false` и `builder.enabled=false` на уровне `pages` transport/UI adapters.
 - [ ] Зафиксировать evidence-template для Wave hand-off (platform + pages owner approval).
 
 ## Wave 0 execution checklist (операционный минимум для `pages`)

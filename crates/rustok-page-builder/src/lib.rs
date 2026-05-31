@@ -207,12 +207,17 @@ mod tests {
         let publish_off = BuilderToggleProfile::PublishOff.fallback_outcome();
         assert_eq!(publish_off.publish, "typed_feature_disabled_error");
         assert_eq!(publish_off.read_paths, "stable");
+        assert_eq!(publish_off.disabled_capabilities, &["publish"]);
 
         let builder_off = BuilderToggleProfile::BuilderOff.fallback_outcome();
         assert_eq!(builder_off.admin_visual_path, "readonly_fallback");
         assert_eq!(builder_off.preview, "typed_feature_disabled_error");
         assert_eq!(builder_off.properties, "typed_feature_disabled_error");
         assert_eq!(builder_off.publish, "typed_feature_disabled_error");
+        assert_eq!(
+            builder_off.disabled_capabilities,
+            &["preview", "tree", "properties", "publish"]
+        );
     }
 
     #[test]

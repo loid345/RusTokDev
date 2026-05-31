@@ -78,7 +78,7 @@ impl BuilderToggleProfile {
                 properties: "available",
                 publish: "available",
                 read_paths: "stable",
-                expected_error: None,
+                disabled_capabilities: &[],
             },
             Self::PublishOff => BuilderFallbackOutcome {
                 profile: self,
@@ -87,7 +87,7 @@ impl BuilderToggleProfile {
                 properties: "available",
                 publish: "typed_feature_disabled_error",
                 read_paths: "stable",
-                expected_error: Some("publish"),
+                disabled_capabilities: &["publish"],
             },
             Self::PreviewOff => BuilderFallbackOutcome {
                 profile: self,
@@ -96,7 +96,7 @@ impl BuilderToggleProfile {
                 properties: "available",
                 publish: "typed_feature_disabled_error",
                 read_paths: "stable",
-                expected_error: Some("preview"),
+                disabled_capabilities: &["preview", "publish"],
             },
             Self::BuilderOff => BuilderFallbackOutcome {
                 profile: self,
@@ -105,7 +105,7 @@ impl BuilderToggleProfile {
                 properties: "typed_feature_disabled_error",
                 publish: "typed_feature_disabled_error",
                 read_paths: "stable",
-                expected_error: Some("builder"),
+                disabled_capabilities: &["preview", "tree", "properties", "publish"],
             },
         }
     }
@@ -119,7 +119,7 @@ pub struct BuilderFallbackOutcome {
     pub properties: &'static str,
     pub publish: &'static str,
     pub read_paths: &'static str,
-    pub expected_error: Option<&'static str>,
+    pub disabled_capabilities: &'static [&'static str],
 }
 
 pub fn fallback_matrix() -> [BuilderFallbackOutcome; 4] {

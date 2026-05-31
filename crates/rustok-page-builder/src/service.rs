@@ -98,6 +98,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::rollout::BuilderToggleProfile;
 
     struct StubService;
 
@@ -146,6 +147,44 @@ mod tests {
         }
     }
 
+    fn preview_input() -> PreviewPageBuilderInput {
+        PreviewPageBuilderInput {
+            page_id: "home".to_string(),
+            schema_version: "grapesjs_v1".to_string(),
+            project_data: serde_json::json!({}),
+        }
+    }
+
+    fn tree_input() -> BuilderTreeInput {
+        BuilderTreeInput {
+            page_id: "home".to_string(),
+        }
+    }
+
+    fn properties_input() -> BuilderNodePropertiesInput {
+        BuilderNodePropertiesInput {
+            page_id: "home".to_string(),
+            node_id: "hero".to_string(),
+            properties: serde_json::json!({ "title": "Welcome" }),
+        }
+    }
+
+    fn publish_input() -> PublishPageBuilderInput {
+        PublishPageBuilderInput {
+            page_id: "home".to_string(),
+            revision_id: "rev-1".to_string(),
+            schema_version: "grapesjs_v1".to_string(),
+            project_data: serde_json::json!({}),
+        }
+    }
+
+    fn assert_disabled<T: std::fmt::Debug>(result: PageBuilderServiceResult<T>, capability: &str) {
+        match result.expect_err("capability should be disabled") {
+            PageBuilderServiceError::CapabilityDisabled(name) => assert_eq!(name, capability),
+            other => panic!("unexpected error: {other:?}"),
+        }
+    }
+
     #[tokio::test]
     async fn guarded_service_blocks_disabled_publish() {
         let flags = BuilderCapabilityFlags {
@@ -171,5 +210,54 @@ mod tests {
             PageBuilderServiceError::CapabilityDisabled(name) => assert_eq!(name, "publish"),
             other => panic!("unexpected error: {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn guarded_service_fallback_profiles_enforce_capability_outcomes() {
+        let service =
+            CapabilityGuardedService::new(StubService, BuilderToggleProfile::AllOn.flags());
+        service
+            .preview(preview_input())
+            .await
+            .expect("preview enabled");
+        service.tree(tree_input()).await.expect("tree enabled");
+        service
+            .properties(properties_input())
+            .await
+            .expect("properties enabled");
+        service
+            .publish(publish_input())
+            .await
+            .expect("publish enabled");
+
+        let service =
+            CapabilityGuardedService::new(StubService, BuilderToggleProfile::PublishOff.flags());
+        service
+            .preview(preview_input())
+            .await
+            .expect("preview enabled");
+        service.tree(tree_input()).await.expect("tree enabled");
+        service
+            .properties(properties_input())
+            .await
+            .expect("properties enabled");
+        assert_disabled(service.publish(publish_input()).await, "publish");
+
+        let service =
+            CapabilityGuardedService::new(StubService, BuilderToggleProfile::PreviewOff.flags());
+        assert_disabled(service.preview(preview_input()).await, "preview");
+        service.tree(tree_input()).await.expect("tree enabled");
+        service
+            .properties(properties_input())
+            .await
+            .expect("properties enabled");
+        assert_disabled(service.publish(publish_input()).await, "publish");
+
+        let service =
+            CapabilityGuardedService::new(StubService, BuilderToggleProfile::BuilderOff.flags());
+        assert_disabled(service.preview(preview_input()).await, "preview");
+        assert_disabled(service.tree(tree_input()).await, "tree");
+        assert_disabled(service.properties(properties_input()).await, "properties");
+        assert_disabled(service.publish(publish_input()).await, "publish");
     }
 }

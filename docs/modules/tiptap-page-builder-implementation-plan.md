@@ -120,18 +120,18 @@
 
 Единая матрица fallback-поведения синхронизирована с runtime helper-ами `rustok-page-builder::rollout` и consumer manifest `rustok-pages`. Она задаёт минимальный ожидаемый outcome для Next/Leptos/Flutter adapters без требования 1:1 UI-клона.
 
-| Профиль | Admin visual path | Preview | Properties/tree | Publish | Read/list/storefront paths | Expected typed error |
+| Профиль | Admin visual path | Preview | Properties/tree | Publish | Read/list/storefront paths | Disabled capabilities |
 |---|---|---|---|---|---|---|
 | `all_on` | `editable_builder` | `available` | `available` | `available` | `stable` | — |
 | `publish_off` | `editable_builder_publish_disabled` | `available` | `available` | `typed_feature_disabled_error` | `stable` | `publish` |
-| `preview_off` | `preview_hidden_properties_available` | `typed_feature_disabled_error` | `available` | `typed_feature_disabled_error` | `stable` | `preview` |
-| `builder_off` | `readonly_fallback` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `stable` | `builder` |
+| `preview_off` | `preview_hidden_properties_available` | `typed_feature_disabled_error` | `available` | `typed_feature_disabled_error` | `stable` | `preview`, `publish` |
+| `builder_off` | `readonly_fallback` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `stable` | `preview`, `tree`, `properties`, `publish` |
 
 Правила синхронизации:
 
 1. При изменении профилей сначала обновляется runtime matrix в `crates/rustok-page-builder/src/rollout.rs`.
 2. Затем синхронизируются consumer manifest/docs (`rustok-pages`) и этот центральный план.
-3. Anti-drift gate `verify-page-builder-fallback-matrix-docs.mjs` должен оставаться частью baseline-проверки до Wave 1.
+3. Anti-drift gate `verify-page-builder-fallback-matrix-docs.mjs` и provider runtime gate `verify-page-builder-runtime-fallback-gate.mjs` должны оставаться частью baseline-проверки до Wave 1.
 
 ### Фаза 3.2 — Матрица rollout по волнам
 
