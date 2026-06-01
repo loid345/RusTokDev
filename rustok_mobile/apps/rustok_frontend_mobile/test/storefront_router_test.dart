@@ -95,6 +95,7 @@ class _FakeStorefrontCatalogRepository implements StorefrontCatalogRepository {
         title: 'Creator kit',
         description: 'Mounted through the storefront shell.',
         priceLabel: '49.00 USD',
+        variantId: 'creator-kit-variant',
       ),
     ];
   }

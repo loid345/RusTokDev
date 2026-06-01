@@ -12,9 +12,9 @@ GraphQL transport, and route wiring.
 
 ## Responsibilities
 
-- Render customer catalog and cart screens for the mobile storefront host, including add/start/update/remove cart actions as UI intents.
+- Render customer catalog and cart screens for the mobile storefront host, including add/start/update/remove cart actions as UI intents; add-to-cart is enabled only for products with a backend-provided variant id.
 - Consume a host-provided `StorefrontCatalogRepository` instead of creating a
-  package-local GraphQL client, locale resolver, or cart storage contract.
+  package-local GraphQL client, locale resolver, product-id-to-variant fallback, or cart storage contract.
 - Keep loading, empty, and error states inside the package so host routing stays
   declarative.
 - Avoid admin/operator affordances in customer-facing surfaces.

@@ -123,10 +123,11 @@ final hostStorefrontCatalogRepositoryProvider =
     Provider<StorefrontCatalogRepository>((ref) {
   final client = ref.watch(storefrontGraphQlClientProvider);
   final runtime = ref.watch(storefrontRuntimeContextProvider);
+  final cartIdStore = ref.watch(storefrontCartIdStoreProvider);
   return GraphQlStorefrontCatalogRepository(
     client: client,
     locale: runtime.locale,
-    cartId: runtime.cartId,
+    cartIdStore: cartIdStore,
   );
 });
 
@@ -134,15 +135,15 @@ class GraphQlStorefrontCatalogRepository implements StorefrontCatalogRepository 
   GraphQlStorefrontCatalogRepository({
     required GraphQLClient client,
     required this.locale,
-    String? cartId,
+    required StorefrontCartIdStore cartIdStore,
   })  : _client = client,
-        _activeCartId = cartId;
+        _cartIdStore = cartIdStore;
 
   final GraphQLClient _client;
   final String locale;
-  String? _activeCartId;
+  final StorefrontCartIdStore _cartIdStore;
 
-  String? get cartId => _activeCartId;
+  String? get cartId => _cartIdStore.read();
 
   @override
   Future<List<StorefrontProductSummary>> featuredProducts() async {
@@ -320,16 +321,16 @@ class GraphQlStorefrontCatalogRepository implements StorefrontCatalogRepository 
   StorefrontCartWriteResult _rememberCart(Map<String, dynamic> payload) {
     final id = _readString(payload, 'id');
     if (id.isNotEmpty) {
-      _activeCartId = id;
+      _cartIdStore.write(id);
     }
     return StorefrontCartWriteResult(
-      cartId: _activeCartId ?? id,
+      cartId: _cartIdStore.read() ?? id,
       lines: _cartLinesFromPayload(payload),
     );
   }
 
   Future<String> _ensureCartId() async {
-    final id = _activeCartId?.trim();
+    final id = cartId?.trim();
     if (id != null && id.isNotEmpty) {
       return id;
     }
@@ -338,7 +339,7 @@ class GraphQlStorefrontCatalogRepository implements StorefrontCatalogRepository 
   }
 
   String _requireCartId() {
-    final id = _activeCartId?.trim();
+    final id = cartId?.trim();
     if (id == null || id.isEmpty) {
       throw StateError('Create a storefront cart before changing cart lines.');
     }

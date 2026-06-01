@@ -169,14 +169,18 @@ class _ProductCardState extends ConsumerState<_ProductCard> {
                   ),
                 ),
                 FilledButton.icon(
-                  onPressed: _busy ? null : () => _addToCart(product),
+                  onPressed: _busy || !product.canAddToCart
+                      ? null
+                      : () => _addToCart(product),
                   icon: _busy
                       ? const SizedBox.square(
                           dimension: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.add_shopping_cart_outlined),
-                  label: const Text('Add to cart'),
+                  label: Text(
+                    product.canAddToCart ? 'Add to cart' : 'Select option',
+                  ),
                 ),
               ],
             ),
@@ -189,8 +193,12 @@ class _ProductCardState extends ConsumerState<_ProductCard> {
   Future<void> _addToCart(StorefrontProductSummary product) async {
     setState(() => _busy = true);
     try {
+      final variantId = product.variantId?.trim();
+      if (variantId == null || variantId.isEmpty) {
+        throw StateError('Product option is required before adding to cart.');
+      }
       await ref.read(storefrontCatalogRepositoryProvider).addCartLine(
-            StorefrontAddCartLineDraft(variantId: product.cartVariantId),
+            StorefrontAddCartLineDraft(variantId: variantId),
           );
       ref.invalidate(cartLinesProvider);
       if (mounted) {
@@ -238,6 +246,13 @@ class _CartLineTileState extends ConsumerState<_CartLineTile> {
           children: [
             Text(line.priceLabel),
             IconButton(
+              tooltip: 'Decrease quantity',
+              onPressed: _busy
+                  ? null
+                  : () => _updateQuantity(line, line.quantity - 1),
+              icon: const Icon(Icons.remove_circle_outline),
+            ),
+            IconButton(
               tooltip: 'Increase quantity',
               onPressed: _busy
                   ? null
@@ -256,6 +271,10 @@ class _CartLineTileState extends ConsumerState<_CartLineTile> {
   }
 
   Future<void> _updateQuantity(StorefrontCartLine line, int quantity) async {
+    if (quantity <= 0) {
+      await _remove(line);
+      return;
+    }
     setState(() => _busy = true);
     try {
       await ref.read(storefrontCatalogRepositoryProvider).updateCartLine(

@@ -89,6 +89,7 @@ class _FakeCatalogRepository implements StorefrontCatalogRepository {
         title: 'Starter hoodie',
         description: 'A storefront product card owned by the catalog package.',
         priceLabel: '24.00 USD',
+        variantId: 'starter-hoodie-variant',
         badge: 'Featured',
       ),
     ];

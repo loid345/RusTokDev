@@ -15,7 +15,7 @@ class StorefrontProductSummary {
   final String? variantId;
   final String? badge;
 
-  String get cartVariantId => variantId ?? id;
+  bool get canAddToCart => variantId != null && variantId!.trim().isNotEmpty;
 }
 
 class StorefrontCartLine {

@@ -1295,10 +1295,11 @@ Storefront catalog/cart package теперь получает cart data чере
 Storefront catalog/cart package теперь выполняет customer cart write actions через тот же host-owned repository seam:
 - repository contract — module-owned package объявляет create/add/update/remove intents, но не создаёт GraphQL client, tenant resolver, locale fallback или package-local cart storage;
 - data adapter — host repository вызывает canonical GraphQL mutations `createStorefrontCart`, `addStorefrontCartLineItem`, `updateStorefrontCartLineItem` и `removeStorefrontCartLineItem`, повторно используя shared GraphQL headers/context;
-- UX actions — catalog cards могут добавить товар, empty cart может стартовать cart, line items могут увеличить quantity или удалить строку;
-- runtime guardrail — созданный cart id хранится только в host repository instance memory на этом шаге; durable storage остаётся отдельным host-owned product decision, а не package-local contract.
+- UX actions — catalog cards могут добавить товар только при наличии backend-provided `variantId`, empty cart может стартовать cart, line items могут увеличить/уменьшить quantity или удалить строку;
+- runtime guardrail — созданный cart id хранится в host-owned `StorefrontCartIdStore`; durable storage остаётся отдельным host-owned product decision, а не package-local contract;
+- contract tests — `rustok_mobile/tooling/tests/test_storefront_cart_contract.py` фиксирует, что package не fallback-ит product id в variant id и что host repository использует host cart id store.
 
-Следующий storefront шаг: закрепить host-owned persistence policy для cart id (если требуется продуктом) и добавить contract tests against schema/codegen, не расширяя Flutter-specific API surface.
+Следующий storefront шаг: заменить in-memory `StorefrontCartIdStore` на согласованный durable host-owned adapter, если это потребуется продуктом, и добавить schema-backed integration tests, не расширяя Flutter-specific API surface.
 
 #### PR-A evidence pack (registry contract freeze)
 
