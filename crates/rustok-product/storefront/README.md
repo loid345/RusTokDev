@@ -10,12 +10,14 @@ published catalog discovery.
 - Render the public catalog rail and selected product detail for the current
   tenant.
 - Keep storefront route/query state normalization, selected-product view-model
-  composition, pricing/seller formatting, and pricing deep-link construction in
-  framework-agnostic `src/core.rs`, so Leptos remains a thin host-context/render
-  adapter before calling transport.
-- Read storefront product data through native `#[server]` functions backed by
-  `rustok-product::CatalogService`.
-- Keep the existing GraphQL storefront contract as a parallel fallback path.
+  composition, pricing/seller formatting, pricing-context sanitization/defaulting,
+  and pricing deep-link construction in framework-agnostic `src/core.rs`, so
+  Leptos remains a thin host-context/render adapter before calling transport.
+- Read storefront product data through `src/transport/`, which keeps native
+  `#[server]` functions backed by `rustok-product::CatalogService` as the
+  preferred path.
+- Keep the existing GraphQL storefront contract as a parallel fallback adapter in
+  `src/transport/graphql_adapter.rs`.
 - Treat `storefrontProduct -> variants.prices` as a catalog compatibility
   snapshot and show resolved price data through a separate pricing-module hook
   backed by `rustok-pricing` in native server functions and GraphQL fallback.
@@ -28,10 +30,10 @@ published catalog discovery.
 
 ## Entry points
 
-- `ProductView`
+- `ProductView` re-exported from `ui::leptos`
 - `core::build_storefront_route_input`
 - `core::build_selected_product_view_model`
 - `core::build_storefront_pricing_href`
-- `api::fetch_storefront_products`
+- `transport::fetch_products`
 
 See also `../README.md` and `../docs/README.md`.

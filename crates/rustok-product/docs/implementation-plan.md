@@ -5,26 +5,27 @@
 
 ## Execution checkpoint
 
-- Current phase: ffa_storefront_core_slice
-- Last checkpoint: Storefront shell copy and fetch request shape now live in framework-agnostic `ProductStorefrontShellViewModel` / `ProductStorefrontFetchRequest`; Leptos `ProductView` supplies host route context and passes the prepared request to the transport facade.
+- Current phase: ffa_storefront_transport_ui_slice
+- Last checkpoint: Storefront pricing-context policy now lives in framework-agnostic core, native/GraphQL storefront fetch paths are exposed through explicit `transport/native_server_adapter.rs` and `transport/graphql_adapter.rs`, and the Leptos render layer moved under `ui/leptos.rs` while preserving native-first fallback parity.
 - Next step: Continue FFA-first sequencing by moving the next storefront/admin render fragment or route/query writer smoke into core without changing native/GraphQL transport parity.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок.
-- Last updated at (UTC): 2026-05-31T00:00:00Z
+- Last updated at (UTC): 2026-06-01T07:26:57Z
 
 
 ## FFA/FBA status
 
 - FFA status: `in_progress`
 - FBA status: `in_progress`
-- Structural shape: `core_only`
+- Structural shape: `core_transport_ui`
 - Evidence:
   - module plan синхронизирован с central FFA/FBA readiness board; UI surface уже опубликован и ведётся в migration/backlog ритме;
   - FFA slice: storefront catalog rail title/total/empty/open labels, item fallback labels, seller boundary text, published timestamp fallback and handle links now live in framework-agnostic `ProductCatalogRailViewModel` with unit-test evidence;
   - FFA slice: selected-product card empty state, pricing context label, ownership note, metric labels and pricing action label now live in `SelectedProductEmptyViewModel` / `SelectedProductViewModel` with unit-test evidence;
   - FFA slice: storefront shell badge/title/subtitle/load-error copy and typed fetch request shape now live in `ProductStorefrontShellViewModel` / `ProductStorefrontFetchRequest` with unit-test evidence;
+  - FFA slice: storefront pricing-context sanitization/defaulting moved into core, native/GraphQL fetch adapters now sit behind `storefront/src/transport/`, and Leptos rendering is isolated in `storefront/src/ui/leptos.rs`; evidence: `cargo test -p rustok-product-storefront --lib`;
   - дальнейшее повышение статуса выполняется только вместе с verification evidence и обновлением local+central docs.
-- Last verified at (UTC): 2026-05-31T00:00:00Z
+- Last verified at (UTC): 2026-06-01T07:26:57Z
 - Owner: `rustok-product` module team
 
 ## Область работ
@@ -46,9 +47,11 @@
   discovery через native Leptos server functions с GraphQL fallback;
 - storefront UI продолжает FFA-декомпозицию: route/query normalization, typed fetch
   request shape, shell copy, selected-product view-model composition, selected-card
-  labels/empty state, catalog rail view-model, pricing/seller labels и pricing
-  deep-link state вынесены в framework-agnostic `storefront/src/core.rs`, а Leptos
-  слой остаётся thin render/host-context adapter поверх transport;
+  labels/empty state, catalog rail view-model, pricing/seller labels, pricing
+  deep-link state и pricing-context sanitization/defaulting вынесены в
+  framework-agnostic `storefront/src/core.rs`, native/GraphQL storefront fetch
+  paths оформлены как `storefront/src/transport/` adapters, а Leptos слой
+  изолирован в `storefront/src/ui/leptos.rs` как thin render/host-context adapter;
 - transport-level validation и public transport по-прежнему публикуются фасадом `rustok-commerce`.
 
 ## Этапы
@@ -75,6 +78,7 @@
 - [x] вынести storefront catalog rail presentation в core view-model без Leptos runtime;
 - [x] вынести selected-product card labels и empty state в core view-model без Leptos runtime;
 - [x] вынести storefront shell copy и typed fetch request shape в core без Leptos runtime;
+- [x] выделить storefront native/GraphQL transport adapters и явный Leptos UI adapter поверх core-owned request/policy state;
 - [ ] обновлять consumer-module docs при изменении tag/deliverability integration rules.
 
 ## Проверка
