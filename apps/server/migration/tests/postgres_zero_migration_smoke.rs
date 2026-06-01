@@ -1,0 +1,207 @@
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use migration::Migrator;
+use sea_orm_migration::{
+    prelude::MigratorTrait,
+    sea_orm::{
+        ConnectOptions, ConnectionTrait, Database, DatabaseConnection, DbBackend, Statement,
+    },
+};
+
+#[tokio::test]
+#[ignore = "requires PostgreSQL admin access; run scripts/verify/verify-migration-smoke.sh"]
+async fn postgres_zero_migration_smoke_applies_from_empty_database() {
+    if let Err(error) = run_postgres_zero_migration_smoke().await {
+        panic!("PostgreSQL migration smoke failed: {error}");
+    }
+}
+
+async fn run_postgres_zero_migration_smoke() -> Result<(), Box<dyn std::error::Error>> {
+    let admin_url = std::env::var("RUSTOK_MIGRATION_SMOKE_ADMIN_URL")
+        .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/postgres".to_string());
+    assert_postgres_url(&admin_url);
+
+    let database_name =
+        std::env::var("RUSTOK_MIGRATION_SMOKE_DB_NAME").unwrap_or_else(|_| default_database_name());
+    assert_valid_database_name(&database_name);
+
+    let target_url = database_url_from_admin_url(&admin_url, &database_name);
+    let keep_database = std::env::var("RUSTOK_MIGRATION_SMOKE_KEEP_DB").as_deref() == Ok("1");
+
+    let admin = connect_postgres(&admin_url)
+        .await
+        .map_err(|error| format!("admin database must be reachable: {error}"))?;
+
+    drop_database_if_exists(&admin, &database_name).await?;
+    create_database(&admin, &database_name).await?;
+
+    let smoke_result = apply_migrations_and_assert_schema(&target_url).await;
+
+    if keep_database {
+        eprintln!("Keeping migration smoke database '{database_name}' at {target_url}");
+    } else {
+        drop_database_if_exists(&admin, &database_name).await?;
+    }
+
+    smoke_result
+}
+
+async fn apply_migrations_and_assert_schema(
+    target_url: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let db = connect_postgres(target_url)
+        .await
+        .map_err(|error| format!("smoke database must be reachable: {error}"))?;
+
+    Migrator::up(&db, None)
+        .await
+        .map_err(|error| format!("server migrator must apply from zero on PostgreSQL: {error}"))?;
+
+    let pending = Migrator::get_pending_migrations(&db)
+        .await
+        .map_err(|error| format!("pending migration list must be readable: {error}"))?;
+    if !pending.is_empty() {
+        let pending_names = pending
+            .iter()
+            .map(|migration| migration.name().to_string())
+            .collect::<Vec<_>>();
+        return Err(format!("all migrations should be applied, pending: {pending_names:?}").into());
+    }
+
+    for table in [
+        "tenants",
+        "users",
+        "product_variants",
+        "prices",
+        "inventory_items",
+        "channels",
+        "oauth_apps",
+        "blog_post_tags",
+        "forum_topic_tags",
+        "taxonomy_terms",
+    ] {
+        assert_table_exists(&db, table).await?;
+    }
+
+    Ok(())
+}
+
+async fn connect_postgres(
+    url: &str,
+) -> Result<DatabaseConnection, sea_orm_migration::sea_orm::DbErr> {
+    let mut options = ConnectOptions::new(url.to_string());
+    options
+        .connect_timeout(Duration::from_secs(5))
+        .acquire_timeout(Duration::from_secs(5))
+        .sqlx_logging(false);
+    Database::connect(options).await
+}
+
+async fn create_database(
+    admin: &DatabaseConnection,
+    database_name: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    admin
+        .execute(Statement::from_string(
+            DbBackend::Postgres,
+            format!("CREATE DATABASE {}", quoted_identifier(database_name)),
+        ))
+        .await
+        .map_err(|error| format!("failed to create smoke database {database_name}: {error}"))?;
+    Ok(())
+}
+
+async fn drop_database_if_exists(
+    admin: &DatabaseConnection,
+    database_name: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    admin
+        .execute(Statement::from_string(
+            DbBackend::Postgres,
+            format!(
+                "DROP DATABASE IF EXISTS {} WITH (FORCE)",
+                quoted_identifier(database_name)
+            ),
+        ))
+        .await
+        .map_err(|error| format!("failed to drop smoke database {database_name}: {error}"))?;
+    Ok(())
+}
+
+async fn assert_table_exists(
+    db: &DatabaseConnection,
+    table: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let row = db
+        .query_one(Statement::from_sql_and_values(
+            DbBackend::Postgres,
+            "SELECT to_regclass($1) IS NOT NULL AS exists",
+            [format!("public.{table}").into()],
+        ))
+        .await
+        .map_err(|error| format!("table existence query for {table} must succeed: {error}"))?
+        .ok_or_else(|| format!("table existence query for {table} returned no row"))?;
+    let exists: bool = row
+        .try_get("", "exists")
+        .map_err(|error| format!("table existence result for {table} must decode: {error}"))?;
+    if !exists {
+        return Err(format!("expected table {table} to exist after migrations").into());
+    }
+    Ok(())
+}
+
+fn assert_postgres_url(url: &str) {
+    assert!(
+        url.starts_with("postgres://") || url.starts_with("postgresql://"),
+        "RUSTOK_MIGRATION_SMOKE_ADMIN_URL must use postgres:// or postgresql://"
+    );
+}
+
+fn assert_valid_database_name(database_name: &str) {
+    let mut chars = database_name.chars();
+    let Some(first) = chars.next() else {
+        panic!("RUSTOK_MIGRATION_SMOKE_DB_NAME must not be empty");
+    };
+    assert!(
+        first == '_' || first.is_ascii_alphabetic(),
+        "RUSTOK_MIGRATION_SMOKE_DB_NAME must start with a letter or underscore"
+    );
+    assert!(
+        chars.all(|ch| ch == '_' || ch.is_ascii_alphanumeric()),
+        "RUSTOK_MIGRATION_SMOKE_DB_NAME may contain only letters, digits, and underscores"
+    );
+}
+
+fn database_url_from_admin_url(admin_url: &str, database_name: &str) -> String {
+    let (base, suffix) = admin_url
+        .split_once('?')
+        .map(|(base, query)| (base, format!("?{query}")))
+        .unwrap_or((admin_url, String::new()));
+    let scheme_end = base
+        .find("://")
+        .expect("PostgreSQL URL must include a scheme separator")
+        + 3;
+    let authority_end = base[scheme_end..]
+        .find('/')
+        .map(|offset| scheme_end + offset)
+        .unwrap_or(base.len());
+    format!(
+        "{}{}/{}{}",
+        &base[..authority_end],
+        "",
+        database_name,
+        suffix
+    )
+}
+
+fn default_database_name() -> String {
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system clock must be after UNIX_EPOCH")
+        .as_millis();
+    format!("rustok_migration_smoke_{millis}_{}", std::process::id())
+}
+
+fn quoted_identifier(identifier: &str) -> String {
+    format!("\"{}\"", identifier.replace('"', "\"\""))
+}

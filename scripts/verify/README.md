@@ -1,4 +1,4 @@
-﻿# RusTok — Verification Scripts
+# RusTok — Verification Scripts
 
 Автоматизированные проверки платформы, встроенные в общий verification workflow. Точка входа для ручного orchestration-прогона: [PLATFORM_VERIFICATION_PLAN.md](../../docs/verification/PLATFORM_VERIFICATION_PLAN.md).
 
@@ -19,6 +19,7 @@
 # Запустить скрипт напрямую (всегда полный вывод)
 ./scripts/verify/verify-tenant-isolation.sh
 ./scripts/verify/verify-deployment-profiles.sh
+./scripts/verify/verify-migration-smoke.sh
 node scripts/verify/verify-flex-multilingual-contract.mjs
 node scripts/verify/verify-module-lifecycle-bypass-usage.mjs
 node crates/rustok-page-builder/scripts/verify/verify-page-builder-contract-parity.mjs
@@ -39,7 +40,7 @@ node crates/rustok-page-builder/scripts/verify/verify-page-builder-consumer-read
 | Добавили новый endpoint | `./scripts/verify/verify-all.sh api-quality` |
 | Добавили новый event | `./scripts/verify/verify-all.sh events` |
 | Проверка anti-bypass drift | `./scripts/verify/verify-all.sh anti-bypass` |
-| Добавили миграцию | `./scripts/verify/verify-all.sh tenant-isolation` |
+| Добавили миграцию | `./scripts/verify/verify-all.sh tenant-isolation` + `./scripts/verify/verify-migration-smoke.sh` |
 | Подозрение на дыру в RBAC | `./scripts/verify/verify-all.sh rbac-coverage` |
 | Аудит безопасности | `./scripts/verify/verify-security.sh` |
 | Проверка deployment profile matrix | `./scripts/verify/verify-all.sh deployment-profiles` |
@@ -64,6 +65,25 @@ npm run verify:page-builder:consumer:forum
 ```
 
 ## Описание скриптов
+
+### `verify-migration-smoke.sh`
+**Wave 4 migration-safety smoke** — PostgreSQL apply-from-zero для server migrator.
+
+Что делает:
+- создаёт временную PostgreSQL database через `RUSTOK_MIGRATION_SMOKE_ADMIN_URL` внутри Rust integration test, без зависимости от локального `psql`;
+- запускает ignored integration test `postgres_zero_migration_smoke_applies_from_empty_database`;
+- применяет `migration::Migrator` с нуля и проверяет, что pending migrations не осталось;
+- проверяет наличие representative platform/module tables (`tenants`, `product_variants`, `prices`, `inventory_items`, `channels`, `oauth_apps`, `blog_post_tags`, `forum_topic_tags`, `taxonomy_terms`);
+- удаляет временную database из Rust test, если `RUSTOK_MIGRATION_SMOKE_KEEP_DB=1` не установлен.
+
+Пример:
+
+```bash
+RUSTOK_MIGRATION_SMOKE_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres \
+  ./scripts/verify/verify-migration-smoke.sh
+```
+
+---
 
 ### `verify-tenant-isolation.sh`
 **Фаза 19.1 + 5** — Multi-tenancy safety
