@@ -14,6 +14,7 @@ const checks = [
   "verify-page-builder-fallback-profiles.mjs",
   "verify-page-builder-error-catalog-binding.mjs",
   "verify-page-builder-fallback-matrix-docs.mjs",
+  "verify-page-builder-wave-evidence-template.mjs",
   "verify-page-builder-runtime-fallback-gate.mjs",
   "verify-page-builder-pages-fallback-gate.mjs",
   "verify-page-builder-next-admin-parity.mjs",

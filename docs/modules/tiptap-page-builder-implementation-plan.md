@@ -712,7 +712,7 @@ Notes: <known deviations or waivers>
 
 ### 12.6 Минимальный evidence packet template (для Wave 0/Wave 1)
 
-Для унификации пакета между модулями после `pages` используется единая структура:
+Для унификации пакета между модулями после `pages` используется единая структура. Machine-readable baseline закреплён в `crates/rustok-page-builder/contracts/page-builder-wave-evidence-template.json` и проверяется `verify-page-builder-wave-evidence-template.mjs`:
 
 1. `metadata/`
    - provider snapshot (`builder_contract_version`, health profile, degraded modes);
@@ -727,7 +727,7 @@ Notes: <known deviations or waivers>
    - rollback decision log (`keep` / `rollback`) с причиной;
    - owner on-call подтверждение и timestamp.
 
-Минимальный стандарт: без полного packet template модуль не может перейти из Wave 0 в Wave 1.
+Минимальный стандарт: без полного packet template модуль не может перейти из Wave 0 в Wave 1. Template должен оставаться частью aggregate baseline gate `verify-page-builder-fba-baseline.mjs`.
 
 ### 12.7 Следующий практический шаг “прямо сейчас” (next 10 working days)
 
@@ -962,7 +962,8 @@ Notes: <known deviations or waivers>
 
 #### Week 2 — закрыть P2/P3
 
-- [ ] **PB-FBA-1C / Control-plane operability:**
+- [~] **PB-FBA-1C / Control-plane operability:**
+  - [x] зафиксировать machine-readable evidence template для metadata/control-plane/fallback/observability/rollback/approvals;
   - [ ] провести dry-run toggle change-set (tenant internal), сохранить `before/after` snapshots;
   - [ ] оформить decision log (`keep|rollback`) с owner sign-off.
 - [ ] **PB-FBA-1D / Observability baseline:**

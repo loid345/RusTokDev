@@ -13,6 +13,7 @@ Rules:
 - `verify/verify-page-builder-fba-baseline.mjs` runs the provider/consumer anti-drift gate.
 - `verify/verify-page-builder-contract-registry.mjs` compares `contracts/page-builder-fba-registry.json` with provider/consumer manifests and fails on version/capability drift.
 - `verify/verify-page-builder-fallback-matrix-docs.mjs` keeps central, provider, and pages fallback matrix docs aligned with `all_on`, `publish_off`, `preview_off`, and `builder_off` runtime profiles.
+- `verify/verify-page-builder-wave-evidence-template.mjs` validates `contracts/page-builder-wave-evidence-template.json`, the machine-readable Wave 0/Wave 1 evidence packet template for metadata, control-plane snapshots, fallback smoke, observability, rollback and owner approvals.
 - `verify/verify-page-builder-error-catalog-binding.mjs` verifies that provider metadata, `rustok-pages` consumer metadata, the FBA registry, and the `PagesError` runtime catalog use the same typed builder error semantics (`validation`, `sanitize`, `runtime`, `feature-disabled`).
 
 - `verify/verify-page-builder-runtime-fallback-gate.mjs` runs the provider runtime fallback tests used by the CI baseline gate.

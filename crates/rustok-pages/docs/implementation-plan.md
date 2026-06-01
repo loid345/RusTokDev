@@ -8,7 +8,7 @@
 
 - Current phase: phase_b_closed
 - Last checkpoint: FFA maintenance slice вынесла create-page draft normalization (`PageDraftFormInput` / `build_create_page_draft`) и route text checks на shared UI helpers из `rustok-api`.
-- Next step: Собрать оставшуюся PB-FBA-1B cross-runtime parity evidence для Next/Leptos/Flutter adapters и затем PB-FBA-1C control-plane audit trail.
+- Next step: Использовать machine-readable Wave evidence template для PB-FBA-1C control-plane dry-run и собрать фактические before/after snapshots.
 - Open blockers: None.
 - Hand-off notes for next agent:
   1. Перед любыми изменениями pages сначала сверить `docs/research/dioxus-ffa-pilot-connectivity-map.md` и этот файл; не открывать новый slice без явной цели в трекере.
@@ -24,6 +24,7 @@
 - Last updated at (UTC): 2026-06-01T01:00:00Z
 - Last updated at (UTC): 2026-06-01T02:00:00Z
 - Last updated at (UTC): 2026-06-01T03:00:00Z
+- Last updated at (UTC): 2026-06-01T04:00:00Z
 - Latest maintenance update: Leptos admin package now exposes capability surfaces `preview/tree/properties/publish` for `grapesjs_v1` and keeps legacy `blocks` compatibility visible in the same write-path.
 - Latest maintenance update: зафиксирован typed builder error catalog parity (`validation/sanitize/runtime/feature-disabled`) для admin UI + service/runtime с опорой на `WritePathIssueKind`, `PagesError::FeatureDisabled`, manifest/registry binding и `verify-page-builder-error-catalog-binding.mjs`.
 - Latest maintenance update: create-page draft normalization теперь собирается в `admin/src/core.rs` и переиспользует `rustok-api::normalize_ui_text` / `parse_ui_csv`, а Leptos слой остаётся thin bind/render adapter.
@@ -79,7 +80,7 @@
 2. `publish_off` возвращает typed `feature-disabled`/`typed_feature_disabled_error` только на builder publish path; legacy/direct read paths остаются стабильными.
 3. `preview_off` скрывает или блокирует preview capability, но не должен запрещать properties/tree чтение, если `builder.properties.enabled=true`.
 
-- [ ] Wave 0 evidence template: flags snapshot + smoke output + observability snapshot + keep/rollback decision.
+- [x] Wave 0 evidence template: flags snapshot + smoke output + observability snapshot + keep/rollback decision (`crates/rustok-page-builder/contracts/page-builder-wave-evidence-template.json`).
 
 ### Out of scope (for this sprint)
 
@@ -188,9 +189,9 @@ Rollback trigger:
 
 ### B4. Verification gates
 
-- [x] Включить fallback regression checks в `cargo xtask module test pages` (или эквивалентный CI gate): `verify-page-builder-fba-baseline.mjs` запускает provider runtime gate, registry anti-drift gate, error-catalog binding gate, Next Admin parity gate, Leptos admin parity gate, Flutter parity gate и `rustok-pages` service/admin/storefront fallback gates по всем четырём baseline-профилям.
+- [x] Включить fallback regression checks в `cargo xtask module test pages` (или эквивалентный CI gate): `verify-page-builder-fba-baseline.mjs` запускает provider runtime gate, registry anti-drift gate, error-catalog binding gate, Next Admin parity gate, Leptos admin parity gate, Flutter parity gate, Wave evidence-template gate и `rustok-pages` service/admin/storefront fallback gates по всем четырём baseline-профилям.
 - [x] Добавить targeted integration checks для `all_on`, `publish_off`, `preview_off`, `builder_off` на уровне `pages` service/transport boundary (`pages_builder_fallback_*` checks).
-- [ ] Зафиксировать evidence-template для Wave hand-off (platform + pages owner approval).
+- [x] Зафиксировать evidence-template для Wave hand-off (platform + pages owner approval): `crates/rustok-page-builder/contracts/page-builder-wave-evidence-template.json` + `verify-page-builder-wave-evidence-template.mjs`.
 
 ## Wave 0 execution checklist (операционный минимум для `pages`)
 
