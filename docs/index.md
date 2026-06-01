@@ -115,6 +115,7 @@
 - [Единый план реализации Fluid Backend Architecture](./research/fluid-backend-architecture-unified-plan.md)
 - [План FFA-рефакторинга UI и подготовки к Dioxus](./research/dioxus-ffa-ui-migration-plan.md)
 - [Карта связности пилотов FFA/Dioxus (Phase A)](./research/dioxus-ffa-pilot-connectivity-map.md)
+- [План устранения недостатков backend/runtime](./research/error%20fix.md)
 - [Checklist parity для FFA UI migration](./verification/ffa-ui-parity-checklist.md)
 - [Исследования и ADR-черновики](./research/ADR-xxxx-grpc-adoption.md)
 
