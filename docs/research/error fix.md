@@ -17,6 +17,12 @@
 5. **Хрупкая агрегация миграций**: серверный migrator вручную собирает миграции множества crate-ов, но dependency descriptors агрегируются только из `rustok_product`.
 6. **CI не закрывает migration-safety и runtime-context invariants отдельными gates**: есть сильные базовые проверки, но нет явного обязательного smoke job на миграции с нуля / incremental apply / dependency graph runtime invariants.
 
+### Обновление реализации на 2026-06-01
+
+- Wave 1 evidence по `pages -> [content, page_builder]`, Wave 2 channel request context и Wave 3 TTL-cache tenant locale policy уже отражены в коде текущей ветки.
+- В рамках продолжения Wave 4 добавлен первый migration-safety baseline: module-owned `migration_dependencies()` для известных cross-module FK/order boundaries (`channel -> auth`, `pricing/inventory -> product variants`, `commerce collections/categories -> product`, `blog/forum -> taxonomy`) и агрегация этих descriptors в server migrator.
+- Открытым остатком Wave 4 остаётся полноценный PostgreSQL smoke из пустой БД и последующее вынесение его в отдельный CI job.
+
 ## Проверенные факты
 
 | ID | Тезис из аудита | Статус | Подтверждение в коде/документации | Вывод |

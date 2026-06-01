@@ -52,12 +52,34 @@ fn collect_migration_descriptors() -> Vec<MigrationDescriptor> {
     // Module-owned dependency metadata collection point.
     // Keep each module's descriptors close to its migration exporter and aggregate here.
     let mut dependencies: Vec<MigrationDescriptor> = Vec::new();
-    dependencies.extend(
-        rustok_product::migrations::migration_dependencies()
-            .into_iter()
-            .map(MigrationDescriptor::from),
-    );
+    dependencies.extend(module_dependency_descriptors(
+        rustok_channel::migrations::migration_dependencies(),
+    ));
+    dependencies.extend(module_dependency_descriptors(
+        rustok_product::migrations::migration_dependencies(),
+    ));
+    dependencies.extend(module_dependency_descriptors(
+        rustok_pricing::migrations::migration_dependencies(),
+    ));
+    dependencies.extend(module_dependency_descriptors(
+        rustok_inventory::migrations::migration_dependencies(),
+    ));
+    dependencies.extend(module_dependency_descriptors(
+        rustok_commerce::migrations::migration_dependencies(),
+    ));
+    dependencies.extend(module_dependency_descriptors(
+        rustok_blog::migrations::migration_dependencies(),
+    ));
+    dependencies.extend(module_dependency_descriptors(
+        rustok_forum::migrations::migration_dependencies(),
+    ));
     dependencies
+}
+
+fn module_dependency_descriptors(
+    descriptors: Vec<rustok_core::MigrationDependencyDescriptor>,
+) -> impl Iterator<Item = MigrationDescriptor> {
+    descriptors.into_iter().map(MigrationDescriptor::from)
 }
 
 #[async_trait::async_trait]
@@ -441,6 +463,50 @@ mod tests {
                 seen.insert(descriptor.migration.clone()),
                 "duplicate collected descriptor key '{}'",
                 descriptor.migration
+            );
+        }
+    }
+
+    #[test]
+    fn collected_descriptors_include_module_cross_boundaries() {
+        let descriptors = super::collect_migration_descriptors();
+
+        for (migration, dependency) in [
+            (
+                "m20260325_000004_create_channel_oauth_apps",
+                "m20260308_000001_create_oauth_apps",
+            ),
+            (
+                "m20250130_000015_create_commerce_prices",
+                "m20250130_000014_create_commerce_variants",
+            ),
+            (
+                "m20250130_000016_create_commerce_inventory",
+                "m20250130_000014_create_commerce_variants",
+            ),
+            (
+                "m20250130_000017_create_commerce_collections",
+                "m20250130_000012_create_commerce_products",
+            ),
+            (
+                "m20250130_000018_create_commerce_categories",
+                "m20250130_000012_create_commerce_products",
+            ),
+            (
+                "m20260328_000002_create_blog_taxonomy_tables",
+                "m20260329_000001_create_taxonomy_tables",
+            ),
+            (
+                "m20260329_000005_create_forum_topic_tags",
+                "m20260329_000001_create_taxonomy_tables",
+            ),
+        ] {
+            assert!(
+                descriptors
+                    .iter()
+                    .any(|descriptor| descriptor.migration == migration
+                        && descriptor.after.iter().any(|after| after == dependency)),
+                "descriptor {migration} -> {dependency} must be collected by server migrator"
             );
         }
     }

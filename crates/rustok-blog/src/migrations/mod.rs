@@ -2,6 +2,7 @@ mod m20260328_000001_create_blog_post_tables;
 mod m20260328_000002_create_blog_taxonomy_tables;
 mod m20260329_000001_create_blog_post_channel_visibility_table;
 
+use rustok_core::MigrationDependencyDescriptor;
 use sea_orm_migration::MigrationTrait;
 
 pub fn migrations() -> Vec<Box<dyn MigrationTrait>> {
@@ -10,4 +11,11 @@ pub fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         Box::new(m20260328_000002_create_blog_taxonomy_tables::Migration),
         Box::new(m20260329_000001_create_blog_post_channel_visibility_table::Migration),
     ]
+}
+
+pub fn migration_dependencies() -> Vec<MigrationDependencyDescriptor> {
+    vec![MigrationDependencyDescriptor::new(
+        "m20260328_000002_create_blog_taxonomy_tables",
+        vec!["m20260329_000001_create_taxonomy_tables"],
+    )]
 }
