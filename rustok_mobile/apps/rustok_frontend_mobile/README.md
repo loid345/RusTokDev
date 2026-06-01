@@ -15,7 +15,7 @@ UX do not drift into one host.
 - Mirror the existing web storefront contract from `apps/storefront` and
   `apps/next-frontend` without introducing a Flutter-only backend API.
 - Mount module-owned catalog/cart mobile surfaces at `/catalog` and `/cart`, including create/add/update/remove cart actions through the host-owned repository boundary.
-- Resolve manifest-driven module routes under `/modules/:routeSegment`, using the generated storefront mobile registry to mount known package surfaces and fallback placeholders for the rest.
+- Resolve manifest-driven module routes under `/modules/:routeSegment`, using the generated storefront mobile registry to mount known package surfaces, show registry-driven home links, and fallback placeholders for the rest.
 
 ## Interactions
 
@@ -32,7 +32,7 @@ UX do not drift into one host.
 - `lib/data/storefront_catalog_repository.dart` — host-owned catalog/cart repository using the shared GraphQL client and existing `storefrontSearch`, `storefrontCart`, and storefront cart mutation surfaces.
 - `lib/registry/storefront_mobile_manifest.g.dart` — generated storefront registry from `provides.storefront_ui`.
 - `lib/registry/storefront_surface_registry.dart` — host adapter that maps generated storefront entries to mounted mobile package surfaces.
-- `lib/routes/storefront_router.dart` — route table, module-owned catalog/cart mounting, and generic manifest-backed module placeholders.
+- `lib/routes/storefront_router.dart` — route table, registry-driven module links, module-owned catalog/cart mounting, and generic manifest-backed module placeholders.
 
 ## Runtime defines
 
