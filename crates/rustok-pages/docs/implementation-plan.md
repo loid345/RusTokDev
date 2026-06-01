@@ -8,7 +8,7 @@
 
 - Current phase: phase_b_closed
 - Last checkpoint: FFA maintenance slice вынесла create-page draft normalization (`PageDraftFormInput` / `build_create_page_draft`) и route text checks на shared UI helpers из `rustok-api`.
-- Next step: Использовать machine-readable Wave evidence template для PB-FBA-1C control-plane dry-run и собрать фактические before/after snapshots.
+- Next step: Провести реальный control-plane Wave 0 dry-run на internal tenant и заменить синтетический пакет фактическими before/after snapshots.
 - Open blockers: None.
 - Hand-off notes for next agent:
   1. Перед любыми изменениями pages сначала сверить `docs/research/dioxus-ffa-pilot-connectivity-map.md` и этот файл; не открывать новый slice без явной цели в трекере.
@@ -25,6 +25,7 @@
 - Last updated at (UTC): 2026-06-01T02:00:00Z
 - Last updated at (UTC): 2026-06-01T03:00:00Z
 - Last updated at (UTC): 2026-06-01T04:00:00Z
+- Last updated at (UTC): 2026-06-01T04:30:00Z
 - Latest maintenance update: Leptos admin package now exposes capability surfaces `preview/tree/properties/publish` for `grapesjs_v1` and keeps legacy `blocks` compatibility visible in the same write-path.
 - Latest maintenance update: зафиксирован typed builder error catalog parity (`validation/sanitize/runtime/feature-disabled`) для admin UI + service/runtime с опорой на `WritePathIssueKind`, `PagesError::FeatureDisabled`, manifest/registry binding и `verify-page-builder-error-catalog-binding.mjs`.
 - Latest maintenance update: create-page draft normalization теперь собирается в `admin/src/core.rs` и переиспользует `rustok-api::normalize_ui_text` / `parse_ui_csv`, а Leptos слой остаётся thin bind/render adapter.
@@ -81,6 +82,7 @@
 3. `preview_off` скрывает или блокирует preview capability, но не должен запрещать properties/tree чтение, если `builder.properties.enabled=true`.
 
 - [x] Wave 0 evidence template: flags snapshot + smoke output + observability snapshot + keep/rollback decision (`crates/rustok-page-builder/contracts/page-builder-wave-evidence-template.json`).
+- [x] Синтетический Wave 0 dry-run packet для всех baseline-профилей: `crates/rustok-page-builder/contracts/evidence/pages-wave0-dry-run-evidence.json` (проверяет только форму и семантику, не заменяет фактическое tenant evidence).
 
 ### Out of scope (for this sprint)
 
@@ -189,7 +191,7 @@ Rollback trigger:
 
 ### B4. Verification gates
 
-- [x] Включить fallback regression checks в `cargo xtask module test pages` (или эквивалентный CI gate): `verify-page-builder-fba-baseline.mjs` запускает provider runtime gate, registry anti-drift gate, error-catalog binding gate, Next Admin parity gate, Leptos admin parity gate, Flutter parity gate, Wave evidence-template gate и `rustok-pages` service/admin/storefront fallback gates по всем четырём baseline-профилям.
+- [x] Включить fallback regression checks в `cargo xtask module test pages` (или эквивалентный CI gate): `verify-page-builder-fba-baseline.mjs` запускает provider runtime gate, registry anti-drift gate, error-catalog binding gate, Next Admin parity gate, Leptos admin parity gate, Flutter parity gate, Wave evidence-template gate, gate синтетического evidence packet и `rustok-pages` service/admin/storefront fallback gates по всем четырём baseline-профилям.
 - [x] Добавить targeted integration checks для `all_on`, `publish_off`, `preview_off`, `builder_off` на уровне `pages` service/transport boundary (`pages_builder_fallback_*` checks).
 - [x] Зафиксировать evidence-template для Wave hand-off (platform + pages owner approval): `crates/rustok-page-builder/contracts/page-builder-wave-evidence-template.json` + `verify-page-builder-wave-evidence-template.mjs`.
 
@@ -204,10 +206,10 @@ Rollback trigger:
 
 ### C2. Evidence package для каждого профиля
 
-- [ ] before/after snapshot флагов и module health.
-- [ ] smoke output: `list -> open -> preview -> save-draft -> publish-dry` (с ожидаемым результатом для профиля).
-- [ ] observability snapshot: `sanitize`, `runtime`, `publish_latency`.
-- [ ] решение `keep/rollback` + owner подпись в control-plane audit trail.
+- [~] before/after snapshot флагов и module health: синтетический dry-run packet зафиксирован; фактические tenant snapshots ещё ожидаются.
+- [~] smoke output: `list -> open -> preview -> save-draft -> publish-dry` (синтетические ожидаемые outcomes зафиксированы; фактический control-plane smoke output ещё ожидается).
+- [~] observability snapshot: `sanitize`, `runtime`, `publish_latency` (синтетические placeholders зафиксированы; фактические метрики ещё ожидаются).
+- [~] решение `keep/rollback` + owner подпись в control-plane audit trail (синтетическое решение `keep` зафиксировано; фактический owner sign-off ещё ожидается).
 
 ### C3. Exit criteria для Wave 1
 

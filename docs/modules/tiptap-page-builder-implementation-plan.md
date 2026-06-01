@@ -712,7 +712,7 @@ Notes: <known deviations or waivers>
 
 ### 12.6 Минимальный evidence packet template (для Wave 0/Wave 1)
 
-Для унификации пакета между модулями после `pages` используется единая структура. Machine-readable baseline закреплён в `crates/rustok-page-builder/contracts/page-builder-wave-evidence-template.json` и проверяется `verify-page-builder-wave-evidence-template.mjs`:
+Для унификации пакета между модулями после `pages` используется единая структура. Machine-readable baseline закреплён в `crates/rustok-page-builder/contracts/page-builder-wave-evidence-template.json` и проверяется `verify-page-builder-wave-evidence-template.mjs`; синтетический dry-run packet для `pages` лежит в `crates/rustok-page-builder/contracts/evidence/pages-wave0-dry-run-evidence.json` и проверяется `verify-page-builder-wave-evidence-packet.mjs`, но не заменяет фактическое tenant evidence:
 
 1. `metadata/`
    - provider snapshot (`builder_contract_version`, health profile, degraded modes);
@@ -727,7 +727,7 @@ Notes: <known deviations or waivers>
    - rollback decision log (`keep` / `rollback`) с причиной;
    - owner on-call подтверждение и timestamp.
 
-Минимальный стандарт: без полного packet template модуль не может перейти из Wave 0 в Wave 1. Template должен оставаться частью aggregate baseline gate `verify-page-builder-fba-baseline.mjs`.
+Минимальный стандарт: без полного packet template модуль не может перейти из Wave 0 в Wave 1. Template и gate синтетического packet должны оставаться частью aggregate baseline gate `verify-page-builder-fba-baseline.mjs`; переход в Wave 1 требует заменить синтетические snapshots фактическими before/after артефактами tenant dry-run.
 
 ### 12.7 Следующий практический шаг “прямо сейчас” (next 10 working days)
 
@@ -964,8 +964,9 @@ Notes: <known deviations or waivers>
 
 - [~] **PB-FBA-1C / Control-plane operability:**
   - [x] зафиксировать machine-readable evidence template для metadata/control-plane/fallback/observability/rollback/approvals;
-  - [ ] провести dry-run toggle change-set (tenant internal), сохранить `before/after` snapshots;
-  - [ ] оформить decision log (`keep|rollback`) с owner sign-off.
+  - [x] зафиксировать синтетический Wave 0 dry-run packet для всех baseline toggle profiles как gate формы/семантики;
+  - [ ] провести реальный dry-run toggle change-set (tenant internal), сохранить фактические `before/after` snapshots;
+  - [ ] оформить реальный decision log (`keep|rollback`) с owner sign-off.
 - [ ] **PB-FBA-1D / Observability baseline:**
   - [ ] зафиксировать baseline-метрики `preview p95`, `publish p95`, `sanitize failure rate`;
   - [ ] приложить минимум 2 correlation trace (`builder write -> pages publish -> storefront read`).
