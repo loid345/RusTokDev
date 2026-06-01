@@ -5,12 +5,12 @@
 
 ## Execution checkpoint
 
-- Current phase: ffa_storefront_transport_ui_slice
-- Last checkpoint: Storefront pricing-context policy now lives in framework-agnostic core, native/GraphQL storefront fetch paths are exposed through explicit `transport/native_server_adapter.rs` and `transport/graphql_adapter.rs`, and the Leptos render layer moved under `ui/leptos.rs` while preserving native-first fallback parity.
-- Next step: Continue FFA-first sequencing by moving the next storefront/admin render fragment or route/query writer smoke into core without changing native/GraphQL transport parity.
+- Current phase: ffa_product_admin_core_slice
+- Last checkpoint: Product admin list/status/filter, shipping-profile, pricing-preview and pricing deep-link helpers now live in framework-agnostic `admin/src/core.rs`; Leptos admin rendering consumes those helpers without owning presentation policy.
+- Next step: Continue FFA-first sequencing by splitting product admin GraphQL operations behind a `transport/` facade without changing the existing `rustok-commerce` GraphQL contract.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок.
-- Last updated at (UTC): 2026-06-01T07:26:57Z
+- Last updated at (UTC): 2026-06-01T08:15:10Z
 
 
 ## FFA/FBA status
@@ -24,8 +24,9 @@
   - FFA slice: selected-product card empty state, pricing context label, ownership note, metric labels and pricing action label now live in `SelectedProductEmptyViewModel` / `SelectedProductViewModel` with unit-test evidence;
   - FFA slice: storefront shell badge/title/subtitle/load-error copy and typed fetch request shape now live in `ProductStorefrontShellViewModel` / `ProductStorefrontFetchRequest` with unit-test evidence;
   - FFA slice: storefront pricing-context sanitization/defaulting moved into core, native/GraphQL fetch adapters now sit behind `storefront/src/transport/`, and Leptos rendering is isolated in `storefront/src/ui/leptos.rs`; evidence: `cargo test -p rustok-product-storefront --lib`;
+  - FFA slice: product admin list/status/filter, shipping-profile, pricing-preview and pricing deep-link helpers moved into `admin/src/core.rs`; Leptos admin remains the render/effect adapter while GraphQL transport stays unchanged for this slice;
   - дальнейшее повышение статуса выполняется только вместе с verification evidence и обновлением local+central docs.
-- Last verified at (UTC): 2026-06-01T07:26:57Z
+- Last verified at (UTC): 2026-06-01T08:15:10Z
 - Owner: `rustok-product` module team
 
 ## Область работ
@@ -41,7 +42,9 @@
 - taxonomy-backed `product_tags` уже служат first-class product tag surface;
 - typed `shipping_profile_slug` уже закреплён в product/variant persistence и DTO;
 - module-owned admin UI пакет `rustok-product/admin` уже поднят и подключён в
-  manifest-driven admin composition как первый шаг UI split;
+  manifest-driven admin composition как первый шаг UI split; admin list/status/filter,
+  shipping-profile, pricing-preview и pricing deep-link helpers вынесены в
+  framework-agnostic `admin/src/core.rs`, а Leptos слой остаётся render/effect adapter;
 - module-owned storefront UI пакет `rustok-product/storefront` уже поднят и
   подключён в manifest-driven storefront composition для published catalog
   discovery через native Leptos server functions с GraphQL fallback;
@@ -79,6 +82,7 @@
 - [x] вынести selected-product card labels и empty state в core view-model без Leptos runtime;
 - [x] вынести storefront shell copy и typed fetch request shape в core без Leptos runtime;
 - [x] выделить storefront native/GraphQL transport adapters и явный Leptos UI adapter поверх core-owned request/policy state;
+- [x] вынести product admin list/status/filter, shipping-profile и pricing-preview helpers в framework-agnostic admin core;
 - [ ] обновлять consumer-module docs при изменении tag/deliverability integration rules.
 
 ## Проверка
