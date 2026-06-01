@@ -1299,7 +1299,32 @@ Storefront catalog/cart package теперь выполняет customer cart wr
 - runtime guardrail — созданный cart id хранится в host-owned `StorefrontCartIdStore`; durable storage остаётся отдельным host-owned product decision, а не package-local contract;
 - contract tests — `rustok_mobile/tooling/tests/test_storefront_cart_contract.py` фиксирует, что package не fallback-ит product id в variant id и что host repository использует host cart id store.
 
-Следующий storefront шаг: заменить in-memory `StorefrontCartIdStore` на согласованный durable host-owned adapter, если это потребуется продуктом, и добавить schema-backed integration tests, не расширяя Flutter-specific API surface.
+Следующий storefront шаг был закрыт host-owned persistence seam и schema-backed contract evidence: cart id больше не привязан к package-local или repository-local памяти, а Flutter cart operations проверяются против существующего commerce GraphQL surface.
+
+#### PR-M evidence pack (storefront cart durable host seam + schema contract)
+
+**Cart persistence and schema evidence:** `rustok_mobile/apps/rustok_frontend_mobile/lib/app_shell/storefront_context.dart` + `rustok_mobile/tooling/tests/test_storefront_cart_graphql_contract.py`.
+
+Storefront cart write path получил host-owned durable seam без расширения Flutter-specific API:
+- persistence boundary — `DurableStorefrontCartIdStore` работает через `StorefrontCartIdPersistence`, поэтому package `rustok_catalog_mobile` по-прежнему не создаёт cart storage contract;
+- host adapter — `FileStorefrontCartIdPersistence` может хранить cart id в host-provided JSON file через `RUSTOK_STOREFRONT_CART_ID_FILE`, а previews/tests сохраняют in-memory persistence;
+- runtime guardrail — storage key задаётся host-слоем (`RUSTOK_STOREFRONT_CART_STORAGE_KEY`), tenant/locale/auth context остаётся в shared GraphQL config;
+- schema-backed evidence — `test_storefront_cart_graphql_contract.py` сверяет Flutter cart operations и input types с существующими resolver/input declarations в `crates/rustok-commerce`;
+- FFA guardrail — durable seam не добавляет `/api/flutter`, `/api/mobile` или feature-local GraphQL client и не переносит storage ownership в module-owned catalog package.
+
+Следующий storefront шаг частично закрыт registry-driven home navigation: storefront host теперь показывает все generated manifest routes на главной поверхности, разделяя package-backed и manifest-only entries без ручного hard-code blog route. Более глубокий integration/e2e сигнал поверх реального schema snapshot или test server остаётся следующим CI-шагом, когда Flutter SDK будет доступен в окружении.
+
+#### PR-N evidence pack (storefront generated module navigation)
+
+**Generated storefront module links:** `rustok_mobile/apps/rustok_frontend_mobile/lib/routes/storefront_router.dart`.
+
+Storefront host начал использовать generated registry не только для direct `/modules/:routeSegment` resolution, но и для home navigation discovery:
+- navigation boundary — `StorefrontHomePage` рендерит список `storefrontSurfaceRegistry.entries`, поэтому новые storefront manifest entries становятся видимыми без hard-coded home links;
+- package/fallback signal — package-backed `products`/`cart` routes помечаются как `package`, остальные manifest-only surfaces остаются generic `manifest` entries;
+- route parity — tap по generated entry ведёт на тот же `/modules/<route_segment>` seam, который уже монтирует `StorefrontCatalogScreen`, `StorefrontCartScreen` или generic placeholder;
+- test evidence — `storefront_router_test.dart` проверяет generated home links и переход в manifest-backed `blog`, а `test_storefront_home_registry_contract.py` фиксирует отсутствие hard-coded `/modules/blog` home route.
+
+Следующий storefront шаг: добавить schema/test-server backed integration signal для catalog/cart GraphQL path и расширять package mappings только при появлении новых module-owned storefront packages.
 
 #### PR-A evidence pack (registry contract freeze)
 
