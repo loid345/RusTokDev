@@ -1,7 +1,7 @@
-mod api;
 mod core;
 mod i18n;
 mod model;
+mod transport;
 
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -73,7 +73,7 @@ pub fn WorkflowAdmin() -> impl IntoView {
     let workflows_resource = local_resource(
         move || (token.get(), tenant.get(), refresh_nonce.get()),
         move |(token_value, tenant_value, _)| async move {
-            api::fetch_workflows(token_value, tenant_value).await
+            transport::fetch_workflows(token_value, tenant_value).await
         },
     );
 
@@ -298,7 +298,7 @@ fn TemplateGallery(
     let templates_resource = local_resource(
         move || (token_for_templates.clone(), tenant_for_templates.clone()),
         move |(token_value, tenant_value)| async move {
-            api::fetch_templates(token_value, tenant_value).await
+            transport::fetch_templates(token_value, tenant_value).await
         },
     );
 
@@ -353,7 +353,7 @@ fn TemplateGallery(
                                                     set_pending_id.set(Some(template_id.clone()));
 
                                                     spawn_local(async move {
-                                                        match api::create_from_template(
+                                                        match transport::create_from_template(
                                                             token_value,
                                                             tenant_value,
                                                             template_id.clone(),
