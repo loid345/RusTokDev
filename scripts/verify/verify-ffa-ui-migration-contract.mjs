@@ -71,6 +71,7 @@ const requiredDocs = [
   "docs/research/dioxus-ffa-ui-migration-plan.md",
   "docs/research/dioxus-ffa-pilot-connectivity-map.md",
   "docs/verification/ffa-ui-parity-checklist.md",
+  "docs/modules/registry.md",
   "docs/index.md",
 ];
 
@@ -105,8 +106,8 @@ const requiredChecklistChecks = [
     pattern: /- \[[ xX]\] UI слой не владеет transport\/business логикой\./,
   },
   {
-    label: "transport-through-core checklist item",
-    pattern: /- \[[ xX]\] Доступ к transport идёт через core ports\./,
+    label: "transport-facade-core-ownership checklist item",
+    pattern: /- \[[ xX]\] UI adapter обращается к transport только через module-owned facade; request\/command\/state construction и business\/policy остаются в core ports\/helpers\./,
   },
   {
     label: "core-leptos-independence checklist item",
@@ -114,7 +115,7 @@ const requiredChecklistChecks = [
   },
   {
     label: "transport adapter roles checklist item",
-    pattern: /- \[[ xX]\] Transport adapters разделены по ролям: native и GraphQL fallback\./,
+    pattern: /- \[[ xX]\] Transport adapters разделены по ролям: native и GraphQL fallback либо явно зафиксирован temporary single-adapter state с next-step parity plan\./,
   },
   {
     label: "host-visible error-status checklist item",
@@ -131,6 +132,15 @@ const requiredChecklistChecks = [
 ];
 
 const requiredConnectivityMentions = ["rustok-pages", "rustok-search"];
+
+const requiredStructuralShapes = [
+  "none",
+  "docs_boundary",
+  "core_only",
+  "core_transport",
+  "core_transport_ui",
+  "no_ui_boundary",
+];
 
 const requiredIndexRefs = [
   "dioxus-ffa-ui-migration-plan.md",
@@ -230,12 +240,13 @@ function getMarkdownHeadings(content) {
 }
 
 function readRequiredDocs() {
-  const [planPath, connectivityPath, checklistPath, docsIndexPath] = requiredDocs.map(assertFileExists);
+  const [planPath, connectivityPath, checklistPath, registryPath, docsIndexPath] = requiredDocs.map(assertFileExists);
 
   return {
     plan: normalizeMarkdown(readFileSync(planPath, "utf8")),
     connectivity: normalizeMarkdown(readFileSync(connectivityPath, "utf8")),
     checklist: normalizeMarkdown(readFileSync(checklistPath, "utf8")),
+    registry: normalizeMarkdown(readFileSync(registryPath, "utf8")),
     docsIndex: normalizeMarkdown(readFileSync(docsIndexPath, "utf8")),
   };
 }
@@ -366,7 +377,27 @@ function collectRegionErrorStatusContractErrors() {
   return errors;
 }
 
-function collectValidationErrors({ plan, connectivity, checklist, docsIndex, packageJson }) {
+function collectStructuralShapeErrors(registry) {
+  const errors = [];
+
+  if (!registry.includes("Structural shape фиксирует")) {
+    errors.push("docs/modules/registry.md должен описывать Structural shape для FFA/FBA board");
+  }
+
+  if (!registry.includes("| Module slug | UI surfaces | FFA status | FBA status | Structural shape | Source plan |")) {
+    errors.push("docs/modules/registry.md FFA/FBA board должен содержать колонку Structural shape");
+  }
+
+  requiredStructuralShapes.forEach((shape) => {
+    if (!registry.includes(`\`${shape}\``)) {
+      errors.push(`docs/modules/registry.md должен документировать Structural shape: ${shape}`);
+    }
+  });
+
+  return errors;
+}
+
+function collectValidationErrors({ plan, connectivity, checklist, registry, docsIndex, packageJson }) {
   const errors = [];
 
   const planHeadingIndex = new Map(
@@ -439,6 +470,7 @@ function collectValidationErrors({ plan, connectivity, checklist, docsIndex, pac
     }
   });
 
+  errors.push(...collectStructuralShapeErrors(registry));
   errors.push(...collectRegionErrorStatusContractErrors());
 
   return errors.sort((a, b) => a.localeCompare(b, "ru"));

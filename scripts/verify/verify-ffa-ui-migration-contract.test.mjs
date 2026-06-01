@@ -18,6 +18,7 @@ function withFixture({ pipeline, contractCommand, docsCommand }) {
   const root = mkdtempSync(path.join(tmpdir(), "rustok-ffa-verify-"));
   mkdirSync(path.join(root, "docs", "research"), { recursive: true });
   mkdirSync(path.join(root, "docs", "verification"), { recursive: true });
+  mkdirSync(path.join(root, "docs", "modules"), { recursive: true });
   mkdirSync(path.join(root, "crates", "rustok-region", "storefront", "src"), { recursive: true });
   mkdirSync(path.join(root, "crates", "rustok-region", "storefront", "locales"), { recursive: true });
 
@@ -51,12 +52,28 @@ function withFixture({ pipeline, contractCommand, docsCommand }) {
       "- [ ] Headless host path (Next/mobile/external) не сломан.",
       "- [ ] GraphQL/REST surface не удалён и не ослаблен.",
       "- [ ] UI слой не владеет transport/business логикой.",
-      "- [ ] Доступ к transport идёт через core ports.",
+      "- [ ] UI adapter обращается к transport только через module-owned facade; request/command/state construction и business/policy остаются в core ports/helpers.",
       "- [ ] Core слой не зависит от `leptos*`.",
-      "- [ ] Transport adapters разделены по ролям: native и GraphQL fallback.",
+      "- [ ] Transport adapters разделены по ролям: native и GraphQL fallback либо явно зафиксирован temporary single-adapter state с next-step parity plan.",
       "- [ ] Host-visible UI status/error contracts имеют stable machine-readable codes и documented locale keys.",
       "- [ ] Выполнен `npm run verify:ffa:ui:migration`.",
       "- [ ] Для изменённых error/status контрактов приложен список stable codes и locale keys.",
+    ].join("\n"),
+  );
+
+  writeFileSync(
+    path.join(root, "docs", "modules", "registry.md"),
+    [
+      "Structural shape фиксирует глубину code-level FFA split.",
+      "- `none`",
+      "- `docs_boundary`",
+      "- `core_only`",
+      "- `core_transport`",
+      "- `core_transport_ui`",
+      "- `no_ui_boundary`",
+      "| Module slug | UI surfaces | FFA status | FBA status | Structural shape | Source plan |",
+      "|---|---|---|---|---|---|",
+      "| `cart` | storefront | `in_progress` | `in_progress` | `core_transport_ui` | fixture |",
     ].join("\n"),
   );
 
