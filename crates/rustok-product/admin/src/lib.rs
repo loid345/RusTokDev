@@ -1,7 +1,9 @@
 #![allow(clippy::too_many_arguments)]
 mod api;
+mod core;
 mod i18n;
 mod model;
+mod transport;
 
 use leptos::ev::SubmitEvent;
 use leptos::prelude::*;
@@ -12,6 +14,12 @@ use rustok_api::{AdminQueryKey, UiRouteContext};
 use rustok_seo_admin_support::SeoEntityPanel;
 use rustok_seo_targets::{builtin_slug as seo_builtin_slug, SeoTargetSlug};
 
+use crate::core::{
+    build_admin_pricing_href, format_catalog_snapshot_price, format_known_shipping_profiles,
+    format_pricing_preview, format_product_meta, format_product_shipping_profile,
+    localized_product_status, primary_catalog_currency, shipping_profile_choice_label,
+    status_badge, text_or_none, translation_for_locale,
+};
 use crate::i18n::t;
 use crate::model::{
     ProductAdminBootstrap, ProductDetail, ProductDraft, ProductPricingDetail, ShippingProfile,
@@ -27,12 +35,6 @@ where
     T: 'static,
 {
     LocalResource::new(move || fetcher(source()))
-}
-
-fn locale_tags_match(left: &str, right: &str) -> bool {
-    left.trim()
-        .replace('_', "-")
-        .eq_ignore_ascii_case(&right.trim().replace('_', "-"))
 }
 
 #[component]
@@ -73,7 +75,7 @@ pub fn ProductAdmin() -> impl IntoView {
     let bootstrap = local_resource(
         move || (token.get(), tenant.get()),
         move |(token_value, tenant_value)| async move {
-            api::fetch_bootstrap(token_value, tenant_value).await
+            transport::fetch_bootstrap(token_value, tenant_value).await
         },
     );
 
@@ -89,8 +91,9 @@ pub fn ProductAdmin() -> impl IntoView {
             )
         },
         move |(token_value, tenant_value, _, locale_value, search_value, status_value)| async move {
-            let bootstrap = api::fetch_bootstrap(token_value.clone(), tenant_value.clone()).await?;
-            api::fetch_products(
+            let bootstrap =
+                transport::fetch_bootstrap(token_value.clone(), tenant_value.clone()).await?;
+            transport::fetch_products(
                 token_value,
                 tenant_value,
                 bootstrap.current_tenant.id,
@@ -105,9 +108,14 @@ pub fn ProductAdmin() -> impl IntoView {
     let shipping_profiles = local_resource(
         move || (token.get(), tenant.get(), refresh_nonce.get()),
         move |(token_value, tenant_value, _)| async move {
-            let bootstrap = api::fetch_bootstrap(token_value.clone(), tenant_value.clone()).await?;
-            api::fetch_shipping_profiles(token_value, tenant_value, bootstrap.current_tenant.id)
-                .await
+            let bootstrap =
+                transport::fetch_bootstrap(token_value.clone(), tenant_value.clone()).await?;
+            transport::fetch_shipping_profiles(
+                token_value,
+                tenant_value,
+                bootstrap.current_tenant.id,
+            )
+            .await
         },
     );
     let selected_pricing = local_resource(
@@ -130,10 +138,10 @@ pub fn ProductAdmin() -> impl IntoView {
             let Some((product_id, currency_code)) = selected_product else {
                 return Ok(None);
             };
-            let bootstrap = api::fetch_bootstrap(token_value.clone(), tenant_value.clone())
+            let bootstrap = transport::fetch_bootstrap(token_value.clone(), tenant_value.clone())
                 .await
                 .map_err(|err| err.to_string())?;
-            api::fetch_product_pricing(
+            transport::fetch_product_pricing(
                 token_value,
                 tenant_value,
                 bootstrap.current_tenant.id,
@@ -316,7 +324,7 @@ pub fn ProductAdmin() -> impl IntoView {
         spawn_local(async move {
             let result = match product_id {
                 Some(id) => {
-                    api::update_product(
+                    transport::update_product(
                         token_value,
                         tenant_value,
                         bootstrap.current_tenant.id,
@@ -327,7 +335,7 @@ pub fn ProductAdmin() -> impl IntoView {
                     .await
                 }
                 None => {
-                    api::create_product(
+                    transport::create_product(
                         token_value,
                         tenant_value,
                         bootstrap.current_tenant.id,
@@ -576,7 +584,7 @@ pub fn ProductAdmin() -> impl IntoView {
                                                             let delete_returned_false_label = delete_returned_false_label_for_delete.clone();
                                                             let delete_product_error_label = delete_product_error_label_for_delete.clone();
                                                             spawn_local(async move {
-                                                                match api::delete_product(
+                                                                match transport::delete_product(
                                                                     token_value,
                                                                     tenant_value,
                                                                     bootstrap.current_tenant.id,
@@ -778,7 +786,7 @@ fn open_product_for_edit(
     set_busy.set(true);
     set_error.set(None);
     spawn_local(async move {
-        match api::fetch_product(
+        match transport::fetch_product(
             token,
             tenant,
             bootstrap.current_tenant.id,
@@ -973,18 +981,6 @@ fn apply_product(
     set_publish_now.set(product.status == "ACTIVE");
 }
 
-fn translation_for_locale(
-    translations: &[crate::model::ProductTranslation],
-    requested_locale: Option<&str>,
-) -> Option<crate::model::ProductTranslation> {
-    requested_locale.and_then(|requested_locale| {
-        translations
-            .iter()
-            .find(|translation| locale_tags_match(&translation.locale, requested_locale))
-            .cloned()
-    })
-}
-
 fn mutate_status(
     bootstrap: Option<ProductAdminBootstrap>,
     token: Option<String>,
@@ -1005,7 +1001,7 @@ fn mutate_status(
     set_busy.set(true);
     set_error.set(None);
     spawn_local(async move {
-        match api::change_product_status(
+        match transport::change_product_status(
             token,
             tenant,
             bootstrap.current_tenant.id,
@@ -1132,216 +1128,4 @@ fn SelectedProductSummary(
         </div>
     }
     .into_any()
-}
-
-fn primary_catalog_currency(product: Option<&ProductDetail>) -> Option<String> {
-    product.and_then(|item| {
-        item.variants
-            .first()
-            .and_then(|variant| variant.prices.first())
-            .map(|price| price.currency_code.clone())
-    })
-}
-
-fn format_catalog_snapshot_price(locale: Option<&str>, product: Option<&ProductDetail>) -> String {
-    product
-        .and_then(|item| item.variants.first())
-        .and_then(|variant| variant.prices.first())
-        .map(|price| {
-            format_scoped_price(
-                locale,
-                &price.currency_code,
-                &price.amount,
-                price.compare_at_amount.as_deref(),
-                None,
-            )
-        })
-        .unwrap_or_else(|| t(locale, "product.summary.noPricing", "no pricing"))
-}
-
-fn format_pricing_preview(locale: Option<&str>, pricing: Option<&ProductPricingDetail>) -> String {
-    let Some(pricing) = pricing else {
-        return t(
-            locale,
-            "product.summary.pricingUnavailable",
-            "Pricing module preview is unavailable.",
-        );
-    };
-
-    let Some(variant) = pricing.variants.first() else {
-        return t(locale, "product.summary.noPricing", "no pricing");
-    };
-
-    if let Some(price) = variant.effective_price.as_ref() {
-        let mut label = format_scoped_price(
-            locale,
-            &price.currency_code,
-            &price.amount,
-            price.compare_at_amount.as_deref(),
-            price.discount_percent.as_deref(),
-        );
-        if let Some(scope) = format_pricing_scope(
-            locale,
-            price.price_list_id.as_deref(),
-            price.channel_slug.as_deref(),
-            price.channel_id.as_deref(),
-        ) {
-            label.push_str(format!(" | {scope}").as_str());
-        }
-        return label;
-    }
-
-    variant
-        .prices
-        .first()
-        .map(|price| {
-            format_scoped_price(
-                locale,
-                &price.currency_code,
-                &price.amount,
-                price.compare_at_amount.as_deref(),
-                price.discount_percent.as_deref(),
-            )
-        })
-        .unwrap_or_else(|| t(locale, "product.summary.noPricing", "no pricing"))
-}
-
-fn format_scoped_price(
-    locale: Option<&str>,
-    currency_code: &str,
-    amount: &str,
-    compare_at_amount: Option<&str>,
-    discount_percent: Option<&str>,
-) -> String {
-    let mut label = if let Some(compare_at_amount) = compare_at_amount {
-        format!(
-            "{} {} ({})",
-            currency_code,
-            amount,
-            t(locale, "product.summary.compareAt", "compare-at {value}")
-                .replace("{value}", compare_at_amount),
-        )
-    } else {
-        format!("{currency_code} {amount}")
-    };
-
-    if let Some(discount_percent) = discount_percent.filter(|value| !value.trim().is_empty()) {
-        label.push_str(format!(" (-{discount_percent}%)").as_str());
-    }
-
-    label
-}
-
-fn format_pricing_scope(
-    locale: Option<&str>,
-    price_list_id: Option<&str>,
-    channel_slug: Option<&str>,
-    channel_id: Option<&str>,
-) -> Option<String> {
-    let price_list_id = price_list_id.filter(|value| !value.trim().is_empty());
-    let channel_slug = channel_slug.filter(|value| !value.trim().is_empty());
-    let channel_id = channel_id.filter(|value| !value.trim().is_empty());
-
-    if price_list_id.is_none() && channel_slug.is_none() && channel_id.is_none() {
-        return None;
-    }
-
-    let mut parts = Vec::new();
-    if let Some(price_list_id) = price_list_id {
-        parts.push(t(locale, "product.summary.priceList", "price list") + " " + price_list_id);
-    }
-    match (channel_slug, channel_id) {
-        (Some(channel_slug), Some(channel_id)) => parts.push(
-            t(locale, "product.summary.channel", "channel")
-                + " "
-                + channel_slug
-                + " ("
-                + channel_id
-                + ")",
-        ),
-        (Some(channel_slug), None) => {
-            parts.push(t(locale, "product.summary.channel", "channel") + " " + channel_slug)
-        }
-        (None, Some(channel_id)) => {
-            parts.push(t(locale, "product.summary.channel", "channel") + " " + channel_id)
-        }
-        (None, None) => {}
-    }
-
-    Some(parts.join(" | "))
-}
-
-fn build_admin_pricing_href(module_route_base: &str, product: &ProductDetail) -> String {
-    let mut params = vec![format!("id={}", product.id)];
-    if let Some(currency_code) =
-        primary_catalog_currency(Some(product)).filter(|value| !value.trim().is_empty())
-    {
-        params.push(format!("currency={currency_code}"));
-    }
-    params.push("quantity=1".to_string());
-    format!("{module_route_base}?{}", params.join("&"))
-}
-
-fn format_known_shipping_profiles(locale: Option<&str>, profiles: &[ShippingProfile]) -> String {
-    let slugs = profiles
-        .iter()
-        .filter(|profile| profile.active)
-        .map(|profile| profile.slug.as_str())
-        .collect::<Vec<_>>();
-    if slugs.is_empty() {
-        t(locale, "product.common.noneYet", "none yet")
-    } else {
-        slugs.join(", ")
-    }
-}
-
-fn shipping_profile_choice_label(locale: Option<&str>, profile: &ShippingProfile) -> String {
-    if profile.active {
-        format!("{} ({})", profile.name, profile.slug)
-    } else {
-        format!(
-            "{} ({}, {})",
-            profile.name,
-            profile.slug,
-            t(locale, "product.common.inactive", "inactive")
-        )
-    }
-}
-
-fn localized_product_status(locale: Option<&str>, status: &str) -> String {
-    match status {
-        "ACTIVE" => t(locale, "product.status.active", "Active"),
-        "ARCHIVED" => t(locale, "product.status.archived", "Archived"),
-        _ => t(locale, "product.status.draft", "Draft"),
-    }
-}
-
-fn format_product_meta(locale: Option<&str>, handle: &str, vendor: Option<&str>) -> String {
-    let handle_label = t(locale, "product.summary.handle", "handle");
-    let vendor_label = t(locale, "product.summary.vendor", "vendor");
-    match vendor.filter(|value| !value.is_empty()) {
-        Some(vendor) => format!("{handle_label}: {handle} | {vendor_label}: {vendor}"),
-        None => format!("{handle_label}: {handle}"),
-    }
-}
-
-fn format_product_shipping_profile(locale: Option<&str>, slug: &str) -> String {
-    t(locale, "product.summary.profileChip", "profile {slug}").replace("{slug}", slug)
-}
-
-fn text_or_none(value: String) -> Option<String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
-}
-
-fn status_badge(status: &str) -> &'static str {
-    match status {
-        "ACTIVE" => "border-emerald-200 bg-emerald-50 text-emerald-700",
-        "ARCHIVED" => "border-slate-200 bg-slate-100 text-slate-700",
-        _ => "border-amber-200 bg-amber-50 text-amber-700",
-    }
 }

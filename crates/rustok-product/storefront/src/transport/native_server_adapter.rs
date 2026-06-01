@@ -5,7 +5,7 @@ use crate::model::StorefrontProductsData;
 pub async fn fetch_products(
     request: ProductStorefrontFetchRequest,
 ) -> Result<StorefrontProductsData, ApiError> {
-    api::fetch_storefront_products(
+    api::fetch_storefront_products_server(
         request.selected_handle,
         request.locale,
         request.currency_code,

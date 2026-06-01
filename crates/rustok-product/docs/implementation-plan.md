@@ -5,26 +5,29 @@
 
 ## Execution checkpoint
 
-- Current phase: ffa_storefront_core_slice
-- Last checkpoint: Storefront shell copy and fetch request shape now live in framework-agnostic `ProductStorefrontShellViewModel` / `ProductStorefrontFetchRequest`; Leptos `ProductView` supplies host route context and passes the prepared request to the transport facade.
-- Next step: Continue FFA-first sequencing by moving the next storefront/admin render fragment or route/query writer smoke into core without changing native/GraphQL transport parity.
+- Current phase: ffa_product_admin_transport_slice
+- Last checkpoint: Product admin GraphQL calls now go through module-owned `admin/src/transport.rs`, while the existing `api.rs` GraphQL implementation remains unchanged behind that facade.
+- Next step: Continue FFA-first sequencing by isolating product admin Leptos rendering under an explicit `ui/leptos.rs` adapter without changing the current GraphQL transport contract.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок.
-- Last updated at (UTC): 2026-05-31T00:00:00Z
+- Last updated at (UTC): 2026-06-01T08:29:40Z
 
 
 ## FFA/FBA status
 
 - FFA status: `in_progress`
 - FBA status: `in_progress`
-- Structural shape: `core_only`
+- Structural shape: `core_transport_ui`
 - Evidence:
   - module plan синхронизирован с central FFA/FBA readiness board; UI surface уже опубликован и ведётся в migration/backlog ритме;
   - FFA slice: storefront catalog rail title/total/empty/open labels, item fallback labels, seller boundary text, published timestamp fallback and handle links now live in framework-agnostic `ProductCatalogRailViewModel` with unit-test evidence;
   - FFA slice: selected-product card empty state, pricing context label, ownership note, metric labels and pricing action label now live in `SelectedProductEmptyViewModel` / `SelectedProductViewModel` with unit-test evidence;
   - FFA slice: storefront shell badge/title/subtitle/load-error copy and typed fetch request shape now live in `ProductStorefrontShellViewModel` / `ProductStorefrontFetchRequest` with unit-test evidence;
+  - FFA slice: storefront pricing-context sanitization/defaulting moved into core, native/GraphQL fetch adapters now sit behind `storefront/src/transport/`, and Leptos rendering is isolated in `storefront/src/ui/leptos.rs`; evidence: `cargo test -p rustok-product-storefront --lib`;
+  - FFA slice: product admin list/status/filter, shipping-profile, pricing-preview and pricing deep-link helpers moved into `admin/src/core.rs`; Leptos admin remains the render/effect adapter while GraphQL transport stays unchanged for this slice;
+  - FFA slice: product admin GraphQL operations now route through `admin/src/transport.rs`, keeping `admin/src/api.rs` as the GraphQL adapter and preserving the existing `rustok-commerce` GraphQL contract;
   - дальнейшее повышение статуса выполняется только вместе с verification evidence и обновлением local+central docs.
-- Last verified at (UTC): 2026-05-31T00:00:00Z
+- Last verified at (UTC): 2026-06-01T08:29:40Z
 - Owner: `rustok-product` module team
 
 ## Область работ
@@ -40,15 +43,20 @@
 - taxonomy-backed `product_tags` уже служат first-class product tag surface;
 - typed `shipping_profile_slug` уже закреплён в product/variant persistence и DTO;
 - module-owned admin UI пакет `rustok-product/admin` уже поднят и подключён в
-  manifest-driven admin composition как первый шаг UI split;
+  manifest-driven admin composition как первый шаг UI split; admin list/status/filter,
+  shipping-profile, pricing-preview и pricing deep-link helpers вынесены в
+  framework-agnostic `admin/src/core.rs`, GraphQL операции проходят через
+  `admin/src/transport.rs`, а Leptos слой остаётся render/effect adapter;
 - module-owned storefront UI пакет `rustok-product/storefront` уже поднят и
   подключён в manifest-driven storefront composition для published catalog
   discovery через native Leptos server functions с GraphQL fallback;
 - storefront UI продолжает FFA-декомпозицию: route/query normalization, typed fetch
   request shape, shell copy, selected-product view-model composition, selected-card
-  labels/empty state, catalog rail view-model, pricing/seller labels и pricing
-  deep-link state вынесены в framework-agnostic `storefront/src/core.rs`, а Leptos
-  слой остаётся thin render/host-context adapter поверх transport;
+  labels/empty state, catalog rail view-model, pricing/seller labels, pricing
+  deep-link state и pricing-context sanitization/defaulting вынесены в
+  framework-agnostic `storefront/src/core.rs`, native/GraphQL storefront fetch
+  paths оформлены как `storefront/src/transport/` adapters, а Leptos слой
+  изолирован в `storefront/src/ui/leptos.rs` как thin render/host-context adapter;
 - transport-level validation и public transport по-прежнему публикуются фасадом `rustok-commerce`.
 
 ## Этапы
@@ -75,6 +83,9 @@
 - [x] вынести storefront catalog rail presentation в core view-model без Leptos runtime;
 - [x] вынести selected-product card labels и empty state в core view-model без Leptos runtime;
 - [x] вынести storefront shell copy и typed fetch request shape в core без Leptos runtime;
+- [x] выделить storefront native/GraphQL transport adapters и явный Leptos UI adapter поверх core-owned request/policy state;
+- [x] вынести product admin list/status/filter, shipping-profile и pricing-preview helpers в framework-agnostic admin core;
+- [x] выделить product admin GraphQL operations behind a module-owned transport facade without changing `rustok-commerce` GraphQL contract;
 - [ ] обновлять consumer-module docs при изменении tag/deliverability integration rules.
 
 ## Проверка

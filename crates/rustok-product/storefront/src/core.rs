@@ -75,6 +75,90 @@ pub fn build_storefront_fetch_request(
     }
 }
 
+fn sanitize_currency_code(currency_code: Option<String>) -> Option<String> {
+    currency_code
+        .map(|value| value.trim().to_ascii_uppercase())
+        .filter(|value| value.len() == 3)
+}
+
+pub(crate) fn sanitize_uuid_string(value: Option<String>) -> Option<String> {
+    value
+        .map(|item| item.trim().to_string())
+        .filter(|item| !item.is_empty() && uuid::Uuid::parse_str(item).is_ok())
+}
+
+pub(crate) fn sanitize_channel_slug(channel_slug: Option<String>) -> Option<String> {
+    channel_slug
+        .map(|value| value.trim().to_ascii_lowercase())
+        .filter(|value| !value.is_empty())
+}
+
+#[cfg_attr(not(feature = "ssr"), allow(dead_code))]
+fn normalize_optional(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_string())
+        }
+    })
+}
+
+#[cfg_attr(not(feature = "ssr"), allow(dead_code))]
+pub fn resolve_requested_locale(
+    requested: Option<String>,
+    request_context_locale: Option<&str>,
+    tenant_default_locale: &str,
+) -> String {
+    normalize_optional(requested)
+        .or_else(|| {
+            request_context_locale.and_then(|value| normalize_optional(Some(value.to_string())))
+        })
+        .or_else(|| normalize_optional(Some(tenant_default_locale.to_string())))
+        .unwrap_or_default()
+}
+
+fn sanitize_quantity(quantity: Option<i32>) -> Option<i32> {
+    quantity.filter(|value| *value > 0)
+}
+
+fn derive_pricing_currency(
+    selected_product: Option<&ProductDetail>,
+    currency_code: Option<String>,
+) -> Option<String> {
+    sanitize_currency_code(currency_code).or_else(|| {
+        selected_product.and_then(|product| {
+            product
+                .variants
+                .first()
+                .and_then(|variant| variant.prices.first())
+                .map(|price| price.currency_code.clone())
+                .and_then(|currency| sanitize_currency_code(Some(currency)))
+        })
+    })
+}
+
+pub fn build_pricing_context(
+    selected_product: Option<&ProductDetail>,
+    currency_code: Option<String>,
+    region_id: Option<String>,
+    price_list_id: Option<String>,
+    channel_id: Option<String>,
+    channel_slug: Option<String>,
+    quantity: Option<i32>,
+) -> Option<ProductPricingContext> {
+    let currency_code = derive_pricing_currency(selected_product, currency_code)?;
+    Some(ProductPricingContext {
+        currency_code,
+        region_id: sanitize_uuid_string(region_id),
+        price_list_id: sanitize_uuid_string(price_list_id),
+        channel_id: sanitize_uuid_string(channel_id),
+        channel_slug: sanitize_channel_slug(channel_slug),
+        quantity: sanitize_quantity(quantity).unwrap_or(1),
+    })
+}
+
 pub fn build_product_storefront_shell_view_model(
     locale: Option<&str>,
 ) -> ProductStorefrontShellViewModel {
