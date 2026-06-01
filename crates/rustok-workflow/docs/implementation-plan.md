@@ -18,6 +18,7 @@ capability integrations без дрейфа и битой документаци
 
 - FFA status: `in_progress`
 - FBA status: `in_progress`
+- Structural shape: `core_transport_ui`
 - Evidence:
   - module plan синхронизирован с central FFA/FBA readiness board; UI surface уже опубликован и ведётся в migration/backlog ритме;
   - FFA admin slice: status badge presentation, workflow table row mapping, template category styling и template-name normalization теперь живут в framework-agnostic `admin/src/core.rs` с unit tests;

@@ -397,6 +397,41 @@ function collectStructuralShapeErrors(registry) {
   return errors;
 }
 
+
+function collectRegistryLocalShapeErrors(registry) {
+  const errors = [];
+  const tableLines = registry
+    .split("\n")
+    .filter((line) => line.startsWith("| `") && line.includes("docs/implementation-plan.md"));
+
+  tableLines.forEach((line) => {
+    const columns = line.split("|").map((column) => column.trim());
+    const moduleSlug = columns[1]?.replace(/`/g, "") ?? "<unknown>";
+    const structuralShape = columns[5]?.replace(/`/g, "");
+    const sourcePlanCell = columns[6] ?? "";
+    const sourcePlanMatch = sourcePlanCell.match(/(crates\/[^`) ]+\/docs\/implementation-plan\.md)/);
+
+    if (!requiredStructuralShapes.includes(structuralShape)) {
+      errors.push(`FFA/FBA board содержит неизвестный Structural shape для ${moduleSlug}: ${structuralShape}`);
+      return;
+    }
+
+    if (!sourcePlanMatch) {
+      errors.push(`FFA/FBA board не содержит source implementation plan path для ${moduleSlug}`);
+      return;
+    }
+
+    const sourcePlanPath = sourcePlanMatch[1];
+    const sourcePlan = readText(sourcePlanPath);
+    const expectedShapeLine = `- Structural shape: \`${structuralShape}\``;
+    if (!sourcePlan.includes(expectedShapeLine)) {
+      errors.push(`${sourcePlanPath} должен содержать строку локального статуса: ${expectedShapeLine}`);
+    }
+  });
+
+  return errors;
+}
+
 function collectValidationErrors({ plan, connectivity, checklist, registry, docsIndex, packageJson }) {
   const errors = [];
 
@@ -471,6 +506,7 @@ function collectValidationErrors({ plan, connectivity, checklist, registry, docs
   });
 
   errors.push(...collectStructuralShapeErrors(registry));
+  errors.push(...collectRegistryLocalShapeErrors(registry));
   errors.push(...collectRegionErrorStatusContractErrors());
 
   return errors.sort((a, b) => a.localeCompare(b, "ru"));

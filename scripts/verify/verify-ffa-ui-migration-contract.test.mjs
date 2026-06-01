@@ -14,11 +14,18 @@ import { spawnSync } from "node:child_process";
 
 const scriptPath = path.resolve("scripts/verify/verify-ffa-ui-migration-contract.mjs");
 
-function withFixture({ pipeline, contractCommand, docsCommand }) {
+function withFixture({
+  pipeline,
+  contractCommand,
+  docsCommand,
+  registryShape = "core_transport_ui",
+  localShape = "core_transport_ui",
+}) {
   const root = mkdtempSync(path.join(tmpdir(), "rustok-ffa-verify-"));
   mkdirSync(path.join(root, "docs", "research"), { recursive: true });
   mkdirSync(path.join(root, "docs", "verification"), { recursive: true });
   mkdirSync(path.join(root, "docs", "modules"), { recursive: true });
+  mkdirSync(path.join(root, "crates", "rustok-cart", "docs"), { recursive: true });
   mkdirSync(path.join(root, "crates", "rustok-region", "storefront", "src"), { recursive: true });
   mkdirSync(path.join(root, "crates", "rustok-region", "storefront", "locales"), { recursive: true });
 
@@ -73,7 +80,18 @@ function withFixture({ pipeline, contractCommand, docsCommand }) {
       "- `no_ui_boundary`",
       "| Module slug | UI surfaces | FFA status | FBA status | Structural shape | Source plan |",
       "|---|---|---|---|---|---|",
-      "| `cart` | storefront | `in_progress` | `in_progress` | `core_transport_ui` | fixture |",
+      "| `cart` | storefront | `in_progress` | `in_progress` | `" + registryShape + "` | `crates/rustok-cart/docs/implementation-plan.md` fixture |",
+    ].join("\n"),
+  );
+
+  writeFileSync(
+    path.join(root, "crates", "rustok-cart", "docs", "implementation-plan.md"),
+    [
+      "## FFA/FBA status",
+      "",
+      "- FFA status: `in_progress`",
+      "- FBA status: `in_progress`",
+      "- Structural shape: `" + localShape + "`",
     ].join("\n"),
   );
 
@@ -222,6 +240,22 @@ test("fails when contract script command is drifted", () => {
   }
 });
 
+
+test("fails when registry structural shape drifts from local module plan", () => {
+  const fixture = withFixture({
+    pipeline: "npm run verify:ffa:ui:migration:contract && npm run verify:ffa:ui:migration:docs",
+    registryShape: "core_transport_ui",
+    localShape: "core_only",
+  });
+
+  try {
+    const result = runVerifier(fixture.root);
+    assert.notEqual(result.status, 0, "Expected local structural shape drift fixture to fail");
+    assert.match(result.stderr, /Structural shape: `core_transport_ui`/);
+  } finally {
+    fixture.cleanup();
+  }
+});
 
 test("passes when docs script uses sh variant", () => {
   const fixture = withFixture({
