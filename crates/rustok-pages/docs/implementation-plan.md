@@ -8,7 +8,7 @@
 
 - Current phase: phase_b_closed
 - Last checkpoint: FFA maintenance slice вынесла create-page draft normalization (`PageDraftFormInput` / `build_create_page_draft`) и route text checks на shared UI helpers из `rustok-api`.
-- Next step: Закрыть оставшуюся PB-FBA-1B typed errors parity для Next/Leptos/Flutter adapters и затем PB-FBA-1C control-plane audit trail.
+- Next step: Собрать оставшуюся PB-FBA-1B cross-runtime parity evidence для Next/Leptos/Flutter adapters и затем PB-FBA-1C control-plane audit trail.
 - Open blockers: None.
 - Hand-off notes for next agent:
   1. Перед любыми изменениями pages сначала сверить `docs/research/dioxus-ffa-pilot-connectivity-map.md` и этот файл; не открывать новый slice без явной цели в трекере.
@@ -20,18 +20,16 @@
 - Last updated at (UTC): 2026-05-24T12:20:00Z
 - Last updated at (UTC): 2026-05-25T11:10:00Z
 - Last updated at (UTC): 2026-05-29T00:00:00Z
+- Last updated at (UTC): 2026-06-01T00:00:00Z
 - Latest maintenance update: Leptos admin package now exposes capability surfaces `preview/tree/properties/publish` for `grapesjs_v1` and keeps legacy `blocks` compatibility visible in the same write-path.
-- Latest maintenance update: зафиксирован typed builder error catalog parity (`validation/sanitization/runtime/feature-disabled`) для admin UI + service/runtime с опорой на `WritePathIssueKind` и `PagesError::FeatureDisabled`.
+- Latest maintenance update: зафиксирован typed builder error catalog parity (`validation/sanitize/runtime/feature-disabled`) для admin UI + service/runtime с опорой на `WritePathIssueKind`, `PagesError::FeatureDisabled`, manifest/registry binding и `verify-page-builder-error-catalog-binding.mjs`.
 - Latest maintenance update: create-page draft normalization теперь собирается в `admin/src/core.rs` и переиспользует `rustok-api::normalize_ui_text` / `parse_ui_csv`, а Leptos слой остаётся thin bind/render adapter.
 
 - PB-FBA-1 platform sync note: central plan `docs/modules/tiptap-page-builder-implementation-plan.md` now содержит delivery slices и exit criteria для Wave 0 hand-off; pages track должен обновляться синхронно по dependency notes.
 - PB-FBA-1 execution note: sync с central section `8.5 Execution backlog` принят как active queue (`PB-FBA-1A..1D`, фокус Week1=P0/P1, Week2=P2/P3).
 - PB-FBA-1A update: `consumer_min_version = "1.0"` добавлен в `fba.builder_consumer`, а machine-readable registry `crates/rustok-page-builder/contracts/page-builder-fba-registry.json` теперь проверяется через `verify-page-builder-contract-registry.mjs` и aggregate baseline gate.
 - PB-FBA-1B host update: `pages_builder_fallback_*` gate покрывает все baseline-профили (`all_on`, `publish_off`, `preview_off`, `builder_off`) на service boundary и admin/storefront host helpers: read/list остаются стабильными, disabled capabilities возвращают typed `FeatureDisabled`, storefront render не требует builder capability.
-
-
-
-
+- PB-FBA-1B catalog update: `fba.builder_consumer.error_catalog`, `error_codes` и `degraded_mode_errors` синхронизированы с provider metadata, FBA registry и runtime constants; aggregate baseline gate теперь включает anti-drift проверку error-catalog binding.
 
 ## FFA/FBA status
 
@@ -172,7 +170,7 @@ Rollback trigger:
 
 ### B2. Fallback & error semantics
 
-- [x] Закрепить единый typed error catalog для builder-related runtime ошибок (`validation/sanitize/runtime/feature-disabled`).
+- [x] Закрепить единый typed error catalog для builder-related runtime ошибок (`validation/sanitize/runtime/feature-disabled`) и связать его с `degraded_modes` через machine-readable manifest/registry gate.
 - [x] Добавить fallback snapshots в docs для admin/list/read/publish surfaces.
 - [x] Убедиться, что baseline-профили `all_on`, `publish_off`, `preview_off`, `builder_off` не ломают page read/list/menu paths на service fallback gate и host-level admin/storefront helper checks; Next/Flutter parity evidence остаётся в Wave hand-off.
 
@@ -184,7 +182,7 @@ Rollback trigger:
 
 ### B4. Verification gates
 
-- [x] Включить fallback regression checks в `cargo xtask module test pages` (или эквивалентный CI gate): `verify-page-builder-fba-baseline.mjs` запускает provider runtime gate, registry anti-drift gate и `rustok-pages` service/admin/storefront fallback gates по всем четырём baseline-профилям.
+- [x] Включить fallback regression checks в `cargo xtask module test pages` (или эквивалентный CI gate): `verify-page-builder-fba-baseline.mjs` запускает provider runtime gate, registry anti-drift gate, error-catalog binding gate и `rustok-pages` service/admin/storefront fallback gates по всем четырём baseline-профилям.
 - [x] Добавить targeted integration checks для `all_on`, `publish_off`, `preview_off`, `builder_off` на уровне `pages` service/transport boundary (`pages_builder_fallback_*` checks).
 - [ ] Зафиксировать evidence-template для Wave hand-off (platform + pages owner approval).
 

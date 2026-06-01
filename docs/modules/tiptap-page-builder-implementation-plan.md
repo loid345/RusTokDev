@@ -384,7 +384,7 @@ Notes: <known deviations or waivers>
 
 **Итерация PB-FBA-1 (contract hardening + metadata parity)**
 
-- [~] Зафиксировать в `rustok-pages` machine-readable матрицу capability fallback (`builder_off`, `preview_off`, `publish_off`) и связать её с runtime error catalog (toggle profiles + degraded modes зафиксированы в manifest; связка с error catalog закрывается в Phase 5).
+- [~] Зафиксировать в `rustok-pages` machine-readable матрицу capability fallback (`builder_off`, `preview_off`, `publish_off`) и связать её с runtime error catalog (toggle profiles + degraded modes + error-catalog binding зафиксированы в manifest/registry/runtime gate; cross-runtime parity evidence остаётся в Wave hand-off).
 - [ ] Закрыть contract-parity по consumer adapters (Next/Leptos/Flutter) на уровне одинаковых error semantics, без требования UI 1:1.
 - [ ] Зафиксировать anti-drift checks: `contract_version` между provider/consumer должен валидироваться в CI.
 
@@ -475,8 +475,8 @@ Notes: <known deviations or waivers>
    - обновить `docs/modules/implementation-plans-registry.md` после фиксации Wave 0 evidence packet;
    - приложить ссылки на `toggle snapshots` и `fallback gate` результаты для `all_on/publish_off/preview_off/builder_off`.
 2. **PB-FBA-1b — error catalog binding**
-   - связать `degraded_modes` из `rustok-module.toml` с typed runtime error catalog в `rustok-pages`;
-   - добавить проверку anti-drift: каждый degraded mode должен иметь documented error code.
+   - [x] связать `degraded_modes` из `rustok-module.toml` с typed runtime error catalog в `rustok-pages`;
+   - [x] добавить проверку anti-drift: каждый degraded mode должен иметь documented error code.
 3. **PB-FBA-2a — CI fallback gate hardening**
    - довести до required-check сценарии `builder_off` и `publish_off` без 5xx на read/list surfaces;
    - зафиксировать waiver policy: временные исключения только с owner sign-off и expiry date.
@@ -505,7 +505,7 @@ Notes: <known deviations or waivers>
 **Цель:** довести reference-модуль builder-а до стабильного provider-контракта.
 
 - [ ] Зафиксировать `builder_contract_version` в provider metadata и добавить anti-drift проверку в CI.
-- [ ] Формализовать typed error catalog для `preview/tree/properties/publish` (validation/sanitize/rbac/runtime).
+- [x] Формализовать baseline typed error catalog для `preview/tree/properties/publish` (`validation/sanitize/runtime/feature-disabled`) в provider/consumer metadata и runtime gate; RBAC parity остаётся Wave evidence.
 - [ ] Довести health contract до machine-readable профиля (`ready/degraded/unavailable`) с причиной деградации.
 - [ ] Подготовить SLO-baseline для capability endpoints по pilot-tenant классу нагрузки.
 
@@ -515,9 +515,9 @@ Notes: <known deviations or waivers>
 
 **Цель:** на примере `pages` зафиксировать канонический migration path module-owned → FBA-consumer.
 
-- [ ] В `rustok-pages` metadata зафиксировать dependency profile на внешний builder provider (без локального ownership fallback).
-- [ ] Внедрить fallback-matrix для admin/storefront сценариев (`builder_off`, `publish_off`, `preview_off`) и подтвердить отсутствие 5xx в read/list.
-- [ ] Добавить publish gating contract: typed runtime error + UX guidance вместо аварийного падения publish flow.
+- [x] В `rustok-pages` metadata зафиксировать dependency profile на внешний builder provider (без локального ownership fallback).
+- [x] Внедрить fallback-matrix для admin/storefront сценариев (`builder_off`, `publish_off`, `preview_off`) и подтвердить отсутствие 5xx в read/list.
+- [x] Добавить publish gating contract: typed runtime error + UX guidance вместо аварийного падения publish flow.
 - [ ] Свести observability correlation: один trace/correlation-id на путь `builder write -> pages publish -> storefront read`.
 
 **Выход итерации:** `pages` подтверждён как эталонный FBA-consumer, пригодный как шаблон для `content`-подобных модулей.
@@ -954,6 +954,7 @@ Notes: <known deviations or waivers>
 - [~] **PB-FBA-1B / Fallback hardening:**
   - [x] подтвердить service-level smoke-профили `all_on/publish_off/preview_off/builder_off` без деградации `pages` read/list через `pages_builder_fallback_*` gate;
   - [x] приложить admin/storefront host-helper evidence без деградации read/list и без builder capability requirement на storefront render;
+  - [x] связать `degraded_modes` с typed error catalog (`FEATURE_DISABLED`) в provider/consumer metadata, FBA registry и runtime anti-drift gate;
   - [ ] собрать parity-таблицу typed errors для Next/Leptos/Flutter adapters.
 
 #### Week 2 — закрыть P2/P3
