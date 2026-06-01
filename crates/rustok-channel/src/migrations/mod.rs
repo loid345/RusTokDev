@@ -9,6 +9,7 @@ mod m20260327_000006_add_channels_is_default;
 mod m20260327_000007_create_channel_resolution_policy_sets;
 mod m20260327_000008_create_channel_resolution_policy_rules;
 
+use rustok_core::MigrationDependencyDescriptor;
 use sea_orm_migration::MigrationTrait;
 
 pub fn migrations() -> Vec<Box<dyn MigrationTrait>> {
@@ -22,4 +23,11 @@ pub fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         Box::new(m20260327_000007_create_channel_resolution_policy_sets::Migration),
         Box::new(m20260327_000008_create_channel_resolution_policy_rules::Migration),
     ]
+}
+
+pub fn migration_dependencies() -> Vec<MigrationDependencyDescriptor> {
+    vec![MigrationDependencyDescriptor::new(
+        "m20260325_000004_create_channel_oauth_apps",
+        vec!["m20260308_000001_create_oauth_apps"],
+    )]
 }

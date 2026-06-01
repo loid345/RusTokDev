@@ -184,8 +184,7 @@ state и перевод operation в `committed` фиксируются одни
 (`BAD_USER_INPUT`, `MODULE_HOOK_FAILED`, `INTERNAL_ERROR`) и recovery/journal fields, а Leptos SSR/admin
 слои только прокидывают payload без local remap.
 
-Module-owned migrations могут объявлять ordering metadata рядом со своим exporter-ом; server migrator делает
-topological sort и считает missing dependency/cycle ошибкой runtime/test contract.
+Module-owned migrations с cross-module foreign keys или order assumptions обязаны объявлять ordering metadata рядом со своим exporter-ом через `migration_dependencies()`. Server migrator агрегирует эти descriptors из module crates, делает topological sort и считает missing dependency/cycle ошибкой runtime/test contract. Текущий агрегируемый baseline покрывает явные границы `channel -> auth`, `pricing/inventory -> product variants`, `commerce collections/categories -> product`, `blog/forum taxonomy joins -> taxonomy`.
 
 ### Текущий contract control-plane/module lifecycle
 
@@ -194,4 +193,4 @@ topological sort и считает missing dependency/cycle ошибкой runti
 - Lifecycle journal использует статусы `validated/running/committed/failed`; post-hook failure не откатывает committed tenant state, а создаёт failed operation с recovery metadata (`status`, `issue`, `retryable`, `recommended_action`, `correlation_id`, `requested_by`, `error_message`).
 - Recovery выполняется только через canonical GraphQL/service surface: `moduleOperationRecoveryPlan`, `failedModuleOperationRecoveryPlans`, `retryFailedModuleOperationPostHook`, `compensateFailedModuleOperation`. Compensation разрешается только для `post_hook_failed` operations, когда current effective state всё ещё совпадает с committed requested state.
 - GraphQL mapper владеет error taxonomy (`BAD_USER_INPUT`, `MODULE_HOOK_FAILED`, `INTERNAL_ERROR`); Leptos SSR/admin layers обязаны passthrough и не должны remap'ить taxonomy/journal/recovery fields.
-- Module migration ordering фиксируется descriptor contract: topological sort, deterministic lexical tie-breaker, hard errors для missing dependency/cycle и отсутствие hardcoded dependency match в migrator core.
+- Module migration ordering фиксируется descriptor contract: module crates экспортируют `migration_dependencies()` рядом с `migrations()`, server migrator агрегирует descriptors для известных cross-module границ, делает topological sort, сохраняет deterministic lexical tie-breaker для независимых migrations и падает на missing dependency/cycle.

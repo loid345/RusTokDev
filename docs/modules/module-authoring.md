@@ -96,7 +96,9 @@ Backend модуля должен встраиваться в общий platfor
 - короткие локализуемые поля живут в `*_translations`;
 - тяжёлый локализуемый контент при необходимости живёт в `*_bodies`;
 - `locale` хранится нормализованно;
-- audit payload и technical metadata не должны превращаться в business copy.
+- audit payload и technical metadata не должны превращаться в business copy;
+- module-owned migrations экспортируются через локальный `migrations()`; если migration создаёт FK или другой строгий порядок к таблицам другого module crate, рядом должен быть `migration_dependencies()` с `MigrationDependencyDescriptor`, а `apps/server/migration` обязан агрегировать этот exporter;
+- descriptor должен ссылаться только на реальные migration names и проходить server migrator tests на missing dependency, duplicate descriptor и cycle.
 
 Канон:
 

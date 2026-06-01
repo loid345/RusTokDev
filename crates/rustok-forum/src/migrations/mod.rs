@@ -8,6 +8,7 @@ mod m20260329_000005_create_forum_topic_tags;
 mod m20260330_000001_drop_forum_topic_legacy_tags_column;
 mod m20260405_000001_add_metadata_to_forum_topics;
 
+use rustok_core::MigrationDependencyDescriptor;
 use sea_orm_migration::MigrationTrait;
 
 pub fn migrations() -> Vec<Box<dyn MigrationTrait>> {
@@ -22,4 +23,11 @@ pub fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         Box::new(m20260330_000001_drop_forum_topic_legacy_tags_column::Migration),
         Box::new(m20260405_000001_add_metadata_to_forum_topics::Migration),
     ]
+}
+
+pub fn migration_dependencies() -> Vec<MigrationDependencyDescriptor> {
+    vec![MigrationDependencyDescriptor::new(
+        "m20260329_000005_create_forum_topic_tags",
+        vec!["m20260329_000001_create_taxonomy_tables"],
+    )]
 }
