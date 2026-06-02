@@ -20,7 +20,8 @@ use uuid::Uuid;
 
 use crate::{
     SeoBulkJobRecord, SeoBulkJobStatus, SeoCrossLinkSuggestionRecord, SeoDiagnosticCountRecord,
-    SeoDiagnosticSeverity, SeoDiagnosticsSummaryRecord, SeoError, SeoPageContext, SeoService,
+    SeoDiagnosticSeverity, SeoDiagnosticsSummaryRecord, SeoError, SeoIndexDeliveryStatusRecord,
+    SeoIndexRepairReplayInput, SeoIndexRepairReplayResultRecord, SeoPageContext, SeoService,
     SeoSitemapJobRecord, SeoSitemapStatusRecord, SeoTargetCapabilityKind, SeoTargetRegistryEntry,
     SeoTargetSlug,
 };
@@ -59,6 +60,11 @@ pub struct SeoSitemapJobsQuery {
 pub struct SeoBulkJobsQuery {
     pub limit: Option<i32>,
     pub status: Option<SeoBulkJobStatus>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SeoIndexTrackingQuery {
+    pub target_type: Option<String>,
 }
 
 type SeoHttpResult<T> = std::result::Result<T, SeoHttpError>;
@@ -350,6 +356,48 @@ pub async fn bulk_job_json(
     Ok(Json(job))
 }
 
+pub async fn index_tracking_json(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    Query(query): Query<SeoIndexTrackingQuery>,
+) -> SeoHttpResult<Json<SeoIndexDeliveryStatusRecord>> {
+    let service = seo_service_from_app_ctx(&ctx)?;
+    ensure_seo_module_enabled(&service, tenant.id).await?;
+    ensure_seo_permission(&auth, &[Permission::SEO_MANAGE], "seo:manage required")?;
+
+    let summary = service
+        .index_delivery_status(tenant.id, query.target_type.as_deref())
+        .await
+        .map_err(map_seo_http_error)?;
+
+    Ok(Json(summary))
+}
+
+pub async fn index_repair_replay_json(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    Json(input): Json<SeoIndexRepairReplayInput>,
+) -> SeoHttpResult<Json<SeoIndexRepairReplayResultRecord>> {
+    let service = seo_service_from_app_ctx(&ctx)?;
+    ensure_seo_module_enabled(&service, tenant.id).await?;
+    ensure_seo_permission(&auth, &[Permission::SEO_MANAGE], "seo:manage required")?;
+
+    let limit = input.limit.clamp(1, 500) as usize;
+    let result = service
+        .run_index_repair_replay(
+            tenant.id,
+            input.target_type.as_deref(),
+            limit,
+            input.replay_historical,
+        )
+        .await
+        .map_err(map_seo_http_error)?;
+
+    Ok(Json(result))
+}
+
 pub async fn bulk_artifact_download(
     State(ctx): State<AppContext>,
     tenant: TenantContext,
@@ -427,7 +475,7 @@ pub fn routes() -> Routes {
 }
 
 fn api_routes() -> Routes {
-    use axum::routing::get;
+    use axum::routing::{get, post};
 
     Routes::new()
         .add("/page-context", get(page_context_json))
@@ -439,6 +487,8 @@ fn api_routes() -> Routes {
         .add("/sitemaps/jobs/{job_id}", get(sitemap_job_json))
         .add("/bulk/jobs", get(bulk_jobs_json))
         .add("/bulk/jobs/{job_id}", get(bulk_job_json))
+        .add("/index/tracking", get(index_tracking_json))
+        .add("/index/repair-replay", post(index_repair_replay_json))
         .add(
             "/bulk/jobs/{job_id}/artifacts/{artifact_id}",
             get(bulk_artifact_download),

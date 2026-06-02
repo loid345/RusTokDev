@@ -30,7 +30,14 @@ pub fn render_head_html(context: &SeoPageContext) -> String {
         ));
     }
 
-    for alternate in &route.alternates {
+    let mut alternates = route.alternates.clone();
+    alternates.sort_by(|left, right| {
+        left.locale
+            .cmp(&right.locale)
+            .then_with(|| left.href.cmp(&right.href))
+            .then_with(|| left.x_default.cmp(&right.x_default))
+    });
+    for alternate in alternates {
         head.push_str(&format!(
             r#"<link rel="alternate" hreflang="{}" href="{}" />"#,
             html_escape(alternate.locale.as_str()),
@@ -120,25 +127,40 @@ pub fn render_head_html(context: &SeoPageContext) -> String {
     }
 
     if let Some(verification) = document.verification.as_ref() {
-        for token in &verification.google {
+        let mut google_tokens = verification.google.clone();
+        google_tokens.sort();
+        for token in google_tokens {
             head.push_str(&format!(
                 r#"<meta name="google-site-verification" content="{}" />"#,
                 html_escape(token.as_str())
             ));
         }
-        for token in &verification.yandex {
+
+        let mut yandex_tokens = verification.yandex.clone();
+        yandex_tokens.sort();
+        for token in yandex_tokens {
             head.push_str(&format!(
                 r#"<meta name="yandex-verification" content="{}" />"#,
                 html_escape(token.as_str())
             ));
         }
-        for token in &verification.yahoo {
+
+        let mut yahoo_tokens = verification.yahoo.clone();
+        yahoo_tokens.sort();
+        for token in yahoo_tokens {
             head.push_str(&format!(
                 r#"<meta name="y_key" content="{}" />"#,
                 html_escape(token.as_str())
             ));
         }
-        for token in &verification.other {
+
+        let mut other_tokens = verification.other.clone();
+        other_tokens.sort_by(|left, right| {
+            left.name
+                .cmp(&right.name)
+                .then_with(|| left.value.cmp(&right.value))
+        });
+        for token in other_tokens {
             head.push_str(&format!(
                 r#"<meta name="{}" content="{}" />"#,
                 html_escape(token.name.as_str()),
@@ -162,15 +184,46 @@ pub fn render_head_html(context: &SeoPageContext) -> String {
         }
     }
 
-    for tag in &document.meta_tags {
+    let mut meta_tags = document.meta_tags.clone();
+    meta_tags.sort_by(|left, right| {
+        left
+            .name
+            .cmp(&right.name)
+            .then_with(|| left.property.cmp(&right.property))
+            .then_with(|| left.http_equiv.cmp(&right.http_equiv))
+            .then_with(|| left.content.cmp(&right.content))
+    });
+    for tag in &meta_tags {
         render_meta_tag(&mut head, tag);
     }
 
-    for tag in &document.link_tags {
+    let mut link_tags = document.link_tags.clone();
+    link_tags.sort_by(|left, right| {
+        left.rel
+            .cmp(&right.rel)
+            .then_with(|| left.href.cmp(&right.href))
+            .then_with(|| left.hreflang.cmp(&right.hreflang))
+            .then_with(|| left.media.cmp(&right.media))
+            .then_with(|| left.mime_type.cmp(&right.mime_type))
+            .then_with(|| left.title.cmp(&right.title))
+    });
+    for tag in &link_tags {
         render_link_tag(&mut head, tag);
     }
 
-    for block in &document.structured_data_blocks {
+    let mut structured_data_blocks = document.structured_data_blocks.clone();
+    structured_data_blocks.sort_by(|left, right| {
+        left.id
+            .cmp(&right.id)
+            .then_with(|| left.schema_kind.as_str().cmp(right.schema_kind.as_str()))
+            .then_with(|| left.schema_type.cmp(&right.schema_type))
+            .then_with(|| {
+                serde_json::to_string(&left.payload.0)
+                    .unwrap_or_default()
+                    .cmp(&serde_json::to_string(&right.payload.0).unwrap_or_default())
+            })
+    });
+    for block in &structured_data_blocks {
         if let Ok(payload) = serde_json::to_string(&block.payload.0) {
             head.push_str(&format!(
                 r#"<script type="application/ld+json">{payload}</script>"#
@@ -295,8 +348,9 @@ fn render_link_tag(head: &mut String, tag: &SeoLinkTag) {
 mod tests {
     use rustok_seo::{
         SeoAlternateLink, SeoDocument, SeoFieldSource, SeoImageAsset, SeoLinkTag, SeoMetaTag,
-        SeoOpenGraph, SeoPageContext, SeoRobots, SeoRouteContext, SeoSchemaBlockKind,
-        SeoStructuredDataBlock, SeoTwitterCard, SeoVerification, SeoVerificationTag,
+        SeoOpenGraph, SeoPageContext, SeoPagination, SeoRobots, SeoRouteContext,
+        SeoSchemaBlockKind, SeoStructuredDataBlock, SeoTwitterCard, SeoVerification,
+        SeoVerificationTag,
     };
 
     use super::{render_head_html, robots_directives};
@@ -419,5 +473,146 @@ mod tests {
             r#"<link rel="preload" href="https://cdn.example.com/font.woff2" type="font/woff2" />"#
         ));
         assert!(head.contains(r#"<script type="application/ld+json">{"@context":"https://schema.org","@type":"Product","name":"Demo"}</script>"#));
+    }
+
+    #[test]
+    fn renders_complex_head_combinations_with_deterministic_ordering() {
+        let context = SeoPageContext {
+            route: SeoRouteContext {
+                canonical_url: "https://example.com/catalog".to_string(),
+                alternates: vec![
+                    SeoAlternateLink {
+                        locale: "fr-FR".to_string(),
+                        href: "https://example.com/fr/catalog".to_string(),
+                        x_default: false,
+                    },
+                    SeoAlternateLink {
+                        locale: "en-US".to_string(),
+                        href: "https://example.com/en/catalog".to_string(),
+                        x_default: true,
+                    },
+                ],
+                ..SeoRouteContext::default()
+            },
+            document: SeoDocument {
+                description: Some("Catalog metadata".to_string()),
+                robots: SeoRobots {
+                    index: false,
+                    follow: true,
+                    ..SeoRobots::default()
+                },
+                verification: Some(SeoVerification {
+                    google: vec!["z-token".to_string(), "a-token".to_string()],
+                    other: vec![
+                        SeoVerificationTag {
+                            name: "zeta".to_string(),
+                            value: "2".to_string(),
+                        },
+                        SeoVerificationTag {
+                            name: "alpha".to_string(),
+                            value: "1".to_string(),
+                        },
+                    ],
+                    ..SeoVerification::default()
+                }),
+                pagination: Some(SeoPagination {
+                    prev_url: Some("https://example.com/catalog?page=1".to_string()),
+                    next_url: Some("https://example.com/catalog?page=3".to_string()),
+                }),
+                meta_tags: vec![
+                    SeoMetaTag {
+                        name: Some("viewport".to_string()),
+                        property: None,
+                        http_equiv: None,
+                        content: "width=device-width".to_string(),
+                    },
+                    SeoMetaTag {
+                        name: Some("author".to_string()),
+                        property: None,
+                        http_equiv: None,
+                        content: "RusToK".to_string(),
+                    },
+                ],
+                link_tags: vec![
+                    SeoLinkTag {
+                        rel: "preload".to_string(),
+                        href: "https://cdn.example.com/z.js".to_string(),
+                        ..SeoLinkTag::default()
+                    },
+                    SeoLinkTag {
+                        rel: "dns-prefetch".to_string(),
+                        href: "https://cdn.example.com".to_string(),
+                        ..SeoLinkTag::default()
+                    },
+                ],
+                structured_data_blocks: vec![
+                    SeoStructuredDataBlock {
+                        id: Some("z-article".to_string()),
+                        schema_kind: SeoSchemaBlockKind::Article,
+                        schema_type: Some("Article".to_string()),
+                        kind: Some("Article".to_string()),
+                        source: SeoFieldSource::Explicit,
+                        payload: serde_json::json!({"@type":"Article","headline":"Z"}).into(),
+                    },
+                    SeoStructuredDataBlock {
+                        id: Some("a-product".to_string()),
+                        schema_kind: SeoSchemaBlockKind::Product,
+                        schema_type: Some("Product".to_string()),
+                        kind: Some("Product".to_string()),
+                        source: SeoFieldSource::Generated,
+                        payload: serde_json::json!({"@type":"Product","name":"A"}).into(),
+                    },
+                ],
+                ..SeoDocument::default()
+            },
+        };
+
+        let head = render_head_html(&context);
+
+        let canonical_position = head
+            .find(r#"<link rel="canonical" href="https://example.com/catalog" />"#)
+            .expect("canonical tag should exist");
+        let alternate_en_position = head
+            .find(r#"<link rel="alternate" hreflang="en-US" href="https://example.com/en/catalog" />"#)
+            .expect("en alternate should exist");
+        let alternate_fr_position = head
+            .find(r#"<link rel="alternate" hreflang="fr-FR" href="https://example.com/fr/catalog" />"#)
+            .expect("fr alternate should exist");
+        assert!(canonical_position < alternate_en_position);
+        assert!(alternate_en_position < alternate_fr_position);
+
+        let google_a_position = head
+            .find(r#"<meta name="google-site-verification" content="a-token" />"#)
+            .expect("a-token should exist");
+        let google_z_position = head
+            .find(r#"<meta name="google-site-verification" content="z-token" />"#)
+            .expect("z-token should exist");
+        assert!(google_a_position < google_z_position);
+
+        let meta_author_position = head
+            .find(r#"<meta name="author" content="RusToK" />"#)
+            .expect("author meta should exist");
+        let meta_viewport_position = head
+            .find(r#"<meta name="viewport" content="width=device-width" />"#)
+            .expect("viewport meta should exist");
+        assert!(meta_author_position < meta_viewport_position);
+
+        let link_dns_prefetch_position = head
+            .find(r#"<link rel="dns-prefetch" href="https://cdn.example.com" />"#)
+            .expect("dns-prefetch tag should exist");
+        let link_preload_position = head
+            .find(r#"<link rel="preload" href="https://cdn.example.com/z.js" />"#)
+            .expect("preload tag should exist");
+        assert!(link_dns_prefetch_position < link_preload_position);
+
+        let script_product_position = head
+            .find(r#"<script type="application/ld+json">{"@type":"Product","name":"A"}</script>"#)
+            .expect("product json-ld should exist");
+        let script_article_position = head
+            .find(r#"<script type="application/ld+json">{"@type":"Article","headline":"Z"}</script>"#)
+            .expect("article json-ld should exist");
+        assert!(script_product_position < script_article_position);
+
+        assert!(head.contains(r#"<meta name="robots" content="noindex, follow" />"#));
     }
 }

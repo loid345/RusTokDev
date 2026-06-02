@@ -1,7 +1,12 @@
 use leptos::prelude::*;
 
-use crate::i18n::{recommendation, tr};
-use crate::model::{SeoCompletenessReport, SeoEntityForm};
+use crate::i18n::{
+    delivery_status_label, recommendation, remediation_action_label, remediation_reason, tr,
+};
+use crate::model::{
+    SeoCompletenessReport, SeoEntityForm, SeoEventDeliveryStatus, SeoEventDeliverySummary,
+    SeoRemediationHint,
+};
 
 #[component]
 pub fn SeoSummaryTile(

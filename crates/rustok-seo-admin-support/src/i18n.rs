@@ -1,5 +1,5 @@
 use crate::locale::locale_primary_language;
-use crate::model::SeoRecommendation;
+use crate::model::{SeoEventDeliveryStatus, SeoRecommendation, SeoRemediationAction};
 
 pub(crate) fn tr(locale: Option<&str>, en: &str, ru: &str) -> String {
     if is_russian(locale) {
@@ -71,6 +71,53 @@ pub(crate) fn source_label(locale: Option<&str>, source: &str) -> String {
     }
 }
 
+pub(crate) fn delivery_status_label(
+    locale: Option<&str>,
+    status: SeoEventDeliveryStatus,
+) -> String {
+    match status {
+        SeoEventDeliveryStatus::Pending => tr(locale, "Pending", "В очереди"),
+        SeoEventDeliveryStatus::Sent => tr(locale, "Sent", "Отправлено"),
+        SeoEventDeliveryStatus::Retry => tr(locale, "Retry", "Повтор"),
+        SeoEventDeliveryStatus::Failed => tr(locale, "Failed", "Ошибка"),
+    }
+}
+
+pub(crate) fn remediation_action_label(
+    locale: Option<&str>,
+    action: SeoRemediationAction,
+) -> String {
+    match action {
+        SeoRemediationAction::OpenEntityEditor => {
+            tr(locale, "Open entity editor", "Открыть редактор сущности")
+        }
+        SeoRemediationAction::OpenBulkJob => {
+            tr(locale, "Open bulk remediation", "Открыть bulk remediation")
+        }
+        SeoRemediationAction::RunReindex => tr(locale, "Run reindex", "Запустить переиндексацию"),
+    }
+}
+
+pub(crate) fn remediation_reason(locale: Option<&str>, reason_key: &str) -> String {
+    match reason_key {
+        "bulk_consistency_fix" => tr(
+            locale,
+            "Issue is usually resolved via coordinated bulk updates.",
+            "Проблема обычно исправляется согласованным bulk-обновлением.",
+        ),
+        "index_sync_required" => tr(
+            locale,
+            "Index state is out-of-sync and needs replay/reindex.",
+            "Состояние индекса рассинхронизировано и требует replay/reindex.",
+        ),
+        _ => tr(
+            locale,
+            "Resolve metadata directly in the owning entity editor.",
+            "Исправьте метаданные напрямую в редакторе сущности.",
+        ),
+    }
+}
+
 pub(crate) fn recommendations_count_label(locale: Option<&str>, count: usize) -> String {
     if is_russian(locale) {
         format!("{count} рекомендаций")
@@ -122,7 +169,11 @@ fn is_russian(locale: Option<&str>) -> bool {
 
 #[cfg(test)]
 mod tests {
-    use super::{recommendations_count_label, source_label, tr, validation_error, working_label};
+    use super::{
+        delivery_status_label, recommendations_count_label, remediation_action_label,
+        remediation_reason, source_label, tr, validation_error, working_label,
+    };
+    use crate::model::{SeoEventDeliveryStatus, SeoRemediationAction};
 
     #[test]
     fn tr_uses_primary_language_for_russian_locales() {
@@ -146,6 +197,22 @@ mod tests {
         assert_eq!(
             validation_error(Some("ru"), "Host locale is required."),
             "Нужна локаль от host-приложения."
+        );
+    }
+
+    #[test]
+    fn delivery_and_remediation_labels_are_localized() {
+        assert_eq!(
+            delivery_status_label(Some("ru"), SeoEventDeliveryStatus::Retry),
+            "Повтор"
+        );
+        assert_eq!(
+            remediation_action_label(Some("en"), SeoRemediationAction::RunReindex),
+            "Run reindex"
+        );
+        assert_eq!(
+            remediation_reason(Some("en"), "index_sync_required"),
+            "Index state is out-of-sync and needs replay/reindex."
         );
     }
 }
