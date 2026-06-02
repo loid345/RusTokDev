@@ -8,10 +8,7 @@ use uuid::Uuid;
 
 #[cfg(feature = "ssr")]
 use crate::core::normalize_public_channel_slug;
-use crate::core::{
-    decrement_quantity_command, parse_adjustment_scope, parse_cart_id, parse_line_item_id,
-    CartCoreError, CartLineItemQuantityCommand,
-};
+use crate::core::{parse_adjustment_scope, parse_cart_id, parse_line_item_id, CartCoreError};
 use crate::model::{
     StorefrontCart, StorefrontCartAdjustment, StorefrontCartData, StorefrontCartDeliveryGroup,
     StorefrontCartLineItem,
@@ -302,10 +299,10 @@ pub async fn remove_storefront_cart_line_item_server(
         .map_err(ApiError::from)
 }
 
-pub async fn decrement_storefront_cart_line_item_graphql(
+pub async fn update_storefront_cart_line_item_quantity_graphql(
     cart_id: String,
     line_item_id: String,
-    current_quantity: i32,
+    next_quantity: i32,
 ) -> Result<(), ApiError> {
     let Some((_, parsed_cart_id)) = parse_cart_id(Some(cart_id))? else {
         return Err(ApiError::Validation(
@@ -314,30 +311,19 @@ pub async fn decrement_storefront_cart_line_item_graphql(
     };
     let (_, parsed_line_item_id) = parse_line_item_id(line_item_id)?;
 
-    match decrement_quantity_command(current_quantity) {
-        CartLineItemQuantityCommand::Remove => {
-            remove_storefront_cart_line_item_graphql(
-                parsed_cart_id.to_string(),
-                parsed_line_item_id.to_string(),
-            )
-            .await
-        }
-        CartLineItemQuantityCommand::Update { next_quantity } => {
-            let response: UpdateStorefrontCartLineItemResponse = request(
-                UPDATE_STOREFRONT_CART_LINE_ITEM_MUTATION,
-                UpdateStorefrontCartLineItemVariables {
-                    cart_id: parsed_cart_id,
-                    line_id: parsed_line_item_id,
-                    input: UpdateStorefrontCartLineItemInput {
-                        quantity: next_quantity,
-                    },
-                },
-            )
-            .await?;
-            let _ = response.updated_cart.id;
-            Ok(())
-        }
-    }
+    let response: UpdateStorefrontCartLineItemResponse = request(
+        UPDATE_STOREFRONT_CART_LINE_ITEM_MUTATION,
+        UpdateStorefrontCartLineItemVariables {
+            cart_id: parsed_cart_id,
+            line_id: parsed_line_item_id,
+            input: UpdateStorefrontCartLineItemInput {
+                quantity: next_quantity,
+            },
+        },
+    )
+    .await?;
+    let _ = response.updated_cart.id;
+    Ok(())
 }
 
 pub async fn remove_storefront_cart_line_item_graphql(
