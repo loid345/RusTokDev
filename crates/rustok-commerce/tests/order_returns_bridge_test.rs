@@ -370,6 +370,14 @@ async fn commerce_post_order_decision_creates_return_bound_exchange_change() {
         change.preview["order_return_id"],
         serde_json::json!(decision.order_return.id.to_string())
     );
+    assert_eq!(
+        change.preview["return_decision_action"],
+        serde_json::json!("exchange")
+    );
+    assert_eq!(
+        change.metadata["return_decision_source"],
+        serde_json::json!("rustok-commerce")
+    );
 }
 
 #[tokio::test]

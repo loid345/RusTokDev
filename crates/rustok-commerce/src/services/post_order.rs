@@ -349,9 +349,29 @@ fn build_return_order_change_input(
     Ok(CreateOrderChangeInput {
         change_type: change_type.to_string(),
         description,
-        preview: attach_return_context(preview, return_id)?,
-        metadata: attach_return_context(metadata, return_id)?,
+        preview: attach_return_order_change_context(preview, return_id, change_type)?,
+        metadata: attach_return_order_change_context(metadata, return_id, change_type)?,
     })
+}
+
+fn attach_return_order_change_context(
+    value: Value,
+    return_id: Uuid,
+    change_type: &str,
+) -> PostOrderOrchestrationResult<Value> {
+    let mut object = match attach_return_context(value, return_id)? {
+        Value::Object(object) => object,
+        _ => unreachable!("attach_return_context returns object"),
+    };
+    object.insert(
+        "return_decision_action".to_string(),
+        Value::String(change_type.to_string()),
+    );
+    object.insert(
+        "return_decision_source".to_string(),
+        Value::String("rustok-commerce".to_string()),
+    );
+    Ok(Value::Object(object))
 }
 
 fn attach_return_context(value: Value, return_id: Uuid) -> PostOrderOrchestrationResult<Value> {
