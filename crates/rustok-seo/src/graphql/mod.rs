@@ -14,9 +14,9 @@ use rustok_seo_targets::{SeoTargetCapabilityKind, SeoTargetRegistryEntry, SeoTar
 use crate::{
     SeoBulkApplyInput, SeoBulkApplyMode, SeoBulkExportInput, SeoBulkImportInput, SeoBulkJobRecord,
     SeoBulkJobStatus, SeoBulkListInput, SeoBulkPage, SeoCrossLinkSuggestionRecord,
-    SeoDiagnosticsSummaryRecord, SeoError, SeoMetaInput, SeoMetaRecord, SeoPageContext,
-    SeoRedirectInput, SeoRedirectRecord, SeoRevisionRecord, SeoService, SeoSitemapJobRecord,
-    SeoSitemapStatusRecord,
+    SeoDiagnosticsSummaryRecord, SeoError, SeoIndexDeliveryStatusRecord, SeoIndexRepairReplayInput,
+    SeoIndexRepairReplayResultRecord, SeoMetaInput, SeoMetaRecord, SeoPageContext, SeoRedirectInput,
+    SeoRedirectRecord, SeoRevisionRecord, SeoService, SeoSitemapJobRecord, SeoSitemapStatusRecord,
 };
 
 const MODULE_SLUG: &str = "seo";
@@ -166,6 +166,20 @@ impl SeoQuery {
         let tenant = ctx.data::<TenantContext>()?;
         seo_service_from_graphql(ctx)?
             .bulk_job(tenant.id, job_id)
+            .await
+            .map_err(map_seo_error)
+    }
+
+    async fn seo_index_delivery_status(
+        &self,
+        ctx: &Context<'_>,
+        target_type: Option<String>,
+    ) -> Result<SeoIndexDeliveryStatusRecord> {
+        require_module_enabled(ctx, MODULE_SLUG).await?;
+        require_seo_permission(ctx, &[Permission::SEO_MANAGE], "seo:manage required")?;
+        let tenant = ctx.data::<TenantContext>()?;
+        seo_service_from_graphql(ctx)?
+            .index_delivery_status(tenant.id, target_type.as_deref())
             .await
             .map_err(map_seo_error)
     }
@@ -347,6 +361,27 @@ impl SeoMutation {
         let tenant = ctx.data::<TenantContext>()?;
         seo_service_from_graphql(ctx)?
             .queue_bulk_export(tenant, Some(auth.user_id), input)
+            .await
+            .map_err(map_seo_error)
+    }
+
+    async fn run_seo_index_repair_replay(
+        &self,
+        ctx: &Context<'_>,
+        input: SeoIndexRepairReplayInput,
+    ) -> Result<SeoIndexRepairReplayResultRecord> {
+        require_module_enabled(ctx, MODULE_SLUG).await?;
+        require_seo_permission(ctx, &[Permission::SEO_MANAGE], "seo:manage required")?;
+        let tenant = ctx.data::<TenantContext>()?;
+        let limit = input.limit.clamp(1, 500) as usize;
+
+        seo_service_from_graphql(ctx)?
+            .run_index_repair_replay(
+                tenant.id,
+                input.target_type.as_deref(),
+                limit,
+                input.replay_historical,
+            )
             .await
             .map_err(map_seo_error)
     }

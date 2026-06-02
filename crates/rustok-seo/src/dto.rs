@@ -434,6 +434,85 @@ pub struct SeoSitemapJobRecord {
     pub files: Vec<SeoSitemapFileRecord>,
 }
 
+#[derive(Enum, Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+#[graphql(rename_items = "snake_case")]
+#[serde(rename_all = "snake_case")]
+pub enum SeoIndexReplayMode {
+    #[default]
+    NotStarted,
+    RepairOnly,
+    ReplayRequested,
+    Replaying,
+    ReplayCompleted,
+}
+
+impl SeoIndexReplayMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::NotStarted => "not_started",
+            Self::RepairOnly => "repair_only",
+            Self::ReplayRequested => "replay_requested",
+            Self::Replaying => "replaying",
+            Self::ReplayCompleted => "replay_completed",
+        }
+    }
+
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "not_started" => Some(Self::NotStarted),
+            "repair_only" => Some(Self::RepairOnly),
+            "replay_requested" => Some(Self::ReplayRequested),
+            "replaying" => Some(Self::Replaying),
+            "replay_completed" => Some(Self::ReplayCompleted),
+            _ => None,
+        }
+    }
+}
+
+#[derive(SimpleObject, Serialize, Deserialize, Debug, Clone)]
+pub struct SeoIndexCursorRecord {
+    pub target_type: String,
+    pub initial_cursor_at: DateTime<Utc>,
+    pub high_water_mark_at: DateTime<Utc>,
+    pub last_repair_cursor_at: Option<DateTime<Utc>>,
+    pub replay_mode: SeoIndexReplayMode,
+    pub replay_requested_at: Option<DateTime<Utc>>,
+    pub replay_completed_at: Option<DateTime<Utc>>,
+}
+
+#[derive(SimpleObject, Serialize, Deserialize, Debug, Clone, Default)]
+pub struct SeoIndexDeliveryStatusRecord {
+    pub target_type: Option<String>,
+    pub pending_count: i32,
+    pub sent_count: i32,
+    pub retry_count: i32,
+    pub failed_count: i32,
+    pub dead_letter_count: i32,
+    pub cursors: Vec<SeoIndexCursorRecord>,
+}
+
+#[derive(InputObject, Serialize, Deserialize, Debug, Clone)]
+pub struct SeoIndexRepairReplayInput {
+    pub target_type: Option<String>,
+    #[graphql(default = 100)]
+    #[serde(default = "default_index_repair_limit")]
+    pub limit: i32,
+    #[graphql(default)]
+    #[serde(default)]
+    pub replay_historical: bool,
+}
+
+#[derive(SimpleObject, Serialize, Deserialize, Debug, Clone)]
+pub struct SeoIndexRepairReplayResultRecord {
+    pub target_type: Option<String>,
+    pub limit: i32,
+    pub replay_mode: SeoIndexReplayMode,
+    pub repaired_count: i32,
+    pub replayed_count: i32,
+    pub historical_events_scanned: i32,
+    pub replay_run_id: Option<Uuid>,
+}
+
 #[derive(SimpleObject, Serialize, Deserialize, Debug, Clone)]
 pub struct SeoCrossLinkSuggestionRecord {
     pub target_kind: SeoTargetSlug,
@@ -901,4 +980,8 @@ fn default_robots() -> Vec<String> {
 
 fn default_sitemap_enabled() -> bool {
     true
+}
+
+fn default_index_repair_limit() -> i32 {
+    100
 }

@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::time::Duration;
 
 use chrono::{Duration as ChronoDuration, Utc};
@@ -9,8 +10,12 @@ use uuid::Uuid;
 
 use rustok_core::{simple_hash, DomainEvent};
 
+use crate::dto::{
+    SeoIndexCursorRecord, SeoIndexDeliveryStatusRecord, SeoIndexRepairReplayResultRecord,
+    SeoIndexReplayMode,
+};
 use crate::entities::{seo_event_delivery, seo_index_cursor, seo_index_delivery};
-use crate::SeoResult;
+use crate::{SeoError, SeoResult};
 
 use super::SeoService;
 
@@ -28,6 +33,10 @@ const INDEX_TARGET_SCOPE_KIND: &str = "kind";
 const INDEX_SCOPE_KEY_ALL: &str = "*";
 
 const INDEX_CURSOR_REPLAY_MODE_NOT_STARTED: &str = "not_started";
+const INDEX_CURSOR_REPLAY_MODE_REPAIR_ONLY: &str = "repair_only";
+const INDEX_CURSOR_REPLAY_MODE_REPLAY_REQUESTED: &str = "replay_requested";
+const INDEX_CURSOR_REPLAY_MODE_REPLAYING: &str = "replaying";
+const INDEX_CURSOR_REPLAY_MODE_REPLAY_COMPLETED: &str = "replay_completed";
 
 const INDEX_RETRY_MAX_ATTEMPTS: i32 = 3;
 const INDEX_RETRY_BASE_BACKOFF_MS: u64 = 100;
@@ -101,6 +110,13 @@ struct SeoIndexReindexTrigger {
     target_id: Option<Uuid>,
     target_scope: String,
     target_scope_key: String,
+}
+
+#[derive(Debug, Clone, Default)]
+struct SeoHistoricalReplayStats {
+    events_scanned: usize,
+    replayed_count: usize,
+    replay_run_id: Option<Uuid>,
 }
 
 impl SeoIndexReindexTrigger {
@@ -372,12 +388,121 @@ impl SeoService {
         self.publish_seo_event(tenant_id, event).await;
     }
 
+    pub async fn index_delivery_status(
+        &self,
+        tenant_id: Uuid,
+        target_type: Option<&str>,
+    ) -> SeoResult<SeoIndexDeliveryStatusRecord> {
+        let normalized_target_type = normalize_index_target_type(target_type)?;
+
+        let mut query = seo_index_delivery::Entity::find()
+            .filter(seo_index_delivery::Column::TenantId.eq(tenant_id));
+        if let Some(target_type) = normalized_target_type.as_deref() {
+            query = query.filter(seo_index_delivery::Column::TargetType.eq(target_type));
+        }
+
+        let deliveries = query.all(&self.db).await?;
+        let mut summary = SeoIndexDeliveryStatusRecord {
+            target_type: normalized_target_type.clone(),
+            ..SeoIndexDeliveryStatusRecord::default()
+        };
+
+        for delivery in deliveries {
+            match delivery.status.as_str() {
+                INDEX_DELIVERY_STATUS_PENDING => summary.pending_count += 1,
+                INDEX_DELIVERY_STATUS_SENT => summary.sent_count += 1,
+                INDEX_DELIVERY_STATUS_FAILED if delivery.attempt_count > 0 => {
+                    summary.retry_count += 1
+                }
+                INDEX_DELIVERY_STATUS_FAILED => summary.failed_count += 1,
+                INDEX_DELIVERY_STATUS_DEAD_LETTER => summary.dead_letter_count += 1,
+                _ => {}
+            }
+        }
+
+        let mut cursor_query = seo_index_cursor::Entity::find()
+            .filter(seo_index_cursor::Column::TenantId.eq(tenant_id));
+        if let Some(target_type) = normalized_target_type.as_deref() {
+            cursor_query = cursor_query.filter(seo_index_cursor::Column::TargetType.eq(target_type));
+        }
+        let mut cursors = cursor_query.all(&self.db).await?;
+        cursors.sort_by(|left, right| left.target_type.cmp(&right.target_type));
+
+        summary.cursors = cursors
+            .into_iter()
+            .map(|cursor| SeoIndexCursorRecord {
+                target_type: cursor.target_type,
+                initial_cursor_at: cursor.initial_cursor_at.with_timezone(&Utc),
+                high_water_mark_at: cursor.high_water_mark_at.with_timezone(&Utc),
+                last_repair_cursor_at: cursor
+                    .last_repair_cursor_at
+                    .map(|value| value.with_timezone(&Utc)),
+                replay_mode: parse_replay_mode(cursor.replay_mode.as_str()),
+                replay_requested_at: cursor
+                    .replay_requested_at
+                    .map(|value| value.with_timezone(&Utc)),
+                replay_completed_at: cursor
+                    .replay_completed_at
+                    .map(|value| value.with_timezone(&Utc)),
+            })
+            .collect();
+
+        Ok(summary)
+    }
+
+    pub async fn run_index_repair_replay(
+        &self,
+        tenant_id: Uuid,
+        target_type: Option<&str>,
+        limit: usize,
+        replay_historical: bool,
+    ) -> SeoResult<SeoIndexRepairReplayResultRecord> {
+        let normalized_target_type = normalize_index_target_type(target_type)?;
+        let bounded_limit = limit.clamp(1, 500);
+
+        let repaired_count = self
+            .repair_index_delivery_backlog(
+                tenant_id,
+                normalized_target_type.as_deref(),
+                bounded_limit,
+            )
+            .await?;
+
+        let replay_stats = if replay_historical {
+            self.replay_historical_index_changes(
+                tenant_id,
+                normalized_target_type.as_deref(),
+                bounded_limit,
+            )
+            .await?
+        } else {
+            SeoHistoricalReplayStats::default()
+        };
+
+        Ok(SeoIndexRepairReplayResultRecord {
+            target_type: normalized_target_type,
+            limit: bounded_limit as i32,
+            replay_mode: if replay_historical {
+                SeoIndexReplayMode::ReplayCompleted
+            } else {
+                SeoIndexReplayMode::RepairOnly
+            },
+            repaired_count: repaired_count as i32,
+            replayed_count: replay_stats.replayed_count as i32,
+            historical_events_scanned: replay_stats.events_scanned as i32,
+            replay_run_id: replay_stats.replay_run_id,
+        })
+    }
+
     pub async fn repair_index_delivery_backlog(
         &self,
         tenant_id: Uuid,
         target_type: Option<&str>,
         limit: usize,
     ) -> SeoResult<usize> {
+        let normalized_target_type = normalize_index_target_type(target_type)?;
+        let bounded_limit = limit.clamp(1, 500);
+
         let mut query = seo_index_delivery::Entity::find()
             .filter(seo_index_delivery::Column::TenantId.eq(tenant_id))
             .filter(
@@ -386,9 +511,9 @@ impl SeoService {
                     .add(seo_index_delivery::Column::Status.eq(INDEX_DELIVERY_STATUS_DEAD_LETTER)),
             )
             .order_by_asc(seo_index_delivery::Column::CreatedAt)
-            .limit(limit.clamp(1, 500) as u64);
+            .limit(bounded_limit as u64);
 
-        if let Some(target_type) = target_type {
+        if let Some(target_type) = normalized_target_type.as_deref() {
             query = query.filter(seo_index_delivery::Column::TargetType.eq(target_type));
         }
 
@@ -411,6 +536,7 @@ impl SeoService {
                     tenant_id,
                     trigger.target_type.as_str(),
                     delivery.created_at,
+                    INDEX_CURSOR_REPLAY_MODE_REPAIR_ONLY,
                 )
                 .await
             {
@@ -425,6 +551,113 @@ impl SeoService {
         }
 
         Ok(repaired)
+    }
+
+    async fn replay_historical_index_changes(
+        &self,
+        tenant_id: Uuid,
+        target_type: Option<&str>,
+        limit: usize,
+    ) -> SeoResult<SeoHistoricalReplayStats> {
+        let normalized_target_type = normalize_index_target_type(target_type)?;
+        let bounded_limit = limit.clamp(1, 500);
+
+        let historical_events = seo_event_delivery::Entity::find()
+            .filter(seo_event_delivery::Column::TenantId.eq(tenant_id))
+            .filter(seo_event_delivery::Column::Status.eq(DELIVERY_STATUS_SENT))
+            .order_by_asc(seo_event_delivery::Column::CreatedAt)
+            .limit(bounded_limit as u64)
+            .all(&self.db)
+            .await?;
+
+        let mut replay_work = Vec::<(seo_event_delivery::Model, SeoIndexReindexTrigger)>::new();
+        for event_delivery in &historical_events {
+            let triggers = index_reindex_triggers_for_delivery_event(
+                event_delivery.event_type.as_str(),
+                event_delivery.source_kind.as_deref(),
+                event_delivery.source_id,
+                normalized_target_type.as_deref(),
+            );
+            for trigger in triggers {
+                replay_work.push((event_delivery.clone(), trigger));
+            }
+        }
+
+        if replay_work.is_empty() {
+            return Ok(SeoHistoricalReplayStats {
+                events_scanned: historical_events.len(),
+                replayed_count: 0,
+                replay_run_id: None,
+            });
+        }
+
+        let replay_run_id = Uuid::new_v4();
+        let touched_target_types = replay_work
+            .iter()
+            .map(|(_, trigger)| trigger.target_type.clone())
+            .collect::<BTreeSet<_>>();
+
+        let requested_at = Utc::now().fixed_offset();
+        for target in &touched_target_types {
+            self.upsert_index_cursor(tenant_id, target.as_str(), requested_at)
+                .await?;
+            self.mark_index_cursor_replay_requested(tenant_id, target.as_str(), requested_at)
+                .await?;
+        }
+
+        let mut replayed_count = 0usize;
+        for (event_delivery, trigger) in replay_work {
+            let replay_idempotency_key = self.build_event_key(
+                "seo.index.replay.historical",
+                tenant_id,
+                &[
+                    event_delivery.idempotency_key.clone(),
+                    trigger.target_type.clone(),
+                    trigger.target_scope_key.clone(),
+                    replay_run_id.to_string(),
+                ],
+            );
+
+            let delivery = self
+                .upsert_index_delivery(
+                    tenant_id,
+                    event_delivery.event_type.as_str(),
+                    replay_idempotency_key.as_str(),
+                    &trigger,
+                )
+                .await?;
+            self.dispatch_index_reindex_trigger(tenant_id, &delivery, &trigger)
+                .await;
+            if let Err(error) = self
+                .mark_index_cursor_repair_progress(
+                    tenant_id,
+                    trigger.target_type.as_str(),
+                    event_delivery.created_at,
+                    INDEX_CURSOR_REPLAY_MODE_REPLAYING,
+                )
+                .await
+            {
+                tracing::warn!(
+                    tenant_id = %tenant_id,
+                    target_type = %trigger.target_type,
+                    error = %error,
+                    "failed to mark SEO index cursor replay progress"
+                );
+            }
+            replayed_count += 1;
+        }
+
+        let completed_at = Utc::now().fixed_offset();
+        for target in &touched_target_types {
+            self.mark_index_cursor_replay_completed(tenant_id, target.as_str(), completed_at)
+                .await?;
+        }
+
+        Ok(SeoHistoricalReplayStats {
+            events_scanned: historical_events.len(),
+            replayed_count,
+            replay_run_id: Some(replay_run_id),
+        })
     }
 
     async fn publish_seo_event(&self, tenant_id: Uuid, event: DomainEvent) {
@@ -1002,6 +1235,7 @@ impl SeoService {
         tenant_id: Uuid,
         target_type: &str,
         cursor: chrono::DateTime<chrono::FixedOffset>,
+        replay_mode: &str,
     ) -> Result<(), DbErr> {
         let Some(existing) = seo_index_cursor::Entity::find()
             .filter(seo_index_cursor::Column::TenantId.eq(tenant_id))
@@ -1012,8 +1246,61 @@ impl SeoService {
             return Ok(());
         };
 
-        let mut active: seo_index_cursor::ActiveModel = existing.into();
+        let mut active: seo_index_cursor::ActiveModel = existing.clone().into();
         active.last_repair_cursor_at = Set(Some(cursor));
+        active.replay_mode = Set(advance_replay_mode(existing.replay_mode.as_str(), replay_mode));
+        active.updated_at = Set(Utc::now().fixed_offset());
+        active.update(&self.db).await?;
+        Ok(())
+    }
+
+    async fn mark_index_cursor_replay_requested(
+        &self,
+        tenant_id: Uuid,
+        target_type: &str,
+        requested_at: chrono::DateTime<chrono::FixedOffset>,
+    ) -> Result<(), DbErr> {
+        let Some(existing) = seo_index_cursor::Entity::find()
+            .filter(seo_index_cursor::Column::TenantId.eq(tenant_id))
+            .filter(seo_index_cursor::Column::TargetType.eq(target_type))
+            .one(&self.db)
+            .await?
+        else {
+            return Ok(());
+        };
+
+        let mut active: seo_index_cursor::ActiveModel = existing.clone().into();
+        active.replay_mode = Set(advance_replay_mode(
+            existing.replay_mode.as_str(),
+            INDEX_CURSOR_REPLAY_MODE_REPLAY_REQUESTED,
+        ));
+        active.replay_requested_at = Set(Some(requested_at));
+        active.updated_at = Set(Utc::now().fixed_offset());
+        active.update(&self.db).await?;
+        Ok(())
+    }
+
+    async fn mark_index_cursor_replay_completed(
+        &self,
+        tenant_id: Uuid,
+        target_type: &str,
+        completed_at: chrono::DateTime<chrono::FixedOffset>,
+    ) -> Result<(), DbErr> {
+        let Some(existing) = seo_index_cursor::Entity::find()
+            .filter(seo_index_cursor::Column::TenantId.eq(tenant_id))
+            .filter(seo_index_cursor::Column::TargetType.eq(target_type))
+            .one(&self.db)
+            .await?
+        else {
+            return Ok(());
+        };
+
+        let mut active: seo_index_cursor::ActiveModel = existing.clone().into();
+        active.replay_mode = Set(advance_replay_mode(
+            existing.replay_mode.as_str(),
+            INDEX_CURSOR_REPLAY_MODE_REPLAY_COMPLETED,
+        ));
+        active.replay_completed_at = Set(Some(completed_at));
         active.updated_at = Set(Utc::now().fixed_offset());
         active.update(&self.db).await?;
         Ok(())
@@ -1170,6 +1457,93 @@ fn map_target_type_for_seo_kind(target_kind: &str) -> Option<&'static str> {
         "page" | "blog_post" | "forum_category" | "forum_topic" => Some("content"),
         _ => None,
     }
+}
+
+fn index_reindex_triggers_for_delivery_event(
+    event_type: &str,
+    source_kind: Option<&str>,
+    source_id: Option<Uuid>,
+    target_type_filter: Option<&str>,
+) -> Vec<SeoIndexReindexTrigger> {
+    let triggers = match event_type {
+        "seo.meta.upserted" | "seo.revision.published" | "seo.revision.rolled_back" => {
+            let Some(source_kind) = source_kind else {
+                return Vec::new();
+            };
+            let Some(source_id) = source_id else {
+                return Vec::new();
+            };
+            map_target_type_for_seo_kind(source_kind)
+                .map(|target_type| vec![SeoIndexReindexTrigger::entity(target_type, source_id)])
+                .unwrap_or_default()
+        }
+        "seo.redirect.upserted" | "seo.redirect.disabled" => vec![
+            SeoIndexReindexTrigger::kind("content"),
+            SeoIndexReindexTrigger::kind("product"),
+        ],
+        "seo.bulk.completed" | "seo.bulk.partial" | "seo.bulk.failed" => {
+            if let Some(target_type) = target_type_filter {
+                vec![SeoIndexReindexTrigger::kind(target_type)]
+            } else {
+                vec![
+                    SeoIndexReindexTrigger::kind("content"),
+                    SeoIndexReindexTrigger::kind("product"),
+                ]
+            }
+        }
+        _ => Vec::new(),
+    };
+
+    if let Some(target_type) = target_type_filter {
+        triggers
+            .into_iter()
+            .filter(|trigger| trigger.target_type == target_type)
+            .collect()
+    } else {
+        triggers
+    }
+}
+
+fn normalize_index_target_type(target_type: Option<&str>) -> SeoResult<Option<String>> {
+    let Some(value) = target_type else {
+        return Ok(None);
+    };
+
+    let normalized = value.trim().to_ascii_lowercase();
+    if normalized.is_empty() {
+        return Ok(None);
+    }
+
+    match normalized.as_str() {
+        "content" | "product" => Ok(Some(normalized)),
+        _ => Err(SeoError::validation(format!(
+            "unsupported index target_type `{}`; expected `content` or `product`",
+            value.trim()
+        ))),
+    }
+}
+
+fn replay_mode_rank(mode: &str) -> u8 {
+    match mode {
+        INDEX_CURSOR_REPLAY_MODE_NOT_STARTED => 0,
+        INDEX_CURSOR_REPLAY_MODE_REPAIR_ONLY => 1,
+        INDEX_CURSOR_REPLAY_MODE_REPLAY_REQUESTED => 2,
+        INDEX_CURSOR_REPLAY_MODE_REPLAYING => 3,
+        INDEX_CURSOR_REPLAY_MODE_REPLAY_COMPLETED => 4,
+        _ => 0,
+    }
+}
+
+fn advance_replay_mode(current: &str, next: &str) -> String {
+    if replay_mode_rank(next) >= replay_mode_rank(current) {
+        next.to_string()
+    } else {
+        current.to_string()
+    }
+}
+
+fn parse_replay_mode(value: &str) -> SeoIndexReplayMode {
+    SeoIndexReplayMode::parse(value).unwrap_or(SeoIndexReplayMode::NotStarted)
 }
 
 #[cfg(test)]
@@ -1678,5 +2052,112 @@ mod tests {
             .expect("seo index cursor should load")
             .expect("seo index cursor should exist");
         assert!(cursor.last_repair_cursor_at.is_some());
+        assert_eq!(cursor.replay_mode, INDEX_CURSOR_REPLAY_MODE_REPAIR_ONLY);
+    }
+
+    #[tokio::test]
+    async fn historical_replay_dispatches_new_index_transition_with_unique_idempotency_key() {
+        let db = test_db().await;
+        run_migrations(&db).await;
+        let service = service_with_outbox(db.clone());
+
+        let tenant_id = Uuid::new_v4();
+        service
+            .publish_seo_meta_upserted_event(
+                tenant_id,
+                "product",
+                Uuid::new_v4(),
+                "en-US",
+                "explicit",
+                None,
+            )
+            .await;
+
+        let result = service
+            .run_index_repair_replay(tenant_id, Some("product"), 20, true)
+            .await
+            .expect("replay mode should succeed");
+
+        assert_eq!(result.repaired_count, 0);
+        assert_eq!(result.replayed_count, 1);
+        assert_eq!(result.historical_events_scanned, 1);
+        assert_eq!(result.replay_mode, SeoIndexReplayMode::ReplayCompleted);
+        assert!(result.replay_run_id.is_some());
+
+        let deliveries = seo_index_delivery::Entity::find()
+            .filter(seo_index_delivery::Column::TenantId.eq(tenant_id))
+            .filter(seo_index_delivery::Column::TargetType.eq("product"))
+            .all(&db)
+            .await
+            .expect("seo index deliveries should load");
+        assert_eq!(deliveries.len(), 2);
+        assert_ne!(deliveries[0].idempotency_key, deliveries[1].idempotency_key);
+
+        let reindex_events = outbox_entity::Entity::find()
+            .filter(outbox_entity::Column::EventType.eq("index.reindex_requested"))
+            .all(&db)
+            .await
+            .expect("reindex events should load");
+        assert_eq!(reindex_events.len(), 2);
+
+        let cursor = seo_index_cursor::Entity::find()
+            .filter(seo_index_cursor::Column::TenantId.eq(tenant_id))
+            .filter(seo_index_cursor::Column::TargetType.eq("product"))
+            .one(&db)
+            .await
+            .expect("seo index cursor should load")
+            .expect("seo index cursor should exist");
+        assert_eq!(cursor.replay_mode, INDEX_CURSOR_REPLAY_MODE_REPLAY_COMPLETED);
+        assert!(cursor.replay_requested_at.is_some());
+        assert!(cursor.replay_completed_at.is_some());
+    }
+
+    #[tokio::test]
+    async fn index_delivery_status_reports_sent_transitions_and_cursor_state() {
+        let db = test_db().await;
+        run_migrations(&db).await;
+        let service = service_with_outbox(db.clone());
+
+        let tenant_id = Uuid::new_v4();
+        service
+            .publish_seo_meta_upserted_event(
+                tenant_id,
+                "product",
+                Uuid::new_v4(),
+                "en-US",
+                "explicit",
+                None,
+            )
+            .await;
+
+        let summary = service
+            .index_delivery_status(tenant_id, Some("product"))
+            .await
+            .expect("index delivery status should load");
+        assert_eq!(summary.sent_count, 1);
+        assert_eq!(summary.pending_count, 0);
+        assert_eq!(summary.retry_count, 0);
+        assert_eq!(summary.failed_count, 0);
+        assert_eq!(summary.dead_letter_count, 0);
+        assert_eq!(summary.cursors.len(), 1);
+        assert_eq!(summary.cursors[0].replay_mode, SeoIndexReplayMode::NotStarted);
+    }
+
+    #[test]
+    fn replay_mode_is_forward_only() {
+        assert_eq!(
+            advance_replay_mode(
+                INDEX_CURSOR_REPLAY_MODE_REPLAY_COMPLETED,
+                INDEX_CURSOR_REPLAY_MODE_REPAIR_ONLY,
+            ),
+            INDEX_CURSOR_REPLAY_MODE_REPLAY_COMPLETED,
+        );
+        assert_eq!(
+            advance_replay_mode(
+                INDEX_CURSOR_REPLAY_MODE_NOT_STARTED,
+                INDEX_CURSOR_REPLAY_MODE_REPLAY_REQUESTED,
+            ),
+            INDEX_CURSOR_REPLAY_MODE_REPLAY_REQUESTED,
+        );
     }
 }

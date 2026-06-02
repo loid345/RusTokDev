@@ -121,6 +121,49 @@ export interface SeoDiagnosticsSummaryRecord {
   issues: SeoDiagnosticIssueRecord[];
 }
 
+export type SeoIndexReplayMode =
+  | 'not_started'
+  | 'repair_only'
+  | 'replay_requested'
+  | 'replaying'
+  | 'replay_completed';
+
+export interface SeoIndexCursorRecord {
+  targetType: string;
+  initialCursorAt: string;
+  highWaterMarkAt: string;
+  lastRepairCursorAt: string | null;
+  replayMode: SeoIndexReplayMode;
+  replayRequestedAt: string | null;
+  replayCompletedAt: string | null;
+}
+
+export interface SeoIndexDeliveryStatusRecord {
+  targetType: string | null;
+  pendingCount: number;
+  sentCount: number;
+  retryCount: number;
+  failedCount: number;
+  deadLetterCount: number;
+  cursors: SeoIndexCursorRecord[];
+}
+
+export interface SeoIndexRepairReplayInput {
+  targetType?: string | null;
+  limit?: number;
+  replayHistorical?: boolean;
+}
+
+export interface SeoIndexRepairReplayResultRecord {
+  targetType: string | null;
+  limit: number;
+  replayMode: SeoIndexReplayMode;
+  repairedCount: number;
+  replayedCount: number;
+  historicalEventsScanned: number;
+  replayRunId: string | null;
+}
+
 export interface SeoApiOptions {
   token?: string | null;
   tenantSlug?: string | null;
@@ -196,6 +239,26 @@ interface SeoBulkJobResponse {
 
 interface SeoBulkJobVariables {
   jobId: string;
+}
+
+interface SeoIndexDeliveryStatusResponse {
+  seoIndexDeliveryStatus: SeoIndexDeliveryStatusRecord;
+}
+
+interface SeoIndexDeliveryStatusVariables {
+  targetType?: string | null;
+}
+
+interface SeoIndexRepairReplayResponse {
+  runSeoIndexRepairReplay: SeoIndexRepairReplayResultRecord;
+}
+
+interface SeoIndexRepairReplayVariables {
+  input: {
+    targetType?: string | null;
+    limit: number;
+    replayHistorical: boolean;
+  };
 }
 
 const SEO_TARGETS_QUERY = `
@@ -372,6 +435,42 @@ query SeoBulkJob($jobId: UUID!) {
 }
 `;
 
+const SEO_INDEX_DELIVERY_STATUS_QUERY = `
+query SeoIndexDeliveryStatus($targetType: String) {
+  seoIndexDeliveryStatus(targetType: $targetType) {
+    targetType
+    pendingCount
+    sentCount
+    retryCount
+    failedCount
+    deadLetterCount
+    cursors {
+      targetType
+      initialCursorAt
+      highWaterMarkAt
+      lastRepairCursorAt
+      replayMode
+      replayRequestedAt
+      replayCompletedAt
+    }
+  }
+}
+`;
+
+const RUN_SEO_INDEX_REPAIR_REPLAY_MUTATION = `
+mutation RunSeoIndexRepairReplay($input: SeoIndexRepairReplayInput!) {
+  runSeoIndexRepairReplay(input: $input) {
+    targetType
+    limit
+    replayMode
+    repairedCount
+    replayedCount
+    historicalEventsScanned
+    replayRunId
+  }
+}
+`;
+
 function resolveApiBaseUrl(explicit?: string): string {
   return explicit ?? API_BASE_URL;
 }
@@ -488,6 +587,30 @@ async function fetchSeoRest<T>(
   const response = await fetch(url.toString(), {
     method: 'GET',
     headers: buildSeoHeaders(options),
+    cache: 'no-store'
+  });
+
+  if (!response.ok) {
+    throw await buildSeoRestError(response);
+  }
+
+  const payload = await response.json();
+  return camelize<T>(payload);
+}
+
+async function postSeoRest<T>(
+  path: string,
+  options: SeoApiOptions,
+  body: unknown
+): Promise<T> {
+  const url = new URL(path, resolveApiBaseUrl(options.apiBaseUrl));
+  const response = await fetch(url.toString(), {
+    method: 'POST',
+    headers: {
+      ...buildSeoHeaders(options),
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body),
     cache: 'no-store'
   });
 
@@ -805,4 +928,84 @@ export async function fetchSeoBulkJob(
   );
 
   return data.seoBulkJob;
+}
+
+export async function fetchSeoIndexDeliveryStatus(
+  options: SeoApiOptions & { targetType?: string | null } = {}
+): Promise<SeoIndexDeliveryStatusRecord> {
+  if (shouldPreferRest(options)) {
+    try {
+      return await fetchSeoRest<SeoIndexDeliveryStatusRecord>(
+        '/api/seo/index/tracking',
+        options,
+        {
+          target_type: options.targetType
+        }
+      );
+    } catch (error) {
+      if (!shouldFallbackToGraphql(error)) {
+        throw error;
+      }
+      // REST parity can be rollout-gated; keep GraphQL fallback.
+    }
+  }
+
+  const variables = options.targetType ? { targetType: options.targetType } : undefined;
+  const data = await graphqlRequest<
+    SeoIndexDeliveryStatusVariables,
+    SeoIndexDeliveryStatusResponse
+  >(
+    SEO_INDEX_DELIVERY_STATUS_QUERY,
+    variables,
+    options.token,
+    options.tenantSlug,
+    { graphqlUrl: options.graphqlUrl }
+  );
+
+  return data.seoIndexDeliveryStatus;
+}
+
+export async function runSeoIndexRepairReplay(
+  input: SeoIndexRepairReplayInput,
+  options: SeoApiOptions = {}
+): Promise<SeoIndexRepairReplayResultRecord> {
+  const normalizedInput = {
+    targetType: input.targetType ?? null,
+    limit: Math.max(1, Math.min(500, input.limit ?? 100)),
+    replayHistorical: input.replayHistorical === true
+  };
+
+  if (shouldPreferRest(options)) {
+    try {
+      return await postSeoRest<SeoIndexRepairReplayResultRecord>(
+        '/api/seo/index/repair-replay',
+        options,
+        {
+          target_type: normalizedInput.targetType,
+          limit: normalizedInput.limit,
+          replay_historical: normalizedInput.replayHistorical
+        }
+      );
+    } catch (error) {
+      if (!shouldFallbackToGraphql(error)) {
+        throw error;
+      }
+      // REST parity can be rollout-gated; keep GraphQL fallback.
+    }
+  }
+
+  const data = await graphqlRequest<
+    SeoIndexRepairReplayVariables,
+    SeoIndexRepairReplayResponse
+  >(
+    RUN_SEO_INDEX_REPAIR_REPLAY_MUTATION,
+    {
+      input: normalizedInput
+    },
+    options.token,
+    options.tenantSlug,
+    { graphqlUrl: options.graphqlUrl }
+  );
+
+  return data.runSeoIndexRepairReplay;
 }
