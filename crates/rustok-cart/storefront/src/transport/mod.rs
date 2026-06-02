@@ -10,6 +10,7 @@ use crate::core::{CartFetchRequest, CartLineItemDecrementRequest, CartLineItemMu
 use crate::model::StorefrontCartData;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum CartTransportPath {
     NativeServer,
     Graphql,
@@ -33,16 +34,16 @@ pub struct CartTransportError {
 }
 
 impl CartTransportError {
-    fn native(error: ApiError, fallback_attempted: bool) -> Self {
+    fn native(error: ApiError) -> Self {
         Self {
             failed_path: CartTransportPath::NativeServer,
-            fallback_attempted,
+            fallback_attempted: false,
             native_error: Some(error.to_string()),
             graphql_error: None,
         }
     }
 
-    fn graphql_after_native(native_error: ApiError, graphql_error: ApiError) -> Self {
+    fn fallback_failed(native_error: ApiError, graphql_error: ApiError) -> Self {
         Self {
             failed_path: CartTransportPath::Graphql,
             fallback_attempted: true,
@@ -57,8 +58,7 @@ impl Display for CartTransportError {
         match (&self.native_error, &self.graphql_error) {
             (Some(native), Some(graphql)) => write!(
                 f,
-                "cart transport failed after {} fallback: native_server={native}; graphql={graphql}",
-                self.failed_path.as_str()
+                "cart transport fallback failed: native_server={native}; graphql={graphql}"
             ),
             (Some(native), None) => write!(
                 f,
@@ -89,13 +89,13 @@ pub async fn fetch_cart(request: CartFetchRequest) -> TransportResult<Storefront
         Err(native_error) if should_try_graphql_fallback(&native_error) => {
             match graphql_adapter::fetch_cart(request).await {
                 Ok(data) => Ok(data),
-                Err(graphql_error) => Err(CartTransportError::graphql_after_native(
+                Err(graphql_error) => Err(CartTransportError::fallback_failed(
                     native_error,
                     graphql_error,
                 )),
             }
         }
-        Err(native_error) => Err(CartTransportError::native(native_error, false)),
+        Err(native_error) => Err(CartTransportError::native(native_error)),
     }
 }
 
@@ -105,13 +105,13 @@ pub async fn decrement_line_item(request: CartLineItemDecrementRequest) -> Trans
         Err(native_error) if should_try_graphql_fallback(&native_error) => {
             match graphql_adapter::decrement_line_item(request).await {
                 Ok(()) => Ok(()),
-                Err(graphql_error) => Err(CartTransportError::graphql_after_native(
+                Err(graphql_error) => Err(CartTransportError::fallback_failed(
                     native_error,
                     graphql_error,
                 )),
             }
         }
-        Err(native_error) => Err(CartTransportError::native(native_error, false)),
+        Err(native_error) => Err(CartTransportError::native(native_error)),
     }
 }
 
@@ -121,13 +121,13 @@ pub async fn remove_line_item(request: CartLineItemMutationRequest) -> Transport
         Err(native_error) if should_try_graphql_fallback(&native_error) => {
             match graphql_adapter::remove_line_item(request).await {
                 Ok(()) => Ok(()),
-                Err(graphql_error) => Err(CartTransportError::graphql_after_native(
+                Err(graphql_error) => Err(CartTransportError::fallback_failed(
                     native_error,
                     graphql_error,
                 )),
             }
         }
-        Err(native_error) => Err(CartTransportError::native(native_error, false)),
+        Err(native_error) => Err(CartTransportError::native(native_error)),
     }
 }
 
@@ -154,10 +154,9 @@ mod tests {
 
     #[test]
     fn native_validation_error_keeps_single_path_evidence() {
-        let error = CartTransportError::native(
-            ApiError::Validation("cart_id must be a valid UUID".to_string()),
-            false,
-        );
+        let error = CartTransportError::native(ApiError::Validation(
+            "cart_id must be a valid UUID".to_string(),
+        ));
 
         assert_eq!(error.failed_path, CartTransportPath::NativeServer);
         assert!(!error.fallback_attempted);
@@ -169,8 +168,20 @@ mod tests {
     }
 
     #[test]
+    fn transport_path_serializes_as_stable_snake_case() {
+        let serialized = serde_json::to_string(&CartTransportError::fallback_failed(
+            ApiError::ServerFn("server function unavailable".to_string()),
+            ApiError::Graphql("network unavailable".to_string()),
+        ))
+        .expect("transport error should serialize");
+
+        assert!(serialized.contains(r#""failed_path":"graphql""#));
+        assert!(serialized.contains(r#""fallback_attempted":true"#));
+    }
+
+    #[test]
     fn failed_fallback_keeps_both_path_errors() {
-        let error = CartTransportError::graphql_after_native(
+        let error = CartTransportError::fallback_failed(
             ApiError::ServerFn("server function unavailable".to_string()),
             ApiError::Graphql("network unavailable".to_string()),
         );
