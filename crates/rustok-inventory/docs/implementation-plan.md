@@ -21,7 +21,7 @@ admin read-side UI, а dedicated inventory write transport и channel-aware orch
 - Evidence:
   - модуль ведётся в ускоренном FFA/FBA migration track как часть ecommerce family;
   - inventory admin UI вынесен в explicit `ui/leptos.rs` adapter, вызывает inventory-owned `core`/`api` facade, а transport boundary держит transitional commerce GraphQL adapter внутри пакета;
-  - compatibility test фиксирует минимальные поля read model (`inventoryQuantity`, `inventoryPolicy`, `inStock`, variants/translations/feed paging) до выделения dedicated inventory transport;
+  - compatibility tests фиксируют минимальные поля read model (`inventoryQuantity`, `inventoryPolicy`, `inStock`, variants/translations/feed paging) и сериализацию normalized GraphQL variables до выделения dedicated inventory transport;
   - `admin/tests/boundary.rs` проверяет, что `leptos_graphql`, `GraphqlRequest`, `/api/graphql` и `RUSTOK_GRAPHQL_URL` не попадают в `api`, `core`, `model` или `ui`.
 - Last verified at (UTC): 2026-06-02T00:00:00Z
 - Owner: `rustok-inventory` module team
