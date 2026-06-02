@@ -20,6 +20,7 @@ fn graphql_runtime_details_stay_inside_transport_adapter() {
     let forbidden_markers = [
         "leptos_graphql",
         "GraphqlRequest",
+        "GraphqlHttpError",
         "execute_graphql",
         "/api/graphql",
         "RUSTOK_GRAPHQL_URL",

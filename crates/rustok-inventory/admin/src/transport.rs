@@ -2,6 +2,7 @@
 use leptos::web_sys;
 use leptos_graphql::{execute as execute_graphql, GraphqlHttpError, GraphqlRequest};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 use crate::core::{
     normalized_product_selector, normalized_products_filter, InventoryProductRequest,
@@ -9,7 +10,37 @@ use crate::core::{
 };
 use crate::model::{InventoryAdminBootstrap, InventoryProductDetail, InventoryProductList};
 
-pub type InventoryTransportError = GraphqlHttpError;
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum InventoryTransportError {
+    Network,
+    Graphql(String),
+    Http(String),
+    Unauthorized,
+}
+
+impl fmt::Display for InventoryTransportError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Network => formatter.write_str("Network error"),
+            Self::Graphql(message) => write!(formatter, "GraphQL error: {message}"),
+            Self::Http(message) => write!(formatter, "Http error: {message}"),
+            Self::Unauthorized => formatter.write_str("Unauthorized"),
+        }
+    }
+}
+
+impl std::error::Error for InventoryTransportError {}
+
+impl From<GraphqlHttpError> for InventoryTransportError {
+    fn from(error: GraphqlHttpError) -> Self {
+        match error {
+            GraphqlHttpError::Network => Self::Network,
+            GraphqlHttpError::Graphql(message) => Self::Graphql(message),
+            GraphqlHttpError::Http(message) => Self::Http(message),
+            GraphqlHttpError::Unauthorized => Self::Unauthorized,
+        }
+    }
+}
 
 pub trait InventoryReadTransport {
     async fn fetch_bootstrap(
@@ -157,6 +188,7 @@ where
         None,
     )
     .await
+    .map_err(InventoryTransportError::from)
 }
 
 impl InventoryReadTransport for CommerceGraphqlInventoryReadAdapter {
@@ -217,7 +249,30 @@ impl InventoryReadTransport for CommerceGraphqlInventoryReadAdapter {
 
 #[cfg(test)]
 mod tests {
-    use super::{product_variables, products_variables, PRODUCTS_QUERY, PRODUCT_QUERY};
+    use super::{
+        product_variables, products_variables, GraphqlHttpError, InventoryTransportError,
+        PRODUCTS_QUERY, PRODUCT_QUERY,
+    };
+
+    #[test]
+    fn inventory_transport_error_maps_graphql_runtime_errors_without_leaking_type() {
+        assert_eq!(
+            InventoryTransportError::from(GraphqlHttpError::Network),
+            InventoryTransportError::Network
+        );
+        assert_eq!(
+            InventoryTransportError::from(GraphqlHttpError::Unauthorized),
+            InventoryTransportError::Unauthorized
+        );
+        assert_eq!(
+            InventoryTransportError::from(GraphqlHttpError::Graphql("boom".to_string())),
+            InventoryTransportError::Graphql("boom".to_string())
+        );
+        assert_eq!(
+            InventoryTransportError::from(GraphqlHttpError::Http("500".to_string())),
+            InventoryTransportError::Http("500".to_string())
+        );
+    }
 
     #[test]
     fn products_variables_apply_core_normalization_and_paging_defaults() {

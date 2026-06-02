@@ -9,6 +9,7 @@ Leptos admin UI package for the `rustok-inventory` module.
 - Participates in manifest-driven admin composition through `rustok-module.toml`.
 - Uses the inventory-owned read facade in `src/core.rs`, `src/api.rs`, and `src/transport.rs`, rendered through the explicit `src/ui/leptos.rs` adapter for current admin read-side access.
 - Keeps the existing commerce GraphQL access isolated inside the transitional `CommerceGraphqlInventoryReadAdapter` until dedicated inventory transport is available.
+- Maps transitional GraphQL runtime failures into the inventory-owned `InventoryTransportError` so `ApiError` does not expose `GraphqlHttpError`.
 - Enforces the boundary with `tests/boundary.rs`: GraphQL runtime markers are allowed only in `src/transport.rs`, and the crate root exports only the UI entry point.
 - Ships package-owned `admin/locales/en.json` and `admin/locales/ru.json` bundles declared through `[provides.admin_ui.i18n]`.
 
