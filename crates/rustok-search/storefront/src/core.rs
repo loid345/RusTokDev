@@ -201,7 +201,10 @@ mod tests {
             ranking_profile: "balanced".to_string(),
             facets: vec![SearchFacetGroup {
                 name: "entity_type".to_string(),
-                buckets: vec![],
+                buckets: vec![crate::model::SearchFacetBucket {
+                    value: "product".to_string(),
+                    count: 2,
+                }],
             }],
         };
         let labels = SearchResultsLabels {
@@ -232,6 +235,8 @@ mod tests {
             Some("/products/boots".to_string())
         );
         assert_eq!(view_model.facets.len(), 1);
+        assert_eq!(view_model.facets[0].display_name, "entity type");
+        assert_eq!(view_model.facets[0].buckets[0].label, "product (2)");
     }
 
     #[test]
@@ -334,6 +339,28 @@ mod tests {
             PRESET_CHIP_SELECTED_CLASS
         );
         assert_eq!(preset_chip_class("", "content"), PRESET_CHIP_IDLE_CLASS);
+    }
+
+    #[test]
+    fn facet_view_models_prepare_display_names_and_bucket_labels() {
+        let facets = build_search_facet_view_models(vec![SearchFacetGroup {
+            name: "source_module".to_string(),
+            buckets: vec![
+                crate::model::SearchFacetBucket {
+                    value: "catalog".to_string(),
+                    count: 7,
+                },
+                crate::model::SearchFacetBucket {
+                    value: "pages".to_string(),
+                    count: 3,
+                },
+            ],
+        }]);
+
+        assert_eq!(facets.len(), 1);
+        assert_eq!(facets[0].display_name, "source module");
+        assert_eq!(facets[0].buckets[0].label, "catalog (7)");
+        assert_eq!(facets[0].buckets[1].label, "pages (3)");
     }
 }
 
@@ -527,6 +554,35 @@ pub fn build_search_preset_chip_view_models(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchFacetBucketViewModel {
+    pub label: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SearchFacetGroupViewModel {
+    pub display_name: String,
+    pub buckets: Vec<SearchFacetBucketViewModel>,
+}
+
+pub fn build_search_facet_view_models(
+    facets: Vec<SearchFacetGroup>,
+) -> Vec<SearchFacetGroupViewModel> {
+    facets
+        .into_iter()
+        .map(|facet| SearchFacetGroupViewModel {
+            display_name: facet_display_name(facet.name.as_str()),
+            buckets: facet
+                .buckets
+                .into_iter()
+                .map(|bucket| SearchFacetBucketViewModel {
+                    label: facet_bucket_label(bucket.value.as_str(), bucket.count),
+                })
+                .collect(),
+        })
+        .collect()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SearchResultsLabels {
     pub summary_template: String,
     pub preset_template: String,
@@ -553,7 +609,7 @@ pub struct SearchResultsViewModel {
     pub locale: String,
     pub has_items: bool,
     pub items: Vec<SearchResultItemViewModel>,
-    pub facets: Vec<SearchFacetGroup>,
+    pub facets: Vec<SearchFacetGroupViewModel>,
 }
 
 pub fn build_search_results_view_model(
@@ -603,7 +659,7 @@ pub fn build_search_results_view_model(
         locale: render_locale_label(labels.locale_template.as_str(), locale.as_str()),
         has_items,
         items,
-        facets,
+        facets: build_search_facet_view_models(facets),
     }
 }
 

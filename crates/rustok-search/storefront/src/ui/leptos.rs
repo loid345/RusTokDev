@@ -7,8 +7,7 @@ use rustok_api::UiRouteContext;
 
 use crate::i18n::t;
 use crate::model::{
-    SearchFacetGroup, SearchFilterPreset, SearchPreviewFilters, SearchPreviewPayload,
-    SearchSuggestion,
+    SearchFilterPreset, SearchPreviewFilters, SearchPreviewPayload, SearchSuggestion,
 };
 use crate::{core, transport};
 
@@ -599,16 +598,16 @@ where
 }
 
 #[component]
-fn FacetCard(facet: SearchFacetGroup) -> impl IntoView {
+fn FacetCard(facet: core::SearchFacetGroupViewModel) -> impl IntoView {
     view! {
         <article class="rounded-2xl border border-border bg-background p-5">
             <div class="text-sm font-semibold capitalize text-card-foreground">
-                {core::facet_display_name(&facet.name)}
+                {facet.display_name}
             </div>
             <div class="mt-3 flex flex-wrap gap-2">
                 {facet.buckets.into_iter().map(|bucket| view! {
                     <span class="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs font-medium text-muted-foreground">
-                        {core::facet_bucket_label(&bucket.value, bucket.count)}
+                        {bucket.label}
                     </span>
                 }).collect_view()}
             </div>
