@@ -214,11 +214,12 @@ mod tests {
             none_label: "none".to_string(),
             locale_template: "locale: {locale}".to_string(),
             no_snippet: "No snippet returned.".to_string(),
+            no_target_label: "No target".to_string(),
+            open_result_label: "Open result".to_string(),
         };
 
         let view_model = build_search_results_view_model(payload, "manual", &labels);
 
-        assert_eq!(view_model.query_log_id, Some("log-1".to_string()));
         assert_eq!(
             view_model.summary,
             "1 results in 12ms via postgres/balanced"
@@ -231,8 +232,14 @@ mod tests {
         assert_eq!(view_model.items[0].score_label, "score 0.988");
         assert_eq!(view_model.items[0].snippet, "No snippet returned.");
         assert_eq!(
-            view_model.items[0].href,
-            Some("/products/boots".to_string())
+            view_model.items[0].action,
+            SearchResultActionViewModel::Open {
+                label: "Open result".to_string(),
+                href: "/products/boots".to_string(),
+                query_log_id: Some("log-1".to_string()),
+                document_id: "doc-1".to_string(),
+                position: 1,
+            }
         );
         assert_eq!(view_model.facets.len(), 1);
         assert_eq!(view_model.facets[0].display_name, "entity type");
@@ -361,6 +368,42 @@ mod tests {
         assert_eq!(facets[0].display_name, "source module");
         assert_eq!(facets[0].buckets[0].label, "catalog (7)");
         assert_eq!(facets[0].buckets[1].label, "pages (3)");
+    }
+
+    #[test]
+    fn result_action_view_model_prepares_open_and_no_target_states() {
+        let labels = SearchResultsLabels {
+            summary_template: String::new(),
+            preset_template: String::new(),
+            none_label: String::new(),
+            locale_template: String::new(),
+            no_snippet: String::new(),
+            no_target_label: "No target".to_string(),
+            open_result_label: "Open result".to_string(),
+        };
+
+        assert_eq!(
+            build_search_result_action_view_model(
+                Some("log-1".to_string()),
+                "doc-1".to_string(),
+                Some("/products/boots".to_string()),
+                2,
+                &labels,
+            ),
+            SearchResultActionViewModel::Open {
+                label: "Open result".to_string(),
+                href: "/products/boots".to_string(),
+                query_log_id: Some("log-1".to_string()),
+                document_id: "doc-1".to_string(),
+                position: 2,
+            }
+        );
+        assert_eq!(
+            build_search_result_action_view_model(None, "doc-2".to_string(), None, 1, &labels),
+            SearchResultActionViewModel::NoTarget {
+                label: "No target".to_string(),
+            }
+        );
     }
 }
 
@@ -589,6 +632,8 @@ pub struct SearchResultsLabels {
     pub none_label: String,
     pub locale_template: String,
     pub no_snippet: String,
+    pub no_target_label: String,
+    pub open_result_label: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -598,12 +643,44 @@ pub struct SearchResultItemViewModel {
     pub score_label: String,
     pub title: String,
     pub snippet: String,
-    pub href: Option<String>,
+    pub action: SearchResultActionViewModel,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SearchResultActionViewModel {
+    Open {
+        label: String,
+        href: String,
+        query_log_id: Option<String>,
+        document_id: String,
+        position: i32,
+    },
+    NoTarget {
+        label: String,
+    },
+}
+
+pub fn build_search_result_action_view_model(
+    query_log_id: Option<String>,
+    document_id: String,
+    href: Option<String>,
+    position: i32,
+    labels: &SearchResultsLabels,
+) -> SearchResultActionViewModel {
+    href.map(|href| SearchResultActionViewModel::Open {
+        label: labels.open_result_label.clone(),
+        href,
+        query_log_id,
+        document_id,
+        position,
+    })
+    .unwrap_or_else(|| SearchResultActionViewModel::NoTarget {
+        label: labels.no_target_label.clone(),
+    })
 }
 
 #[derive(Debug, Clone)]
 pub struct SearchResultsViewModel {
-    pub query_log_id: Option<String>,
     pub summary: String,
     pub preset: String,
     pub locale: String,
@@ -632,18 +709,29 @@ pub fn build_search_results_view_model(
     let has_items = has_items(items.as_slice());
     let items = items
         .into_iter()
-        .map(|item| SearchResultItemViewModel {
-            id: item.id,
-            source_label: entity_source_label(&item.entity_type, &item.source_module),
-            score_label: score_label(item.score),
-            title: item.title,
-            snippet: snippet_or_fallback(item.snippet, labels.no_snippet.as_str()),
-            href: item.url,
+        .enumerate()
+        .map(|(index, item)| {
+            let id = item.id;
+            let action = build_search_result_action_view_model(
+                query_log_id.clone(),
+                id.clone(),
+                item.url,
+                (index + 1) as i32,
+                labels,
+            );
+
+            SearchResultItemViewModel {
+                id,
+                source_label: entity_source_label(&item.entity_type, &item.source_module),
+                score_label: score_label(item.score),
+                title: item.title,
+                snippet: snippet_or_fallback(item.snippet, labels.no_snippet.as_str()),
+                action,
+            }
         })
         .collect();
 
     SearchResultsViewModel {
-        query_log_id,
         summary: render_results_summary(
             labels.summary_template.as_str(),
             total,

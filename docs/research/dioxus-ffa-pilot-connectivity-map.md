@@ -202,3 +202,4 @@
 - `rustok-search` slice #32 evidence: storefront suggestions presentation and document-vs-query navigation decision moved into `storefront/src/core.rs`; Leptos adapter renders core-owned suggestion view-models and only executes the prepared navigation target.
 - `rustok-search` slice #33 evidence: storefront filter preset chip state/class/next-selection mapping moved into `storefront/src/core.rs`; Leptos adapter renders core-owned chip view-models and keeps only signal wiring/navigation execution.
 - `rustok-search` slice #34 evidence: storefront facet display names and bucket labels moved into `storefront/src/core.rs`; Leptos facet cards render core-owned facet view-models without inline facet formatting.
+- `rustok-search` slice #35 evidence: storefront result action no-target/open-link state and click-tracking position moved into `storefront/src/core.rs`; Leptos result cards render the prepared action model and only execute click tracking/navigation.

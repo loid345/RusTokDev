@@ -429,15 +429,22 @@ fn SearchResults(
                 "search.results.noSnippet",
                 "No snippet returned.",
             ),
+            no_target_label: t(
+                locale_context.as_deref(),
+                "search.results.noTarget",
+                "No storefront target is available for this result yet.",
+            ),
+            open_result_label: t(
+                locale_context.as_deref(),
+                "search.results.openResult",
+                "Open result",
+            ),
         },
     );
     let item_views = view_model
         .items
         .iter()
-        .enumerate()
-        .map(|(index, item)| {
-            let query_log_id = view_model.query_log_id.clone();
-            let href = item.href.clone();
+        .map(|item| {
             view! {
                 <article class="rounded-2xl border border-border bg-background p-5">
                     <div class="flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.16em] text-muted-foreground">
@@ -449,7 +456,7 @@ fn SearchResults(
                     <p class="mt-2 text-sm text-muted-foreground">
                         {item.snippet.clone()}
                     </p>
-                    {render_result_action(query_log_id, item.id.clone(), href, index)}
+                    {render_result_action(item.action.clone())}
                 </article>
             }
         })
@@ -516,42 +523,37 @@ fn SearchResults(
     }
 }
 
-fn render_result_action(
-    query_log_id: Option<String>,
-    document_id: String,
-    href: Option<String>,
-    index: usize,
-) -> impl IntoView {
-    let locale = use_context::<UiRouteContext>().unwrap_or_default().locale;
-    let no_target_label = t(
-        locale.as_deref(),
-        "search.results.noTarget",
-        "No storefront target is available for this result yet.",
-    );
-    let open_result_label = t(
-        locale.as_deref(),
-        "search.results.openResult",
-        "Open result",
-    );
-    let Some(href_value) = href else {
-        return view! {
+fn render_result_action(action: core::SearchResultActionViewModel) -> impl IntoView {
+    match action {
+        core::SearchResultActionViewModel::NoTarget { label } => view! {
             <p class="mt-4 text-xs text-muted-foreground">
-                {no_target_label}
+                {label}
             </p>
         }
-        .into_any();
-    };
-
-    view! {
-        <a
-            class="mt-4 inline-flex text-sm font-medium text-primary hover:underline"
-            href=href_value.clone()
-            on:click=move |ev| track_result_click(ev, query_log_id.clone(), document_id.clone(), href_value.clone(), index)
-        >
-            {open_result_label}
-        </a>
+        .into_any(),
+        core::SearchResultActionViewModel::Open {
+            label,
+            href,
+            query_log_id,
+            document_id,
+            position,
+        } => view! {
+            <a
+                class="mt-4 inline-flex text-sm font-medium text-primary hover:underline"
+                href=href.clone()
+                on:click=move |ev| track_result_click(
+                    ev,
+                    query_log_id.clone(),
+                    document_id.clone(),
+                    href.clone(),
+                    position,
+                )
+            >
+                {label}
+            </a>
+        }
+        .into_any(),
     }
-    .into_any()
 }
 
 fn track_result_click(
@@ -559,7 +561,7 @@ fn track_result_click(
     query_log_id: Option<String>,
     document_id: String,
     href: String,
-    index: usize,
+    position: i32,
 ) {
     let Some(window) = web_sys::window() else {
         return;
@@ -574,7 +576,7 @@ fn track_result_click(
         let _ = transport::track_search_click(
             query_log_id,
             document_id,
-            Some((index + 1) as i32),
+            Some(position),
             Some(href.clone()),
         )
         .await;

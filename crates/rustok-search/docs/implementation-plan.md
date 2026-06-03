@@ -6,8 +6,8 @@
 ## Execution checkpoint
 
 - Current phase: phase_b_in_progress
-- Last checkpoint: Phase B slice #34 перенёс storefront facet display names and bucket labels в `storefront/src/core.rs`; Leptos facet cards теперь рендерят core-owned `SearchFacetGroupViewModel`.
-- Next step: Продолжить Phase B: вынести оставшиеся storefront feature card/result action presentation или dictionaries mutation feedback envelope/status state в core view-model, сохраняя разделённые native/GraphQL adapters без изменения public contract.
+- Last checkpoint: Phase B slice #35 перенёс storefront result action state в `storefront/src/core.rs`; Leptos result cards теперь рендерят `SearchResultActionViewModel` и только исполняют click tracking/navigation.
+- Next step: Продолжить Phase B: вынести оставшиеся storefront feature card/empty-state presentation или dictionaries mutation feedback envelope/status state в core view-model, сохраняя разделённые native/GraphQL adapters без изменения public contract.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок и central readiness board.
 - Last updated at (UTC): 2026-06-03T00:00:00Z
@@ -38,6 +38,7 @@
   - Phase B slice #32 добавил `SearchSuggestionsLabels`, `SearchSuggestionNavigation` и `SearchSuggestionItemViewModel` в `storefront/src/core.rs`; Leptos suggestions adapter больше не решает inline document-vs-query navigation или action/kind labels.
   - Phase B slice #33 добавил `SearchPresetChipViewModel`, preset chip class constants и builder в `storefront/src/core.rs`; Leptos preset chips больше не хранят selected/idle class strings и next-selection policy inline.
   - Phase B slice #34 добавил `SearchFacetGroupViewModel`, `SearchFacetBucketViewModel` и `build_search_facet_view_models` в `storefront/src/core.rs`; Leptos facet cards больше не форматируют facet names/bucket labels inline.
+  - Phase B slice #35 добавил `SearchResultActionViewModel` и `build_search_result_action_view_model` в `storefront/src/core.rs`; Leptos result cards больше не решают no-target/open-link labels, href state или click-tracking position inline.
 - Last verified at (UTC): 2026-06-03T00:00:00Z
 - Owner: `rustok-search` module team
 
@@ -141,3 +142,4 @@
 - [x] Slice 32: storefront suggestions presentation перенесён в core (`SearchSuggestionsLabels`, `SearchSuggestionNavigation`, `SearchSuggestionItemViewModel`, `build_search_suggestion_view_models`), поэтому Leptos adapter получает готовые kind/action labels и исполняет core-owned navigation target без inline document-vs-query branching.
 - [x] Slice 33: storefront filter preset chips перенесены в core (`SearchPresetChipViewModel`, `build_search_preset_chip_view_models`, `preset_chip_class`), поэтому Leptos adapter рендерит готовые labels/state и не хранит selected/idle class strings или next-selection policy inline.
 - [x] Slice 34: storefront facet cards перенесены в core (`SearchFacetGroupViewModel`, `SearchFacetBucketViewModel`, `build_search_facet_view_models`), поэтому Leptos adapter рендерит готовые facet display names and bucket labels без inline formatting.
+- [x] Slice 35: storefront result actions перенесены в core (`SearchResultActionViewModel`, `build_search_result_action_view_model`), поэтому Leptos adapter рендерит prepared no-target/open-link states и только исполняет click tracking/navigation.
