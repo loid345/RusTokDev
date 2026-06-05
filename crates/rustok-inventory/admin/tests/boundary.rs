@@ -107,13 +107,16 @@ fn native_write_path_targets_inventory_service() {
 
     for marker in [
         r#"#[server(prefix = "/api/fn", endpoint = "inventory/variant/set-quantity")]"#,
+        r#"#[server(prefix = "/api/fn", endpoint = "inventory/variant/adjust-quantity")]"#,
         "INVENTORY_SET_QUANTITY_REQUIRES_SSR_ERROR",
+        "INVENTORY_ADJUST_QUANTITY_REQUIRES_SSR_ERROR",
         "transactional_event_bus_from_context",
         "assert_requested_tenant",
         "Permission::INVENTORY_UPDATE",
         "Permission::INVENTORY_MANAGE",
         "InventoryService::new",
         "set_inventory",
+        "adjust_variant_inventory",
     ] {
         assert!(
             native.contains(marker),
@@ -124,41 +127,65 @@ fn native_write_path_targets_inventory_service() {
 }
 
 #[test]
-fn set_quantity_write_path_stays_native_without_graphql_fallback() {
+fn native_write_facades_stay_native_without_graphql_fallback() {
     let api = read_source("src/api.rs");
-    let start = api
-        .find("pub async fn set_variant_quantity")
-        .expect("src/api.rs should expose set_variant_quantity facade");
-    let end = api[start..]
-        .find("#[cfg(test)]")
-        .map(|offset| start + offset)
-        .unwrap_or(api.len());
-    let write_facade = &api[start..end];
 
-    for required in [
-        "set_quantity_request",
-        "crate::native::set_variant_quantity",
-        ".map_err(Into::into)",
+    for (function_name, required_markers) in [
+        (
+            "set_variant_quantity",
+            [
+                "set_quantity_request",
+                "crate::native::set_variant_quantity",
+            ],
+        ),
+        (
+            "adjust_variant_quantity",
+            [
+                "adjust_quantity_request",
+                "crate::native::adjust_variant_quantity",
+            ],
+        ),
     ] {
-        assert!(
-            write_facade.contains(required),
-            "set_variant_quantity facade must keep native write marker `{}`",
-            required
-        );
-    }
+        let start = api
+            .find(&format!("pub async fn {function_name}"))
+            .unwrap_or_else(|| panic!("src/api.rs should expose {} facade", function_name));
+        let end = api[start..]
+            .find("\npub async fn ")
+            .map(|offset| start + offset)
+            .or_else(|| {
+                api[start..]
+                    .find("#[cfg(test)]")
+                    .map(|offset| start + offset)
+            })
+            .unwrap_or(api.len());
+        let write_facade = &api[start..end];
 
-    for forbidden in [
-        "fallback_",
-        "transitional_read_transport",
-        "CommerceGraphqlInventoryReadAdapter",
-        "token",
-        "tenant_slug",
-    ] {
+        for required in required_markers {
+            assert!(
+                write_facade.contains(required),
+                "{function_name} facade must keep native write marker `{}`",
+                required
+            );
+        }
         assert!(
-            !write_facade.contains(forbidden),
-            "set_variant_quantity facade must not use transitional read/fallback marker `{}`",
-            forbidden
+            write_facade.contains(".map_err(Into::into)"),
+            "{} facade must map native server errors through ApiError",
+            function_name
         );
+
+        for forbidden in [
+            "fallback_",
+            "transitional_read_transport",
+            "CommerceGraphqlInventoryReadAdapter",
+            "token",
+            "tenant_slug",
+        ] {
+            assert!(
+                !write_facade.contains(forbidden),
+                "{function_name} facade must not use transitional read/fallback marker `{}`",
+                forbidden
+            );
+        }
     }
 }
 

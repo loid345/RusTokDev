@@ -10,6 +10,8 @@ pub(crate) const INVENTORY_PRODUCT_REQUIRES_SSR_ERROR: &str =
     "inventory/product requires the `ssr` feature";
 pub(crate) const INVENTORY_SET_QUANTITY_REQUIRES_SSR_ERROR: &str =
     "inventory/variant/set-quantity requires the `ssr` feature";
+pub(crate) const INVENTORY_ADJUST_QUANTITY_REQUIRES_SSR_ERROR: &str =
+    "inventory/variant/adjust-quantity requires the `ssr` feature";
 
 pub(crate) async fn fetch_bootstrap() -> Result<InventoryAdminBootstrap, ServerFnError> {
     inventory_bootstrap_native().await
@@ -38,6 +40,14 @@ pub(crate) async fn set_variant_quantity(
     quantity: i32,
 ) -> Result<i32, ServerFnError> {
     inventory_set_quantity_native(tenant_id, variant_id, quantity).await
+}
+
+pub(crate) async fn adjust_variant_quantity(
+    tenant_id: String,
+    variant_id: String,
+    adjustment: i32,
+) -> Result<i32, ServerFnError> {
+    inventory_adjust_quantity_native(tenant_id, variant_id, adjustment).await
 }
 
 #[cfg(feature = "ssr")]
@@ -363,6 +373,50 @@ async fn inventory_set_quantity_native(
         let _ = (tenant_id, variant_id, quantity);
         Err(ServerFnError::new(
             INVENTORY_SET_QUANTITY_REQUIRES_SSR_ERROR,
+        ))
+    }
+}
+
+#[server(prefix = "/api/fn", endpoint = "inventory/variant/adjust-quantity")]
+async fn inventory_adjust_quantity_native(
+    tenant_id: String,
+    variant_id: String,
+    adjustment: i32,
+) -> Result<i32, ServerFnError> {
+    #[cfg(feature = "ssr")]
+    {
+        use leptos::prelude::expect_context;
+        use loco_rs::app::AppContext;
+        use rustok_api::{loco::transactional_event_bus_from_context, AuthContext, TenantContext};
+        use rustok_core::Permission;
+        use rustok_inventory::InventoryService;
+
+        let app_ctx = expect_context::<AppContext>();
+        let event_bus = transactional_event_bus_from_context(&app_ctx);
+        let auth = leptos_axum::extract::<AuthContext>()
+            .await
+            .map_err(ServerFnError::new)?;
+        let tenant = leptos_axum::extract::<TenantContext>()
+            .await
+            .map_err(ServerFnError::new)?;
+        ensure_permission(
+            &auth.permissions,
+            &[Permission::INVENTORY_UPDATE, Permission::INVENTORY_MANAGE],
+            "inventory:update or inventory:manage required",
+        )?;
+        assert_requested_tenant(&tenant, &tenant_id)?;
+
+        let variant_id = parse_uuid(&variant_id, "variant_id")?;
+        InventoryService::new(app_ctx.db.clone(), event_bus)
+            .adjust_variant_inventory(tenant.id, auth.user_id, variant_id, adjustment)
+            .await
+            .map_err(ServerFnError::new)
+    }
+    #[cfg(not(feature = "ssr"))]
+    {
+        let _ = (tenant_id, variant_id, adjustment);
+        Err(ServerFnError::new(
+            INVENTORY_ADJUST_QUANTITY_REQUIRES_SSR_ERROR,
         ))
     }
 }

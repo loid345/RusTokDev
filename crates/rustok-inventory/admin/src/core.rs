@@ -51,6 +51,20 @@ pub(crate) struct InventorySetQuantityInput {
     pub quantity: i32,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct InventoryAdjustQuantityRequest {
+    pub tenant_id: String,
+    pub variant_id: String,
+    pub adjustment: i32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct InventoryAdjustQuantityInput {
+    pub tenant_id: String,
+    pub variant_id: String,
+    pub adjustment: i32,
+}
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum InventoryHealthState {
     Backorder,
@@ -109,6 +123,18 @@ pub(crate) fn normalized_set_quantity_input(
         tenant_id: tenant_id.trim().to_string(),
         variant_id: variant_id.trim().to_string(),
         quantity,
+    }
+}
+
+pub(crate) fn normalized_adjust_quantity_input(
+    tenant_id: String,
+    variant_id: String,
+    adjustment: i32,
+) -> InventoryAdjustQuantityInput {
+    InventoryAdjustQuantityInput {
+        tenant_id: tenant_id.trim().to_string(),
+        variant_id: variant_id.trim().to_string(),
+        adjustment,
     }
 }
 
@@ -271,6 +297,19 @@ mod tests {
         assert_eq!(input.tenant_id, "tenant-id");
         assert_eq!(input.variant_id, "variant-id");
         assert_eq!(input.quantity, -3);
+    }
+
+    #[test]
+    fn normalized_adjust_quantity_input_trims_route_identifiers_without_changing_adjustment() {
+        let input = normalized_adjust_quantity_input(
+            " tenant-id ".to_string(),
+            " variant-id ".to_string(),
+            -4,
+        );
+
+        assert_eq!(input.tenant_id, "tenant-id");
+        assert_eq!(input.variant_id, "variant-id");
+        assert_eq!(input.adjustment, -4);
     }
 
     #[test]
