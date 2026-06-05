@@ -11,7 +11,7 @@
   "inventory.detail.empty": "Откройте товар, чтобы посмотреть остатки по variant, low-stock сигналы и backorder policy из inventory route.",
   "inventory.detail.subtitle": "Смотрите stock health, backorder policy и видимость по variant из module-owned inventory route.",
   "inventory.detail.title": "Детали inventory",
-  "inventory.detail.transportGap": "Dedicated inventory mutations пока не вынесены. Этот route уже владеет stock visibility и operator triage, а quantity-changing transport ещё должен быть отделён от umbrella ecommerce surface.",
+  "inventory.detail.transportGap": "Dedicated inventory transport для set-quantity уже доступен для точечных корректировок остатков; остальные inventory mutations ещё выделяются из umbrella ecommerce surface.",
   "inventory.detail.untitled": "Без названия",
   "inventory.error.bootstrapLoading": "Bootstrap ещё загружается.",
   "inventory.error.loadProduct": "Не удалось загрузить детали inventory",
@@ -43,6 +43,10 @@
   "inventory.status.active": "Активен",
   "inventory.status.archived": "Архив",
   "inventory.status.draft": "Черновик",
-  "inventory.subtitle": "Module-owned inventory read-side surface для видимости остатков, low-stock triage и variant health signals, пока dedicated inventory mutations ещё отделяются от umbrella transport.",
-  "inventory.title": "Inventory Control"
+  "inventory.subtitle": "Module-owned inventory surface для видимости остатков, low-stock triage, variant health signals и точечных set-quantity корректировок, пока оставшиеся inventory mutations выделяются из umbrella transport.",
+  "inventory.title": "Inventory Control",
+  "inventory.action.quantityLabel": "Количество варианта",
+  "inventory.action.setQuantity": "Задать",
+  "inventory.error.invalidQuantity": "Количество должно быть целым числом.",
+  "inventory.error.setQuantity": "Не удалось обновить количество варианта"
 }

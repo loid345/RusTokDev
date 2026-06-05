@@ -112,6 +112,17 @@ pub(crate) fn normalized_set_quantity_input(
     }
 }
 
+pub(crate) fn parse_set_quantity(value: &str) -> Result<i32, String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Err("quantity is required".to_string());
+    }
+
+    trimmed
+        .parse::<i32>()
+        .map_err(|_| "quantity must be a signed integer".to_string())
+}
+
 pub(crate) fn normalize_optional_trimmed(value: Option<String>) -> Option<String> {
     value.and_then(|value| {
         let trimmed = value.trim();
@@ -227,6 +238,19 @@ mod tests {
         assert_eq!(input.tenant_id, "tenant-id");
         assert_eq!(input.variant_id, "variant-id");
         assert_eq!(input.quantity, -3);
+    }
+
+    #[test]
+    fn parse_set_quantity_accepts_signed_integer_with_whitespace() {
+        assert_eq!(parse_set_quantity(" 42 "), Ok(42));
+        assert_eq!(parse_set_quantity("-3"), Ok(-3));
+    }
+
+    #[test]
+    fn parse_set_quantity_rejects_blank_or_non_integer_values() {
+        assert!(parse_set_quantity("   ").is_err());
+        assert!(parse_set_quantity("1.5").is_err());
+        assert!(parse_set_quantity("many").is_err());
     }
 
     #[test]
