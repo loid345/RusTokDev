@@ -29,11 +29,35 @@ pub struct InventoryQuantityWriteResult {
     pub in_stock: bool,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct InventoryReservationWriteResult {
+    #[serde(rename = "reservedQuantity")]
+    pub reserved_quantity: i32,
+    #[serde(rename = "availableQuantity")]
+    pub available_quantity: i32,
+    #[serde(rename = "inStock")]
+    pub in_stock: bool,
+}
+
 impl InventoryQuantityWriteResult {
     fn from_quantity(quantity: i32) -> Self {
         Self {
             quantity,
             in_stock: quantity > 0,
+        }
+    }
+}
+
+impl InventoryReservationWriteResult {
+    fn from_quantities(
+        reserved_quantity: i32,
+        available_quantity: i32,
+        inventory_policy: &str,
+    ) -> Self {
+        Self {
+            reserved_quantity,
+            available_quantity,
+            in_stock: available_quantity > 0 || inventory_policy == "continue",
         }
     }
 }
@@ -260,7 +284,7 @@ impl InventoryService {
         tenant_id: Uuid,
         variant_id: Uuid,
         quantity: i32,
-    ) -> CommerceResult<()> {
+    ) -> CommerceResult<InventoryReservationWriteResult> {
         if quantity < 0 {
             return Err(CommerceError::Validation(
                 "Reservation quantity must be non-negative".to_string(),
@@ -268,7 +292,9 @@ impl InventoryService {
         }
 
         if quantity == 0 {
-            return Ok(());
+            return Ok(InventoryReservationWriteResult::from_quantities(
+                0, 0, "deny",
+            ));
         }
 
         let txn = self.db.begin().await?;
@@ -312,7 +338,11 @@ impl InventoryService {
         .await?;
 
         txn.commit().await?;
-        Ok(())
+        Ok(InventoryReservationWriteResult::from_quantities(
+            quantity,
+            available - quantity,
+            variant.inventory_policy.as_str(),
+        ))
     }
 
     async fn load_variant<C>(
@@ -487,7 +517,7 @@ impl InventoryService {
 
 #[cfg(test)]
 mod tests {
-    use super::InventoryQuantityWriteResult;
+    use super::{InventoryQuantityWriteResult, InventoryReservationWriteResult};
 
     #[test]
     fn quantity_write_result_derives_in_stock_from_committed_quantity() {
@@ -500,6 +530,39 @@ mod tests {
                 "inventory write result must report stock state from the committed quantity"
             );
         }
+    }
+
+    #[test]
+    fn reservation_write_result_reports_reserved_available_and_stock_state() {
+        let result = InventoryReservationWriteResult::from_quantities(4, 6, "deny");
+
+        assert_eq!(result.reserved_quantity, 4);
+        assert_eq!(result.available_quantity, 6);
+        assert!(result.in_stock);
+
+        let depleted = InventoryReservationWriteResult::from_quantities(4, 0, "deny");
+        assert!(!depleted.in_stock);
+
+        let backorderable = InventoryReservationWriteResult::from_quantities(4, -2, "continue");
+        assert!(backorderable.in_stock);
+    }
+
+    #[test]
+    fn reservation_write_result_keeps_backend_wire_shape() {
+        let result = InventoryReservationWriteResult::from_quantities(2, 8, "deny");
+
+        let serialized = serde_json::to_value(&result).expect(
+            "inventory reservation write result should serialize for native endpoint transport",
+        );
+
+        assert_eq!(
+            serialized,
+            serde_json::json!({
+                "reservedQuantity": 2,
+                "availableQuantity": 8,
+                "inStock": true
+            })
+        );
     }
 
     #[test]

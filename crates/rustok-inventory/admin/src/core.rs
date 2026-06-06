@@ -58,11 +58,25 @@ pub(crate) struct InventoryAdjustQuantityRequest {
     pub adjustment: i32,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct InventoryReserveQuantityRequest {
+    pub tenant_id: String,
+    pub variant_id: String,
+    pub quantity: i32,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct InventoryAdjustQuantityInput {
     pub tenant_id: String,
     pub variant_id: String,
     pub adjustment: i32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct InventoryReserveQuantityInput {
+    pub tenant_id: String,
+    pub variant_id: String,
+    pub quantity: i32,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -135,6 +149,18 @@ pub(crate) fn normalized_adjust_quantity_input(
         tenant_id: tenant_id.trim().to_string(),
         variant_id: variant_id.trim().to_string(),
         adjustment,
+    }
+}
+
+pub(crate) fn normalized_reserve_quantity_input(
+    tenant_id: String,
+    variant_id: String,
+    quantity: i32,
+) -> InventoryReserveQuantityInput {
+    InventoryReserveQuantityInput {
+        tenant_id: tenant_id.trim().to_string(),
+        variant_id: variant_id.trim().to_string(),
+        quantity,
     }
 }
 
@@ -310,6 +336,19 @@ mod tests {
         assert_eq!(input.tenant_id, "tenant-id");
         assert_eq!(input.variant_id, "variant-id");
         assert_eq!(input.adjustment, -4);
+    }
+
+    #[test]
+    fn normalized_reserve_quantity_input_trims_route_identifiers_without_changing_quantity() {
+        let input = normalized_reserve_quantity_input(
+            " tenant-id ".to_string(),
+            " variant-id ".to_string(),
+            3,
+        );
+
+        assert_eq!(input.tenant_id, "tenant-id");
+        assert_eq!(input.variant_id, "variant-id");
+        assert_eq!(input.quantity, 3);
     }
 
     #[test]

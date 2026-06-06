@@ -34,6 +34,7 @@
 - Следующий малый Wave 5 docs-sync slice синхронизировал центральный FFA/FBA readiness board в `docs/modules/registry.md` с локальным inventory plan: registry evidence теперь явно включает read-only transitional adapter/removal criteria boundary coverage.
 - Следующий малый Wave 5 ops-sync slice обновил `docs/modules/implementation-plans-registry.md` для `rustok-inventory`: статус больше не `not_started`, checkpoint отражает native read/write split, read-only transitional adapter guardrail, следующий write-mutation slice и verification gates.
 - Следующий малый Wave 5 contract-semantics slice закрепил backend-level semantics для `InventoryQuantityWriteResult`: committed quantity теперь покрыта unit evidence для `inStock` derivation и native endpoint wire shape, чтобы write UI/API не восстанавливали stock state локальной догадкой.
+- Следующий малый Wave 5 reserve-transport slice вынес reservation write path в inventory-owned native/API facade: `InventoryService::reserve` возвращает typed `InventoryReservationWriteResult { reserved_quantity, available_quantity, in_stock }`, endpoint `inventory/variant/reserve-quantity` проходит tenant/permission checks без GraphQL fallback, а backend/admin serde evidence фиксирует reservation wire shape.
 
 ## Проверенные факты
 

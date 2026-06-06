@@ -11,7 +11,7 @@ pub use services::{
     AdminInventoryPrice, AdminInventoryProductDetail, AdminInventoryProductList,
     AdminInventoryProductListItem, AdminInventoryProductTranslation, AdminInventoryProductsFilter,
     AdminInventoryReadService, AdminInventoryVariant, InventoryQuantityWriteResult,
-    InventoryService,
+    InventoryReservationWriteResult, InventoryService,
 };
 
 pub struct InventoryModule;

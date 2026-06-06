@@ -2,13 +2,13 @@ use leptos::prelude::*;
 use std::fmt::{Display, Formatter};
 
 use crate::core::{
-    normalized_adjust_quantity_input, normalized_set_quantity_input,
-    InventoryAdjustQuantityRequest, InventoryProductRequest, InventoryProductsRequest,
-    InventorySetQuantityRequest,
+    normalized_adjust_quantity_input, normalized_reserve_quantity_input,
+    normalized_set_quantity_input, InventoryAdjustQuantityRequest, InventoryProductRequest,
+    InventoryProductsRequest, InventoryReserveQuantityRequest, InventorySetQuantityRequest,
 };
 use crate::model::{
     InventoryAdminBootstrap, InventoryProductDetail, InventoryProductList,
-    InventoryQuantityWriteResult,
+    InventoryQuantityWriteResult, InventoryReservationWriteResult,
 };
 use crate::transport::{
     CommerceGraphqlInventoryReadAdapter, InventoryReadTransport, InventoryTransportError,
@@ -104,6 +104,19 @@ fn adjust_quantity_request(
         tenant_id: input.tenant_id,
         variant_id: input.variant_id,
         adjustment: input.adjustment,
+    }
+}
+
+fn reserve_quantity_request(
+    tenant_id: String,
+    variant_id: String,
+    quantity: i32,
+) -> InventoryReserveQuantityRequest {
+    let input = normalized_reserve_quantity_input(tenant_id, variant_id, quantity);
+    InventoryReserveQuantityRequest {
+        tenant_id: input.tenant_id,
+        variant_id: input.variant_id,
+        quantity: input.quantity,
     }
 }
 
@@ -241,13 +254,24 @@ pub async fn adjust_variant_quantity(
     .map_err(Into::into)
 }
 
+pub async fn reserve_variant_quantity(
+    tenant_id: String,
+    variant_id: String,
+    quantity: i32,
+) -> Result<InventoryReservationWriteResult, ApiError> {
+    let request = reserve_quantity_request(tenant_id, variant_id, quantity);
+    crate::native::reserve_variant_quantity(request.tenant_id, request.variant_id, request.quantity)
+        .await
+        .map_err(Into::into)
+}
+
 #[cfg(test)]
 mod tests {
     use leptos::prelude::ServerFnError;
 
     use super::{
         adjust_quantity_request, native_error_allows_transitional_graphql_fallback,
-        product_request, products_request, set_quantity_request,
+        product_request, products_request, reserve_quantity_request, set_quantity_request,
     };
 
     #[test]
@@ -268,6 +292,16 @@ mod tests {
         assert_eq!(request.tenant_id, "tenant-id");
         assert_eq!(request.variant_id, "variant-id");
         assert_eq!(request.quantity, 12);
+    }
+
+    #[test]
+    fn reserve_quantity_request_normalizes_inventory_write_facade_context() {
+        let request =
+            reserve_quantity_request(" tenant-id ".to_string(), " variant-id ".to_string(), 3);
+
+        assert_eq!(request.tenant_id, "tenant-id");
+        assert_eq!(request.variant_id, "variant-id");
+        assert_eq!(request.quantity, 3);
     }
 
     #[test]

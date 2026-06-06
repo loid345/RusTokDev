@@ -108,8 +108,10 @@ fn native_write_path_targets_inventory_service() {
     for marker in [
         r#"#[server(prefix = "/api/fn", endpoint = "inventory/variant/set-quantity")]"#,
         r#"#[server(prefix = "/api/fn", endpoint = "inventory/variant/adjust-quantity")]"#,
+        r#"#[server(prefix = "/api/fn", endpoint = "inventory/variant/reserve-quantity")]"#,
         "INVENTORY_SET_QUANTITY_REQUIRES_SSR_ERROR",
         "INVENTORY_ADJUST_QUANTITY_REQUIRES_SSR_ERROR",
+        "INVENTORY_RESERVE_QUANTITY_REQUIRES_SSR_ERROR",
         "transactional_event_bus_from_context",
         "assert_requested_tenant",
         "Permission::INVENTORY_UPDATE",
@@ -117,7 +119,9 @@ fn native_write_path_targets_inventory_service() {
         "InventoryService::new",
         "set_variant_quantity",
         "adjust_variant_quantity",
+        "reserve_variant_quantity",
         "InventoryQuantityWriteResult",
+        "InventoryReservationWriteResult",
         "in_stock: result.in_stock",
     ] {
         assert!(
@@ -145,6 +149,13 @@ fn native_write_facades_stay_native_without_graphql_fallback() {
             [
                 "adjust_quantity_request",
                 "crate::native::adjust_variant_quantity",
+            ],
+        ),
+        (
+            "reserve_variant_quantity",
+            [
+                "reserve_quantity_request",
+                "crate::native::reserve_variant_quantity",
             ],
         ),
     ] {
@@ -245,6 +256,7 @@ fn transitional_graphql_adapter_is_read_only_with_documented_removal_criteria() 
         "adjustQuantity",
         "setVariantQuantity",
         "adjustVariantQuantity",
+        "reserveVariantQuantity",
     ] {
         assert!(
             !transport.contains(forbidden),
@@ -377,7 +389,10 @@ fn native_write_path_returns_quantity_contract_not_bare_integer() {
 
     for marker in [
         "pub struct InventoryQuantityWriteResult",
+        "pub struct InventoryReservationWriteResult",
         "pub quantity: i32",
+        "pub reserved_quantity: i32",
+        "pub available_quantity: i32",
         "pub in_stock: bool",
         r#"#[serde(rename = "inStock")]"#,
     ] {
@@ -391,21 +406,32 @@ fn native_write_path_returns_quantity_contract_not_bare_integer() {
         );
     }
 
-    assert!(
-        lib.contains("InventoryQuantityWriteResult"),
-        "rustok-inventory crate root must export the inventory write result contract"
-    );
+    for exported in [
+        "InventoryQuantityWriteResult",
+        "InventoryReservationWriteResult",
+    ] {
+        assert!(
+            lib.contains(exported),
+            "rustok-inventory crate root must export the inventory write result contract `{exported}`"
+        );
+    }
 
     for source in [&native, &api] {
         assert!(
             source.contains("Result<InventoryQuantityWriteResult"),
-            "native/API write path must return InventoryQuantityWriteResult instead of a bare i32"
+            "native/API quantity write path must return InventoryQuantityWriteResult instead of a bare i32"
+        );
+        assert!(
+            source.contains("Result<InventoryReservationWriteResult"),
+            "native/API reservation write path must return InventoryReservationWriteResult instead of a bare unit"
         );
     }
 
     for marker in [
         "set_variant_quantity",
         "adjust_variant_quantity",
+        "reserve_variant_quantity",
+        "map_reservation_result",
         "in_stock: result.in_stock",
     ] {
         assert!(
