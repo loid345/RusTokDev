@@ -48,24 +48,121 @@ mod m20260522_000001_add_module_operation_correlation_id;
 
 pub struct Migrator;
 
+struct ModuleMigrationSource {
+    slug: &'static str,
+    source: &'static dyn rustok_core::MigrationSource,
+}
+
+static MODULE_MIGRATION_SOURCES: &[ModuleMigrationSource] = &[
+    ModuleMigrationSource {
+        slug: "alloy",
+        source: &alloy::AlloyModule,
+    },
+    ModuleMigrationSource {
+        slug: "auth",
+        source: &rustok_auth::AuthModule,
+    },
+    ModuleMigrationSource {
+        slug: "channel",
+        source: &rustok_channel::ChannelModule,
+    },
+    ModuleMigrationSource {
+        slug: "cart",
+        source: &rustok_cart::CartModule,
+    },
+    ModuleMigrationSource {
+        slug: "customer",
+        source: &rustok_customer::CustomerModule,
+    },
+    ModuleMigrationSource {
+        slug: "product",
+        source: &rustok_product::ProductModule,
+    },
+    ModuleMigrationSource {
+        slug: "region",
+        source: &rustok_region::RegionModule,
+    },
+    ModuleMigrationSource {
+        slug: "pricing",
+        source: &rustok_pricing::PricingModule,
+    },
+    ModuleMigrationSource {
+        slug: "inventory",
+        source: &rustok_inventory::InventoryModule,
+    },
+    ModuleMigrationSource {
+        slug: "order",
+        source: &rustok_order::OrderModule,
+    },
+    ModuleMigrationSource {
+        slug: "payment",
+        source: &rustok_payment::PaymentModule,
+    },
+    ModuleMigrationSource {
+        slug: "fulfillment",
+        source: &rustok_fulfillment::FulfillmentModule,
+    },
+    ModuleMigrationSource {
+        slug: "commerce",
+        source: &rustok_commerce::CommerceModule,
+    },
+    ModuleMigrationSource {
+        slug: "content",
+        source: &rustok_content::ContentModule,
+    },
+    ModuleMigrationSource {
+        slug: "blog",
+        source: &rustok_blog::BlogModule,
+    },
+    ModuleMigrationSource {
+        slug: "comments",
+        source: &rustok_comments::CommentsModule,
+    },
+    ModuleMigrationSource {
+        slug: "pages",
+        source: &rustok_pages::PagesModule,
+    },
+    ModuleMigrationSource {
+        slug: "seo",
+        source: &rustok_seo::SeoModule,
+    },
+    ModuleMigrationSource {
+        slug: "forum",
+        source: &rustok_forum::ForumModule,
+    },
+    ModuleMigrationSource {
+        slug: "index",
+        source: &rustok_index::IndexModule,
+    },
+    ModuleMigrationSource {
+        slug: "search",
+        source: &rustok_search::SearchModule,
+    },
+    ModuleMigrationSource {
+        slug: "taxonomy",
+        source: &rustok_taxonomy::TaxonomyModule,
+    },
+    ModuleMigrationSource {
+        slug: "workflow",
+        source: &rustok_workflow::WorkflowModule,
+    },
+];
+
+fn module_migration_sources() -> &'static [ModuleMigrationSource] {
+    MODULE_MIGRATION_SOURCES
+}
+
 fn collect_migration_descriptors() -> Vec<MigrationDescriptor> {
     // Module-owned dependency metadata collection point.
-    // Keep each module's descriptors behind the MigrationSource contract so a
-    // module can expose ordering metadata next to its migration exporter without
-    // server-side callers reaching into package-local migration modules.
-    let modules: [&dyn rustok_core::MigrationSource; 7] = [
-        &rustok_channel::ChannelModule,
-        &rustok_product::ProductModule,
-        &rustok_pricing::PricingModule,
-        &rustok_inventory::InventoryModule,
-        &rustok_commerce::CommerceModule,
-        &rustok_blog::BlogModule,
-        &rustok_forum::ForumModule,
-    ];
-
-    modules
-        .into_iter()
-        .flat_map(|module| module_dependency_descriptors(module.migration_dependencies()))
+    // Keep descriptors behind the MigrationSource contract for every module whose
+    // migrations are included in this server migrator. Modules without
+    // cross-module ordering metadata use the trait default.
+    module_migration_sources()
+        .iter()
+        .flat_map(|module| {
+            let _module_slug = module.slug;
+            module_dependency_descriptors(module.source.migration_dependencies())
+        })
         .collect()
 }
 
@@ -273,6 +370,44 @@ mod tests {
     use super::{sort_migrations_by_dependencies, MigrationDescriptor, Migrator};
     use rustok_test_utils::setup_test_db;
     use sea_orm_migration::MigratorTrait;
+
+    #[test]
+    fn module_migration_sources_cover_server_module_crates() {
+        let slugs = super::module_migration_sources()
+            .iter()
+            .map(|module| module.slug)
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            slugs,
+            vec![
+                "alloy",
+                "auth",
+                "channel",
+                "cart",
+                "customer",
+                "product",
+                "region",
+                "pricing",
+                "inventory",
+                "order",
+                "payment",
+                "fulfillment",
+                "commerce",
+                "content",
+                "blog",
+                "comments",
+                "pages",
+                "seo",
+                "forum",
+                "index",
+                "search",
+                "taxonomy",
+                "workflow",
+            ],
+            "descriptor aggregation must cover every module crate whose migrations are included in the server migrator"
+        );
+    }
 
     #[test]
     fn dependency_sort_rejects_missing_dependency() {
