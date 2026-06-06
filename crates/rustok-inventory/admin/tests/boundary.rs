@@ -239,6 +239,8 @@ fn ui_stock_quantity_controls_use_inventory_api_facade_only() {
         "crate::api::release_reservation_quantity",
         "crate::api::check_variant_availability",
         "inventory.action.checkAvailability",
+        "inventory.error.invalidAvailabilityQuantity",
+        "inventory.error.invalidReservationQuantity",
         "inventory.action.releaseReservation",
         "inventory.notice.releasedReservation",
         "inventory.notice.available",
