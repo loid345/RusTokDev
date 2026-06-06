@@ -8,10 +8,10 @@ use rustok_seo_admin_support::SeoEntityPanel;
 use rustok_seo_targets::{builtin_slug as seo_builtin_slug, SeoTargetSlug};
 
 use crate::core::{
-    build_product_admin_list_item_view_model, build_selected_product_summary_view_model,
-    format_known_shipping_profiles, primary_catalog_currency, shipping_profile_choice_label,
-    text_or_none, translation_for_locale, ProductAdminPricingPreviewState,
-    SelectedProductSummaryViewModel,
+    build_product_admin_editor_view_model, build_product_admin_list_item_view_model,
+    build_selected_product_summary_view_model, format_known_shipping_profiles,
+    primary_catalog_currency, shipping_profile_choice_label, text_or_none, translation_for_locale,
+    ProductAdminPricingPreviewState, SelectedProductSummaryViewModel,
 };
 use crate::i18n::t;
 use crate::model::{ProductAdminBootstrap, ProductDetail, ProductDraft, ProductPricingDetail};
@@ -375,8 +375,7 @@ pub fn ProductAdmin() -> impl IntoView {
     let ui_locale_for_list = ui_locale.clone();
     let ui_locale_for_profiles = ui_locale.clone();
     let ui_locale_for_summary = ui_locale.clone();
-    let ui_locale_for_editor_title = ui_locale.clone();
-    let ui_locale_for_editor_subtitle = ui_locale.clone();
+    let ui_locale_for_editor = ui_locale.clone();
     let ui_locale_for_submit = ui_locale.clone();
     let ui_locale_for_profile_panel = ui_locale.clone();
     let ui_locale_for_summary_title = ui_locale.clone();
@@ -631,14 +630,22 @@ pub fn ProductAdmin() -> impl IntoView {
                         <div class="flex items-center justify-between gap-3">
                             <div>
                                 <h3 class="text-lg font-semibold text-card-foreground">
-                                    {move || if editing_id.get().is_some() {
-                                        t(ui_locale_for_editor_title.as_deref(), "product.editor.editTitle", "Product Editor")
-                                    } else {
-                                        t(ui_locale_for_editor_title.as_deref(), "product.editor.createTitle", "Create Product")
-                                    }}
+                                    {
+                                        let ui_locale_for_editor = ui_locale_for_editor.clone();
+                                        move || build_product_admin_editor_view_model(
+                                            ui_locale_for_editor.as_deref(),
+                                            editing_id.get().as_deref(),
+                                        ).title
+                                    }
                                 </h3>
                                 <p class="text-sm text-muted-foreground">
-                                    {t(ui_locale_for_editor_subtitle.as_deref(), "product.editor.subtitle", "Single-SKU catalog editor backed by the existing commerce GraphQL contract.")}
+                                    {
+                                        let ui_locale_for_editor = ui_locale_for_editor.clone();
+                                        move || build_product_admin_editor_view_model(
+                                            ui_locale_for_editor.as_deref(),
+                                            editing_id.get().as_deref(),
+                                        ).subtitle
+                                    }
                                 </p>
                             </div>
                             <button type="button" class="inline-flex rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition hover:bg-accent disabled:opacity-50" disabled=move || busy.get() on:click=move |_| reset_current_product.run(())>
@@ -693,11 +700,10 @@ pub fn ProductAdmin() -> impl IntoView {
                                 {t(ui_locale.as_deref(), "product.field.keepPublished", "Keep published after save")}
                             </label>
                             <button type="submit" class="inline-flex rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50" disabled=move || busy.get()>
-                                {move || if editing_id.get().is_some() {
-                                    t(ui_locale_for_submit.as_deref(), "product.action.saveProduct", "Save product")
-                                } else {
-                                    t(ui_locale_for_submit.as_deref(), "product.action.createProduct", "Create product")
-                                }}
+                                {move || build_product_admin_editor_view_model(
+                                    ui_locale_for_submit.as_deref(),
+                                    editing_id.get().as_deref(),
+                                ).submit_label}
                             </button>
                         </form>
 

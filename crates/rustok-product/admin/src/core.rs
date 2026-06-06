@@ -287,6 +287,53 @@ pub(crate) fn build_selected_product_summary_view_model(
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ProductAdminEditorMode {
+    Create,
+    Edit,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ProductAdminEditorViewModel {
+    pub mode: ProductAdminEditorMode,
+    pub title: String,
+    pub subtitle: String,
+    pub submit_label: String,
+}
+
+pub(crate) fn build_product_admin_editor_view_model(
+    locale: Option<&str>,
+    editing_product_id: Option<&str>,
+) -> ProductAdminEditorViewModel {
+    let is_editing = editing_product_id
+        .map(|id| !id.trim().is_empty())
+        .unwrap_or(false);
+
+    if is_editing {
+        ProductAdminEditorViewModel {
+            mode: ProductAdminEditorMode::Edit,
+            title: t(locale, "product.editor.editTitle", "Product Editor"),
+            subtitle: t(
+                locale,
+                "product.editor.subtitle",
+                "Single-SKU catalog editor backed by the existing commerce GraphQL contract.",
+            ),
+            submit_label: t(locale, "product.action.saveProduct", "Save product"),
+        }
+    } else {
+        ProductAdminEditorViewModel {
+            mode: ProductAdminEditorMode::Create,
+            title: t(locale, "product.editor.createTitle", "Create Product"),
+            subtitle: t(
+                locale,
+                "product.editor.subtitle",
+                "Single-SKU catalog editor backed by the existing commerce GraphQL contract.",
+            ),
+            submit_label: t(locale, "product.action.createProduct", "Create product"),
+        }
+    }
+}
+
 pub(crate) fn format_known_shipping_profiles(
     locale: Option<&str>,
     profiles: &[ShippingProfile],
@@ -405,6 +452,23 @@ pub(crate) fn status_badge(status: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn product_admin_editor_view_model_tracks_create_and_edit_modes() {
+        let create = build_product_admin_editor_view_model(Some("en"), None);
+        assert_eq!(create.mode, ProductAdminEditorMode::Create);
+        assert_eq!(create.title, "Create Product");
+        assert_eq!(create.submit_label, "Create product");
+
+        let edit = build_product_admin_editor_view_model(Some("en"), Some("product-1"));
+        assert_eq!(edit.mode, ProductAdminEditorMode::Edit);
+        assert_eq!(edit.title, "Product Editor");
+        assert_eq!(edit.submit_label, "Save product");
+        assert_eq!(
+            edit.subtitle,
+            "Single-SKU catalog editor backed by the existing commerce GraphQL contract."
+        );
+    }
 
     #[test]
     fn product_admin_list_item_view_model_formats_render_state() {
