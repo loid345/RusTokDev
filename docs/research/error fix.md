@@ -32,6 +32,7 @@
 - Следующий малый Wave 6 docs-hardening slice расширил существующий `docs/verification/README.md` кратким runtime/backend regression runbook для module graph drift, channel locale/OAuth context, locale DB amplification и migration dependency failures без создания нового документа.
 - Следующий малый Wave 5 guardrail slice закрепил transitional commerce GraphQL adapter как read-only compatibility fallback: inventory admin boundary test теперь проверяет отсутствие GraphQL mutation/write markers в adapter-е и наличие README removal criteria для adapter-а, пока оставшийся dedicated write transport добирается.
 - Следующий малый Wave 5 docs-sync slice синхронизировал центральный FFA/FBA readiness board в `docs/modules/registry.md` с локальным inventory plan: registry evidence теперь явно включает read-only transitional adapter/removal criteria boundary coverage.
+- Следующий малый Wave 5 ops-sync slice обновил `docs/modules/implementation-plans-registry.md` для `rustok-inventory`: статус больше не `not_started`, checkpoint отражает native read/write split, read-only transitional adapter guardrail, следующий write-mutation slice и verification gates.
 
 ## Проверенные факты
 
