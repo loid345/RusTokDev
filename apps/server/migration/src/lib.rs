@@ -50,30 +50,23 @@ pub struct Migrator;
 
 fn collect_migration_descriptors() -> Vec<MigrationDescriptor> {
     // Module-owned dependency metadata collection point.
-    // Keep each module's descriptors close to its migration exporter and aggregate here.
-    let mut dependencies: Vec<MigrationDescriptor> = Vec::new();
-    dependencies.extend(module_dependency_descriptors(
-        rustok_channel::migrations::migration_dependencies(),
-    ));
-    dependencies.extend(module_dependency_descriptors(
-        rustok_product::migrations::migration_dependencies(),
-    ));
-    dependencies.extend(module_dependency_descriptors(
-        rustok_pricing::migrations::migration_dependencies(),
-    ));
-    dependencies.extend(module_dependency_descriptors(
-        rustok_inventory::migrations::migration_dependencies(),
-    ));
-    dependencies.extend(module_dependency_descriptors(
-        rustok_commerce::migrations::migration_dependencies(),
-    ));
-    dependencies.extend(module_dependency_descriptors(
-        rustok_blog::migrations::migration_dependencies(),
-    ));
-    dependencies.extend(module_dependency_descriptors(
-        rustok_forum::migrations::migration_dependencies(),
-    ));
-    dependencies
+    // Keep each module's descriptors behind the MigrationSource contract so a
+    // module can expose ordering metadata next to its migration exporter without
+    // server-side callers reaching into package-local migration modules.
+    let modules: [&dyn rustok_core::MigrationSource; 7] = [
+        &rustok_channel::ChannelModule,
+        &rustok_product::ProductModule,
+        &rustok_pricing::PricingModule,
+        &rustok_inventory::InventoryModule,
+        &rustok_commerce::CommerceModule,
+        &rustok_blog::BlogModule,
+        &rustok_forum::ForumModule,
+    ];
+
+    modules
+        .into_iter()
+        .flat_map(|module| module_dependency_descriptors(module.migration_dependencies()))
+        .collect()
 }
 
 fn module_dependency_descriptors(

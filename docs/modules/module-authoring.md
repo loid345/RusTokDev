@@ -97,7 +97,7 @@ Backend модуля должен встраиваться в общий platfor
 - тяжёлый локализуемый контент при необходимости живёт в `*_bodies`;
 - `locale` хранится нормализованно;
 - audit payload и technical metadata не должны превращаться в business copy;
-- module-owned migrations экспортируются через локальный `migrations()`; если migration создаёт FK или другой строгий порядок к таблицам другого module crate, рядом должен быть `migration_dependencies()` с `MigrationDependencyDescriptor`, а `apps/server/migration` обязан агрегировать этот exporter;
+- module-owned migrations экспортируются через локальный `migrations()` и trait `MigrationSource`; если migration создаёт FK или другой строгий порядок к таблицам другого module crate, рядом должен быть `migration_dependencies()` с `MigrationDependencyDescriptor`, а module `MigrationSource::migration_dependencies()` обязан возвращать этот exporter для агрегации в `apps/server/migration`;
 - descriptor должен ссылаться только на реальные migration names и проходить server migrator tests на missing dependency, duplicate descriptor и cycle.
 
 Канон:

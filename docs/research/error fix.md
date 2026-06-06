@@ -24,6 +24,7 @@
 - Добавлен локальный PostgreSQL smoke `scripts/verify/verify-migration-smoke.sh`: он запускает ignored integration test, который сам создаёт временную БД без локального `psql`, применяет мигратор from-zero и проверяет representative module tables.
 - Wave 5 продвинут малым write-transport slice: inventory admin read-side остаётся на inventory-owned `core` + facade `api` + `transport` + explicit `ui/leptos.rs` adapter, а dedicated native endpoints `inventory/variant/set-quantity` и `inventory/variant/adjust-quantity` теперь идут через inventory-owned API/native facade без GraphQL fallback, вызывают inventory-owned service methods после tenant/permission checks, а inventory detail UI получил targeted set-quantity и +/-1 adjustment controls с локальной integer-валидацией и optimistic detail refresh.
 - Открытым остатком Wave 4 остаётся стабилизация PostgreSQL smoke на реальном окружении и последующее вынесение его в отдельный CI job; для Wave 5 остаётся расширить parity coverage и закрыть оставшиеся inventory mutations вместо transitional adapter-а.
+- Следующий малый Wave 4 slice закрепил dependency descriptors в общем module contract: `MigrationSource` получил default `migration_dependencies()`, известные module crates с cross-module ordering metadata возвращают локальные descriptors через этот trait, а server migrator агрегирует их через module instances вместо прямого доступа к package-local migration modules.
 
 ## Проверенные факты
 
