@@ -2,7 +2,8 @@ use leptos::prelude::*;
 
 use crate::model::{
     InventoryAdminBootstrap, InventoryAvailabilityCheckResult, InventoryProductDetail,
-    InventoryProductList, InventoryQuantityWriteResult, InventoryReservationWriteResult,
+    InventoryProductList, InventoryQuantityWriteResult, InventoryReservationReleaseWriteResult,
+    InventoryReservationWriteResult,
 };
 
 pub(crate) const INVENTORY_BOOTSTRAP_REQUIRES_SSR_ERROR: &str =
@@ -19,6 +20,8 @@ pub(crate) const INVENTORY_RESERVE_QUANTITY_REQUIRES_SSR_ERROR: &str =
     "inventory/variant/reserve-quantity requires the `ssr` feature";
 pub(crate) const INVENTORY_CHECK_AVAILABILITY_REQUIRES_SSR_ERROR: &str =
     "inventory/variant/check-availability requires the `ssr` feature";
+pub(crate) const INVENTORY_RELEASE_RESERVATION_REQUIRES_SSR_ERROR: &str =
+    "inventory/variant/release-reservation requires the `ssr` feature";
 
 pub(crate) async fn fetch_bootstrap() -> Result<InventoryAdminBootstrap, ServerFnError> {
     inventory_bootstrap_native().await
@@ -71,6 +74,14 @@ pub(crate) async fn check_variant_availability(
     requested_quantity: i32,
 ) -> Result<InventoryAvailabilityCheckResult, ServerFnError> {
     inventory_check_availability_native(tenant_id, variant_id, requested_quantity).await
+}
+
+pub(crate) async fn release_reservation_quantity(
+    tenant_id: String,
+    variant_id: String,
+    quantity: i32,
+) -> Result<InventoryReservationReleaseWriteResult, ServerFnError> {
+    inventory_release_reservation_native(tenant_id, variant_id, quantity).await
 }
 
 #[cfg(feature = "ssr")]
@@ -210,6 +221,17 @@ fn map_availability_result(
 ) -> InventoryAvailabilityCheckResult {
     InventoryAvailabilityCheckResult {
         available: result.available,
+    }
+}
+
+#[cfg(feature = "ssr")]
+fn map_release_result(
+    result: rustok_inventory::InventoryReservationReleaseWriteResult,
+) -> InventoryReservationReleaseWriteResult {
+    InventoryReservationReleaseWriteResult {
+        released_quantity: result.released_quantity,
+        available_quantity: result.available_quantity,
+        in_stock: result.in_stock,
     }
 }
 
@@ -565,6 +587,53 @@ async fn inventory_check_availability_native(
         let _ = (tenant_id, variant_id, requested_quantity);
         Err(ServerFnError::new(
             INVENTORY_CHECK_AVAILABILITY_REQUIRES_SSR_ERROR,
+        ))
+    }
+}
+
+#[server(prefix = "/api/fn", endpoint = "inventory/variant/release-reservation")]
+async fn inventory_release_reservation_native(
+    tenant_id: String,
+    variant_id: String,
+    quantity: i32,
+) -> Result<InventoryReservationReleaseWriteResult, ServerFnError> {
+    #[cfg(feature = "ssr")]
+    {
+        use leptos::prelude::expect_context;
+        use loco_rs::app::AppContext;
+        use rustok_api::{AuthContext, TenantContext};
+        use rustok_core::Permission;
+        use rustok_inventory::InventoryService;
+
+        let app_ctx = expect_context::<AppContext>();
+        let auth = leptos_axum::extract::<AuthContext>()
+            .await
+            .map_err(ServerFnError::new)?;
+        let tenant = leptos_axum::extract::<TenantContext>()
+            .await
+            .map_err(ServerFnError::new)?;
+        ensure_permission(
+            &auth.permissions,
+            &[Permission::INVENTORY_UPDATE, Permission::INVENTORY_MANAGE],
+            "inventory:update or inventory:manage required",
+        )?;
+        assert_requested_tenant(&tenant, &tenant_id)?;
+
+        let variant_id = parse_uuid(&variant_id, "variant_id")?;
+        InventoryService::new(
+            app_ctx.db.clone(),
+            rustok_api::loco::transactional_event_bus_from_context(&app_ctx),
+        )
+        .release_reservation_quantity(tenant.id, variant_id, quantity)
+        .await
+        .map(map_release_result)
+        .map_err(ServerFnError::new)
+    }
+    #[cfg(not(feature = "ssr"))]
+    {
+        let _ = (tenant_id, variant_id, quantity);
+        Err(ServerFnError::new(
+            INVENTORY_RELEASE_RESERVATION_REQUIRES_SSR_ERROR,
         ))
     }
 }

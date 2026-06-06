@@ -75,6 +75,13 @@ pub(crate) struct InventoryAvailabilityCheckRequest {
     pub requested_quantity: i32,
 }
 
+#[derive(Clone, Debug)]
+pub(crate) struct InventoryReleaseReservationRequest {
+    pub tenant_id: String,
+    pub variant_id: String,
+    pub quantity: i32,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct InventoryAdjustQuantityInput {
     pub tenant_id: String,
@@ -94,6 +101,13 @@ pub(crate) struct InventoryAvailabilityCheckInput {
     pub tenant_id: String,
     pub variant_id: String,
     pub requested_quantity: i32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct InventoryReleaseReservationInput {
+    pub tenant_id: String,
+    pub variant_id: String,
+    pub quantity: i32,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -190,6 +204,18 @@ pub(crate) fn normalized_availability_check_input(
         tenant_id: tenant_id.trim().to_string(),
         variant_id: variant_id.trim().to_string(),
         requested_quantity,
+    }
+}
+
+pub(crate) fn normalized_release_reservation_input(
+    tenant_id: String,
+    variant_id: String,
+    quantity: i32,
+) -> InventoryReleaseReservationInput {
+    InventoryReleaseReservationInput {
+        tenant_id: tenant_id.trim().to_string(),
+        variant_id: variant_id.trim().to_string(),
+        quantity,
     }
 }
 
@@ -418,6 +444,19 @@ mod tests {
         assert!(parse_set_quantity("   ").is_err());
         assert!(parse_set_quantity("1.5").is_err());
         assert!(parse_set_quantity("many").is_err());
+    }
+
+    #[test]
+    fn normalized_release_reservation_input_trims_context() {
+        let input = normalized_release_reservation_input(
+            " tenant-id ".to_string(),
+            " variant-id ".to_string(),
+            2,
+        );
+
+        assert_eq!(input.tenant_id, "tenant-id");
+        assert_eq!(input.variant_id, "variant-id");
+        assert_eq!(input.quantity, 2);
     }
 
     #[test]

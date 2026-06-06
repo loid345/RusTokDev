@@ -44,6 +44,16 @@ pub struct InventoryAvailabilityCheckResult {
     pub available: bool,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct InventoryReservationReleaseWriteResult {
+    #[serde(rename = "releasedQuantity")]
+    pub released_quantity: i32,
+    #[serde(rename = "availableQuantity")]
+    pub available_quantity: i32,
+    #[serde(rename = "inStock")]
+    pub in_stock: bool,
+}
+
 impl InventoryQuantityWriteResult {
     fn from_quantity(quantity: i32) -> Self {
         Self {
@@ -61,6 +71,20 @@ impl InventoryReservationWriteResult {
     ) -> Self {
         Self {
             reserved_quantity,
+            available_quantity,
+            in_stock: available_quantity > 0 || inventory_policy == "continue",
+        }
+    }
+}
+
+impl InventoryReservationReleaseWriteResult {
+    fn from_quantities(
+        released_quantity: i32,
+        available_quantity: i32,
+        inventory_policy: &str,
+    ) -> Self {
+        Self {
+            released_quantity,
             available_quantity,
             in_stock: available_quantity > 0 || inventory_policy == "continue",
         }
@@ -378,6 +402,62 @@ impl InventoryService {
         ))
     }
 
+    #[instrument(skip(self))]
+    pub async fn release_reservation_quantity(
+        &self,
+        tenant_id: Uuid,
+        variant_id: Uuid,
+        quantity: i32,
+    ) -> CommerceResult<InventoryReservationReleaseWriteResult> {
+        validate_release_quantity(quantity)?;
+
+        let txn = self.db.begin().await?;
+        let variant = self.load_variant(&txn, tenant_id, variant_id).await?;
+
+        if quantity == 0 {
+            let available = if let Some(inventory_item) = entities::inventory_item::Entity::find()
+                .filter(entities::inventory_item::Column::VariantId.eq(variant_id))
+                .one(&txn)
+                .await?
+            {
+                self.available_quantity(&txn, inventory_item.id).await?
+            } else {
+                variant.inventory_quantity
+            };
+            txn.commit().await?;
+            return Ok(InventoryReservationReleaseWriteResult::from_quantities(
+                0,
+                available,
+                variant.inventory_policy.as_str(),
+            ));
+        }
+
+        let state = self
+            .ensure_inventory_state(&txn, tenant_id, &variant)
+            .await?;
+        if quantity > state.level.reserved_quantity {
+            return Err(CommerceError::Validation(format!(
+                "Cannot release {quantity} reserved units; only {} are reserved",
+                state.level.reserved_quantity
+            )));
+        }
+
+        let new_reserved_quantity = state.level.reserved_quantity - quantity;
+        let mut level_active: entities::inventory_level::ActiveModel = state.level.clone().into();
+        level_active.reserved_quantity = Set(new_reserved_quantity);
+        level_active.updated_at = Set(Utc::now().into());
+        level_active.update(&txn).await?;
+
+        let available_quantity = state.level.stocked_quantity - new_reserved_quantity;
+        txn.commit().await?;
+
+        Ok(InventoryReservationReleaseWriteResult::from_quantities(
+            quantity,
+            available_quantity,
+            variant.inventory_policy.as_str(),
+        ))
+    }
+
     async fn load_variant<C>(
         &self,
         conn: &C,
@@ -548,6 +628,16 @@ impl InventoryService {
     }
 }
 
+fn validate_release_quantity(quantity: i32) -> CommerceResult<()> {
+    if quantity < 0 {
+        return Err(CommerceError::Validation(
+            "Reservation release quantity must be non-negative".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
 fn validate_availability_request_quantity(requested_quantity: i32) -> CommerceResult<()> {
     if requested_quantity < 0 {
         return Err(CommerceError::Validation(
@@ -561,9 +651,57 @@ fn validate_availability_request_quantity(requested_quantity: i32) -> CommerceRe
 #[cfg(test)]
 mod tests {
     use super::{
-        validate_availability_request_quantity, InventoryAvailabilityCheckResult,
-        InventoryQuantityWriteResult, InventoryReservationWriteResult,
+        validate_availability_request_quantity, validate_release_quantity,
+        InventoryAvailabilityCheckResult, InventoryQuantityWriteResult,
+        InventoryReservationReleaseWriteResult, InventoryReservationWriteResult,
     };
+
+    #[test]
+    fn reservation_release_quantity_rejects_negative_requests_before_db_access() {
+        let error = validate_release_quantity(-1)
+            .expect_err("negative reservation releases must be rejected before DB lookup");
+
+        assert!(
+            error.to_string().contains("non-negative"),
+            "reservation release validation should explain the non-negative invariant"
+        );
+        assert!(validate_release_quantity(0).is_ok());
+        assert!(validate_release_quantity(3).is_ok());
+    }
+
+    #[test]
+    fn reservation_release_result_reports_released_available_and_stock_state() {
+        let result = InventoryReservationReleaseWriteResult::from_quantities(3, 9, "deny");
+
+        assert_eq!(result.released_quantity, 3);
+        assert_eq!(result.available_quantity, 9);
+        assert!(result.in_stock);
+
+        let depleted = InventoryReservationReleaseWriteResult::from_quantities(1, 0, "deny");
+        assert!(!depleted.in_stock);
+
+        let backorderable =
+            InventoryReservationReleaseWriteResult::from_quantities(1, -1, "continue");
+        assert!(backorderable.in_stock);
+    }
+
+    #[test]
+    fn reservation_release_result_keeps_backend_wire_shape() {
+        let result = InventoryReservationReleaseWriteResult::from_quantities(2, 10, "deny");
+
+        let serialized = serde_json::to_value(&result).expect(
+            "inventory reservation release result should serialize for native endpoint transport",
+        );
+
+        assert_eq!(
+            serialized,
+            serde_json::json!({
+                "releasedQuantity": 2,
+                "availableQuantity": 10,
+                "inStock": true
+            })
+        );
+    }
 
     #[test]
     fn availability_check_quantity_rejects_negative_requests_before_db_access() {

@@ -3,13 +3,16 @@ use std::fmt::{Display, Formatter};
 
 use crate::core::{
     normalized_adjust_quantity_input, normalized_availability_check_input,
-    normalized_reserve_quantity_input, normalized_set_quantity_input,
-    InventoryAdjustQuantityRequest, InventoryAvailabilityCheckRequest, InventoryProductRequest,
-    InventoryProductsRequest, InventoryReserveQuantityRequest, InventorySetQuantityRequest,
+    normalized_release_reservation_input, normalized_reserve_quantity_input,
+    normalized_set_quantity_input, InventoryAdjustQuantityRequest,
+    InventoryAvailabilityCheckRequest, InventoryProductRequest, InventoryProductsRequest,
+    InventoryReleaseReservationRequest, InventoryReserveQuantityRequest,
+    InventorySetQuantityRequest,
 };
 use crate::model::{
     InventoryAdminBootstrap, InventoryAvailabilityCheckResult, InventoryProductDetail,
-    InventoryProductList, InventoryQuantityWriteResult, InventoryReservationWriteResult,
+    InventoryProductList, InventoryQuantityWriteResult, InventoryReservationReleaseWriteResult,
+    InventoryReservationWriteResult,
 };
 use crate::transport::{
     CommerceGraphqlInventoryReadAdapter, InventoryReadTransport, InventoryTransportError,
@@ -131,6 +134,19 @@ fn availability_check_request(
         tenant_id: input.tenant_id,
         variant_id: input.variant_id,
         requested_quantity: input.requested_quantity,
+    }
+}
+
+fn release_reservation_request(
+    tenant_id: String,
+    variant_id: String,
+    quantity: i32,
+) -> InventoryReleaseReservationRequest {
+    let input = normalized_release_reservation_input(tenant_id, variant_id, quantity);
+    InventoryReleaseReservationRequest {
+        tenant_id: input.tenant_id,
+        variant_id: input.variant_id,
+        quantity: input.quantity,
     }
 }
 
@@ -294,6 +310,21 @@ pub async fn check_variant_availability(
     .map_err(Into::into)
 }
 
+pub async fn release_reservation_quantity(
+    tenant_id: String,
+    variant_id: String,
+    quantity: i32,
+) -> Result<InventoryReservationReleaseWriteResult, ApiError> {
+    let request = release_reservation_request(tenant_id, variant_id, quantity);
+    crate::native::release_reservation_quantity(
+        request.tenant_id,
+        request.variant_id,
+        request.quantity,
+    )
+    .await
+    .map_err(Into::into)
+}
+
 #[cfg(test)]
 mod tests {
     use leptos::prelude::ServerFnError;
@@ -301,7 +332,7 @@ mod tests {
     use super::{
         adjust_quantity_request, availability_check_request,
         native_error_allows_transitional_graphql_fallback, product_request, products_request,
-        reserve_quantity_request, set_quantity_request,
+        release_reservation_request, reserve_quantity_request, set_quantity_request,
     };
 
     #[test]
@@ -322,6 +353,16 @@ mod tests {
         assert_eq!(request.tenant_id, "tenant-id");
         assert_eq!(request.variant_id, "variant-id");
         assert_eq!(request.quantity, 12);
+    }
+
+    #[test]
+    fn release_reservation_request_normalizes_inventory_write_facade_context() {
+        let request =
+            release_reservation_request(" tenant-id ".to_string(), " variant-id ".to_string(), 2);
+
+        assert_eq!(request.tenant_id, "tenant-id");
+        assert_eq!(request.variant_id, "variant-id");
+        assert_eq!(request.quantity, 2);
     }
 
     #[test]
