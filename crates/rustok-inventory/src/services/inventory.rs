@@ -329,11 +329,7 @@ impl InventoryService {
         variant_id: Uuid,
         quantity: i32,
     ) -> CommerceResult<InventoryReservationWriteResult> {
-        if quantity < 0 {
-            return Err(CommerceError::Validation(
-                "Reservation quantity must be non-negative".to_string(),
-            ));
-        }
+        validate_reservation_quantity(quantity)?;
 
         let txn = self.db.begin().await?;
         let variant = self.load_variant(&txn, tenant_id, variant_id).await?;
@@ -730,6 +726,16 @@ fn insufficient_reservation_items_release_error(requested: i32, tracked: i32) ->
     ))
 }
 
+fn validate_reservation_quantity(quantity: i32) -> CommerceResult<()> {
+    if quantity < 0 {
+        return Err(CommerceError::Validation(
+            "Reservation quantity must be non-negative".to_string(),
+        ));
+    }
+
+    Ok(())
+}
+
 fn validate_release_quantity(quantity: i32) -> CommerceResult<()> {
     if quantity < 0 {
         return Err(CommerceError::Validation(
@@ -755,8 +761,9 @@ mod tests {
     use super::{
         insufficient_reservation_items_release_error, insufficient_reserved_release_error,
         validate_availability_request_quantity, validate_release_quantity,
-        InventoryAvailabilityCheckResult, InventoryQuantityWriteResult,
-        InventoryReservationReleaseWriteResult, InventoryReservationWriteResult,
+        validate_reservation_quantity, InventoryAvailabilityCheckResult,
+        InventoryQuantityWriteResult, InventoryReservationReleaseWriteResult,
+        InventoryReservationWriteResult,
     };
 
     #[test]
@@ -781,6 +788,19 @@ mod tests {
                 .contains("Cannot release 4 reservation item units; only 2 are tracked"),
             "reservation item release errors should report tracked item quantity"
         );
+    }
+
+    #[test]
+    fn reservation_quantity_rejects_negative_requests_before_db_access() {
+        let error = validate_reservation_quantity(-1)
+            .expect_err("negative reservations must be rejected before DB lookup");
+
+        assert!(
+            error.to_string().contains("non-negative"),
+            "reservation validation should explain the non-negative invariant"
+        );
+        assert!(validate_reservation_quantity(0).is_ok());
+        assert!(validate_reservation_quantity(3).is_ok());
     }
 
     #[test]
