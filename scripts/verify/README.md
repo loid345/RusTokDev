@@ -73,12 +73,17 @@ npm run verify:page-builder:consumer:forum
 - создаёт временную PostgreSQL database через `RUSTOK_MIGRATION_SMOKE_ADMIN_URL` внутри Rust integration test, без зависимости от локального `psql`;
 - запускает ignored integration test `postgres_zero_migration_smoke_applies_from_empty_database`;
 - применяет `migration::Migrator` с нуля и проверяет, что pending migrations не осталось;
+- при `RUSTOK_MIGRATION_SMOKE_INCREMENTAL=1` применяет миграции по одной, чтобы отдельно проверить incremental apply path;
 - проверяет наличие representative platform/module tables (`tenants`, `product_variants`, `prices`, `inventory_items`, `channels`, `oauth_apps`, `blog_post_tags`, `forum_topic_tags`, `taxonomy_terms`);
 - удаляет временную database из Rust test, если `RUSTOK_MIGRATION_SMOKE_KEEP_DB=1` не установлен.
 
 Пример:
 
 ```bash
+RUSTOK_MIGRATION_SMOKE_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres \
+  ./scripts/verify/verify-migration-smoke.sh
+
+RUSTOK_MIGRATION_SMOKE_INCREMENTAL=1 \
 RUSTOK_MIGRATION_SMOKE_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres \
   ./scripts/verify/verify-migration-smoke.sh
 ```

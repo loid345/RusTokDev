@@ -27,6 +27,7 @@ async fn run_postgres_zero_migration_smoke() -> Result<(), Box<dyn std::error::E
 
     let target_url = database_url_from_admin_url(&admin_url, &database_name);
     let keep_database = std::env::var("RUSTOK_MIGRATION_SMOKE_KEEP_DB").as_deref() == Ok("1");
+    let incremental = std::env::var("RUSTOK_MIGRATION_SMOKE_INCREMENTAL").as_deref() == Ok("1");
 
     let admin = connect_postgres(&admin_url)
         .await
@@ -35,7 +36,7 @@ async fn run_postgres_zero_migration_smoke() -> Result<(), Box<dyn std::error::E
     drop_database_if_exists(&admin, &database_name).await?;
     create_database(&admin, &database_name).await?;
 
-    let smoke_result = apply_migrations_and_assert_schema(&target_url).await;
+    let smoke_result = apply_migrations_and_assert_schema(&target_url, incremental).await;
 
     if keep_database {
         eprintln!("Keeping migration smoke database '{database_name}' at {target_url}");
@@ -48,14 +49,19 @@ async fn run_postgres_zero_migration_smoke() -> Result<(), Box<dyn std::error::E
 
 async fn apply_migrations_and_assert_schema(
     target_url: &str,
+    incremental: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let db = connect_postgres(target_url)
         .await
         .map_err(|error| format!("smoke database must be reachable: {error}"))?;
 
-    Migrator::up(&db, None)
-        .await
-        .map_err(|error| format!("server migrator must apply from zero on PostgreSQL: {error}"))?;
+    if incremental {
+        apply_migrations_incrementally(&db).await?;
+    } else {
+        Migrator::up(&db, None).await.map_err(|error| {
+            format!("server migrator must apply from zero on PostgreSQL: {error}")
+        })?;
+    }
 
     let pending = Migrator::get_pending_migrations(&db)
         .await
@@ -84,6 +90,26 @@ async fn apply_migrations_and_assert_schema(
     }
 
     Ok(())
+}
+
+async fn apply_migrations_incrementally(
+    db: &DatabaseConnection,
+) -> Result<(), Box<dyn std::error::Error>> {
+    loop {
+        let pending = Migrator::get_pending_migrations(db)
+            .await
+            .map_err(|error| format!("pending migration list must be readable: {error}"))?;
+        let Some(next) = pending.first() else {
+            return Ok(());
+        };
+        let next_name = next.name().to_string();
+
+        Migrator::up(db, Some(1)).await.map_err(|error| {
+            format!(
+                "server migrator must apply incremental PostgreSQL migration {next_name}: {error}"
+            )
+        })?;
+    }
 }
 
 async fn connect_postgres(
