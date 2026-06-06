@@ -24,7 +24,7 @@ admin read-side service, native server-function read transport, первые nat
   - inventory admin UI вынесен в explicit `ui/leptos.rs` adapter, вызывает inventory-owned `core`/`api` facade, primary read path идёт через dedicated `admin/src/native.rs` native `#[server]` functions, первый write split представлен native `inventory/variant/set-quantity` и `inventory/variant/adjust-quantity` endpoint-ами с typed `InventoryQuantityWriteResult`; UI targeted set-quantity и +/-1 adjustment controls работают без GraphQL fallback и применяют quantity/in-stock state из write result, а transport boundary держит transitional commerce GraphQL adapter внутри пакета только как native-unavailable read fallback;
   - unit tests покрывают locale fallback, tags extraction, price sale mapping, search normalization и variant title fallback в backend read-side service;
   - compatibility tests фиксируют минимальные поля read model (`inventoryQuantity`, `inventoryPolicy`, `inStock`, variants/translations/feed paging), model serde snapshots для product list/detail, source-level parity между backend DTO/native mapper/transitional GraphQL adapter, сериализацию normalized GraphQL variables, facade request builders и mapping `GraphqlHttpError` → inventory-owned `InventoryTransportError` до выделения dedicated inventory transport;
-  - `admin/tests/boundary.rs` проверяет, что `leptos_graphql`, `GraphqlRequest`, `GraphqlHttpError`, `/api/graphql` и `RUSTOK_GRAPHQL_URL` не попадают в `api`, `core`, `model`, `native` или `ui`, а read/write boundary checks разделяют native read markers и native-only set/adjust quantity write facades и set-quantity/+/-1 adjustment UI без transitional GraphQL fallback.
+  - `admin/tests/boundary.rs` проверяет, что `leptos_graphql`, `GraphqlRequest`, `GraphqlHttpError`, `/api/graphql` и `RUSTOK_GRAPHQL_URL` не попадают в `api`, `core`, `model`, `native` или `ui`, а read/write boundary checks разделяют native read markers, read-only transitional GraphQL adapter/removal criteria и native-only set/adjust quantity write facades и set-quantity/+/-1 adjustment UI без transitional GraphQL fallback.
 - Last verified at (UTC): 2026-06-06T00:00:00Z
 - Owner: `rustok-inventory` module team
 
@@ -63,7 +63,7 @@ admin read-side service, native server-function read transport, первые nat
 - [ ] вынести dedicated inventory read/write transport из umbrella `rustok-commerce` (read path готов; первый write split: native set-quantity/adjust-quantity endpoints);
 - [x] подключить initial inventory admin UI targeted stock operations к inventory-owned set/adjust quantity mutations;
 - [ ] перевести оставшиеся inventory admin UI stock operations на inventory-owned mutations;
-- [ ] покрывать transport parity и stock mutation semantics targeted tests (facade/boundary checks и write-result serde snapshot добавлены для typed set/adjust quantity endpoints; product list/detail serde snapshots и source-level backend DTO/native mapper/transitional adapter parity закрепляют текущий read-model shape).
+- [ ] покрывать transport parity и stock mutation semantics targeted tests (facade/boundary checks и write-result serde snapshot добавлены для typed set/adjust quantity endpoints; product list/detail serde snapshots, source-level backend DTO/native mapper/transitional adapter parity и read-only transitional adapter/removal-criteria boundary check закрепляют текущий read-model shape и отсутствие GraphQL write fallback).
 
 ### 3. Availability hardening
 

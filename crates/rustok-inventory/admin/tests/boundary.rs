@@ -223,6 +223,45 @@ fn ui_stock_quantity_controls_use_inventory_api_facade_only() {
 }
 
 #[test]
+fn transitional_graphql_adapter_is_read_only_with_documented_removal_criteria() {
+    let transport = read_source("src/transport.rs");
+    let readme = read_source("README.md");
+
+    for marker in ["const BOOTSTRAP_QUERY", "const PRODUCTS_QUERY", "const PRODUCT_QUERY"] {
+        assert!(
+            transport.contains(marker),
+            "transitional GraphQL adapter must keep read-only query marker `{marker}`"
+        );
+    }
+
+    for forbidden in [
+        "mutation ",
+        "Mutation",
+        "setQuantity",
+        "adjustQuantity",
+        "setVariantQuantity",
+        "adjustVariantQuantity",
+    ] {
+        assert!(
+            !transport.contains(forbidden),
+            "transitional GraphQL adapter must remain read-only and not contain `{forbidden}`"
+        );
+    }
+
+    for marker in [
+        "Transitional adapter removal criteria",
+        "limited to native-unavailable fallback",
+        "no GraphQL fallback",
+        "remaining dedicated write transport",
+    ] {
+        assert!(
+            readme.contains(marker),
+            "admin README must document transitional adapter removal marker `{marker}`"
+        );
+    }
+}
+
+#[test]
 fn native_read_mapper_and_transitional_adapter_keep_read_model_parity() {
     let model = read_source("src/model.rs");
     let native = read_source("src/native.rs");
