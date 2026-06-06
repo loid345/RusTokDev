@@ -368,6 +368,26 @@ mod tests {
     }
 
     #[test]
+    fn apply_variant_quantity_update_uses_write_result_stock_flag_without_recomputing() {
+        let mut detail = detail_with_variants(vec![variant(true, "deny", 2)]);
+
+        assert!(apply_variant_quantity_update(
+            &mut detail,
+            "variant-2-deny",
+            InventoryQuantityWriteResult {
+                quantity: 3,
+                in_stock: false,
+            },
+        ));
+
+        assert_eq!(detail.variants[0].inventory_quantity, 3);
+        assert!(
+            !detail.variants[0].in_stock,
+            "optimistic refresh must trust the module-owned write result instead of recomputing quantity > 0"
+        );
+    }
+
+    #[test]
     fn normalize_optional_trimmed_keeps_non_blank_and_drops_blank_values() {
         assert_eq!(
             normalize_optional_trimmed(Some("  value  ".to_string())),
