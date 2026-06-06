@@ -61,9 +61,9 @@ admin read-side service, native server-function read transport, первые nat
 - [x] добавить inventory-owned core/read facade и explicit Leptos adapter для admin UI, изолировав текущий commerce GraphQL доступ в transitional adapter-е и закрепив это boundary test-ом;
 - [x] подключить dedicated inventory read transport/native `#[server]` path к backend `AdminInventoryReadService`;
 - [ ] вынести dedicated inventory read/write transport из umbrella `rustok-commerce` (read path готов; первый write split: native set-quantity/adjust-quantity/reserve-quantity endpoints);
-- [x] подключить initial inventory admin UI targeted stock operations к inventory-owned set/adjust quantity mutations;
-- [ ] перевести оставшиеся inventory admin UI stock operations на inventory-owned mutations;
-- [ ] покрывать transport parity и stock mutation semantics targeted tests (facade/boundary checks и write-result serde snapshot добавлены для typed set/adjust quantity endpoints; product list/detail serde snapshots, source-level backend DTO/native mapper/transitional adapter parity и read-only transitional adapter/removal-criteria boundary check закрепляют текущий read-model shape и отсутствие GraphQL write fallback).
+- [x] подключить initial inventory admin UI targeted stock operations к inventory-owned set/adjust/reserve quantity mutations;
+- [ ] перевести оставшиеся inventory admin UI stock operations beyond set/adjust/reserve на inventory-owned mutations;
+- [ ] покрывать transport parity и stock mutation semantics targeted tests (facade/boundary checks и write-result serde snapshot добавлены для typed set/adjust/reserve quantity endpoints; product list/detail serde snapshots, source-level backend DTO/native mapper/transitional adapter parity и read-only transitional adapter/removal-criteria boundary check закрепляют текущий read-model shape и отсутствие GraphQL write fallback).
 
 ### 3. Availability hardening
 
