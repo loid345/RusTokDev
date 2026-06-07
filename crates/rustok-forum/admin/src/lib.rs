@@ -719,6 +719,7 @@ fn CategoriesPage(
     on_reset: Callback<()>,
 ) -> impl IntoView {
     let ui_locale = use_context::<UiRouteContext>().unwrap_or_default().locale;
+    let host_locale_for_seo = ui_locale.clone().unwrap_or_default();
     let matrix_label = t(
         ui_locale.as_deref(),
         "forum.categories.matrixLabel",
@@ -1018,7 +1019,11 @@ fn CategoriesPage(
                     <SeoEntityPanel
                         target_kind=SeoTargetSlug::new(seo_builtin_slug::FORUM_CATEGORY).expect("builtin SEO target slug")
                         target_id=Signal::derive(move || editing_id.get())
-                        locale=Signal::derive(move || locale.get())
+                        locale=Signal::derive({
+                            let host_locale_for_seo = host_locale_for_seo.clone();
+                            move || host_locale_for_seo.clone()
+                        })
+                        show_control_plane_widgets=true
                         panel_title=move || t(
                             locale.get().as_str().into(),
                             "forum.categories.seo.title",
@@ -1070,6 +1075,7 @@ fn TopicsPage(
     on_reset: Callback<()>,
 ) -> impl IntoView {
     let ui_locale = use_context::<UiRouteContext>().unwrap_or_default().locale;
+    let host_locale_for_seo = ui_locale.clone().unwrap_or_default();
     let all_categories_label = t(
         ui_locale.as_deref(),
         "forum.topics.allCategories",
@@ -1456,7 +1462,11 @@ fn TopicsPage(
                 <SeoEntityPanel
                     target_kind=SeoTargetSlug::new(seo_builtin_slug::FORUM_TOPIC).expect("builtin SEO target slug")
                     target_id=Signal::derive(move || editing_id.get())
-                    locale=Signal::derive(move || locale.get())
+                    locale=Signal::derive({
+                        let host_locale_for_seo = host_locale_for_seo.clone();
+                        move || host_locale_for_seo.clone()
+                    })
+                    show_control_plane_widgets=true
                     panel_title=move || t(
                         locale.get().as_str().into(),
                         "forum.topics.seo.title",

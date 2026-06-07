@@ -415,6 +415,7 @@ pub enum SeoEventDeliveryStatus {
     Sent,
     Retry,
     Failed,
+    DeadLetter,
 }
 
 impl SeoEventDeliveryStatus {
@@ -424,6 +425,7 @@ impl SeoEventDeliveryStatus {
             Self::Sent => "sent",
             Self::Retry => "retry",
             Self::Failed => "failed",
+            Self::DeadLetter => "dead_letter",
         }
     }
 }
@@ -434,12 +436,105 @@ pub struct SeoEventDeliverySummary {
     pub sent: i32,
     pub retry: i32,
     pub failed: i32,
+    pub dead_letter: i32,
 }
 
 impl SeoEventDeliverySummary {
     pub fn total(&self) -> i32 {
-        self.pending + self.sent + self.retry + self.failed
+        self.pending + self.sent + self.retry + self.failed + self.dead_letter
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SeoControlPlaneWidgetStateKind {
+    Loading,
+    Ready,
+    Empty,
+    PermissionDenied,
+    Error,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SeoControlPlaneWidgetState {
+    pub kind: SeoControlPlaneWidgetStateKind,
+    pub message: Option<String>,
+}
+
+impl SeoControlPlaneWidgetState {
+    pub fn loading() -> Self {
+        Self {
+            kind: SeoControlPlaneWidgetStateKind::Loading,
+            message: None,
+        }
+    }
+
+    pub fn ready() -> Self {
+        Self {
+            kind: SeoControlPlaneWidgetStateKind::Ready,
+            message: None,
+        }
+    }
+
+    pub fn empty() -> Self {
+        Self {
+            kind: SeoControlPlaneWidgetStateKind::Empty,
+            message: None,
+        }
+    }
+
+    pub fn permission_denied(message: Option<String>) -> Self {
+        Self {
+            kind: SeoControlPlaneWidgetStateKind::PermissionDenied,
+            message,
+        }
+    }
+
+    pub fn error(message: Option<String>) -> Self {
+        Self {
+            kind: SeoControlPlaneWidgetStateKind::Error,
+            message,
+        }
+    }
+}
+
+impl Default for SeoControlPlaneWidgetState {
+    fn default() -> Self {
+        Self::ready()
+    }
+}
+
+pub fn derive_control_plane_widget_state(
+    has_target: bool,
+    is_loading: bool,
+    message: Option<&str>,
+) -> SeoControlPlaneWidgetState {
+    if !has_target {
+        return SeoControlPlaneWidgetState::empty();
+    }
+
+    if is_loading {
+        return SeoControlPlaneWidgetState::loading();
+    }
+
+    let Some(message) = message.map(str::trim).filter(|value| !value.is_empty()) else {
+        return SeoControlPlaneWidgetState::ready();
+    };
+
+    let normalized = message.to_ascii_lowercase();
+
+    if normalized.contains("permission_denied")
+        || normalized.contains("unauthenticated")
+        || normalized.contains("forbidden")
+    {
+        return SeoControlPlaneWidgetState::permission_denied(Some(message.to_string()));
+    }
+
+    if normalized.contains("error") || normalized.contains("failed") {
+        return SeoControlPlaneWidgetState::error(Some(message.to_string()));
+    }
+
+    SeoControlPlaneWidgetState::ready()
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -470,16 +565,21 @@ pub struct SeoRemediationHint {
 pub fn remediation_hint_for_issue_code(issue_code: &str) -> SeoRemediationHint {
     let normalized = issue_code.trim().to_ascii_lowercase();
     let (action, reason_key) = match normalized.as_str() {
-        "duplicate_canonical_url" | "fallback_only" | "cross_link_gap" => {
+        "duplicate_canonical_url"
+        | "fallback_only"
+        | "cross_link_gap"
+        | "missing_hreflang"
+        | "missing_x_default_hreflang" => {
             (SeoRemediationAction::OpenBulkJob, "bulk_consistency_fix")
         }
-        "missing_sitemap_candidate" | "index_delivery_failed" | "index_delivery_dead_letter" => {
+        "missing_sitemap_candidate"
+        | "index_delivery_failed"
+        | "index_delivery_dead_letter"
+        | "canonical_points_to_redirect_chain"
+        | "canonical_redirect_loop" => {
             (SeoRemediationAction::RunReindex, "index_sync_required")
         }
-        _ => (
-            SeoRemediationAction::OpenEntityEditor,
-            "entity_metadata_fix",
-        ),
+        _ => (SeoRemediationAction::OpenEntityEditor, "entity_metadata_fix"),
     };
 
     SeoRemediationHint {
@@ -509,7 +609,8 @@ fn non_empty_option(value: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        remediation_hint_for_issue_code, SeoEntityForm, SeoEventDeliverySummary,
+        derive_control_plane_widget_state, remediation_hint_for_issue_code,
+        SeoControlPlaneWidgetStateKind, SeoEntityForm, SeoEventDeliverySummary,
         SeoMetaTranslationView, SeoMetaView, SeoRecommendation, SeoRemediationAction,
     };
     use rustok_seo_targets::{builtin_slug as seo_builtin_slug, SeoTargetSlug};
@@ -771,12 +872,44 @@ mod tests {
             SeoRemediationAction::OpenBulkJob,
         );
         assert_eq!(
+            remediation_hint_for_issue_code("missing_hreflang").action,
+            SeoRemediationAction::OpenBulkJob,
+        );
+        assert_eq!(
             remediation_hint_for_issue_code("missing_sitemap_candidate").action,
+            SeoRemediationAction::RunReindex,
+        );
+        assert_eq!(
+            remediation_hint_for_issue_code("canonical_redirect_loop").action,
             SeoRemediationAction::RunReindex,
         );
         assert_eq!(
             remediation_hint_for_issue_code("missing_title").action,
             SeoRemediationAction::OpenEntityEditor,
+        );
+    }
+
+    #[test]
+    fn derive_control_plane_widget_state_uses_shared_contract() {
+        assert_eq!(
+            derive_control_plane_widget_state(false, false, None).kind,
+            SeoControlPlaneWidgetStateKind::Empty,
+        );
+        assert_eq!(
+            derive_control_plane_widget_state(true, true, None).kind,
+            SeoControlPlaneWidgetStateKind::Loading,
+        );
+        assert_eq!(
+            derive_control_plane_widget_state(true, false, Some("PERMISSION_DENIED: seo:manage")).kind,
+            SeoControlPlaneWidgetStateKind::PermissionDenied,
+        );
+        assert_eq!(
+            derive_control_plane_widget_state(true, false, Some("SEO replay failed")).kind,
+            SeoControlPlaneWidgetStateKind::Error,
+        );
+        assert_eq!(
+            derive_control_plane_widget_state(true, false, Some("SEO metadata saved")).kind,
+            SeoControlPlaneWidgetStateKind::Ready,
         );
     }
 
@@ -787,8 +920,9 @@ mod tests {
             sent: 5,
             retry: 1,
             failed: 3,
+            dead_letter: 1,
         };
 
-        assert_eq!(summary.total(), 11);
+        assert_eq!(summary.total(), 12);
     }
 }

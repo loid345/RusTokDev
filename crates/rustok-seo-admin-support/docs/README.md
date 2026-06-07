@@ -14,8 +14,10 @@
 - simple completeness scoring и form/view-model helper-ы;
 - canonical host-locale consumption без package-local locale input: panel берёт effective locale из owner-module context,
   canonicalizes BCP47-like tags и не inventит свой fallback chain;
-- reusable diagnostics/widgets layer: snippet preview, recommendations card и summary tiles можно переиспользовать
-  в owner-module layouts без возврата к central SEO hub;
+- reusable diagnostics/widgets layer: snippet preview, recommendations card, delivery/remediation cards и state notice
+  можно переиспользовать в owner-module layouts без возврата к central SEO hub;
+- shared control-plane widget state contract (`loading/ready/empty/permission_denied/error`) для единых
+  loading/error/permission/empty состояний SEO control-plane виджетов;
 - owner-module integration seam между `rustok-seo` runtime и `pages/product/blog/forum` admin packages.
 
 ## Интеграция
