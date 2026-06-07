@@ -277,7 +277,7 @@ fn ui_stock_quantity_controls_use_inventory_api_facade_only() {
 }
 
 #[test]
-fn transitional_graphql_adapter_removal_is_documented() {
+fn native_only_graphql_adapter_removal_is_documented() {
     let readme = read_source("README.md");
 
     for marker in [
