@@ -1,22 +1,22 @@
 # План реализации `rustok-seo`
 
-Статус: SEO Suite v1 собран как optional platform module. Phase A–C (templates/bulk/diagnostics/schema/cross-link/image boundary) закрыты по baseline. Phase D перешла в execution wave **D6–D9 (host integrations + verification + runbooks)** после закрытия D5 replay/control-plane foundation.
+Статус: SEO Suite v1 собран как optional platform module. Phase A–C (templates/bulk/diagnostics/schema/cross-link/image boundary) закрыты по baseline. В Phase D закрыт полный D6 execution пакет; активный фокус смещён на **D7–D9 (storefront parity + verification + runbooks)**.
 
 ## Execution checkpoint
 
-- Current phase: `phase_d7_renderer_parity_snapshots`
-- Last checkpoint: Закрыт grouped batch D6.1+D6.3+D6.5 (v1 additive): `rustok-seo-admin` получил index delivery observability pane (summary/cursor timeline/failure drilldown + explicit repair/replay confirmations), Leptos server-function transport для index tracking/replay, DTO расширен `failure_samples`, `apps/next-admin` получил operator route `/dashboard/seo` с replay actions, semantic error handling (`BAD_USER_INPUT`/`PERMISSION_DENIED`/`NOT_FOUND`) и telemetry hooks (`seo-operator-action`).
-- Next step: Закрыть D6.2/D6.4 как единый execution пакет — reusable remediation widgets в `rustok-seo-admin-support` + owner-module wiring (`pages/product/blog/forum`) без переноса ownership экранов в central SEO hub.
+- Current phase: `phase_d7_storefront_next_runtime_parity`
+- Last checkpoint: Закрыт grouped batch D6.2+D6.4 (v1 additive): `rustok-seo-admin-support` получил reusable control-plane виджеты (`SeoControlPlaneWidgets`) с typed remediation mapping (`issue_code -> action`) и единым state-contract (`loading/ready/empty/permission_denied/error`), owner wiring обновлён для `pages/product/blog/forum` (включены control-plane widgets и host-locale-only contract через `UiRouteContext.locale` без package-local fallback chains).
+- Next step: Закрыть D7.1+D7.2 как единый execution пакет — uniform consume flow в `apps/storefront` + runtime-driven `robots.ts`/`sitemap.ts` и shared Next adapter semantics в `apps/next-frontend`.
 - Open blockers:
-  - Нужен согласованный UX flow replay/remediation между `rustok-seo-admin`, `rustok-seo-admin-support` и owner-module admin surfaces (`pages/product/blog/forum`).
   - Для D7 route parity в `apps/next-frontend` нужен явный route ownership список beyond home route.
+  - Для D7.4 нужно согласовать fixture-set допустимых long-tail metadata differences между Rust storefront и Next adapter.
 - Hand-off notes for next agent:
   - Не обходить boundary `MediaImageDescriptor` и existing `SeoPageContext` contract.
   - REST/GraphQL расширять только additive-изменениями в стабильном `v1`.
   - Для delivery tracker держать invariant: один idempotency key = один фактический state transition.
   - Для replay mode сохранять forward-only semantics (`not_started -> repair_only -> replay_requested -> replaying -> replay_completed`) без backward transitions.
   - Для REST parity fallback в Next admin не возвращаться к blanket `catch {}`: semantic ошибки (`BAD_USER_INPUT`/`PERMISSION_DENIED`) должны пробрасываться в UI.
-- Last updated at (UTC): 2026-06-07T17:45:00Z
+- Last updated at (UTC): 2026-06-07T22:40:00Z
 
 ## FFA/FBA status block
 
@@ -59,7 +59,7 @@
   - D3 закрыт: SEO->index adapter seam live (`Seo*` events -> `index.reindex_requested`), tenant/kind-scoped triggers и bounded retry/dead-letter tracking в `seo_index_deliveries`;
   - D4 закрыт: REST control-plane parity завершён, включая GraphQL-compatible error envelope для validation/config/not_found/permission сценариев;
   - D5 закрыт: schema/index cursor foundation, repair path и historical replay mode завершены (`run_index_repair_replay` + forward-only cursor replay transitions);
-  - `apps/next-admin` API helper расширен до control-plane read/write surfaces (включая index tracking/replay) и error mapping parity, но host UI observability/remediation widgets и Next storefront runtime parity остаются открытыми.
+  - `apps/next-admin` API helper расширен до control-plane read/write surfaces (включая index tracking/replay) и error mapping parity; owner-side observability/remediation widgets через `rustok-seo-admin-support` и wiring в `pages/product/blog/forum` закрыты, open focus смещён на Next storefront runtime parity.
 
 ## Итог последней exploration-сессии
 
@@ -71,9 +71,9 @@
 - D3 закрыт: SEO->index seam публикует selective `index.reindex_requested` triggers и пишет retry/DLQ tracking в `seo_index_deliveries` с cursor/high-water state в `seo_index_cursors`;
 - D4 закрыт: REST control-plane parity endpoints и GraphQL surfaces дополнены унифицированным error envelope (`errors[].extensions.code`) и Next admin error mapping parity;
 - D5 закрыт: operator-triggered replay path и control-plane surface уже live (`runSeoIndexRepairReplay`, `/api/seo/index/repair-replay`), cursor replay mode удерживает forward-only transitions и покрыт targeted tests;
-- `apps/next-admin` transport helper уже умеет index tracking/replay (REST-first + GraphQL fallback), значит D6 фокус смещён на UI observability/remediation widgets, а не на transport;
+- D6 закрыт end-to-end: owner-side reusable control-plane widgets + typed remediation mapping + host-locale wiring в `pages/product/blog/forum` + Next admin operator parity;
 - guardrail по Next route coverage остаётся deferred до появления реального route ownership surface beyond home route;
-- для следующего execution wave приоритет: D6 admin/operator integrations -> D7 storefront parity -> D8 verification matrix -> D9 runbooks/docs closeout.
+- для следующего execution wave приоритет: D7 storefront parity -> D8 verification matrix -> D9 runbooks/docs closeout.
 
 ## Контракт совместимости (Phase D freeze)
 
@@ -197,29 +197,29 @@
   - [x] Зафиксировать forward-only replay policy (cursor state machine + tests).
   - [x] Добавить control-plane transport parity для tracking/replay: GraphQL + REST.
 
-- [ ] **Batch D6 — Admin integrations (Leptos admin + next-admin + owner panels)**
+- [x] **Batch D6 — Admin integrations (Leptos admin + next-admin + owner panels)**
   - [x] **D6.1 `rustok-seo/admin` observability surface**
     - [x] Добавить index delivery summary card (`pending/sent/retry/failed/dead_letter`) с tenant/target filter.
     - [x] Добавить cursor timeline card (`initial/high_water/last_repair/replay timestamps`) с forward-only replay badge.
     - [x] Добавить operator actions: `repair_only` и `repair+historical_replay` с explicit confirmation UX.
     - [x] Добавить failure drilldown (last_error sample + retry counters + dead-letter hints).
-  - [ ] **D6.2 `rustok-seo-admin-support` reusable widgets**
+  - [x] **D6.2 `rustok-seo-admin-support` reusable widgets**
 
-    - [ ] Добавить typed remediation mapping (`issue_code -> action`), включая `run_reindex` и `open_bulk_job`.
-    - [ ] Добавить общий error/permission/empty-state contract для SEO control-plane виджетов.
+    - [x] Добавить typed remediation mapping (`issue_code -> action`), включая `run_reindex` и `open_bulk_job`.
+    - [x] Добавить общий error/permission/empty-state contract для SEO control-plane виджетов.
   - [x] **D6.3 host wiring (`apps/next-admin`)**
     - [x] Подключить index tracking/replay API в operator UI (используя существующий REST-first helper).
     - [x] Добавить semantic error handling для replay flows (`BAD_USER_INPUT`, `PERMISSION_DENIED`, `NOT_FOUND`).
     - [x] Добавить telemetry hooks (action started/success/failure) для replay/remediation операций.
-  - [ ] **D6.4 owner-module wiring (`pages/product/blog/forum`)**
+  - [x] **D6.4 owner-module wiring (`pages/product/blog/forum`)**
 
-    - [ ] Проверить locale contract: использовать host effective locale, без package-local fallback цепочек.
+    - [x] Проверить locale contract: использовать host effective locale, без package-local fallback цепочек.
   - [x] **D6.5 transport/contract hardening**
     - [x] Зафиксировать DTO limits/validation для replay input (`limit 1..500`, `target_type content|product`).
     - [x] Добавить anti-regression checks на idempotency key invariants после operator replay.
 
 - [ ] **Batch D7 — Storefront + Next frontend runtime parity**
-  - [x] **D7.1 Rust storefront uniform consume flow**
+  - [ ] **D7.1 Rust storefront uniform consume flow**
     - [ ] Довести `SeoPageContext` consume path до uniform режима (`#[server]` + GraphQL fallback + telemetry labels).
     - [ ] Зафиксировать deterministic fallback order и отказоустойчивость при SEO module disable.
   - [ ] **D7.2 Next runtime SEO migration**
@@ -263,22 +263,22 @@
     - [ ] Зафиксировать Definition of Ready/Done для следующего execution wave.
     - [ ] Сформировать evidence packet (tests + smoke + observability snapshots + owner sign-off).
 
-## Осталось сделать (оценка на 2026-06-02)
+## Осталось сделать (оценка на 2026-06-07)
 
 - **Phase C**: технически закрыт, guardrail по Next route coverage перенесён в D7 rollout criteria.
-- **Phase D**: D1–D5 закрыты; открыты D6–D9.
-- **Незавершённые batch-пункты в Phase D**: **4** (D6, D7, D8, D9).
-- **Execution focus**: сначала D6 operator/admin parity, затем D7 runtime parity, после этого D8 verification и D9 docs/runbooks closeout.
-- **Итого open batch-пунктов в документе**: **4**.
+- **Phase D**: D1–D6 закрыты; открыты D7–D9.
+- **Незавершённые batch-пункты в Phase D**: **3** (D7, D8, D9).
+- **Execution focus**: сначала D7 runtime parity, после этого D8 verification и D9 docs/runbooks closeout.
+- **Итого open batch-пунктов в документе**: **3**.
 
 ## Детализированный execution план на текущую итерацию (максимальный scope)
 
 ### Iteration package P0 (must-have, backend already ready -> host/operator delivery)
 
-- [ ] P0.1 Закрыть D6.1/D6.2 UI widgets package (`rustok-seo/admin` + `rustok-seo-admin-support`).
-- [ ] P0.2 Подключить P0 widgets минимум в один owner module (`pages` как reference), затем распространить на `product/blog/forum`.
-- [ ] P0.3 Закрыть Next admin operator flow для replay/remediation поверх уже существующих API helpers.
-- [ ] P0.4 Добавить targeted tests: widget states + API error mapping + replay action success/failure paths.
+- [x] P0.1 Закрыть D6.1/D6.2 UI widgets package (`rustok-seo/admin` + `rustok-seo-admin-support`).
+- [x] P0.2 Подключить P0 widgets минимум в один owner module (`pages` как reference), затем распространить на `product/blog/forum`.
+- [x] P0.3 Закрыть Next admin operator flow для replay/remediation поверх уже существующих API helpers.
+- [x] P0.4 Добавить targeted tests: widget states + API error mapping + replay action success/failure paths.
 
 ### Iteration package P1 (runtime parity)
 
@@ -294,9 +294,9 @@
 
 ### Cut line (если не влезает весь scope)
 
-1. Минимум для завершения итерации: P0.1 + P0.3 + хотя бы часть P0.4 (API error mapping tests).
-2. Если остаётся время: P0.2 и начало P1.1.
-3. P1.2/P1.3/P2 допускаются как follow-up, но должны быть заранее занесены в checkpoint следующей итерации.
+1. Минимум для завершения следующей итерации: P1.1 + старт P1.2 (fixture scaffolding).
+2. Если остаётся время: закрыть P1.2 и продвинуть P1.3 route ownership guardrail.
+3. P2 допускается как follow-up только после закрытия P1 runtime parity.
 
 ## Проверка
 
@@ -321,7 +321,6 @@
 
 ## Quality backlog
 
-- [ ] Закрыть D6 UI observability/remediation coverage в `rustok-seo-admin` и `rustok-seo-admin-support` с reusable contract tests.
 - [ ] Закрыть D7 runtime parity доказательствами Rust storefront vs Next metadata adapter.
 - [ ] Закрыть D8 verification matrix с реальным CI evidence packet.
 - [ ] Зафиксировать D9 runbooks и operational remediation playbooks.

@@ -32,6 +32,7 @@ pub fn PagesAdmin() -> impl IntoView {
     let token = use_token();
     let tenant = use_tenant();
     let default_locale = route_context.locale.clone().unwrap_or_default();
+    let host_locale_for_seo = route_context.locale.clone().unwrap_or_default();
     let badge_text = t(route_context.locale.as_deref(), "pages.badge", "pages");
     let title_text = t(
         route_context.locale.as_deref(),
@@ -1034,7 +1035,11 @@ pub fn PagesAdmin() -> impl IntoView {
                     <SeoEntityPanel
                         target_kind=SeoTargetSlug::new(seo_builtin_slug::PAGE).expect("builtin SEO target slug")
                         target_id=Signal::derive(move || editing_page_id.get())
-                        locale=Signal::derive(move || locale.get())
+                        locale=Signal::derive({
+                            let host_locale_for_seo = host_locale_for_seo.clone();
+                            move || host_locale_for_seo.clone()
+                        })
+                        show_control_plane_widgets=true
                         panel_title=move || t(locale.get().as_str().into(), "pages.seo.title", "Page SEO")
                         panel_subtitle=move || t(
                             locale.get().as_str().into(),

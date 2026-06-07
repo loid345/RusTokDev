@@ -1,5 +1,8 @@
 use crate::locale::locale_primary_language;
-use crate::model::{SeoEventDeliveryStatus, SeoRecommendation, SeoRemediationAction};
+use crate::model::{
+    SeoControlPlaneWidgetStateKind, SeoEventDeliveryStatus, SeoRecommendation,
+    SeoRemediationAction,
+};
 
 pub(crate) fn tr(locale: Option<&str>, en: &str, ru: &str) -> String {
     if is_russian(locale) {
@@ -80,7 +83,70 @@ pub(crate) fn delivery_status_label(
         SeoEventDeliveryStatus::Sent => tr(locale, "Sent", "Отправлено"),
         SeoEventDeliveryStatus::Retry => tr(locale, "Retry", "Повтор"),
         SeoEventDeliveryStatus::Failed => tr(locale, "Failed", "Ошибка"),
+        SeoEventDeliveryStatus::DeadLetter => tr(locale, "Dead letter", "Dead letter"),
     }
+}
+
+pub(crate) fn control_plane_state_title(
+    locale: Option<&str>,
+    kind: SeoControlPlaneWidgetStateKind,
+) -> String {
+    match kind {
+        SeoControlPlaneWidgetStateKind::Loading => {
+            tr(locale, "Control-plane status", "Статус control-plane")
+        }
+        SeoControlPlaneWidgetStateKind::Ready => {
+            tr(locale, "Control-plane status", "Статус control-plane")
+        }
+        SeoControlPlaneWidgetStateKind::Empty => {
+            tr(locale, "No control-plane data", "Нет данных control-plane")
+        }
+        SeoControlPlaneWidgetStateKind::PermissionDenied => {
+            tr(locale, "Permission required", "Нужны права доступа")
+        }
+        SeoControlPlaneWidgetStateKind::Error => tr(locale, "Widget error", "Ошибка виджета"),
+    }
+}
+
+pub(crate) fn control_plane_state_body(
+    locale: Option<&str>,
+    kind: SeoControlPlaneWidgetStateKind,
+) -> String {
+    match kind {
+        SeoControlPlaneWidgetStateKind::Loading => tr(
+            locale,
+            "Loading SEO control-plane data.",
+            "Загрузка данных SEO control-plane.",
+        ),
+        SeoControlPlaneWidgetStateKind::Ready => tr(
+            locale,
+            "Delivery and remediation widgets are ready.",
+            "Виджеты delivery/remediation готовы.",
+        ),
+        SeoControlPlaneWidgetStateKind::Empty => tr(
+            locale,
+            "Select an entity to see SEO control-plane widgets.",
+            "Выберите сущность, чтобы увидеть SEO control-plane виджеты.",
+        ),
+        SeoControlPlaneWidgetStateKind::PermissionDenied => tr(
+            locale,
+            "You do not have access to SEO control-plane widgets for this tenant.",
+            "У вас нет доступа к SEO control-plane виджетам для этого tenant.",
+        ),
+        SeoControlPlaneWidgetStateKind::Error => tr(
+            locale,
+            "Control-plane widgets are temporarily unavailable.",
+            "Control-plane виджеты временно недоступны.",
+        ),
+    }
+}
+
+pub(crate) fn remediation_empty_label(locale: Option<&str>) -> String {
+    tr(
+        locale,
+        "No remediation issue selected.",
+        "Issue для remediation не выбран.",
+    )
 }
 
 pub(crate) fn remediation_action_label(
@@ -170,10 +236,13 @@ fn is_russian(locale: Option<&str>) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        delivery_status_label, recommendations_count_label, remediation_action_label,
+        control_plane_state_body, control_plane_state_title, delivery_status_label,
+        recommendations_count_label, remediation_action_label, remediation_empty_label,
         remediation_reason, source_label, tr, validation_error, working_label,
     };
-    use crate::model::{SeoEventDeliveryStatus, SeoRemediationAction};
+    use crate::model::{
+        SeoControlPlaneWidgetStateKind, SeoEventDeliveryStatus, SeoRemediationAction,
+    };
 
     #[test]
     fn tr_uses_primary_language_for_russian_locales() {
@@ -207,12 +276,32 @@ mod tests {
             "Повтор"
         );
         assert_eq!(
+            delivery_status_label(Some("en"), SeoEventDeliveryStatus::DeadLetter),
+            "Dead letter"
+        );
+        assert_eq!(
             remediation_action_label(Some("en"), SeoRemediationAction::RunReindex),
             "Run reindex"
         );
         assert_eq!(
             remediation_reason(Some("en"), "index_sync_required"),
             "Index state is out-of-sync and needs replay/reindex."
+        );
+        assert_eq!(
+            remediation_empty_label(Some("ru")),
+            "Issue для remediation не выбран."
+        );
+    }
+
+    #[test]
+    fn control_plane_state_labels_are_localized() {
+        assert_eq!(
+            control_plane_state_title(Some("ru"), SeoControlPlaneWidgetStateKind::PermissionDenied),
+            "Нужны права доступа"
+        );
+        assert_eq!(
+            control_plane_state_body(Some("en"), SeoControlPlaneWidgetStateKind::Loading),
+            "Loading SEO control-plane data."
         );
     }
 }

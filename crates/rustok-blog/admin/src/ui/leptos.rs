@@ -28,6 +28,7 @@ pub fn BlogAdmin() -> impl IntoView {
     let route_context = use_context::<UiRouteContext>().unwrap_or_default();
     let ui_locale = route_context.locale.clone();
     let seo_locale = ui_locale.clone();
+    let host_locale_for_seo = ui_locale.clone().unwrap_or_default();
     let selected_post_query = use_route_query_value(AdminQueryKey::PostId.as_str());
     let query_writer = use_route_query_writer();
     let token = use_token();
@@ -724,7 +725,11 @@ pub fn BlogAdmin() -> impl IntoView {
                 <SeoEntityPanel
                     target_kind=SeoTargetSlug::new(seo_builtin_slug::BLOG_POST).expect("builtin SEO target slug")
                     target_id=Signal::derive(move || editing_post_id.get())
-                    locale=Signal::derive(move || locale.get())
+                    locale=Signal::derive({
+                        let host_locale_for_seo = host_locale_for_seo.clone();
+                        move || host_locale_for_seo.clone()
+                    })
+                    show_control_plane_widgets=true
                     panel_title=t(seo_locale.as_deref(), "blog.seo.title", "Post SEO")
                     panel_subtitle=t(
                         seo_locale.as_deref(),

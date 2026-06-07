@@ -5,12 +5,17 @@ use leptos_auth::hooks::{use_tenant, use_token};
 use rustok_seo_targets::SeoTargetSlug;
 
 use crate::api;
-use crate::components::{SeoSchemaPreviewCard, SeoSnippetPreviewCard, SeoSummaryTile};
+use crate::components::{
+    SeoControlPlaneWidgets, SeoSchemaPreviewCard, SeoSnippetPreviewCard, SeoSummaryTile,
+};
 use crate::i18n::{
     recommendation, recommendations_count_label, source_label, tr, validation_error, working_label,
 };
 use crate::locale::normalize_locale_tag;
-use crate::model::{validate_target_id, SeoCompletenessReport, SeoEntityForm, SeoMetaView};
+use crate::model::{
+    derive_control_plane_widget_state, validate_target_id, SeoCompletenessReport, SeoEntityForm,
+    SeoEventDeliverySummary, SeoMetaView,
+};
 
 #[component]
 pub fn SeoEntityPanel(
@@ -20,6 +25,7 @@ pub fn SeoEntityPanel(
     #[prop(optional, into)] panel_title: Option<TextProp>,
     #[prop(optional, into)] panel_subtitle: Option<TextProp>,
     #[prop(optional, into)] empty_message: Option<TextProp>,
+    #[prop(optional, default = false)] show_control_plane_widgets: bool,
 ) -> impl IntoView {
     let token = use_token();
     let tenant = use_tenant();
@@ -156,6 +162,72 @@ pub fn SeoEntityPanel(
     });
 
     let completeness = Memo::new(move |_| form.get().completeness_report());
+    let control_plane_state = Signal::derive(move || {
+        derive_control_plane_widget_state(
+            target_id
+                .get()
+                .map(|value| !value.trim().is_empty())
+                .unwrap_or(false),
+            busy_key.get().as_deref() == Some("load"),
+            status_message.get().as_deref(),
+        )
+    });
+    let control_plane_summary = Signal::derive(move || {
+        let mut summary = SeoEventDeliverySummary::default();
+        if busy_key.get().is_some() {
+            summary.pending = 1;
+            return summary;
+        }
+
+        if loaded_meta.get().is_some() {
+            summary.sent = 1;
+        }
+
+        if let Some(message) = status_message.get() {
+            let normalized = message.to_ascii_lowercase();
+            if normalized.contains("permission_denied") || normalized.contains("unauthenticated") {
+                summary.dead_letter = 1;
+            } else if normalized.contains("error") || normalized.contains("failed") {
+                summary.failed = 1;
+            }
+        }
+
+        summary
+    });
+    let control_plane_issue_code = Signal::derive(move || {
+        if target_id
+            .get()
+            .map(|value| value.trim().is_empty())
+            .unwrap_or(true)
+        {
+            return None;
+        }
+
+        if loaded_meta.get().is_none() {
+            return Some("fallback_only".to_string());
+        }
+
+        let report = completeness.get();
+        if report
+            .recommendations
+            .iter()
+            .any(|item| matches!(item, crate::model::SeoRecommendation::SetCanonicalUrl))
+        {
+            return Some("missing_sitemap_candidate".to_string());
+        }
+
+        if report.recommendations.iter().any(|item| {
+            matches!(
+                item,
+                crate::model::SeoRecommendation::AddMetaDescription
+                    | crate::model::SeoRecommendation::AddSeoTitle
+            )
+        }) {
+            return Some("missing_title".to_string());
+        }
+
+        None
+    });
     let save_target_kind = target_kind.clone();
     let save_meta = Callback::new(move |ev: SubmitEvent| {
         ev.prevent_default();
@@ -288,6 +360,14 @@ pub fn SeoEntityPanel(
                         completeness=completeness
                         locale=locale
                     />
+                    <Show when=move || show_control_plane_widgets>
+                        <SeoControlPlaneWidgets
+                            state=control_plane_state
+                            summary=control_plane_summary
+                            issue_code=control_plane_issue_code
+                            locale=locale
+                        />
+                    </Show>
                     <SeoSnippetPreviewCard form=form locale=locale />
 
                     <form class="space-y-5" on:submit=move |ev| save_meta.run(ev)>

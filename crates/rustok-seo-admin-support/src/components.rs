@@ -1,11 +1,13 @@
 use leptos::prelude::*;
 
 use crate::i18n::{
-    delivery_status_label, recommendation, remediation_action_label, remediation_reason, tr,
+    control_plane_state_body, control_plane_state_title, delivery_status_label, recommendation,
+    remediation_action_label, remediation_empty_label, remediation_reason, tr,
 };
 use crate::model::{
-    SeoCompletenessReport, SeoEntityForm, SeoEventDeliveryStatus, SeoEventDeliverySummary,
-    SeoRemediationHint,
+    remediation_hint_for_issue_code, SeoCompletenessReport, SeoControlPlaneWidgetState,
+    SeoControlPlaneWidgetStateKind, SeoEntityForm, SeoEventDeliveryStatus,
+    SeoEventDeliverySummary, SeoRemediationHint,
 };
 
 #[component]
@@ -273,6 +275,30 @@ pub fn SeoRecommendationsCard(
 
 
 #[component]
+pub fn SeoControlPlaneWidgetStateCard(
+    state: Signal<SeoControlPlaneWidgetState>,
+    locale: Signal<String>,
+) -> impl IntoView {
+    view! {
+        <article class="rounded-2xl border border-border bg-background/70 p-4 md:col-span-2 xl:col-span-2">
+            <h4 class="text-sm font-semibold text-card-foreground">
+                {move || control_plane_state_title(Some(locale.get().as_str()), state.get().kind)}
+            </h4>
+            <p class="mt-2 text-sm text-muted-foreground">
+                {move || {
+                    state
+                        .get()
+                        .message
+                        .unwrap_or_else(|| {
+                            control_plane_state_body(Some(locale.get().as_str()), state.get().kind)
+                        })
+                }}
+            </p>
+        </article>
+    }
+}
+
+#[component]
 pub fn SeoDeliveryStatusCards(
     summary: Signal<SeoEventDeliverySummary>,
     locale: Signal<String>,
@@ -282,6 +308,7 @@ pub fn SeoDeliveryStatusCards(
         SeoEventDeliveryStatus::Sent,
         SeoEventDeliveryStatus::Retry,
         SeoEventDeliveryStatus::Failed,
+        SeoEventDeliveryStatus::DeadLetter,
     ];
 
     view! {
@@ -289,7 +316,7 @@ pub fn SeoDeliveryStatusCards(
             <h4 class="text-sm font-semibold text-card-foreground">
                 {move || tr(Some(locale.get().as_str()), "Delivery status", "Статус доставки")}
             </h4>
-            <div class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <div class="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
                 {statuses.into_iter().map(|status| {
                     let status_label = move || delivery_status_label(Some(locale.get().as_str()), status);
                     let status_value = move || {
@@ -299,6 +326,7 @@ pub fn SeoDeliveryStatusCards(
                             SeoEventDeliveryStatus::Sent => summary.sent,
                             SeoEventDeliveryStatus::Retry => summary.retry,
                             SeoEventDeliveryStatus::Failed => summary.failed,
+                            SeoEventDeliveryStatus::DeadLetter => summary.dead_letter,
                         }
                     };
                     view! {
@@ -333,6 +361,71 @@ pub fn SeoRemediationHintCard(
                 {move || format!("issue_code: {}", hint.get().issue_code)}
             </p>
         </article>
+    }
+}
+
+#[component]
+pub fn SeoControlPlaneWidgets(
+    state: Signal<SeoControlPlaneWidgetState>,
+    summary: Signal<SeoEventDeliverySummary>,
+    issue_code: Signal<Option<String>>,
+    locale: Signal<String>,
+) -> impl IntoView {
+    let remediation_hint = Signal::derive(move || {
+        issue_code
+            .get()
+            .map(|code| remediation_hint_for_issue_code(code.as_str()))
+    });
+    let state_for_notice = state;
+    let locale_for_notice = locale;
+    let locale_for_cards = locale;
+    let locale_for_empty_hint = locale;
+    let locale_for_hint_card = locale;
+
+    view! {
+        <div class="grid gap-3 md:grid-cols-2 xl:grid-cols-2">
+            <Show
+                when=move || state.get().kind == SeoControlPlaneWidgetStateKind::Ready
+                fallback=move || {
+                    view! {
+                        <SeoControlPlaneWidgetStateCard
+                            state=state_for_notice
+                            locale=locale_for_notice
+                        />
+                    }
+                }
+            >
+                <SeoDeliveryStatusCards summary=summary locale=locale_for_cards />
+                <Show
+                    when=move || remediation_hint.get().is_some()
+                    fallback=move || {
+                        view! {
+                            <article class="rounded-2xl border border-border bg-background/70 p-4 md:col-span-2 xl:col-span-2">
+                                <h4 class="text-sm font-semibold text-card-foreground">
+                                    {move || tr(
+                                        Some(locale_for_empty_hint.get().as_str()),
+                                        "Remediation hint",
+                                        "Подсказка remediation",
+                                    )}
+                                </h4>
+                                <p class="mt-2 text-sm text-muted-foreground">
+                                    {move || remediation_empty_label(Some(locale_for_empty_hint.get().as_str()))}
+                                </p>
+                            </article>
+                        }
+                    }
+                >
+                    <SeoRemediationHintCard
+                        hint=Signal::derive(move || {
+                            remediation_hint
+                                .get()
+                                .unwrap_or_else(|| remediation_hint_for_issue_code("missing_title"))
+                        })
+                        locale=locale_for_hint_card
+                    />
+                </Show>
+            </Show>
+        </div>
     }
 }
 

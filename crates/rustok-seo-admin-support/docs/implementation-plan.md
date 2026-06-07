@@ -1,20 +1,20 @@
 # План реализации `rustok-seo-admin-support`
 
-Статус: support crate стабилизирован как reusable owner-side SEO UI слой. Следующий execution wave синхронизирован с Phase D SEO-модуля (`D6`, `D8`, `D9`).
+Статус: support crate стабилизирован как reusable owner-side SEO UI слой. D6.1/D6.3 закрыты; execution wave синхронизирован с оставшимся треком (`D6.2`, `D8`, `D9`).
 
 ## Execution checkpoint
 
-- Current phase: `phase_d6_admin_integration_alignment`
-- Last checkpoint: План синхронизирован с текущим состоянием support crate и большим прогоном SEO Phase D; зафиксирован backlog observability/remediation widgets и transport parity для Next admin control-plane.
-- Next step: Закрыть D6.1 — reusable event/delivery status widgets + diagnostics remediation hints для owner-module admin surfaces.
+- Current phase: `phase_d6_transport_parity_followup`
+- Last checkpoint: Закрыт grouped batch D6.1+D6.3: добавлены reusable control-plane widgets (`SeoControlPlaneWidgets`, `SeoControlPlaneWidgetStateCard`), расширен typed remediation mapping (`issue_code -> action`), введён единый state-contract (`loading/ready/empty/permission_denied/error`) и owner-module wiring `pages/product/blog/forum` переведён на host-locale-only contract.
+- Next step: Закрыть D6.2 — transport helpers parity (REST-first + GraphQL fallback) для diagnostics/sitemap/bulk control-plane read surfaces.
 - Open blockers:
-  - В этой VM отсутствует `cargo` в `PATH`, локальные проверки не запускались.
-  - Для полной D6.1 observability/remediation UX всё ещё нужен owner-side UI wiring в `pages/product/blog/forum`.
+  - Для D6.2 нужно согласовать минимальный REST surface в support crate без дублирования heavy client-кода из Next admin.
+  - Для D8 integration coverage потребуется согласованный fixture-набор ошибок permission/validation для Leptos owner panels.
 - Hand-off notes for next agent:
   - Не переносить ownership entity screens в central SEO hub.
   - Поддерживать host-locale contract без package-local fallback chains.
   - Все новые UI виджеты должны работать одинаково для `pages/product/blog/forum`.
-- Last updated at (UTC): 2026-05-30T12:00:00Z
+- Last updated at (UTC): 2026-06-07T22:40:00Z
 
 ## Цель
 
@@ -35,25 +35,25 @@
 
 ## Phase D backlog (SEO integration parity)
 
-- [ ] **D6.1 — Observability/remediation widgets**
-  - [ ] Добавить reusable cards для event delivery status (pending/sent/retry/failed) без жёсткой привязки к конкретному owner module layout.
-  - [ ] Добавить remediation hints для diagnostics issue-кодов с явным action mapping (`open_entity_editor`, `open_bulk_job`, `run_reindex`).
+- [x] **D6.1 — Observability/remediation widgets**
+  - [x] Добавить reusable cards для event delivery status (pending/sent/retry/failed/dead_letter) без жёсткой привязки к конкретному owner module layout.
+  - [x] Добавить remediation hints для diagnostics issue-кодов с явным action mapping (`open_entity_editor`, `open_bulk_job`, `run_reindex`).
 
 - [ ] **D6.2 — Transport helpers parity**
   - [ ] Расширить shared transport layer под REST parity endpoints из SEO Batch D4 (diagnostics summary, bulk job detail/status, sitemap job detail).
   - [ ] Сохранить fallback на текущий GraphQL contract, пока rollout-флаг REST parity выключен.
 
-- [ ] **D6.3 — UX consistency gates**
-  - [ ] Выделить единый visual/state contract для loading/error/permission/empty состояний.
-  - [ ] Привязать permission hints к canonical SEO permission model (`seo:read`, `seo:manage`).
+- [x] **D6.3 — UX consistency gates**
+  - [x] Выделить единый visual/state contract для loading/error/permission/empty состояний.
+  - [x] Привязать permission hints к canonical SEO permission model (`seo:read`, `seo:manage`).
 
 - [ ] **D8 — Verification matrix**
-  - [ ] Unit tests для scoring/remediation mapping и locale wiring.
+  - [x] Unit tests для scoring/remediation mapping и locale wiring.
   - [ ] Integration tests для transport fallback (GraphQL/REST) и error envelope mapping.
   - [ ] Snapshot/smoke tests для reusable cards в owner layouts.
 
 - [ ] **D9 — Docs/DoD sync**
-  - [ ] Обновить crate README/docs с operational guidance для owner modules.
+  - [x] Обновить crate README/docs с operational guidance для owner modules.
   - [ ] Зафиксировать Definition of Done для reusable widget additions.
 
 ## Проверка
@@ -67,6 +67,6 @@
 
 ## Quality backlog
 
-- [ ] Актуализировать test coverage для новых observability/remediation widgets.
+- [ ] Довести integration/snapshot coverage для новых observability/remediation widgets.
 - [ ] Поддерживать transport compatibility matrix GraphQL/REST.
 - [ ] Синхронизировать docs после каждого D6/D8 инкремента.

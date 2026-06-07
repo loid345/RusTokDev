@@ -738,6 +738,7 @@ pub fn ProductAdmin() -> impl IntoView {
                             let effective_locale = effective_locale.clone();
                             move || effective_locale.clone().unwrap_or_default()
                         })
+                        show_control_plane_widgets=true
                         panel_title=t(effective_locale.as_deref(), "product.seo.title", "Product SEO")
                         panel_subtitle=t(
                             effective_locale.as_deref(),

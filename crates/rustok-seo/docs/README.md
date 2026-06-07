@@ -115,7 +115,8 @@ Readiness score считается производным от issue set. Summar
 - `D1` закрыт: contract freeze, compatibility policy (`v1 additive only`) и rollout flags.
 - `D2-D3`: typed SEO events, outbox emission/idempotency, SEO->index consumer seam — закрыто.
 - `D4-D5`: GraphQL/REST parity completion и migrations/backfill/replay policy — закрыто (включая index tracking/replay endpoints `/api/seo/index/tracking`, `/api/seo/index/repair-replay`, GraphQL `seoIndexDeliveryStatus` + `runSeoIndexRepairReplay`).
-- `D6-D7`: Leptos admin + Next admin control-plane parity, owner-side remediation widgets, storefront + Next runtime SEO parity — в работе.
+- `D6` закрыт: owner-side remediation widgets (`rustok-seo-admin-support`), shared widget state contract и host-locale wiring в `pages/product/blog/forum` + Next admin operator parity.
+- `D7`: storefront + Next runtime SEO parity — в работе.
 - `D8-D9`: verification matrix, runbooks, Definition of Ready/Done для следующего execution wave — в работе.
 
 ## Проверка
