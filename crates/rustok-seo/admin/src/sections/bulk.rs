@@ -5,9 +5,9 @@ use rustok_seo::{
 };
 use uuid::Uuid;
 
-use crate::api::{self, ApiError};
+use crate::core::{SeoBulkActionForm, SeoBulkFilterForm};
 use crate::i18n::t;
-use crate::model::{SeoBulkActionForm, SeoBulkFilterForm};
+use crate::transport::{self, ApiError};
 
 #[component]
 pub fn SeoBulkPane(
@@ -600,7 +600,7 @@ fn render_bulk_job(job: SeoBulkJobRecord) -> impl IntoView {
         view! {
             <div class="flex flex-wrap gap-2">
                 {artifacts.into_iter().map(|artifact| {
-                    let path = api::bulk_artifact_download_path(
+                    let path = transport::bulk_artifact_download_path(
                         job.id.to_string().as_str(),
                         artifact.id.to_string().as_str(),
                     );

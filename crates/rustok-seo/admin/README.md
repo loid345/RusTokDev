@@ -25,16 +25,16 @@ Entity-specific SEO authoring now lives in owner-module admin packages.
 
 ## Entry points
 
-- root export: `admin/src/lib.rs`
-- route/query shell: `admin/src/component.rs`
+- root export and composition boundary: `admin/src/lib.rs`
+- framework-agnostic form/view-model/request policy layer: `admin/src/core.rs`
+- module-owned native/server-function transport facade: `admin/src/transport.rs`
+- explicit Leptos render adapter and route/query shell: `admin/src/ui/leptos.rs`
 - section components: `admin/src/sections/`
-- form/view-model layer: `admin/src/model.rs`
-- native server functions: `admin/src/api.rs`
 - locale copy helper: `admin/src/i18n.rs`
 
 ## Interactions
 
 - depends on `rustok-seo` for the service and DTO contracts
 - runs inside `apps/admin` through manifest-driven module discovery
-- keeps the UI package split into `lib/component/model/api/i18n/sections`, so the module-owned admin surface stays route-driven without collapsing back into one monolithic file
+- keeps the UI package split into `core/transport/ui/leptos/sections/i18n`, so the module-owned admin surface has an FFA boundary while staying route-driven and avoiding a monolithic file
 - now owns the full infrastructure control-plane surface for bulk jobs, bulk remediation modes, redirects, sitemaps, robots preview, tenant defaults, SEO templates, and diagnostics

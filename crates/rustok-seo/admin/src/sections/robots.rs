@@ -1,8 +1,8 @@
 use leptos::prelude::*;
 use rustok_seo::SeoRobotsPreviewRecord;
 
-use crate::api::ApiError;
 use crate::i18n::t;
+use crate::transport::ApiError;
 
 #[component]
 pub fn SeoRobotsPane(

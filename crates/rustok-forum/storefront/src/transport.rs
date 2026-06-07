@@ -1,4 +1,4 @@
-use crate::api::{ApiError, fetch_storefront_forum as fetch_via_api};
+use crate::api::{fetch_storefront_forum as fetch_via_api, ApiError};
 use crate::model::StorefrontForumData;
 
 pub async fn fetch_storefront_forum(

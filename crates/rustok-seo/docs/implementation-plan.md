@@ -5,8 +5,8 @@
 ## Execution checkpoint
 
 - Current phase: `phase_d7_storefront_next_runtime_parity`
-- Last checkpoint: Закрыт grouped batch D6.2+D6.4 (v1 additive): `rustok-seo-admin-support` получил reusable control-plane виджеты (`SeoControlPlaneWidgets`) с typed remediation mapping (`issue_code -> action`) и единым state-contract (`loading/ready/empty/permission_denied/error`), owner wiring обновлён для `pages/product/blog/forum` (включены control-plane widgets и host-locale-only contract через `UiRouteContext.locale` без package-local fallback chains).
-- Next step: Закрыть D7.1+D7.2 как единый execution пакет — uniform consume flow в `apps/storefront` + runtime-driven `robots.ts`/`sitemap.ts` и shared Next adapter semantics в `apps/next-frontend`.
+- Last checkpoint: `rustok-seo-admin` переведён с docs-boundary на code-level FFA shape: framework-agnostic control-plane forms/request helpers теперь живут в `admin/src/core.rs`, native/server-function facade — в `admin/src/transport.rs`, а Leptos route/render shell — в `admin/src/ui/leptos.rs`; внешний SEO GraphQL/REST contract не менялся.
+- Next step: Продолжить D7.1+D7.2 как единый execution пакет — uniform consume flow в `apps/storefront` + runtime-driven `robots.ts`/`sitemap.ts` и shared Next adapter semantics в `apps/next-frontend`; параллельно сужать `rustok-seo-admin` Leptos adapter, перенося оставшиеся pure view-model helpers из render path в `admin/src/core.rs`.
 - Open blockers:
   - Для D7 route parity в `apps/next-frontend` нужен явный route ownership список beyond home route.
   - Для D7.4 нужно согласовать fixture-set допустимых long-tail metadata differences между Rust storefront и Next adapter.
@@ -16,20 +16,18 @@
   - Для delivery tracker держать invariant: один idempotency key = один фактический state transition.
   - Для replay mode сохранять forward-only semantics (`not_started -> repair_only -> replay_requested -> replaying -> replay_completed`) без backward transitions.
   - Для REST parity fallback в Next admin не возвращаться к blanket `catch {}`: semantic ошибки (`BAD_USER_INPUT`/`PERMISSION_DENIED`) должны пробрасываться в UI.
-- Last updated at (UTC): 2026-06-07T22:40:00Z
+- Last updated at (UTC): 2026-06-07T11:04:56Z
 
 ## FFA/FBA status block
 
 - FFA status: `in_progress`
 - FBA status: `not_started`
-- Structural shape: `docs_boundary`
+- Structural shape: `core_transport_ui`
 - Last verification evidence:
-  - `cargo xtask module validate seo` *(pass, 2026-05-30)*
-  - `cargo check -p rustok-seo --tests --config profile.dev.debug=0` *(pass, 2026-05-30)*
-  - `cargo test -p rustok-seo services::events::tests --config profile.dev.debug=0` *(pass, 2026-05-30)*
-  - `cargo test -p rustok-events --test canonical_contracts --config profile.dev.debug=0` *(pass, 2026-05-30)*
-  - `cargo fmt --all -- --check` *(warning: repository-wide pre-existing rustfmt drift outside this SEO D2 patch remains)*
-- Scope note: module-owned UI остаётся infrastructure control-plane (`rustok-seo-admin` + owner-side SEO panels в `pages/product/blog/forum`); transport boundary развивается через GraphQL + REST `/api/seo/page-context`, `/api/seo/cross-link-suggestions`, control-plane parity endpoints и унифицированный GraphQL-compatible REST error envelope в рамках Phase D.
+  - `cargo fmt --all -- --check` *(pass, 2026-06-07)*
+  - `cargo check -p rustok-seo-admin --config profile.dev.debug=0` *(pass, 2026-06-07)*
+  - `cargo test -p rustok-seo-admin --lib --config profile.dev.debug=0` *(pass, 2026-06-07)*
+- Scope note: module-owned UI остаётся infrastructure control-plane (`rustok-seo-admin` + owner-side SEO panels в `pages/product/blog/forum`); `rustok-seo-admin` теперь имеет явный `core/transport/ui` FFA split, а transport boundary продолжает развиваться через GraphQL + REST `/api/seo/page-context`, `/api/seo/cross-link-suggestions`, control-plane parity endpoints и унифицированный GraphQL-compatible REST error envelope в рамках Phase D.
 
 ## Область работ
 

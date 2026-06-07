@@ -1,9 +1,9 @@
 use leptos::prelude::*;
 use rustok_seo::{SeoIndexDeliveryStatusRecord, SeoIndexReplayMode};
 
-use crate::api::ApiError;
+use crate::core::SeoIndexReplayForm;
 use crate::i18n::t;
-use crate::model::SeoIndexReplayForm;
+use crate::transport::ApiError;
 
 #[component]
 pub fn SeoIndexPane(
@@ -128,7 +128,37 @@ pub fn SeoIndexPane(
             <Suspense fallback=move || view! { <p class="text-sm text-muted-foreground">"Loading index delivery status..."</p> }>
                 {move || match index_status.get() {
                     Some(Ok(summary)) => {
-                        let has_failures = !summary.failure_samples.is_empty();
+                        let failure_sample_cards = if summary.failure_samples.is_empty() {
+                            view! { <p class="text-sm text-muted-foreground">"No failed/dead-letter samples."</p> }
+                                .into_any()
+                        } else {
+                            view! {
+                                <ul class="space-y-2">
+                                    {summary.failure_samples.into_iter().map(|sample| {
+                                        let is_dead_letter = sample.status == "dead_letter";
+                                        view! {
+                                            <li class="rounded-lg border border-border/80 bg-background/70 px-3 py-2 text-sm">
+                                                <div class="font-medium text-foreground">
+                                                    {format!("{} / {}", sample.target_type, sample.status)}
+                                                </div>
+                                                <div class="mt-1 text-xs text-muted-foreground">
+                                                    {format!("attempts: {} · updated: {}", sample.attempt_count, sample.updated_at.to_rfc3339())}
+                                                </div>
+                                                <div class="mt-1 break-words text-xs text-destructive">
+                                                    {sample.last_error.unwrap_or_else(|| "n/a".to_string())}
+                                                </div>
+                                                <Show when=move || is_dead_letter>
+                                                    <p class="mt-1 text-xs text-amber-700">
+                                                        "Hint: run repair or historical replay after investigating index consumer health."
+                                                    </p>
+                                                </Show>
+                                            </li>
+                                        }
+                                    }).collect_view()}
+                                </ul>
+                            }
+                            .into_any()
+                        };
                         let cursor_cards = if summary.cursors.is_empty() {
                             view! { <p class="text-sm text-muted-foreground">"No cursor timeline yet."</p> }
                                 .into_any()
@@ -205,33 +235,7 @@ pub fn SeoIndexPane(
 
                                     <div class="space-y-3 rounded-xl border border-border/80 bg-background/60 p-4">
                                         <h3 class="text-base font-semibold text-card-foreground">"Failure drilldown"</h3>
-                                        <Show
-                                            when=move || has_failures
-                                            fallback=move || view! { <p class="text-sm text-muted-foreground">"No failed/dead-letter samples."</p> }
-                                        >
-                                            <ul class="space-y-2">
-                                                {summary.failure_samples.into_iter().map(|sample| {
-                                                    view! {
-                                                        <li class="rounded-lg border border-border/80 bg-background/70 px-3 py-2 text-sm">
-                                                            <div class="font-medium text-foreground">
-                                                                {format!("{} / {}", sample.target_type, sample.status)}
-                                                            </div>
-                                                            <div class="mt-1 text-xs text-muted-foreground">
-                                                                {format!("attempts: {} · updated: {}", sample.attempt_count, sample.updated_at.to_rfc3339())}
-                                                            </div>
-                                                            <div class="mt-1 break-words text-xs text-destructive">
-                                                                {sample.last_error.unwrap_or_else(|| "n/a".to_string())}
-                                                            </div>
-                                                            <Show when=move || sample.status == "dead_letter">
-                                                                <p class="mt-1 text-xs text-amber-700">
-                                                                    "Hint: run repair or historical replay after investigating index consumer health."
-                                                                </p>
-                                                            </Show>
-                                                        </li>
-                                                    }
-                                                }).collect_view()}
-                                            </ul>
-                                        </Show>
+                                        {failure_sample_cards}
                                     </div>
                                 </div>
                             </div>
