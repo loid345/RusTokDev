@@ -5,7 +5,7 @@ use rustok_api::{
     AuthContext, RequestContext, TenantContext,
 };
 use rustok_core::{locale_tags_match, Permission};
-use rustok_inventory::inventory_policy_allows_backorder;
+use rustok_inventory::check_variant_availability_for_public_channel;
 use rustok_pricing::PriceResolutionContext;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::Value;
@@ -14,10 +14,7 @@ use uuid::Uuid;
 
 use crate::{
     entities::{price_list, product, product_translation, product_variant, variant_translation},
-    storefront_channel::{
-        is_metadata_visible_for_public_channel,
-        load_available_inventory_for_variant_in_public_channel, normalize_public_channel_slug,
-    },
+    storefront_channel::{is_metadata_visible_for_public_channel, normalize_public_channel_slug},
     storefront_shipping::{
         effective_shipping_profile_slug, enrich_cart_delivery_groups,
         is_shipping_option_compatible_with_profiles, normalize_shipping_profile_slug,
@@ -3341,19 +3338,16 @@ async fn validate_storefront_variant_inventory(
     requested_quantity: i32,
     public_channel_slug: Option<&str>,
 ) -> Result<()> {
-    if inventory_policy_allows_backorder(&variant.inventory_policy) {
-        return Ok(());
-    }
-
-    let available_inventory = load_available_inventory_for_variant_in_public_channel(
+    let available = check_variant_availability_for_public_channel(
         db,
         tenant_id,
-        variant.id,
+        variant,
+        requested_quantity,
         public_channel_slug,
     )
     .await
     .map_err(|err| async_graphql::Error::new(err.to_string()))?;
-    if available_inventory < requested_quantity {
+    if !available {
         return Err(async_graphql::Error::new(format!(
             "Variant {} does not have enough available inventory for the current channel",
             variant.id
