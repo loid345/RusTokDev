@@ -13,7 +13,7 @@ post-v0 rollout policy lifecycle и runtime integration parity.
 
 - Current phase: ffa_admin_split
 - Last checkpoint: Admin-пакет углублён до FFA-структуры: `admin/src/core.rs` владеет policy выбора, `admin/src/transport/mod.rs` владеет facade и fallback policy, `admin/src/transport/native_server_adapter.rs` содержит native server-function endpoints, `admin/src/transport/rest_adapter.rs` содержит REST fallback, `admin/src/ui/leptos.rs` владеет Leptos-рендерингом, а `admin/src/lib.rs` только подключает и реэкспортирует `ChannelAdmin`.
-- Next step: Расширить verifier fixtures/regression tests для `scripts/verify/verify-channel-admin-boundary.mjs`, затем переводить channel admin row к `phase_b_ready` после полного `cargo check`/`cargo test` evidence.
+- Next step: Собрать полный `cargo check`/`cargo test` evidence для `rustok-channel-admin`, затем переводить channel admin row к `phase_b_ready`.
 - Open blockers: None.
 - Hand-off notes for next agent: Держать вызовы channel admin UI за `transport`, а route-selection policy — в `core` или shared route helpers; не возвращать raw transport calls в `ui/leptos.rs`.
 - Last updated at (UTC): 2026-06-07T00:00:00Z
@@ -29,7 +29,8 @@ post-v0 rollout policy lifecycle и runtime integration parity.
   - `crates/rustok-channel/admin/src/transport/mod.rs` содержит module-owned transport facade и fallback policy, `native_server_adapter.rs` содержит server-function endpoints, а `rest_adapter.rs` содержит REST fallback; Leptos adapter больше не импортирует pre-FFA модуль `api`.
   - `crates/rustok-channel/admin/src/ui/leptos.rs` является явным Leptos render adapter и вызывает для channel operations только module-owned transport facade.
   - `scripts/verify/verify-channel-admin-boundary.mjs` закрепляет split без полной Rust-компиляции: отсутствие `api.rs`/legacy `transport.rs`, отсутствие raw transport calls в UI, Leptos-free `core`, и разнесение `#[server]`/`reqwest` по adapter-файлам.
-- Следующий parity step: расширить fixture-based regression tests для `scripts/verify/verify-channel-admin-boundary.mjs` и собрать full Rust evidence перед переводом строки channel admin в `phase_b_ready`.
+  - `scripts/verify/verify-channel-admin-boundary.test.mjs` добавляет fixture-based regression coverage для pass path, legacy `api.rs`, legacy flat `transport.rs`, raw adapter calls из UI и Leptos-specific core regression.
+- Следующий parity step: собрать full Rust evidence (`cargo check`/`cargo test`) перед переводом строки channel admin в `phase_b_ready`.
 
 ## Область работ
 
