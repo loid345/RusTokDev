@@ -9,7 +9,6 @@ use crate::i18n::t;
 use crate::model::{
     CommerceAdminBootstrap, CommerceAdminCartSnapshot, CommerceCartPromotionKind,
     CommerceCartPromotionPreview, CommerceCartPromotionScope, CommerceOrderChange, ShippingProfile,
-    ShippingProfileDraft,
 };
 use crate::{core, transport};
 
@@ -370,7 +369,7 @@ pub fn CommerceAdmin() -> impl IntoView {
                 token_value,
                 tenant_value,
                 bootstrap.current_tenant.id,
-                text_or_none(search_value),
+                core::trimmed_non_empty(search_value.as_str()),
             )
             .await
         },
@@ -393,8 +392,8 @@ pub fn CommerceAdmin() -> impl IntoView {
                 token_value,
                 tenant_value,
                 bootstrap.current_tenant.id,
-                text_or_none(order_id),
-                text_or_none(status),
+                core::trimmed_non_empty(order_id.as_str()),
+                core::trimmed_non_empty(status.as_str()),
             )
             .await
         },
@@ -495,17 +494,16 @@ pub fn CommerceAdmin() -> impl IntoView {
             set_error.set(Some(locale_unavailable_label.clone()));
             return;
         };
-        let draft = ShippingProfileDraft {
-            slug: slug.get_untracked().trim().to_string(),
-            name: name.get_untracked().trim().to_string(),
-            description: description.get_untracked().trim().to_string(),
-            metadata_json: metadata_json.get_untracked().trim().to_string(),
-            locale: submit_locale,
-        };
-        if draft.slug.is_empty() || draft.name.is_empty() {
+        let Some(draft) = core::prepare_shipping_profile_draft(
+            slug.get_untracked().as_str(),
+            name.get_untracked().as_str(),
+            description.get_untracked().as_str(),
+            metadata_json.get_untracked().as_str(),
+            submit_locale,
+        ) else {
             set_error.set(Some(required_label.clone()));
             return;
-        }
+        };
         let token_value = token.get_untracked();
         let tenant_value = tenant.get_untracked();
         let current_id = editing_id.get_untracked();
@@ -999,12 +997,13 @@ fn apply_shipping_profile(
     set_description: WriteSignal<String>,
     set_metadata_json: WriteSignal<String>,
 ) {
-    set_editing_id.set(Some(profile.id.clone()));
+    let state = core::shipping_profile_form_state(profile);
+    set_editing_id.set(state.editing_id);
     set_selected.set(Some(profile.clone()));
-    set_slug.set(profile.slug.clone());
-    set_name.set(profile.name.clone());
-    set_description.set(profile.description.clone().unwrap_or_default());
-    set_metadata_json.set(profile.metadata.clone());
+    set_slug.set(state.slug);
+    set_name.set(state.name);
+    set_description.set(state.description);
+    set_metadata_json.set(state.metadata_json);
 }
 
 fn clear_shipping_profile_form(
@@ -1015,12 +1014,13 @@ fn clear_shipping_profile_form(
     set_description: WriteSignal<String>,
     set_metadata_json: WriteSignal<String>,
 ) {
-    set_editing_id.set(None);
+    let state = core::empty_shipping_profile_form_state();
+    set_editing_id.set(state.editing_id);
     set_selected.set(None);
-    set_slug.set(String::new());
-    set_name.set(String::new());
-    set_description.set(String::new());
-    set_metadata_json.set(String::new());
+    set_slug.set(state.slug);
+    set_name.set(state.name);
+    set_description.set(state.description);
+    set_metadata_json.set(state.metadata_json);
 }
 
 fn summarize_shipping_profile(locale: Option<&str>, profile: &ShippingProfile) -> String {
@@ -1042,15 +1042,6 @@ fn localized_active_label(locale: Option<&str>, active: bool) -> String {
         t(locale, "commerce.common.active", "ACTIVE")
     } else {
         t(locale, "commerce.common.inactive", "INACTIVE")
-    }
-}
-
-fn text_or_none(value: String) -> Option<String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
     }
 }
 
