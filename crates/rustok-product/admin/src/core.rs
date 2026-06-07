@@ -1,6 +1,7 @@
 use crate::i18n::t;
 use crate::model::{
-    ProductDetail, ProductListItem, ProductPricingDetail, ProductTranslation, ShippingProfile,
+    ProductAdminBootstrap, ProductDetail, ProductDraft, ProductListItem, ProductPricingDetail,
+    ProductTranslation, ShippingProfile,
 };
 
 fn locale_tags_match(left: &str, right: &str) -> bool {
@@ -334,6 +335,343 @@ pub(crate) fn build_product_admin_editor_view_model(
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ProductAdminDraftForm {
+    pub locale: Option<String>,
+    pub title: String,
+    pub handle: String,
+    pub description: String,
+    pub seller_id: String,
+    pub vendor: String,
+    pub product_type: String,
+    pub shipping_profile_slug: String,
+    pub sku: String,
+    pub barcode: String,
+    pub currency_code: String,
+    pub amount: String,
+    pub compare_at_amount: String,
+    pub inventory_quantity: i32,
+    pub publish_now: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ProductAdminSaveMode {
+    Create,
+    Update { product_id: String },
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ProductAdminSaveCommand {
+    pub mode: ProductAdminSaveMode,
+    pub tenant_id: String,
+    pub actor_id: String,
+    pub draft: ProductDraft,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ProductAdminSaveValidationError {
+    TitleRequired,
+    LocaleUnavailable,
+    BootstrapUnavailable,
+}
+
+impl ProductAdminSaveValidationError {
+    pub(crate) fn message(&self, locale: Option<&str>) -> String {
+        match self {
+            Self::TitleRequired => t(locale, "product.error.titleRequired", "Title is required."),
+            Self::LocaleUnavailable => t(
+                locale,
+                "product.error.localeUnavailable",
+                "Host locale is unavailable.",
+            ),
+            Self::BootstrapUnavailable => t(
+                locale,
+                "product.error.bootstrapLoading",
+                "Bootstrap is still loading.",
+            ),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ProductAdminEditorFormState {
+    pub editing_id: Option<String>,
+    pub title: String,
+    pub handle: String,
+    pub description: String,
+    pub seller_id: String,
+    pub vendor: String,
+    pub product_type: String,
+    pub shipping_profile_slug: String,
+    pub sku: String,
+    pub barcode: String,
+    pub currency_code: String,
+    pub amount: String,
+    pub compare_at_amount: String,
+    pub inventory_quantity: i32,
+    pub publish_now: bool,
+}
+
+pub(crate) fn empty_product_admin_editor_form_state() -> ProductAdminEditorFormState {
+    ProductAdminEditorFormState {
+        editing_id: None,
+        title: String::new(),
+        handle: String::new(),
+        description: String::new(),
+        seller_id: String::new(),
+        vendor: String::new(),
+        product_type: String::new(),
+        shipping_profile_slug: String::new(),
+        sku: String::new(),
+        barcode: String::new(),
+        currency_code: "USD".to_string(),
+        amount: "0.00".to_string(),
+        compare_at_amount: String::new(),
+        inventory_quantity: 0,
+        publish_now: false,
+    }
+}
+
+pub(crate) fn build_product_admin_editor_form_state(
+    product: &ProductDetail,
+    requested_locale: Option<&str>,
+) -> ProductAdminEditorFormState {
+    let translation = translation_for_locale(&product.translations, requested_locale);
+    let variant = product.variants.first().cloned();
+    let price = variant
+        .as_ref()
+        .and_then(|item| item.prices.first().cloned());
+
+    ProductAdminEditorFormState {
+        editing_id: Some(product.id.clone()),
+        title: translation
+            .as_ref()
+            .map(|item| item.title.clone())
+            .unwrap_or_default(),
+        handle: translation
+            .as_ref()
+            .map(|item| item.handle.clone())
+            .unwrap_or_default(),
+        description: translation
+            .and_then(|item| item.description)
+            .unwrap_or_default(),
+        seller_id: product.seller_id.clone().unwrap_or_default(),
+        vendor: product.vendor.clone().unwrap_or_default(),
+        product_type: product.product_type.clone().unwrap_or_default(),
+        shipping_profile_slug: product.shipping_profile_slug.clone().unwrap_or_default(),
+        sku: variant
+            .as_ref()
+            .and_then(|item| item.sku.clone())
+            .unwrap_or_default(),
+        barcode: variant.and_then(|item| item.barcode).unwrap_or_default(),
+        currency_code: price
+            .as_ref()
+            .map(|item| item.currency_code.clone())
+            .unwrap_or_else(|| "USD".to_string()),
+        amount: price
+            .as_ref()
+            .map(|item| item.amount.clone())
+            .unwrap_or_else(|| "0.00".to_string()),
+        compare_at_amount: price
+            .and_then(|item| item.compare_at_amount)
+            .unwrap_or_default(),
+        inventory_quantity: product
+            .variants
+            .first()
+            .map(|item| item.inventory_quantity)
+            .unwrap_or(0),
+        publish_now: product.status == "ACTIVE",
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ProductAdminStatusTarget {
+    Active,
+    Draft,
+    Archived,
+}
+
+impl ProductAdminStatusTarget {
+    pub(crate) fn as_graphql_status(self) -> &'static str {
+        match self {
+            Self::Active => "ACTIVE",
+            Self::Draft => "DRAFT",
+            Self::Archived => "ARCHIVED",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ProductAdminStatusMutationCommand {
+    pub tenant_id: String,
+    pub actor_id: String,
+    pub product_id: String,
+    pub status: ProductAdminStatusTarget,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ProductAdminStatusMutationValidationError {
+    BootstrapUnavailable,
+}
+
+impl ProductAdminStatusMutationValidationError {
+    pub(crate) fn message(&self, locale: Option<&str>) -> String {
+        match self {
+            Self::BootstrapUnavailable => t(
+                locale,
+                "product.error.bootstrapLoading",
+                "Bootstrap is still loading.",
+            ),
+        }
+    }
+}
+
+pub(crate) fn build_product_admin_status_mutation_command(
+    bootstrap: Option<&ProductAdminBootstrap>,
+    product_id: String,
+    status: ProductAdminStatusTarget,
+) -> Result<ProductAdminStatusMutationCommand, ProductAdminStatusMutationValidationError> {
+    let bootstrap =
+        bootstrap.ok_or(ProductAdminStatusMutationValidationError::BootstrapUnavailable)?;
+
+    Ok(ProductAdminStatusMutationCommand {
+        tenant_id: bootstrap.current_tenant.id.clone(),
+        actor_id: bootstrap.me.id.clone(),
+        product_id,
+        status,
+    })
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ProductAdminDeleteCommand {
+    pub tenant_id: String,
+    pub actor_id: String,
+    pub product_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ProductAdminDeleteValidationError {
+    BootstrapUnavailable,
+}
+
+impl ProductAdminDeleteValidationError {
+    pub(crate) fn message(&self, locale: Option<&str>) -> String {
+        match self {
+            Self::BootstrapUnavailable => t(
+                locale,
+                "product.error.bootstrapLoading",
+                "Bootstrap is still loading.",
+            ),
+        }
+    }
+}
+
+pub(crate) fn build_product_admin_delete_command(
+    bootstrap: Option<&ProductAdminBootstrap>,
+    product_id: String,
+) -> Result<ProductAdminDeleteCommand, ProductAdminDeleteValidationError> {
+    let bootstrap = bootstrap.ok_or(ProductAdminDeleteValidationError::BootstrapUnavailable)?;
+
+    Ok(ProductAdminDeleteCommand {
+        tenant_id: bootstrap.current_tenant.id.clone(),
+        actor_id: bootstrap.me.id.clone(),
+        product_id,
+    })
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ProductAdminDeleteOutcome {
+    Deleted,
+    NotDeleted,
+    TransportError(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ProductAdminDeleteResultViewModel {
+    pub clear_selection: bool,
+    pub refresh: bool,
+    pub error_message: Option<String>,
+}
+
+pub(crate) fn build_product_admin_delete_result_view_model(
+    locale: Option<&str>,
+    deleted_product_id: &str,
+    open_product_id: Option<&str>,
+    outcome: ProductAdminDeleteOutcome,
+) -> ProductAdminDeleteResultViewModel {
+    match outcome {
+        ProductAdminDeleteOutcome::Deleted => ProductAdminDeleteResultViewModel {
+            clear_selection: open_product_id == Some(deleted_product_id),
+            refresh: true,
+            error_message: None,
+        },
+        ProductAdminDeleteOutcome::NotDeleted => ProductAdminDeleteResultViewModel {
+            clear_selection: false,
+            refresh: false,
+            error_message: Some(t(
+                locale,
+                "product.error.deleteReturnedFalse",
+                "Delete returned false.",
+            )),
+        },
+        ProductAdminDeleteOutcome::TransportError(err) => ProductAdminDeleteResultViewModel {
+            clear_selection: false,
+            refresh: false,
+            error_message: Some(format!(
+                "{}: {err}",
+                t(
+                    locale,
+                    "product.error.deleteProduct",
+                    "Failed to delete product",
+                )
+            )),
+        },
+    }
+}
+
+pub(crate) fn build_product_admin_save_command(
+    form: ProductAdminDraftForm,
+    editing_product_id: Option<String>,
+    bootstrap: Option<&ProductAdminBootstrap>,
+) -> Result<ProductAdminSaveCommand, ProductAdminSaveValidationError> {
+    if form.title.trim().is_empty() {
+        return Err(ProductAdminSaveValidationError::TitleRequired);
+    }
+
+    let locale = form
+        .locale
+        .filter(|value| !value.trim().is_empty())
+        .ok_or(ProductAdminSaveValidationError::LocaleUnavailable)?;
+
+    let bootstrap = bootstrap.ok_or(ProductAdminSaveValidationError::BootstrapUnavailable)?;
+
+    Ok(ProductAdminSaveCommand {
+        mode: editing_product_id
+            .filter(|id| !id.trim().is_empty())
+            .map(|product_id| ProductAdminSaveMode::Update { product_id })
+            .unwrap_or(ProductAdminSaveMode::Create),
+        tenant_id: bootstrap.current_tenant.id.clone(),
+        actor_id: bootstrap.me.id.clone(),
+        draft: ProductDraft {
+            locale,
+            title: form.title,
+            handle: form.handle,
+            description: form.description,
+            seller_id: form.seller_id,
+            vendor: form.vendor,
+            product_type: form.product_type,
+            shipping_profile_slug: text_or_none(form.shipping_profile_slug),
+            sku: form.sku,
+            barcode: form.barcode,
+            currency_code: form.currency_code,
+            amount: form.amount,
+            compare_at_amount: form.compare_at_amount,
+            inventory_quantity: form.inventory_quantity,
+            publish_now: form.publish_now,
+        },
+    })
+}
+
 pub(crate) fn format_known_shipping_profiles(
     locale: Option<&str>,
     profiles: &[ShippingProfile],
@@ -389,6 +727,31 @@ pub(crate) fn format_product_meta(
 
 pub(crate) fn format_product_shipping_profile(locale: Option<&str>, slug: &str) -> String {
     t(locale, "product.summary.profileChip", "profile {slug}").replace("{slug}", slug)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ProductAdminListActionLabels {
+    pub edit: String,
+    pub publish: String,
+    pub move_to_draft: String,
+    pub archive: String,
+    pub delete: String,
+}
+
+pub(crate) fn build_product_admin_list_action_labels(
+    locale: Option<&str>,
+) -> ProductAdminListActionLabels {
+    ProductAdminListActionLabels {
+        edit: t(locale, "product.action.edit", "Edit"),
+        publish: t(locale, "product.action.publish", "Publish"),
+        move_to_draft: t(locale, "product.action.moveToDraft", "Move to Draft"),
+        archive: t(locale, "product.action.archive", "Archive"),
+        delete: t(locale, "product.action.delete", "Delete"),
+    }
+}
+
+pub(crate) fn product_admin_list_actions_disabled(is_busy: bool) -> bool {
+    is_busy
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -452,6 +815,272 @@ pub(crate) fn status_badge(status: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::{CurrentTenant, CurrentUser};
+
+    fn admin_bootstrap() -> ProductAdminBootstrap {
+        ProductAdminBootstrap {
+            current_tenant: CurrentTenant {
+                id: "tenant-1".to_string(),
+                slug: "default".to_string(),
+                name: "Default".to_string(),
+            },
+            me: CurrentUser {
+                id: "user-1".to_string(),
+                email: "operator@example.test".to_string(),
+                name: None,
+            },
+        }
+    }
+
+    fn draft_form() -> ProductAdminDraftForm {
+        ProductAdminDraftForm {
+            locale: Some("en".to_string()),
+            title: "Winter coat".to_string(),
+            handle: "winter-coat".to_string(),
+            description: "Warm coat".to_string(),
+            seller_id: "seller-1".to_string(),
+            vendor: "Acme".to_string(),
+            product_type: "coat".to_string(),
+            shipping_profile_slug: " standard ".to_string(),
+            sku: "COAT-1".to_string(),
+            barcode: "123".to_string(),
+            currency_code: "USD".to_string(),
+            amount: "10.00".to_string(),
+            compare_at_amount: String::new(),
+            inventory_quantity: 7,
+            publish_now: true,
+        }
+    }
+
+    #[test]
+    fn product_admin_delete_result_view_model_tracks_success_and_open_selection() {
+        let open = build_product_admin_delete_result_view_model(
+            Some("en"),
+            "product-1",
+            Some("product-1"),
+            ProductAdminDeleteOutcome::Deleted,
+        );
+
+        assert!(open.clear_selection);
+        assert!(open.refresh);
+        assert_eq!(open.error_message, None);
+
+        let other = build_product_admin_delete_result_view_model(
+            Some("en"),
+            "product-1",
+            Some("product-2"),
+            ProductAdminDeleteOutcome::Deleted,
+        );
+        assert!(!other.clear_selection);
+        assert!(other.refresh);
+    }
+
+    #[test]
+    fn product_admin_delete_result_view_model_formats_failures() {
+        let not_deleted = build_product_admin_delete_result_view_model(
+            Some("en"),
+            "product-1",
+            Some("product-1"),
+            ProductAdminDeleteOutcome::NotDeleted,
+        );
+        assert_eq!(
+            not_deleted.error_message,
+            Some("Delete returned false.".to_string())
+        );
+        assert!(!not_deleted.refresh);
+        assert!(!not_deleted.clear_selection);
+
+        let failed = build_product_admin_delete_result_view_model(
+            Some("en"),
+            "product-1",
+            Some("product-1"),
+            ProductAdminDeleteOutcome::TransportError("network".to_string()),
+        );
+        assert_eq!(
+            failed.error_message,
+            Some("Failed to delete product: network".to_string())
+        );
+        assert!(!failed.refresh);
+    }
+
+    #[test]
+    fn product_admin_delete_command_prepares_transport_payload() {
+        let command =
+            build_product_admin_delete_command(Some(&admin_bootstrap()), "product-1".to_string())
+                .expect("delete command");
+
+        assert_eq!(command.tenant_id, "tenant-1");
+        assert_eq!(command.actor_id, "user-1");
+        assert_eq!(command.product_id, "product-1");
+    }
+
+    #[test]
+    fn product_admin_delete_command_validates_bootstrap() {
+        assert_eq!(
+            build_product_admin_delete_command(None, "product-1".to_string()).unwrap_err(),
+            ProductAdminDeleteValidationError::BootstrapUnavailable
+        );
+    }
+
+    #[test]
+    fn product_admin_status_mutation_command_prepares_transport_payload() {
+        let command = build_product_admin_status_mutation_command(
+            Some(&admin_bootstrap()),
+            "product-1".to_string(),
+            ProductAdminStatusTarget::Archived,
+        )
+        .expect("status command");
+
+        assert_eq!(command.tenant_id, "tenant-1");
+        assert_eq!(command.actor_id, "user-1");
+        assert_eq!(command.product_id, "product-1");
+        assert_eq!(command.status.as_graphql_status(), "ARCHIVED");
+    }
+
+    #[test]
+    fn product_admin_status_mutation_command_validates_bootstrap() {
+        assert_eq!(
+            build_product_admin_status_mutation_command(
+                None,
+                "product-1".to_string(),
+                ProductAdminStatusTarget::Draft,
+            )
+            .unwrap_err(),
+            ProductAdminStatusMutationValidationError::BootstrapUnavailable
+        );
+        assert_eq!(
+            ProductAdminStatusTarget::Active.as_graphql_status(),
+            "ACTIVE"
+        );
+        assert_eq!(ProductAdminStatusTarget::Draft.as_graphql_status(), "DRAFT");
+    }
+
+    #[test]
+    fn product_admin_save_command_prepares_create_draft_in_core() {
+        let command =
+            build_product_admin_save_command(draft_form(), None, Some(&admin_bootstrap()))
+                .expect("save command");
+
+        assert!(matches!(command.mode, ProductAdminSaveMode::Create));
+        assert_eq!(command.tenant_id, "tenant-1");
+        assert_eq!(command.actor_id, "user-1");
+        assert_eq!(command.draft.locale, "en");
+        assert_eq!(command.draft.title, "Winter coat");
+        assert_eq!(
+            command.draft.shipping_profile_slug,
+            Some("standard".to_string())
+        );
+        assert!(command.draft.publish_now);
+    }
+
+    #[test]
+    fn product_admin_save_command_prepares_update_mode_and_validation() {
+        let command = build_product_admin_save_command(
+            draft_form(),
+            Some("product-1".to_string()),
+            Some(&admin_bootstrap()),
+        )
+        .expect("save command");
+
+        assert!(matches!(
+            command.mode,
+            ProductAdminSaveMode::Update { ref product_id } if product_id == "product-1"
+        ));
+
+        let mut missing_title = draft_form();
+        missing_title.title = "  ".to_string();
+        assert_eq!(
+            build_product_admin_save_command(missing_title, None, Some(&admin_bootstrap()))
+                .unwrap_err(),
+            ProductAdminSaveValidationError::TitleRequired
+        );
+
+        let mut missing_locale = draft_form();
+        missing_locale.locale = None;
+        assert_eq!(
+            build_product_admin_save_command(missing_locale, None, Some(&admin_bootstrap()))
+                .unwrap_err(),
+            ProductAdminSaveValidationError::LocaleUnavailable
+        );
+
+        assert_eq!(
+            build_product_admin_save_command(draft_form(), None, None).unwrap_err(),
+            ProductAdminSaveValidationError::BootstrapUnavailable
+        );
+    }
+
+    #[test]
+    fn product_admin_editor_form_state_maps_empty_defaults() {
+        let state = empty_product_admin_editor_form_state();
+
+        assert_eq!(state.editing_id, None);
+        assert_eq!(state.currency_code, "USD");
+        assert_eq!(state.amount, "0.00");
+        assert_eq!(state.inventory_quantity, 0);
+        assert!(!state.publish_now);
+    }
+
+    #[test]
+    fn product_admin_editor_form_state_maps_product_detail() {
+        let product = ProductDetail {
+            id: "product-1".to_string(),
+            status: "ACTIVE".to_string(),
+            seller_id: Some("seller-1".to_string()),
+            vendor: Some("Acme".to_string()),
+            product_type: Some("coat".to_string()),
+            shipping_profile_slug: Some("standard".to_string()),
+            tags: Vec::new(),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+            published_at: Some("2026-01-01T00:00:00Z".to_string()),
+            translations: vec![ProductTranslation {
+                locale: "en".to_string(),
+                title: "Winter coat".to_string(),
+                handle: "winter-coat".to_string(),
+                description: Some("Warm coat".to_string()),
+                meta_title: None,
+                meta_description: None,
+            }],
+            options: Vec::new(),
+            variants: vec![crate::model::ProductVariant {
+                id: "variant-1".to_string(),
+                sku: Some("COAT-1".to_string()),
+                barcode: Some("123".to_string()),
+                shipping_profile_slug: None,
+                title: "Default".to_string(),
+                option1: None,
+                option2: None,
+                option3: None,
+                prices: vec![crate::model::ProductPrice {
+                    currency_code: "EUR".to_string(),
+                    amount: "12.00".to_string(),
+                    compare_at_amount: Some("15.00".to_string()),
+                    on_sale: true,
+                }],
+                inventory_quantity: 9,
+                inventory_policy: "DENY".to_string(),
+                in_stock: true,
+            }],
+        };
+
+        let state = build_product_admin_editor_form_state(&product, Some("en"));
+
+        assert_eq!(state.editing_id, Some("product-1".to_string()));
+        assert_eq!(state.title, "Winter coat");
+        assert_eq!(state.handle, "winter-coat");
+        assert_eq!(state.description, "Warm coat");
+        assert_eq!(state.seller_id, "seller-1");
+        assert_eq!(state.vendor, "Acme");
+        assert_eq!(state.product_type, "coat");
+        assert_eq!(state.shipping_profile_slug, "standard");
+        assert_eq!(state.sku, "COAT-1");
+        assert_eq!(state.barcode, "123");
+        assert_eq!(state.currency_code, "EUR");
+        assert_eq!(state.amount, "12.00");
+        assert_eq!(state.compare_at_amount, "15.00");
+        assert_eq!(state.inventory_quantity, 9);
+        assert!(state.publish_now);
+    }
 
     #[test]
     fn product_admin_editor_view_model_tracks_create_and_edit_modes() {
@@ -468,6 +1097,19 @@ mod tests {
             edit.subtitle,
             "Single-SKU catalog editor backed by the existing commerce GraphQL contract."
         );
+    }
+
+    #[test]
+    fn product_admin_list_action_labels_and_availability_are_core_owned() {
+        let labels = build_product_admin_list_action_labels(Some("en"));
+
+        assert_eq!(labels.edit, "Edit");
+        assert_eq!(labels.publish, "Publish");
+        assert_eq!(labels.move_to_draft, "Move to Draft");
+        assert_eq!(labels.archive, "Archive");
+        assert_eq!(labels.delete, "Delete");
+        assert!(product_admin_list_actions_disabled(true));
+        assert!(!product_admin_list_actions_disabled(false));
     }
 
     #[test]
