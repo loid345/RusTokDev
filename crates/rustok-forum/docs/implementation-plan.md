@@ -5,12 +5,12 @@
 
 ## Execution checkpoint
 
-- Current phase: ffa_storefront_transport_ui_split
-- Last checkpoint: Storefront forum получил первый code-level FFA slice: framework-agnostic `storefront/src/core.rs` теперь владеет route href builders, rich-content summary policy и status-class mapping; `storefront/src/transport.rs` стал module-owned facade над existing native-first + GraphQL fallback API; Leptos render layer вынесен в `storefront/src/ui/leptos.rs`, а crate root стал composition/re-export boundary.
-- Next step: Продолжать FFA split для admin package: вынести selected category/topic route-query policy и CRUD request/view-model helpers в `admin/src/core.rs`, затем добавить admin `transport` facade и explicit `ui/leptos.rs` adapter без изменения REST/GraphQL contracts.
+- Current phase: ffa_admin_storefront_transport_ui_split
+- Last checkpoint: Forum UI получил следующий code-level FFA slice: storefront уже разделён на `core`/`transport`/`ui/leptos`, а admin package теперь тоже имеет framework-agnostic `admin/src/core.rs` для tag/filter/status helpers, `admin/src/transport.rs` facade над existing REST API и explicit Leptos adapter `admin/src/ui/leptos.rs`; crate root стал composition/re-export boundary.
+- Next step: Продолжать сужать admin `ui/leptos.rs`: переносить selected category/topic form snapshots, validation и view-model mapping в `admin/src/core.rs`, оставляя REST/GraphQL contracts без изменений.
 - Open blockers: Activation delivery по FW-2..FW-4 заблокирован до закрытия `P5`; для старта нужны parity evidence Next/Leptos/Flutter + owner sign-off + Wave 1 Go/No-Go.
 - Hand-off notes for next agent: Держать forum domain ownership неизменным; любые widget-изменения проводить как capability-consumer слой и синхронно обновлять central docs; FFA status block, FBA placeholder и central readiness board обновлять в том же PR.
-- Last updated at (UTC): 2026-06-07T08:58:40Z
+- Last updated at (UTC): 2026-06-07T09:43:11Z
 
 ## FFA/FBA status
 
@@ -22,8 +22,9 @@
   - API parity: forum widget catalog/validation доступен через REST + GraphQL contract surface;
   - regression coverage расширено: storefront reply read-path подтверждает approved-only visibility semantics;
   - storefront FFA slice добавил `storefront/src/core.rs` для framework-agnostic href/status/rich-content policy, `storefront/src/transport.rs` facade поверх existing native-first + GraphQL fallback API и explicit Leptos adapter `storefront/src/ui/leptos.rs`; `storefront/src/lib.rs` теперь только wires modules и re-export `ForumView`;
-  - parity evidence: `cargo test -p rustok-forum-storefront --lib` подтверждает pure-core helpers и сохраняет текущий native/GraphQL API contract без удаления fallback.
-- Last verified at (UTC): 2026-06-07T08:58:40Z
+  - admin FFA slice добавил `admin/src/core.rs` для framework-agnostic tag parsing, category-filter normalization, count/status helpers, `admin/src/transport.rs` facade поверх existing REST API и explicit Leptos adapter `admin/src/ui/leptos.rs`; `admin/src/lib.rs` теперь только wires modules и re-export `ForumAdmin`;
+  - parity evidence: `cargo test -p rustok-forum-storefront --lib` подтверждает storefront pure-core helpers и сохраняет текущий native/GraphQL API contract без удаления fallback; `cargo test -p rustok-forum-admin --lib` подтверждает admin pure-core helpers и REST facade wiring;
+- Last verified at (UTC): 2026-06-07T09:43:11Z
 - Owner: `rustok-forum` module team
 
 ## Область работ
