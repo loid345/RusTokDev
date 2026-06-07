@@ -5,8 +5,8 @@
 ## Execution checkpoint
 
 - Current phase: `phase_d7_storefront_next_runtime_parity`
-- Last checkpoint: `rustok-seo-admin` FFA split углублён: framework-agnostic `admin/src/core.rs` теперь владеет index replay confirmation/result messages, status target normalization и schema-fix bulk prefill policy; Leptos adapter остаётся route/render shell поверх `admin/src/transport.rs`; внешний SEO GraphQL/REST contract не менялся.
-- Next step: Продолжить D7.1+D7.2 как единый execution пакет — uniform consume flow в `apps/storefront` + runtime-driven `robots.ts`/`sitemap.ts` и shared Next adapter semantics в `apps/next-frontend`; параллельно продолжать сужать `rustok-seo-admin` Leptos adapter, вынося оставшиеся operator workflow builders из render path в `admin/src/core.rs`.
+- Last checkpoint: `rustok-seo-admin` FFA split углублён: framework-agnostic `admin/src/core.rs` теперь владеет index replay confirmation/result messages, status target normalization, sitemap-generation guardrail, typed busy operation keys и schema-fix bulk prefill policy; Leptos adapter остаётся route/render shell поверх `admin/src/transport.rs`; внешний SEO GraphQL/REST contract не менялся.
+- Next step: Продолжить D7.1+D7.2 как единый execution пакет — uniform consume flow в `apps/storefront` + runtime-driven `robots.ts`/`sitemap.ts` и shared Next adapter semantics в `apps/next-frontend`; параллельно продолжать сужать `rustok-seo-admin` Leptos adapter, вынося оставшиеся operator workflow builders/status-message policy из render path в `admin/src/core.rs`.
 - Open blockers:
   - Для D7 route parity в `apps/next-frontend` нужен явный route ownership список beyond home route.
   - Для D7.4 нужно согласовать fixture-set допустимых long-tail metadata differences между Rust storefront и Next adapter.
@@ -16,7 +16,7 @@
   - Для delivery tracker держать invariant: один idempotency key = один фактический state transition.
   - Для replay mode сохранять forward-only semantics (`not_started -> repair_only -> replay_requested -> replaying -> replay_completed`) без backward transitions.
   - Для REST parity fallback в Next admin не возвращаться к blanket `catch {}`: semantic ошибки (`BAD_USER_INPUT`/`PERMISSION_DENIED`) должны пробрасываться в UI.
-- Last updated at (UTC): 2026-06-07T11:20:00Z
+- Last updated at (UTC): 2026-06-07T11:42:00Z
 
 ## FFA/FBA status block
 
@@ -26,7 +26,7 @@
 - Last verification evidence:
   - `cargo fmt --all -- --check` *(pass, 2026-06-07)*
   - `cargo check -p rustok-seo-admin --config profile.dev.debug=0` *(pass, 2026-06-07)*
-  - `cargo test -p rustok-seo-admin --lib --config profile.dev.debug=0` *(pass, 2026-06-07; 10 pure-core tests)*
+  - `cargo test -p rustok-seo-admin --lib --config profile.dev.debug=0` *(pass, 2026-06-07; 12 pure-core tests)*
 - Scope note: module-owned UI остаётся infrastructure control-plane (`rustok-seo-admin` + owner-side SEO panels в `pages/product/blog/forum`); `rustok-seo-admin` теперь имеет явный `core/transport/ui` FFA split, а transport boundary продолжает развиваться через GraphQL + REST `/api/seo/page-context`, `/api/seo/cross-link-suggestions`, control-plane parity endpoints и унифицированный GraphQL-compatible REST error envelope в рамках Phase D.
 
 ## Область работ

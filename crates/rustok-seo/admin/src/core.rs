@@ -5,7 +5,7 @@ use rustok_seo::{
     SeoBulkListInput, SeoBulkMetaPatchInput, SeoBulkSelectionInput, SeoBulkSelectionMode,
     SeoBulkSource, SeoBulkStringFieldPatch, SeoIndexRepairReplayInput,
     SeoIndexRepairReplayResultRecord, SeoModuleSettings, SeoRedirectInput, SeoRedirectMatchType,
-    SeoTargetSlug, SeoTemplateRuleSet,
+    SeoSitemapStatusRecord, SeoTargetSlug, SeoTemplateRuleSet,
 };
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -22,6 +22,39 @@ pub const ROBOT_DIRECTIVE_PRESETS: &[&str] = &[
     "notranslate",
     "max-image-preview:large",
 ];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SeoAdminBusyKey {
+    SaveRedirect,
+    SaveSettings,
+    GenerateSitemaps,
+    IndexRepairOnly,
+    IndexRepairReplay,
+    PreviewBulkSelection,
+    QueueBulkApply,
+    QueueBulkExport,
+    QueueBulkImport,
+}
+
+impl SeoAdminBusyKey {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::SaveRedirect => "save-redirect",
+            Self::SaveSettings => "save-settings",
+            Self::GenerateSitemaps => "generate-sitemaps",
+            Self::IndexRepairOnly => "index-repair-only",
+            Self::IndexRepairReplay => "index-repair-replay",
+            Self::PreviewBulkSelection => "preview-bulk-selection",
+            Self::QueueBulkApply => "queue-bulk-apply",
+            Self::QueueBulkExport => "queue-bulk-export",
+            Self::QueueBulkImport => "queue-bulk-import",
+        }
+    }
+
+    pub fn to_busy_key(self) -> String {
+        self.as_str().to_string()
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SeoAdminTab {
@@ -112,6 +145,16 @@ impl SeoIndexReplayForm {
         }
 
         self.build_input(replay_historical)
+    }
+}
+
+pub fn validate_sitemap_generation_enabled(
+    status: Option<&SeoSitemapStatusRecord>,
+) -> Result<(), String> {
+    if matches!(status, Some(SeoSitemapStatusRecord { enabled: false, .. })) {
+        Err("Sitemap generation is disabled in SEO defaults".to_string())
+    } else {
+        Ok(())
     }
 }
 
@@ -621,10 +664,12 @@ fn trim_to_option(value: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        SeoAdminTab, SeoBulkActionForm, SeoBulkFilterForm, SeoIndexReplayForm, SeoSettingsForm,
+        validate_sitemap_generation_enabled, SeoAdminBusyKey, SeoAdminTab, SeoBulkActionForm,
+        SeoBulkFilterForm, SeoIndexReplayForm, SeoSettingsForm,
     };
     use rustok_seo::{
-        seo_builtin_slug, SeoBulkApplyMode, SeoBulkFieldPatchMode, SeoModuleSettings, SeoTargetSlug,
+        seo_builtin_slug, SeoBulkApplyMode, SeoBulkFieldPatchMode, SeoModuleSettings,
+        SeoSitemapStatusRecord, SeoTargetSlug,
     };
 
     #[test]
@@ -657,6 +702,33 @@ mod tests {
             SeoAdminTab::from_str(SeoAdminTab::Diagnostics.as_str()),
             Some(SeoAdminTab::Diagnostics)
         );
+    }
+
+    #[test]
+    fn busy_keys_are_framework_agnostic_operation_ids() {
+        assert_eq!(SeoAdminBusyKey::SaveRedirect.as_str(), "save-redirect");
+        assert_eq!(
+            SeoAdminBusyKey::QueueBulkImport.to_busy_key(),
+            "queue-bulk-import"
+        );
+    }
+
+    #[test]
+    fn sitemap_generation_guard_respects_disabled_status() {
+        let status = SeoSitemapStatusRecord {
+            enabled: false,
+            latest_job_id: None,
+            status: None,
+            file_count: 0,
+            generated_at: None,
+            files: Vec::new(),
+        };
+
+        assert_eq!(
+            validate_sitemap_generation_enabled(Some(&status)).expect_err("disabled sitemaps fail"),
+            "Sitemap generation is disabled in SEO defaults"
+        );
+        assert!(validate_sitemap_generation_enabled(None).is_ok());
     }
 
     #[test]

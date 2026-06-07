@@ -6,8 +6,9 @@ use rustok_api::{AdminQueryKey, UiRouteContext};
 use uuid::Uuid;
 
 use crate::core::{
-    format_index_repair_replay_result, SeoAdminTab, SeoBulkActionForm, SeoBulkFilterForm,
-    SeoIndexReplayForm, SeoRedirectForm, SeoSettingsForm,
+    format_index_repair_replay_result, validate_sitemap_generation_enabled, SeoAdminBusyKey,
+    SeoAdminTab, SeoBulkActionForm, SeoBulkFilterForm, SeoIndexReplayForm, SeoRedirectForm,
+    SeoSettingsForm,
 };
 use crate::sections::{
     SeoAdminHeader, SeoAdminTabs, SeoBulkPane, SeoBusyFooter, SeoDefaultsPane, SeoDiagnosticsPane,
@@ -132,7 +133,7 @@ pub fn SeoAdmin() -> impl IntoView {
             }
         };
 
-        busy_key.set(Some("save-redirect".to_string()));
+        busy_key.set(Some(SeoAdminBusyKey::SaveRedirect.to_busy_key()));
         spawn_local(async move {
             match transport::save_redirect(input).await {
                 Ok(_) => {
@@ -150,7 +151,7 @@ pub fn SeoAdmin() -> impl IntoView {
         status_message.set(None);
         let input = settings_form.get_untracked().build_settings();
 
-        busy_key.set(Some("save-settings".to_string()));
+        busy_key.set(Some(SeoAdminBusyKey::SaveSettings.to_busy_key()));
         spawn_local(async move {
             match transport::save_settings(input).await {
                 Ok(saved) => {
@@ -167,20 +168,17 @@ pub fn SeoAdmin() -> impl IntoView {
 
     let generate_sitemaps = Callback::new(move |_| {
         status_message.set(None);
-        if matches!(
-            sitemap_status.get_untracked(),
-            Some(Ok(rustok_seo::SeoSitemapStatusRecord {
-                enabled: false,
-                ..
-            }))
+        let current_status = sitemap_status.get_untracked();
+        if let Err(err) = validate_sitemap_generation_enabled(
+            current_status
+                .as_ref()
+                .and_then(|status| status.as_ref().ok()),
         ) {
-            status_message.set(Some(
-                "Sitemap generation is disabled in SEO defaults".to_string(),
-            ));
+            status_message.set(Some(err));
             return;
         }
 
-        busy_key.set(Some("generate-sitemaps".to_string()));
+        busy_key.set(Some(SeoAdminBusyKey::GenerateSitemaps.to_busy_key()));
         spawn_local(async move {
             match transport::generate_sitemaps().await {
                 Ok(_) => {
@@ -210,7 +208,7 @@ pub fn SeoAdmin() -> impl IntoView {
             }
         };
 
-        busy_key.set(Some("index-repair-only".to_string()));
+        busy_key.set(Some(SeoAdminBusyKey::IndexRepairOnly.to_busy_key()));
         spawn_local(async move {
             match transport::run_index_repair_replay(input).await {
                 Ok(result) => {
@@ -236,7 +234,7 @@ pub fn SeoAdmin() -> impl IntoView {
             }
         };
 
-        busy_key.set(Some("index-repair-replay".to_string()));
+        busy_key.set(Some(SeoAdminBusyKey::IndexRepairReplay.to_busy_key()));
         spawn_local(async move {
             match transport::run_index_repair_replay(input).await {
                 Ok(result) => {
@@ -268,7 +266,7 @@ pub fn SeoAdmin() -> impl IntoView {
             .get_untracked()
             .build_selection(filter, &bulk_selected_ids.get_untracked());
 
-        busy_key.set(Some("preview-bulk-selection".to_string()));
+        busy_key.set(Some(SeoAdminBusyKey::PreviewBulkSelection.to_busy_key()));
         spawn_local(async move {
             match transport::preview_bulk_selection(selection).await {
                 Ok(preview) => bulk_selection_preview.set(Some(preview.count)),
@@ -297,7 +295,7 @@ pub fn SeoAdmin() -> impl IntoView {
             }
         };
 
-        busy_key.set(Some("queue-bulk-apply".to_string()));
+        busy_key.set(Some(SeoAdminBusyKey::QueueBulkApply.to_busy_key()));
         spawn_local(async move {
             match transport::preview_bulk_selection(input.selection.clone()).await {
                 Ok(preview) if preview.count > 0 => {
@@ -328,7 +326,7 @@ pub fn SeoAdmin() -> impl IntoView {
         };
         let input = bulk_action_form.get_untracked().build_export_input(filter);
 
-        busy_key.set(Some("queue-bulk-export".to_string()));
+        busy_key.set(Some(SeoAdminBusyKey::QueueBulkExport.to_busy_key()));
         spawn_local(async move {
             match transport::queue_bulk_export(input).await {
                 Ok(job) => {
@@ -358,7 +356,7 @@ pub fn SeoAdmin() -> impl IntoView {
             }
         };
 
-        busy_key.set(Some("queue-bulk-import".to_string()));
+        busy_key.set(Some(SeoAdminBusyKey::QueueBulkImport.to_busy_key()));
         spawn_local(async move {
             match transport::queue_bulk_import(input).await {
                 Ok(job) => {
