@@ -18,6 +18,9 @@
 - Treat the backorder policy value `continue` case-insensitively across service write results,
   set/adjust/reserve/check-availability guardrails, admin read-side stock state, and
   commerce checkout/storefront compatibility paths through the exported policy helper.
+- Own public-channel inventory visibility helpers (`normalize_public_channel_slug`,
+  channel-visibility metadata parsing, and channel-visible available quantity loaders) consumed by
+  the umbrella commerce storefront/checkout compatibility layer.
 
 ## Interactions
 
@@ -38,6 +41,7 @@
 - `InventoryModule`
 - `InventoryService`
 - `AdminInventoryReadService`
+- public-channel inventory visibility helpers exported from `services::public_channel`
 - `rustok-inventory-admin`
 
 See also `docs/README.md`.
