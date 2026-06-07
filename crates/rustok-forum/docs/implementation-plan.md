@@ -5,23 +5,25 @@
 
 ## Execution checkpoint
 
-- Current phase: in_progress
-- Last checkpoint: Закрыт FW-1 contract freeze в design/contract режиме без rollout — добавлены machine-readable widget catalog v1, compatibility matrix и typed error mapping в `rustok-module.toml`; добавлены REST/GraphQL contract surfaces (`/api/forum/widgets/catalog`, `/api/forum/widgets/validate`, `forumWidgetCatalog`) и validation service `ForumWidgetContractService`; добавлены regression проверки storefront approved-only reply visibility.
-- Next step: Держать FW-2/FW-3/FW-4 в `deferred` до закрытия `P5 / Wave 1 readiness` в central track; разрешены только contract/fallback-prep задачи без tenant activation delivery.
+- Current phase: ffa_storefront_transport_ui_split
+- Last checkpoint: Storefront forum получил первый code-level FFA slice: framework-agnostic `storefront/src/core.rs` теперь владеет route href builders, rich-content summary policy и status-class mapping; `storefront/src/transport.rs` стал module-owned facade над existing native-first + GraphQL fallback API; Leptos render layer вынесен в `storefront/src/ui/leptos.rs`, а crate root стал composition/re-export boundary.
+- Next step: Продолжать FFA split для admin package: вынести selected category/topic route-query policy и CRUD request/view-model helpers в `admin/src/core.rs`, затем добавить admin `transport` facade и explicit `ui/leptos.rs` adapter без изменения REST/GraphQL contracts.
 - Open blockers: Activation delivery по FW-2..FW-4 заблокирован до закрытия `P5`; для старта нужны parity evidence Next/Leptos/Flutter + owner sign-off + Wave 1 Go/No-Go.
-- Hand-off notes for next agent: Держать forum domain ownership неизменным; любые widget-изменения проводить как capability-consumer слой и синхронно обновлять central docs.
-- Last updated at (UTC): 2026-05-30T00:00:00Z
+- Hand-off notes for next agent: Держать forum domain ownership неизменным; любые widget-изменения проводить как capability-consumer слой и синхронно обновлять central docs; FFA/FBA status block и central readiness board обновлять в том же PR.
+- Last updated at (UTC): 2026-06-07T08:58:40Z
 
 ## FFA/FBA status
 
 - FFA status: `in_progress`
 - FBA status: `in_progress`
-- Structural shape: `docs_boundary`
+- Structural shape: `core_transport_ui`
 - Evidence:
   - machine-readable FW-1 contract freeze зафиксирован в `rustok-module.toml` (`widgets`, `compatibility_matrix`, `error_mapping`);
   - API parity: forum widget catalog/validation доступен через REST + GraphQL contract surface;
-  - regression coverage расширено: storefront reply read-path подтверждает approved-only visibility semantics.
-- Last verified at (UTC): 2026-05-30T00:00:00Z
+  - regression coverage расширено: storefront reply read-path подтверждает approved-only visibility semantics;
+  - storefront FFA slice добавил `storefront/src/core.rs` для framework-agnostic href/status/rich-content policy, `storefront/src/transport.rs` facade поверх existing native-first + GraphQL fallback API и explicit Leptos adapter `storefront/src/ui/leptos.rs`; `storefront/src/lib.rs` теперь только wires modules и re-export `ForumView`;
+  - parity evidence: `cargo test -p rustok-forum-storefront --lib` подтверждает pure-core helpers и сохраняет текущий native/GraphQL API contract без удаления fallback.
+- Last verified at (UTC): 2026-06-07T08:58:40Z
 - Owner: `rustok-forum` module team
 
 ## Область работ
