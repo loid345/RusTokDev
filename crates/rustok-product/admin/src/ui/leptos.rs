@@ -174,16 +174,6 @@ pub fn ProductAdmin() -> impl IntoView {
         "product.error.changeStatus",
         "Failed to change status",
     );
-    let delete_product_error_label = t(
-        ui_locale.as_deref(),
-        "product.error.deleteProduct",
-        "Failed to delete product",
-    );
-    let delete_returned_false_label = t(
-        ui_locale.as_deref(),
-        "product.error.deleteReturnedFalse",
-        "Delete returned false.",
-    );
     let initial_product_not_found_label = product_not_found_label.clone();
     let initial_load_product_error_label = load_product_error_label.clone();
     Effect::new(move |_| match selected_product_query.get() {
@@ -484,8 +474,6 @@ pub fn ProductAdmin() -> impl IntoView {
                                         let change_status_error_label_for_publish = change_status_error_label.clone();
                                         let change_status_error_label_for_draft = change_status_error_label.clone();
                                         let change_status_error_label_for_archive = change_status_error_label.clone();
-                                        let delete_returned_false_label_for_delete = delete_returned_false_label.clone();
-                                        let delete_product_error_label_for_delete = delete_product_error_label.clone();
                                         view! {
                                             <article class="rounded-2xl border border-border bg-background p-5 transition hover:border-primary/40">
                                                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -562,8 +550,6 @@ pub fn ProductAdmin() -> impl IntoView {
                                                             delete_id.clone(),
                                                             item_locale_for_delete.clone(),
                                                             delete_query_writer_for_item.clone(),
-                                                            delete_returned_false_label_for_delete.clone(),
-                                                            delete_product_error_label_for_delete.clone(),
                                                             editing_id,
                                                             set_editing_id,
                                                             set_selected,
@@ -999,8 +985,6 @@ fn mutate_delete(
     product_id: String,
     locale: Option<String>,
     query_writer: RouteQueryWriter,
-    delete_returned_false_label: String,
-    delete_product_error_label: String,
     editing_id: ReadSignal<Option<String>>,
     set_editing_id: WriteSignal<Option<String>>,
     set_selected: WriteSignal<Option<ProductDetail>>,
@@ -1034,7 +1018,7 @@ fn mutate_delete(
     set_error.set(None);
     spawn_local(async move {
         let deleted_product_id = command.product_id.clone();
-        match transport::delete_product(
+        let outcome = match transport::delete_product(
             token,
             tenant,
             command.tenant_id,
@@ -1043,33 +1027,45 @@ fn mutate_delete(
         )
         .await
         {
-            Ok(true) => {
-                if editing_id.get_untracked().as_deref() == Some(deleted_product_id.as_str()) {
-                    query_writer.clear_key(AdminQueryKey::ProductId.as_str());
-                    clear_product_form(
-                        set_editing_id,
-                        set_selected,
-                        set_title,
-                        set_handle,
-                        set_description,
-                        set_seller_id,
-                        set_vendor,
-                        set_product_type,
-                        set_shipping_profile_slug,
-                        set_sku,
-                        set_barcode,
-                        set_currency_code,
-                        set_amount,
-                        set_compare_at_amount,
-                        set_inventory_quantity,
-                        set_publish_now,
-                    );
-                    set_error.set(None);
-                }
-                set_refresh_nonce.update(|value| *value += 1);
-            }
-            Ok(false) => set_error.set(Some(delete_returned_false_label)),
-            Err(err) => set_error.set(Some(format!("{delete_product_error_label}: {err}"))),
+            Ok(true) => ProductAdminDeleteOutcome::Deleted,
+            Ok(false) => ProductAdminDeleteOutcome::NotDeleted,
+            Err(err) => ProductAdminDeleteOutcome::TransportError(err.to_string()),
+        };
+        let view_model = build_product_admin_delete_result_view_model(
+            locale.as_deref(),
+            deleted_product_id.as_str(),
+            editing_id.get_untracked().as_deref(),
+            outcome,
+        );
+
+        if view_model.clear_selection {
+            query_writer.clear_key(AdminQueryKey::ProductId.as_str());
+            clear_product_form(
+                set_editing_id,
+                set_selected,
+                set_title,
+                set_handle,
+                set_description,
+                set_seller_id,
+                set_vendor,
+                set_product_type,
+                set_shipping_profile_slug,
+                set_sku,
+                set_barcode,
+                set_currency_code,
+                set_amount,
+                set_compare_at_amount,
+                set_inventory_quantity,
+                set_publish_now,
+            );
+        }
+
+        match view_model.error_message {
+            Some(message) => set_error.set(Some(message)),
+            None => set_error.set(None),
+        }
+        if view_model.refresh {
+            set_refresh_nonce.update(|value| *value += 1);
         }
         set_busy.set(false);
     });

@@ -579,6 +579,56 @@ pub(crate) fn build_product_admin_delete_command(
     })
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ProductAdminDeleteOutcome {
+    Deleted,
+    NotDeleted,
+    TransportError(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ProductAdminDeleteResultViewModel {
+    pub clear_selection: bool,
+    pub refresh: bool,
+    pub error_message: Option<String>,
+}
+
+pub(crate) fn build_product_admin_delete_result_view_model(
+    locale: Option<&str>,
+    deleted_product_id: &str,
+    open_product_id: Option<&str>,
+    outcome: ProductAdminDeleteOutcome,
+) -> ProductAdminDeleteResultViewModel {
+    match outcome {
+        ProductAdminDeleteOutcome::Deleted => ProductAdminDeleteResultViewModel {
+            clear_selection: open_product_id == Some(deleted_product_id),
+            refresh: true,
+            error_message: None,
+        },
+        ProductAdminDeleteOutcome::NotDeleted => ProductAdminDeleteResultViewModel {
+            clear_selection: false,
+            refresh: false,
+            error_message: Some(t(
+                locale,
+                "product.error.deleteReturnedFalse",
+                "Delete returned false.",
+            )),
+        },
+        ProductAdminDeleteOutcome::TransportError(err) => ProductAdminDeleteResultViewModel {
+            clear_selection: false,
+            refresh: false,
+            error_message: Some(format!(
+                "{}: {err}",
+                t(
+                    locale,
+                    "product.error.deleteProduct",
+                    "Failed to delete product",
+                )
+            )),
+        },
+    }
+}
+
 pub(crate) fn build_product_admin_save_command(
     form: ProductAdminDraftForm,
     editing_product_id: Option<String>,
@@ -775,6 +825,57 @@ mod tests {
             inventory_quantity: 7,
             publish_now: true,
         }
+    }
+
+    #[test]
+    fn product_admin_delete_result_view_model_tracks_success_and_open_selection() {
+        let open = build_product_admin_delete_result_view_model(
+            Some("en"),
+            "product-1",
+            Some("product-1"),
+            ProductAdminDeleteOutcome::Deleted,
+        );
+
+        assert!(open.clear_selection);
+        assert!(open.refresh);
+        assert_eq!(open.error_message, None);
+
+        let other = build_product_admin_delete_result_view_model(
+            Some("en"),
+            "product-1",
+            Some("product-2"),
+            ProductAdminDeleteOutcome::Deleted,
+        );
+        assert!(!other.clear_selection);
+        assert!(other.refresh);
+    }
+
+    #[test]
+    fn product_admin_delete_result_view_model_formats_failures() {
+        let not_deleted = build_product_admin_delete_result_view_model(
+            Some("en"),
+            "product-1",
+            Some("product-1"),
+            ProductAdminDeleteOutcome::NotDeleted,
+        );
+        assert_eq!(
+            not_deleted.error_message,
+            Some("Delete returned false.".to_string())
+        );
+        assert!(!not_deleted.refresh);
+        assert!(!not_deleted.clear_selection);
+
+        let failed = build_product_admin_delete_result_view_model(
+            Some("en"),
+            "product-1",
+            Some("product-1"),
+            ProductAdminDeleteOutcome::TransportError("network".to_string()),
+        );
+        assert_eq!(
+            failed.error_message,
+            Some("Failed to delete product: network".to_string())
+        );
+        assert!(!failed.refresh);
     }
 
     #[test]

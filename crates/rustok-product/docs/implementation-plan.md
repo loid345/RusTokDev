@@ -5,9 +5,9 @@
 
 ## Execution checkpoint
 
-- Current phase: ffa_product_admin_delete_command_slice
-- Last checkpoint: Product admin delete command preparation now builds through `ProductAdminDeleteCommand` in `admin/src/core.rs`; the Leptos adapter dispatches the prepared command through `admin/src/transport.rs` and reuses the core-owned empty editor form state when the deleted product was open.
-- Next step: Continue FFA-first sequencing by extracting remaining delete-result view policy (success/no-op/error copy and selection clearing intent) into typed core helpers without changing the current GraphQL transport contract.
+- Current phase: ffa_product_admin_delete_result_policy_slice
+- Last checkpoint: Product admin delete-result view policy now builds through `ProductAdminDeleteResultViewModel` / `ProductAdminDeleteOutcome` in `admin/src/core.rs`; the Leptos adapter maps transport results into typed outcomes and only applies clear-selection/refresh/error intents.
+- Next step: Continue FFA-first sequencing by extracting remaining list action button labels/availability policy into typed core helpers without changing the current GraphQL transport contract.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок.
 - Last updated at (UTC): 2026-06-07T00:00:00Z
@@ -34,6 +34,7 @@
   - FFA slice: product admin editor reset/apply signal values are composed by `ProductAdminEditorFormState` in `admin/src/core.rs`, keeping product-to-form mapping and default form policy outside Leptos;
   - FFA slice: product admin publish/draft/archive command preparation is composed by `ProductAdminStatusMutationCommand` / `ProductAdminStatusTarget` in `admin/src/core.rs`; Leptos status actions dispatch typed core commands over `admin/src/transport.rs`;
   - FFA slice: product admin delete command preparation is composed by `ProductAdminDeleteCommand` in `admin/src/core.rs`; Leptos delete action dispatches a typed core command and clears the editor through the shared core-owned empty form state;
+  - FFA slice: product admin delete-result view policy (clear-selection intent, refresh intent, no-op/error copy) is composed by `ProductAdminDeleteResultViewModel` / `ProductAdminDeleteOutcome` in `admin/src/core.rs`; Leptos delete action only applies those intents;
   - дальнейшее повышение статуса выполняется только вместе с verification evidence и обновлением local+central docs.
 - Last verified at (UTC): 2026-06-07T00:00:00Z
 - Owner: `rustok-product` module team
@@ -61,7 +62,8 @@
   `ProductAdminSaveCommand` / `ProductAdminDraftForm`, а editor reset/apply mapping — через
   `ProductAdminEditorFormState`, а publish/draft/archive command mapping — через
   `ProductAdminStatusMutationCommand` / `ProductAdminStatusTarget`, а delete command mapping — через
-  `ProductAdminDeleteCommand` в `admin/src/core.rs`; Leptos слой
+  `ProductAdminDeleteCommand`, а delete-result policy — через
+  `ProductAdminDeleteResultViewModel` / `ProductAdminDeleteOutcome` в `admin/src/core.rs`; Leptos слой
   изолирован в `admin/src/ui/leptos.rs` как render/effect adapter;
 - module-owned storefront UI пакет `rustok-product/storefront` уже поднят и
   подключён в manifest-driven storefront composition для published catalog
