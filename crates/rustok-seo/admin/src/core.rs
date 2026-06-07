@@ -3,8 +3,9 @@ use rustok_seo::{
     seo_builtin_slug, SeoBulkApplyInput, SeoBulkApplyMode, SeoBulkBoolFieldPatch,
     SeoBulkExportInput, SeoBulkFieldPatchMode, SeoBulkImportInput, SeoBulkJsonFieldPatch,
     SeoBulkListInput, SeoBulkMetaPatchInput, SeoBulkSelectionInput, SeoBulkSelectionMode,
-    SeoBulkSource, SeoBulkStringFieldPatch, SeoIndexRepairReplayInput, SeoModuleSettings,
-    SeoRedirectInput, SeoRedirectMatchType, SeoTargetSlug, SeoTemplateRuleSet,
+    SeoBulkSource, SeoBulkStringFieldPatch, SeoIndexRepairReplayInput,
+    SeoIndexRepairReplayResultRecord, SeoModuleSettings, SeoRedirectInput, SeoRedirectMatchType,
+    SeoSitemapStatusRecord, SeoTargetSlug, SeoTemplateRuleSet,
 };
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -21,6 +22,39 @@ pub const ROBOT_DIRECTIVE_PRESETS: &[&str] = &[
     "notranslate",
     "max-image-preview:large",
 ];
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SeoAdminBusyKey {
+    SaveRedirect,
+    SaveSettings,
+    GenerateSitemaps,
+    IndexRepairOnly,
+    IndexRepairReplay,
+    PreviewBulkSelection,
+    QueueBulkApply,
+    QueueBulkExport,
+    QueueBulkImport,
+}
+
+impl SeoAdminBusyKey {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::SaveRedirect => "save-redirect",
+            Self::SaveSettings => "save-settings",
+            Self::GenerateSitemaps => "generate-sitemaps",
+            Self::IndexRepairOnly => "index-repair-only",
+            Self::IndexRepairReplay => "index-repair-replay",
+            Self::PreviewBulkSelection => "preview-bulk-selection",
+            Self::QueueBulkApply => "queue-bulk-apply",
+            Self::QueueBulkExport => "queue-bulk-export",
+            Self::QueueBulkImport => "queue-bulk-import",
+        }
+    }
+
+    pub fn to_busy_key(self) -> String {
+        self.as_str().to_string()
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SeoAdminTab {
@@ -80,6 +114,10 @@ impl Default for SeoIndexReplayForm {
 }
 
 impl SeoIndexReplayForm {
+    pub fn status_target_type(&self) -> Option<String> {
+        trim_to_option(self.target_type.as_str())
+    }
+
     pub fn build_input(
         &self,
         replay_historical: bool,
@@ -90,6 +128,56 @@ impl SeoIndexReplayForm {
             limit: self.limit.clamp(1, 500),
             replay_historical,
         })
+    }
+
+    pub fn build_confirmed_input(
+        &self,
+        replay_historical: bool,
+    ) -> Result<SeoIndexRepairReplayInput, String> {
+        if replay_historical {
+            if !self.confirm_replay_historical {
+                return Err(
+                    "Confirm historical replay execution before running the operation.".to_string(),
+                );
+            }
+        } else if !self.confirm_repair_only {
+            return Err("Confirm repair-only execution before running the operation.".to_string());
+        }
+
+        self.build_input(replay_historical)
+    }
+}
+
+pub fn validate_sitemap_generation_enabled(
+    status: Option<&SeoSitemapStatusRecord>,
+) -> Result<(), String> {
+    if matches!(status, Some(SeoSitemapStatusRecord { enabled: false, .. })) {
+        Err("Sitemap generation is disabled in SEO defaults".to_string())
+    } else {
+        Ok(())
+    }
+}
+
+pub fn format_index_repair_replay_result(
+    result: &SeoIndexRepairReplayResultRecord,
+    replay_historical: bool,
+) -> String {
+    if replay_historical {
+        format!(
+            "Replay completed: repaired={} replayed={} scanned={} run_id={}",
+            result.repaired_count,
+            result.replayed_count,
+            result.historical_events_scanned,
+            result
+                .replay_run_id
+                .map(|value| value.to_string())
+                .unwrap_or_else(|| "n/a".to_string())
+        )
+    } else {
+        format!(
+            "Repair completed: repaired={} replayed={} scanned={}.",
+            result.repaired_count, result.replayed_count, result.historical_events_scanned
+        )
     }
 }
 
@@ -286,6 +374,21 @@ impl SeoBulkActionForm {
             csv_utf8: csv_utf8.to_string(),
             publish_after_write: self.publish_after_write,
         })
+    }
+
+    pub fn prefill_schema_fix(&mut self, apply_mode: SeoBulkApplyMode, payload: String) {
+        self.apply_mode = apply_mode;
+        self.structured_data.mode = SeoBulkFieldPatchMode::Set;
+        self.structured_data.value = payload;
+        self.title.mode = SeoBulkFieldPatchMode::Keep;
+        self.description.mode = SeoBulkFieldPatchMode::Keep;
+        self.keywords.mode = SeoBulkFieldPatchMode::Keep;
+        self.canonical_url.mode = SeoBulkFieldPatchMode::Keep;
+        self.og_title.mode = SeoBulkFieldPatchMode::Keep;
+        self.og_description.mode = SeoBulkFieldPatchMode::Keep;
+        self.og_image.mode = SeoBulkFieldPatchMode::Keep;
+        self.noindex.mode = SeoBulkFieldPatchMode::Keep;
+        self.nofollow.mode = SeoBulkFieldPatchMode::Keep;
     }
 }
 
@@ -561,10 +664,12 @@ fn trim_to_option(value: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        SeoAdminTab, SeoBulkActionForm, SeoBulkFilterForm, SeoIndexReplayForm, SeoSettingsForm,
+        validate_sitemap_generation_enabled, SeoAdminBusyKey, SeoAdminTab, SeoBulkActionForm,
+        SeoBulkFilterForm, SeoIndexReplayForm, SeoSettingsForm,
     };
     use rustok_seo::{
-        seo_builtin_slug, SeoBulkApplyMode, SeoBulkFieldPatchMode, SeoModuleSettings, SeoTargetSlug,
+        seo_builtin_slug, SeoBulkApplyMode, SeoBulkFieldPatchMode, SeoModuleSettings,
+        SeoSitemapStatusRecord, SeoTargetSlug,
     };
 
     #[test]
@@ -597,6 +702,33 @@ mod tests {
             SeoAdminTab::from_str(SeoAdminTab::Diagnostics.as_str()),
             Some(SeoAdminTab::Diagnostics)
         );
+    }
+
+    #[test]
+    fn busy_keys_are_framework_agnostic_operation_ids() {
+        assert_eq!(SeoAdminBusyKey::SaveRedirect.as_str(), "save-redirect");
+        assert_eq!(
+            SeoAdminBusyKey::QueueBulkImport.to_busy_key(),
+            "queue-bulk-import"
+        );
+    }
+
+    #[test]
+    fn sitemap_generation_guard_respects_disabled_status() {
+        let status = SeoSitemapStatusRecord {
+            enabled: false,
+            latest_job_id: None,
+            status: None,
+            file_count: 0,
+            generated_at: None,
+            files: Vec::new(),
+        };
+
+        assert_eq!(
+            validate_sitemap_generation_enabled(Some(&status)).expect_err("disabled sitemaps fail"),
+            "Sitemap generation is disabled in SEO defaults"
+        );
+        assert!(validate_sitemap_generation_enabled(None).is_ok());
     }
 
     #[test]
@@ -707,5 +839,37 @@ mod tests {
             .build_input(false)
             .expect_err("unknown target type should fail");
         assert_eq!(err, "Index target type must be `content` or `product`");
+    }
+
+    #[test]
+    fn index_replay_form_enforces_confirmation_in_core() {
+        let form = SeoIndexReplayForm::default();
+
+        assert_eq!(
+            form.build_confirmed_input(false)
+                .expect_err("confirmation required"),
+            "Confirm repair-only execution before running the operation."
+        );
+        assert_eq!(
+            form.build_confirmed_input(true)
+                .expect_err("confirmation required"),
+            "Confirm historical replay execution before running the operation."
+        );
+    }
+
+    #[test]
+    fn schema_fix_prefill_keeps_non_schema_fields() {
+        let mut form = SeoBulkActionForm::default();
+        form.title.mode = SeoBulkFieldPatchMode::Set;
+
+        form.prefill_schema_fix(
+            SeoBulkApplyMode::OverwriteGeneratedOnly,
+            r#"{"@type":"FAQPage"}"#.to_string(),
+        );
+
+        assert_eq!(form.apply_mode, SeoBulkApplyMode::OverwriteGeneratedOnly);
+        assert_eq!(form.structured_data.mode, SeoBulkFieldPatchMode::Set);
+        assert_eq!(form.title.mode, SeoBulkFieldPatchMode::Keep);
+        assert_eq!(form.nofollow.mode, SeoBulkFieldPatchMode::Keep);
     }
 }

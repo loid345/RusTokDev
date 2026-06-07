@@ -1,7 +1,6 @@
 use crate::locale::locale_primary_language;
 use crate::model::{
-    SeoControlPlaneWidgetStateKind, SeoEventDeliveryStatus, SeoRecommendation,
-    SeoRemediationAction,
+    SeoControlPlaneWidgetStateKind, SeoEventDeliveryStatus, SeoRecommendation, SeoRemediationAction,
 };
 
 pub(crate) fn tr(locale: Option<&str>, en: &str, ru: &str) -> String {

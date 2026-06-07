@@ -8,8 +8,8 @@ mod sitemaps;
 
 use leptos::prelude::*;
 
+use crate::core::SeoAdminTab;
 use crate::i18n::t;
-use crate::model::SeoAdminTab;
 
 pub use bulk::SeoBulkPane;
 pub use defaults::SeoDefaultsPane;

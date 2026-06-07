@@ -5,8 +5,8 @@
 ## Execution checkpoint
 
 - Current phase: `phase_d7_storefront_next_runtime_parity`
-- Last checkpoint: Закрыт grouped batch D6.2+D6.4 (v1 additive): `rustok-seo-admin-support` получил reusable control-plane виджеты (`SeoControlPlaneWidgets`) с typed remediation mapping (`issue_code -> action`) и единым state-contract (`loading/ready/empty/permission_denied/error`), owner wiring обновлён для `pages/product/blog/forum` (включены control-plane widgets и host-locale-only contract через `UiRouteContext.locale` без package-local fallback chains).
-- Next step: Закрыть D7.1+D7.2 как единый execution пакет — uniform consume flow в `apps/storefront` + runtime-driven `robots.ts`/`sitemap.ts` и shared Next adapter semantics в `apps/next-frontend`.
+- Last checkpoint: `rustok-seo-admin` FFA split углублён: framework-agnostic `admin/src/core.rs` теперь владеет index replay confirmation/result messages, status target normalization, sitemap-generation guardrail, typed busy operation keys и schema-fix bulk prefill policy; Leptos adapter остаётся route/render shell поверх `admin/src/transport.rs`; внешний SEO GraphQL/REST contract не менялся.
+- Next step: Продолжить D7.1+D7.2 как единый execution пакет — uniform consume flow в `apps/storefront` + runtime-driven `robots.ts`/`sitemap.ts` и shared Next adapter semantics в `apps/next-frontend`; параллельно продолжать сужать `rustok-seo-admin` Leptos adapter, вынося оставшиеся operator workflow builders/status-message policy из render path в `admin/src/core.rs`.
 - Open blockers:
   - Для D7 route parity в `apps/next-frontend` нужен явный route ownership список beyond home route.
   - Для D7.4 нужно согласовать fixture-set допустимых long-tail metadata differences между Rust storefront и Next adapter.
@@ -16,20 +16,18 @@
   - Для delivery tracker держать invariant: один idempotency key = один фактический state transition.
   - Для replay mode сохранять forward-only semantics (`not_started -> repair_only -> replay_requested -> replaying -> replay_completed`) без backward transitions.
   - Для REST parity fallback в Next admin не возвращаться к blanket `catch {}`: semantic ошибки (`BAD_USER_INPUT`/`PERMISSION_DENIED`) должны пробрасываться в UI.
-- Last updated at (UTC): 2026-06-07T22:40:00Z
+- Last updated at (UTC): 2026-06-07T11:42:00Z
 
 ## FFA/FBA status block
 
 - FFA status: `in_progress`
 - FBA status: `not_started`
-- Structural shape: `docs_boundary`
+- Structural shape: `core_transport_ui`
 - Last verification evidence:
-  - `cargo xtask module validate seo` *(pass, 2026-05-30)*
-  - `cargo check -p rustok-seo --tests --config profile.dev.debug=0` *(pass, 2026-05-30)*
-  - `cargo test -p rustok-seo services::events::tests --config profile.dev.debug=0` *(pass, 2026-05-30)*
-  - `cargo test -p rustok-events --test canonical_contracts --config profile.dev.debug=0` *(pass, 2026-05-30)*
-  - `cargo fmt --all -- --check` *(warning: repository-wide pre-existing rustfmt drift outside this SEO D2 patch remains)*
-- Scope note: module-owned UI остаётся infrastructure control-plane (`rustok-seo-admin` + owner-side SEO panels в `pages/product/blog/forum`); transport boundary развивается через GraphQL + REST `/api/seo/page-context`, `/api/seo/cross-link-suggestions`, control-plane parity endpoints и унифицированный GraphQL-compatible REST error envelope в рамках Phase D.
+  - `cargo fmt --all -- --check` *(pass, 2026-06-07)*
+  - `cargo check -p rustok-seo-admin --config profile.dev.debug=0` *(pass, 2026-06-07)*
+  - `cargo test -p rustok-seo-admin --lib --config profile.dev.debug=0` *(pass, 2026-06-07; 12 pure-core tests)*
+- Scope note: module-owned UI остаётся infrastructure control-plane (`rustok-seo-admin` + owner-side SEO panels в `pages/product/blog/forum`); `rustok-seo-admin` теперь имеет явный `core/transport/ui` FFA split, а transport boundary продолжает развиваться через GraphQL + REST `/api/seo/page-context`, `/api/seo/cross-link-suggestions`, control-plane parity endpoints и унифицированный GraphQL-compatible REST error envelope в рамках Phase D.
 
 ## Область работ
 
@@ -47,7 +45,7 @@
 - `SeoModuleSettings` включает typed `sitemap_submission_endpoints` с server-side normalization (`http/https`, trim, dedupe, strip fragment);
 - storefront SEO read-side живёт на permanent contract `SeoPageContext = route + document`;
 - Rust-side SSR head rendering вынесен в `rustok-seo-render`;
-- `rustok-seo-admin` разбит на `lib/component/model/api/i18n/sections` и не является universal entity editor;
+- `rustok-seo-admin` разбит на FFA-слои `core/transport/ui/leptos/sections/i18n` и не является universal entity editor;
 - owner-side SEO panels встроены в `rustok-pages/admin`, `rustok-product/admin`, `rustok-blog/admin`, `rustok-forum/admin`;
 - target extensibility идёт через `rustok-seo-targets` и runtime registration providers;
 - tenant templates и diagnostics уже first-class read/control-plane слой; diagnostics покрывает issue aggregates, canonical redirect chains/loops, hreflang gaps, `cross_link_gap`, `missing_image_alt`, `missing_image_size`;

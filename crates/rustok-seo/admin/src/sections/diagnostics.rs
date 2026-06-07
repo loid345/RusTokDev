@@ -5,8 +5,8 @@ use rustok_seo::{
 };
 use rustok_seo_targets::{default_schema_payload_for_slug, SeoTargetSlug};
 
-use crate::api::ApiError;
 use crate::i18n::t;
+use crate::transport::ApiError;
 
 #[component]
 pub fn SeoDiagnosticsPane(

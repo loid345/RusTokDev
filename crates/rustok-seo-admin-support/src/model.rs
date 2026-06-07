@@ -576,10 +576,11 @@ pub fn remediation_hint_for_issue_code(issue_code: &str) -> SeoRemediationHint {
         | "index_delivery_failed"
         | "index_delivery_dead_letter"
         | "canonical_points_to_redirect_chain"
-        | "canonical_redirect_loop" => {
-            (SeoRemediationAction::RunReindex, "index_sync_required")
-        }
-        _ => (SeoRemediationAction::OpenEntityEditor, "entity_metadata_fix"),
+        | "canonical_redirect_loop" => (SeoRemediationAction::RunReindex, "index_sync_required"),
+        _ => (
+            SeoRemediationAction::OpenEntityEditor,
+            "entity_metadata_fix",
+        ),
     };
 
     SeoRemediationHint {
@@ -900,7 +901,8 @@ mod tests {
             SeoControlPlaneWidgetStateKind::Loading,
         );
         assert_eq!(
-            derive_control_plane_widget_state(true, false, Some("PERMISSION_DENIED: seo:manage")).kind,
+            derive_control_plane_widget_state(true, false, Some("PERMISSION_DENIED: seo:manage"))
+                .kind,
             SeoControlPlaneWidgetStateKind::PermissionDenied,
         );
         assert_eq!(

@@ -2,9 +2,9 @@ use leptos::ev::SubmitEvent;
 use leptos::prelude::*;
 use rustok_seo::SeoRedirectRecord;
 
-use crate::api::ApiError;
+use crate::core::SeoRedirectForm;
 use crate::i18n::t;
-use crate::model::SeoRedirectForm;
+use crate::transport::ApiError;
 
 #[component]
 pub fn SeoRedirectsPane(

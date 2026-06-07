@@ -5,8 +5,8 @@ use leptos_ui_routing::{use_route_query_value, use_route_query_writer};
 use rustok_api::{AdminQueryKey, UiRouteContext};
 use uuid::Uuid;
 
-use crate::api;
-use crate::model::{
+use crate::core::{
+    format_index_repair_replay_result, validate_sitemap_generation_enabled, SeoAdminBusyKey,
     SeoAdminTab, SeoBulkActionForm, SeoBulkFilterForm, SeoIndexReplayForm, SeoRedirectForm,
     SeoSettingsForm,
 };
@@ -14,7 +14,7 @@ use crate::sections::{
     SeoAdminHeader, SeoAdminTabs, SeoBulkPane, SeoBusyFooter, SeoDefaultsPane, SeoDiagnosticsPane,
     SeoIndexPane, SeoRedirectsPane, SeoRobotsPane, SeoSitemapsPane,
 };
-use rustok_seo::SeoBulkFieldPatchMode;
+use crate::transport;
 
 #[component]
 pub fn SeoAdmin() -> impl IntoView {
@@ -42,57 +42,52 @@ pub fn SeoAdmin() -> impl IntoView {
 
     let redirects = Resource::new(
         move || redirects_nonce.get(),
-        move |_| async move { api::fetch_redirects().await },
+        move |_| async move { transport::fetch_redirects().await },
     );
     let settings = Resource::new(
         move || settings_nonce.get(),
-        move |_| async move { api::fetch_settings().await },
+        move |_| async move { transport::fetch_settings().await },
     );
     let robots_preview = Resource::new(
         move || settings_nonce.get(),
-        move |_| async move { api::fetch_robots_preview().await },
+        move |_| async move { transport::fetch_robots_preview().await },
     );
     let diagnostics = Resource::new(
         move || settings_nonce.get(),
         move |_| {
             let locale = diagnostics_locale.clone();
-            async move { api::fetch_diagnostics(locale).await }
+            async move { transport::fetch_diagnostics(locale).await }
         },
     );
     let sitemap_status = Resource::new(
         move || sitemap_nonce.get(),
-        move |_| async move { api::fetch_sitemap_status().await },
+        move |_| async move { transport::fetch_sitemap_status().await },
     );
     let index_status = Resource::new(
-        move || (index_nonce.get(), index_replay_form.get().target_type),
-        move |(_, target_type)| async move {
-            let target_type = {
-                let trimmed = target_type.trim();
-                if trimmed.is_empty() {
-                    None
-                } else {
-                    Some(trimmed.to_string())
-                }
-            };
-            api::fetch_index_delivery_status(target_type).await
+        move || {
+            (
+                index_nonce.get(),
+                index_replay_form.get().status_target_type(),
+            )
         },
+        move |(_, target_type)| async move { transport::fetch_index_delivery_status(target_type).await },
     );
     let bulk_items = Resource::new(
         move || bulk_nonce.get(),
         move |_| async move {
             match bulk_filter_form.get_untracked().build_input() {
-                Ok(input) => api::fetch_bulk_items(input).await,
-                Err(err) => Err(api::ApiError::ServerFn(err)),
+                Ok(input) => transport::fetch_bulk_items(input).await,
+                Err(err) => Err(transport::ApiError::ServerFn(err)),
             }
         },
     );
     let bulk_targets = Resource::new(
         || (),
-        move |_| async move { api::fetch_bulk_targets().await },
+        move |_| async move { transport::fetch_bulk_targets().await },
     );
     let bulk_jobs = Resource::new(
         move || bulk_jobs_nonce.get(),
-        move |_| async move { api::fetch_bulk_jobs(Some(20), None).await },
+        move |_| async move { transport::fetch_bulk_jobs(Some(20), None).await },
     );
     let active_tab = Signal::derive(move || {
         tab_query
@@ -138,9 +133,9 @@ pub fn SeoAdmin() -> impl IntoView {
             }
         };
 
-        busy_key.set(Some("save-redirect".to_string()));
+        busy_key.set(Some(SeoAdminBusyKey::SaveRedirect.to_busy_key()));
         spawn_local(async move {
-            match api::save_redirect(input).await {
+            match transport::save_redirect(input).await {
                 Ok(_) => {
                     status_message.set(Some("Redirect saved".to_string()));
                     redirects_nonce.update(|value| *value += 1);
@@ -156,9 +151,9 @@ pub fn SeoAdmin() -> impl IntoView {
         status_message.set(None);
         let input = settings_form.get_untracked().build_settings();
 
-        busy_key.set(Some("save-settings".to_string()));
+        busy_key.set(Some(SeoAdminBusyKey::SaveSettings.to_busy_key()));
         spawn_local(async move {
-            match api::save_settings(input).await {
+            match transport::save_settings(input).await {
                 Ok(saved) => {
                     settings_form.set(SeoSettingsForm::from_settings(&saved));
                     status_message.set(Some("SEO defaults saved".to_string()));
@@ -173,22 +168,19 @@ pub fn SeoAdmin() -> impl IntoView {
 
     let generate_sitemaps = Callback::new(move |_| {
         status_message.set(None);
-        if matches!(
-            sitemap_status.get_untracked(),
-            Some(Ok(rustok_seo::SeoSitemapStatusRecord {
-                enabled: false,
-                ..
-            }))
+        let current_status = sitemap_status.get_untracked();
+        if let Err(err) = validate_sitemap_generation_enabled(
+            current_status
+                .as_ref()
+                .and_then(|status| status.as_ref().ok()),
         ) {
-            status_message.set(Some(
-                "Sitemap generation is disabled in SEO defaults".to_string(),
-            ));
+            status_message.set(Some(err));
             return;
         }
 
-        busy_key.set(Some("generate-sitemaps".to_string()));
+        busy_key.set(Some(SeoAdminBusyKey::GenerateSitemaps.to_busy_key()));
         spawn_local(async move {
-            match api::generate_sitemaps().await {
+            match transport::generate_sitemaps().await {
                 Ok(_) => {
                     status_message.set(Some("Sitemaps generated".to_string()));
                     sitemap_nonce.update(|value| *value += 1);
@@ -205,30 +197,22 @@ pub fn SeoAdmin() -> impl IntoView {
 
     let run_index_repair_only = Callback::new(move |_| {
         status_message.set(None);
-        let input = match index_replay_form.get_untracked().build_input(false) {
+        let input = match index_replay_form
+            .get_untracked()
+            .build_confirmed_input(false)
+        {
             Ok(input) => input,
             Err(err) => {
                 status_message.set(Some(err));
                 return;
             }
         };
-        if !index_replay_form.get_untracked().confirm_repair_only {
-            status_message.set(Some(
-                "Confirm repair-only execution before running the operation.".to_string(),
-            ));
-            return;
-        }
 
-        busy_key.set(Some("index-repair-only".to_string()));
+        busy_key.set(Some(SeoAdminBusyKey::IndexRepairOnly.to_busy_key()));
         spawn_local(async move {
-            match api::run_index_repair_replay(input).await {
+            match transport::run_index_repair_replay(input).await {
                 Ok(result) => {
-                    status_message.set(Some(format!(
-                        "Repair completed: repaired={} replayed={} scanned={}.",
-                        result.repaired_count,
-                        result.replayed_count,
-                        result.historical_events_scanned
-                    )));
+                    status_message.set(Some(format_index_repair_replay_result(&result, false)));
                     index_nonce.update(|value| *value += 1);
                 }
                 Err(err) => status_message.set(Some(err.to_string())),
@@ -239,34 +223,22 @@ pub fn SeoAdmin() -> impl IntoView {
 
     let run_index_repair_replay = Callback::new(move |_| {
         status_message.set(None);
-        let input = match index_replay_form.get_untracked().build_input(true) {
+        let input = match index_replay_form
+            .get_untracked()
+            .build_confirmed_input(true)
+        {
             Ok(input) => input,
             Err(err) => {
                 status_message.set(Some(err));
                 return;
             }
         };
-        if !index_replay_form.get_untracked().confirm_replay_historical {
-            status_message.set(Some(
-                "Confirm historical replay execution before running the operation.".to_string(),
-            ));
-            return;
-        }
 
-        busy_key.set(Some("index-repair-replay".to_string()));
+        busy_key.set(Some(SeoAdminBusyKey::IndexRepairReplay.to_busy_key()));
         spawn_local(async move {
-            match api::run_index_repair_replay(input).await {
+            match transport::run_index_repair_replay(input).await {
                 Ok(result) => {
-                    status_message.set(Some(format!(
-                        "Replay completed: repaired={} replayed={} scanned={} run_id={}",
-                        result.repaired_count,
-                        result.replayed_count,
-                        result.historical_events_scanned,
-                        result
-                            .replay_run_id
-                            .map(|value| value.to_string())
-                            .unwrap_or_else(|| "n/a".to_string())
-                    )));
+                    status_message.set(Some(format_index_repair_replay_result(&result, true)));
                     index_nonce.update(|value| *value += 1);
                 }
                 Err(err) => status_message.set(Some(err.to_string())),
@@ -294,9 +266,9 @@ pub fn SeoAdmin() -> impl IntoView {
             .get_untracked()
             .build_selection(filter, &bulk_selected_ids.get_untracked());
 
-        busy_key.set(Some("preview-bulk-selection".to_string()));
+        busy_key.set(Some(SeoAdminBusyKey::PreviewBulkSelection.to_busy_key()));
         spawn_local(async move {
-            match api::preview_bulk_selection(selection).await {
+            match transport::preview_bulk_selection(selection).await {
                 Ok(preview) => bulk_selection_preview.set(Some(preview.count)),
                 Err(err) => status_message.set(Some(err.to_string())),
             }
@@ -323,17 +295,19 @@ pub fn SeoAdmin() -> impl IntoView {
             }
         };
 
-        busy_key.set(Some("queue-bulk-apply".to_string()));
+        busy_key.set(Some(SeoAdminBusyKey::QueueBulkApply.to_busy_key()));
         spawn_local(async move {
-            match api::preview_bulk_selection(input.selection.clone()).await {
-                Ok(preview) if preview.count > 0 => match api::queue_bulk_apply(input).await {
-                    Ok(job) => {
-                        bulk_selection_preview.set(Some(preview.count));
-                        status_message.set(Some(format!("Queued bulk apply job {}", job.id)));
-                        bulk_jobs_nonce.update(|value| *value += 1);
+            match transport::preview_bulk_selection(input.selection.clone()).await {
+                Ok(preview) if preview.count > 0 => {
+                    match transport::queue_bulk_apply(input).await {
+                        Ok(job) => {
+                            bulk_selection_preview.set(Some(preview.count));
+                            status_message.set(Some(format!("Queued bulk apply job {}", job.id)));
+                            bulk_jobs_nonce.update(|value| *value += 1);
+                        }
+                        Err(err) => status_message.set(Some(err.to_string())),
                     }
-                    Err(err) => status_message.set(Some(err.to_string())),
-                },
+                }
                 Ok(_) => status_message.set(Some("Bulk selection is empty".to_string())),
                 Err(err) => status_message.set(Some(err.to_string())),
             }
@@ -352,9 +326,9 @@ pub fn SeoAdmin() -> impl IntoView {
         };
         let input = bulk_action_form.get_untracked().build_export_input(filter);
 
-        busy_key.set(Some("queue-bulk-export".to_string()));
+        busy_key.set(Some(SeoAdminBusyKey::QueueBulkExport.to_busy_key()));
         spawn_local(async move {
-            match api::queue_bulk_export(input).await {
+            match transport::queue_bulk_export(input).await {
                 Ok(job) => {
                     status_message.set(Some(format!("Queued bulk export job {}", job.id)));
                     bulk_jobs_nonce.update(|value| *value += 1);
@@ -382,9 +356,9 @@ pub fn SeoAdmin() -> impl IntoView {
             }
         };
 
-        busy_key.set(Some("queue-bulk-import".to_string()));
+        busy_key.set(Some(SeoAdminBusyKey::QueueBulkImport.to_busy_key()));
         spawn_local(async move {
-            match api::queue_bulk_import(input).await {
+            match transport::queue_bulk_import(input).await {
                 Ok(job) => {
                     status_message.set(Some(format!("Queued bulk import job {}", job.id)));
                     bulk_jobs_nonce.update(|value| *value += 1);
@@ -409,18 +383,7 @@ pub fn SeoAdmin() -> impl IntoView {
             let select_tab = select_tab.clone();
             select_tab.run(SeoAdminTab::Bulk);
             bulk_action_form.update(|draft| {
-                draft.apply_mode = apply_mode;
-                draft.structured_data.mode = SeoBulkFieldPatchMode::Set;
-                draft.structured_data.value = payload;
-                draft.title.mode = SeoBulkFieldPatchMode::Keep;
-                draft.description.mode = SeoBulkFieldPatchMode::Keep;
-                draft.keywords.mode = SeoBulkFieldPatchMode::Keep;
-                draft.canonical_url.mode = SeoBulkFieldPatchMode::Keep;
-                draft.og_title.mode = SeoBulkFieldPatchMode::Keep;
-                draft.og_description.mode = SeoBulkFieldPatchMode::Keep;
-                draft.og_image.mode = SeoBulkFieldPatchMode::Keep;
-                draft.noindex.mode = SeoBulkFieldPatchMode::Keep;
-                draft.nofollow.mode = SeoBulkFieldPatchMode::Keep;
+                draft.prefill_schema_fix(apply_mode, payload);
             });
             bulk_filter_form.update(|draft| {
                 draft.target_kind = target_kind;

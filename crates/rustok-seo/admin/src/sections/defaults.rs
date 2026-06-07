@@ -2,9 +2,9 @@ use leptos::ev::SubmitEvent;
 use leptos::prelude::*;
 use rustok_seo::SeoModuleSettings;
 
-use crate::api::ApiError;
+use crate::core::{SeoSettingsForm, ROBOT_DIRECTIVE_PRESETS};
 use crate::i18n::t;
-use crate::model::{SeoSettingsForm, ROBOT_DIRECTIVE_PRESETS};
+use crate::transport::ApiError;
 
 #[component]
 pub fn SeoDefaultsPane(

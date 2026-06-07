@@ -5,7 +5,7 @@ use leptos_auth::hooks::{use_tenant, use_token};
 use leptos_ui_routing::{use_route_query_value, use_route_query_writer};
 use rustok_api::{AdminQueryKey, UiRouteContext};
 use rustok_seo_admin_support::SeoEntityPanel;
-use rustok_seo_targets::{SeoTargetSlug, builtin_slug as seo_builtin_slug};
+use rustok_seo_targets::{builtin_slug as seo_builtin_slug, SeoTargetSlug};
 
 use crate::core::{
     format_count, parse_tags, reply_count_label, topic_category_filter, topic_status_class,

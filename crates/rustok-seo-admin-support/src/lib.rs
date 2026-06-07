@@ -7,8 +7,8 @@ mod panel;
 
 pub use components::{
     SeoControlPlaneWidgetStateCard, SeoControlPlaneWidgets, SeoDeliveryStatusCards,
-    SeoRecommendationsCard, SeoRemediationHintCard, SeoSchemaPreviewCard,
-    SeoSnippetPreviewCard, SeoSummaryTile,
+    SeoRecommendationsCard, SeoRemediationHintCard, SeoSchemaPreviewCard, SeoSnippetPreviewCard,
+    SeoSummaryTile,
 };
 pub use model::{
     derive_control_plane_widget_state, remediation_hint_for_issue_code, SeoCompletenessReport,
