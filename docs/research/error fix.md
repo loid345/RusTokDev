@@ -44,7 +44,7 @@
 - Следующий малый Wave 5 UI-boundary slice развёл client-side parsing и i18n copy для reservation и availability flows: detail UI вызывает `parse_availability_quantity` для dedicated availability validation, availability/reservation invalid labels больше не переиспользуют reserve-specific текст, тесты фиксируют domain-labeled non-negative error и source boundary дополнительно запрещает `releaseReservation` в transitional GraphQL adapter-е.
 - Следующий малый Wave 5 availability-semantics slice закрепил case-insensitive matching для inventory backorder policy `continue` в общем `services/policy.rs`: write-result `in_stock`, set/adjust/reserve/check-availability guardrails и admin read-side stock state больше не зависят от регистра policy value и не держат дублирующие helpers.
 - Следующий малый Wave 5 docs-sync slice синхронизировал umbrella commerce docs и центральный FFA/FBA registry с inventory-owned native set/adjust/reserve/release/check-availability surface и shared case-insensitive backorder policy semantics; local inventory operability docs отмечены закрытыми для текущего runtime surface.
-- Следующий малый Wave 5 compatibility-semantics slice экспортировал inventory-owned backorder policy helper и подключил его в umbrella commerce checkout/storefront compatibility paths, чтобы `continue` не становился case-sensitive за пределами inventory-owned read/write services.
+- Следующий малый Wave 5 compatibility-semantics slice экспортировал inventory-owned backorder policy helper и подключил его в umbrella commerce checkout/storefront compatibility paths, чтобы `continue` не становился case-sensitive за пределами inventory-owned read/write services. Следующий Wave 6 guardrail slice добавил быстрый `node scripts/verify/verify-inventory-admin-boundary.mjs` и подключил его к `./scripts/verify/verify-all.sh inventory-admin-boundary`: проверка закрепляет policy-aware native write result, отсутствие duplicate variant pre-read, read-only transitional GraphQL adapter и native-only inventory admin write facades без полной Rust-компиляции.
 
 ## Проверенные факты
 
@@ -270,7 +270,8 @@ flowchart LR
    - manifest ↔ runtime registry graph;
    - migration smoke;
    - channel context/cache key invariants;
-   - locale cache tests.
+   - locale cache tests;
+   - inventory admin native write/read boundary invariants (`verify-inventory-admin-boundary.mjs`).
 2. Обновить central docs:
    - `docs/architecture/api.md` для request context/channel contract;
    - `docs/architecture/modules.md` или `docs/modules/module-authoring.md` для module graph/descriptors;
