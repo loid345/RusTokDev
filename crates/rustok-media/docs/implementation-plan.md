@@ -6,11 +6,11 @@
 ## Execution checkpoint
 
 - Current phase: FFA-разделение admin ui/core/transport
-- Last checkpoint: Admin UI package разделён на Leptos-free `admin/src/core.rs`, module-owned `admin/src/transport/` facade поверх native/GraphQL/REST путей и явный `admin/src/ui/leptos.rs` render adapter; crate root теперь только связывает модули и реэкспортирует `MediaAdmin`.
+- Last checkpoint: Transport facade углублён: `admin/src/transport/mod.rs` теперь только выбирает native-first path и fallback, а GraphQL, REST upload и native server functions вынесены в `graphql_adapter.rs`, `rest_adapter.rs` и `native_server_adapter.rs`; Leptos render adapter продолжает вызывать только facade.
 - Next step: Добрать targeted tests на descriptor normalization + интеграционные проверки owner-module SEO providers, которые используют descriptor contract, и расширить FFA core helpers для upload/detail state без изменения transport parity.
 - Open blockers: нет.
-- Hand-off notes for next agent: держать `MediaImageDescriptor` единственным image payload для cross-module SEO/runtime интеграций; admin UI должен идти через `core` + `transport`, а Leptos-only код оставаться в `ui/leptos.rs`.
-- Last updated at (UTC): 2026-06-08T11:35:32Z
+- Hand-off notes for next agent: держать `MediaImageDescriptor` единственным image payload для cross-module SEO/runtime интеграций; admin UI должен идти через `core` + `transport`, Leptos-only код оставлять в `ui/leptos.rs`, а transport-specific код — в dedicated adapter files.
+- Last updated at (UTC): 2026-06-08T11:43:16Z
 
 ## FFA/FBA status
 
@@ -20,7 +20,7 @@
 - Evidence:
   - module plan синхронизирован с central FFA/FBA readiness board; media admin surface уже опубликован и ведётся в migration/backlog ритме;
   - FFA admin slice: `admin/src/core.rs` владеет Leptos-free form/presentation helpers (`non_empty_option`, dimensions label, pagination label, translation form state, usage stat cards) с unit tests;
-  - `admin/src/transport/` владеет текущим native-first + GraphQL fallback + REST upload transport facade без изменения внешних GraphQL/REST contracts;
+  - `admin/src/transport/` владеет текущим native-first + GraphQL fallback + REST upload transport facade без изменения внешних GraphQL/REST contracts; facade split зафиксирован через `graphql_adapter.rs`, `rest_adapter.rs` и `native_server_adapter.rs`;
   - `admin/src/ui/leptos.rs` является явным Leptos render adapter, а crate root только связывает модули и реэкспортирует `MediaAdmin`.
 
 ## Область работ

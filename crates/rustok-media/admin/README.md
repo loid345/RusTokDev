@@ -16,7 +16,7 @@ Leptos admin UI package for the `rustok-media` module.
 
 - `MediaAdmin` - root admin view rendered from the host admin registry.
 - `src/core.rs` - framework-agnostic admin helpers reused by render adapters.
-- `src/transport/` - module-owned native/GraphQL/REST facade.
+- `src/transport/` - module-owned native/GraphQL/REST facade with dedicated `native_server_adapter.rs`, `graphql_adapter.rs`, and `rest_adapter.rs` files.
 
 ## Interactions
 
