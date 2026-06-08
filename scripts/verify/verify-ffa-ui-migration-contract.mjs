@@ -187,6 +187,9 @@ const regionStorefrontLocalePaths = [
 ];
 
 
+const productAdminCorePath = "crates/rustok-product/admin/src/core.rs";
+const productAdminLeptosUiPath = "crates/rustok-product/admin/src/ui/leptos.rs";
+const productAdminReadmePath = "crates/rustok-product/admin/README.md";
 const productStorefrontCorePath = "crates/rustok-product/storefront/src/core.rs";
 const productStorefrontTransportPath = "crates/rustok-product/storefront/src/transport/mod.rs";
 const productStorefrontLeptosUiPath = "crates/rustok-product/storefront/src/ui/leptos.rs";
@@ -486,6 +489,48 @@ function collectProductTransportEvidenceContractErrors() {
   return errors;
 }
 
+function collectProductAdminShellProfileContractErrors() {
+  const errors = [];
+  const core = readText(productAdminCorePath);
+  const leptosUi = readText(productAdminLeptosUiPath);
+  const adminReadme = readText(productAdminReadmePath);
+
+  [
+    "ProductAdminShellViewModel",
+    "build_product_admin_shell_view_model",
+    "ProductAdminProfilePanelViewModel",
+    "build_product_admin_profile_panel_loading_view_model",
+    "build_product_admin_profile_panel_error_view_model",
+    "build_product_admin_profile_panel_ready_view_model",
+  ].forEach((contractName) => {
+    if (!core.includes(contractName)) {
+      errors.push(`Product admin core должен содержать shell/profile view-model contract: ${contractName}`);
+    }
+  });
+
+  [
+    "build_product_admin_shell_view_model",
+    "build_product_admin_profile_panel_loading_view_model",
+    "build_product_admin_profile_panel_error_view_model",
+    "build_product_admin_profile_panel_ready_view_model",
+  ].forEach((contractName) => {
+    if (!leptosUi.includes(contractName)) {
+      errors.push(`Product admin Leptos adapter должен использовать core-owned shell/profile helper: ${contractName}`);
+    }
+  });
+
+  [
+    "admin shell copy",
+    "profile-panel state",
+  ].forEach((requiredSnippet) => {
+    if (!adminReadme.includes(requiredSnippet)) {
+      errors.push(`Product admin README должен документировать shell/profile FFA snippet: ${requiredSnippet}`);
+    }
+  });
+
+  return errors;
+}
+
 function collectStructuralShapeErrors(registry) {
   const errors = [];
 
@@ -671,6 +716,7 @@ function collectValidationErrors({ plan, connectivity, checklist, registry, docs
   errors.push(...collectPagesStorefrontUiSplitErrors());
   errors.push(...collectRegionErrorStatusContractErrors());
   errors.push(...collectProductTransportEvidenceContractErrors());
+  errors.push(...collectProductAdminShellProfileContractErrors());
 
   return errors.sort((a, b) => a.localeCompare(b, "ru"));
 }

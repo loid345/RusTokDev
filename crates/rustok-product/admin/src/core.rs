@@ -674,6 +674,89 @@ pub(crate) fn build_product_admin_save_command(
     })
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ProductAdminShellViewModel {
+    pub badge: String,
+    pub title: String,
+    pub subtitle: String,
+}
+
+pub(crate) fn build_product_admin_shell_view_model(
+    locale: Option<&str>,
+) -> ProductAdminShellViewModel {
+    ProductAdminShellViewModel {
+        badge: t(locale, "product.badge", "product"),
+        title: t(locale, "product.title", "Product Catalog"),
+        subtitle: t(
+            locale,
+            "product.subtitle",
+            "Product ownership now lives in the product module package. Commerce keeps delivery orchestration while catalog CRUD moves to the product route.",
+        ),
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ProductAdminProfilePanelViewModel {
+    Loading { message: String },
+    Error { message: String },
+    Ready { message: String },
+}
+
+impl ProductAdminProfilePanelViewModel {
+    pub(crate) fn into_message(self) -> String {
+        match self {
+            Self::Loading { message } | Self::Error { message } | Self::Ready { message } => {
+                message
+            }
+        }
+    }
+}
+
+pub(crate) fn build_product_admin_profile_panel_loading_view_model(
+    locale: Option<&str>,
+) -> ProductAdminProfilePanelViewModel {
+    ProductAdminProfilePanelViewModel::Loading {
+        message: t(
+            locale,
+            "product.profile.loading",
+            "Shipping profiles are loading from the registry.",
+        ),
+    }
+}
+
+pub(crate) fn build_product_admin_profile_panel_error_view_model(
+    locale: Option<&str>,
+    error: impl std::fmt::Display,
+) -> ProductAdminProfilePanelViewModel {
+    ProductAdminProfilePanelViewModel::Error {
+        message: format!(
+            "{}: {error}",
+            t(
+                locale,
+                "product.profile.error",
+                "Failed to load shipping profiles"
+            )
+        ),
+    }
+}
+
+pub(crate) fn build_product_admin_profile_panel_ready_view_model(
+    locale: Option<&str>,
+    profiles: &[ShippingProfile],
+) -> ProductAdminProfilePanelViewModel {
+    ProductAdminProfilePanelViewModel::Ready {
+        message: t(
+            locale,
+            "product.profile.known",
+            "Known profiles: {profiles}",
+        )
+        .replace(
+            "{profiles}",
+            format_known_shipping_profiles(locale, profiles).as_str(),
+        ),
+    }
+}
+
 pub(crate) fn format_known_shipping_profiles(
     locale: Option<&str>,
     profiles: &[ShippingProfile],
@@ -1320,6 +1403,63 @@ mod tests {
         );
         assert_eq!(view_model.timestamp_label, "2026-01-02T00:00:00Z");
         assert!(view_model.status_badge_class.contains("emerald"));
+    }
+
+    #[test]
+    fn product_admin_shell_view_model_is_core_owned() {
+        let view_model = build_product_admin_shell_view_model(Some("en"));
+
+        assert_eq!(view_model.badge, "product");
+        assert_eq!(view_model.title, "Product Catalog");
+        assert_eq!(
+            view_model.subtitle,
+            "Product ownership now lives in the product module package. Commerce keeps delivery orchestration while catalog CRUD moves to the product route."
+        );
+    }
+
+    #[test]
+    fn product_admin_profile_panel_view_models_are_core_owned() {
+        let active = ShippingProfile {
+            id: "profile-1".to_string(),
+            tenant_id: "tenant-1".to_string(),
+            slug: "standard".to_string(),
+            name: "Standard".to_string(),
+            description: None,
+            active: true,
+            metadata: "{}".to_string(),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+        };
+        let inactive = ShippingProfile {
+            id: "profile-2".to_string(),
+            tenant_id: "tenant-1".to_string(),
+            slug: "inactive".to_string(),
+            name: "Inactive".to_string(),
+            description: None,
+            active: false,
+            metadata: "{}".to_string(),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-01T00:00:00Z".to_string(),
+        };
+
+        assert_eq!(
+            build_product_admin_profile_panel_loading_view_model(Some("en")),
+            ProductAdminProfilePanelViewModel::Loading {
+                message: "Shipping profiles are loading from the registry.".to_string(),
+            },
+        );
+        assert_eq!(
+            build_product_admin_profile_panel_error_view_model(Some("en"), "network unavailable"),
+            ProductAdminProfilePanelViewModel::Error {
+                message: "Failed to load shipping profiles: network unavailable".to_string(),
+            },
+        );
+        assert_eq!(
+            build_product_admin_profile_panel_ready_view_model(Some("en"), &[active, inactive]),
+            ProductAdminProfilePanelViewModel::Ready {
+                message: "Known profiles: standard".to_string(),
+            },
+        );
     }
 
     #[test]

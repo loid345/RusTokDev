@@ -11,9 +11,12 @@ use crate::core::{
     build_product_admin_editor_form_state, build_product_admin_editor_view_model,
     build_product_admin_list_controls_view_model, build_product_admin_list_empty_view_model,
     build_product_admin_list_error_view_model, build_product_admin_list_item_view_model,
-    build_product_admin_list_loading_view_model, build_product_admin_save_command,
-    build_product_admin_status_mutation_command, build_selected_product_summary_view_model,
-    empty_product_admin_editor_form_state, format_known_shipping_profiles,
+    build_product_admin_list_loading_view_model,
+    build_product_admin_profile_panel_error_view_model,
+    build_product_admin_profile_panel_loading_view_model,
+    build_product_admin_profile_panel_ready_view_model, build_product_admin_save_command,
+    build_product_admin_shell_view_model, build_product_admin_status_mutation_command,
+    build_selected_product_summary_view_model, empty_product_admin_editor_form_state,
     primary_catalog_currency, shipping_profile_choice_label, text_or_none, ProductAdminDraftForm,
     ProductAdminEditorFormState, ProductAdminListStateKind, ProductAdminPricingPreviewState,
     ProductAdminSaveMode, ProductAdminStatusTarget, SelectedProductSummaryViewModel,
@@ -404,21 +407,22 @@ pub fn ProductAdmin() -> impl IntoView {
     view! {
         <section class="space-y-6">
             <header class="rounded-3xl border border-border bg-card p-6 shadow-sm">
-                <div class="space-y-3">
-                    <span class="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                        {t(ui_locale.as_deref(), "product.badge", "product")}
-                    </span>
-                    <h2 class="text-2xl font-semibold text-card-foreground">
-                        {t(ui_locale.as_deref(), "product.title", "Product Catalog")}
-                    </h2>
-                    <p class="max-w-3xl text-sm text-muted-foreground">
-                        {t(
-                            ui_locale.as_deref(),
-                            "product.subtitle",
-                            "Product ownership now lives in the product module package. Commerce keeps delivery orchestration while catalog CRUD moves to the product route.",
-                        )}
-                    </p>
-                </div>
+                {
+                    let shell = build_product_admin_shell_view_model(ui_locale.as_deref());
+                    view! {
+                        <div class="space-y-3">
+                            <span class="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                                {shell.badge}
+                            </span>
+                            <h2 class="text-2xl font-semibold text-card-foreground">
+                                {shell.title}
+                            </h2>
+                            <p class="max-w-3xl text-sm text-muted-foreground">
+                                {shell.subtitle}
+                            </p>
+                        </div>
+                    }
+                }
             </header>
 
             <div class="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
@@ -733,10 +737,20 @@ pub fn ProductAdmin() -> impl IntoView {
 
                         <div class="mt-4 rounded-2xl border border-border bg-background p-4 text-xs text-muted-foreground">
                             {move || match shipping_profiles.get() {
-                                None => t(ui_locale_for_profile_panel.as_deref(), "product.profile.loading", "Shipping profiles are loading from the registry."),
-                                Some(Err(err)) => format!("{}: {err}", t(ui_locale_for_profile_panel.as_deref(), "product.profile.error", "Failed to load shipping profiles")),
-                                Some(Ok(list)) => t(ui_locale_for_profile_panel.as_deref(), "product.profile.known", "Known profiles: {profiles}")
-                                    .replace("{profiles}", format_known_shipping_profiles(ui_locale_for_profile_panel.as_deref(), &list.items).as_str()),
+                                None => build_product_admin_profile_panel_loading_view_model(
+                                    ui_locale_for_profile_panel.as_deref(),
+                                )
+                                .into_message(),
+                                Some(Err(err)) => build_product_admin_profile_panel_error_view_model(
+                                    ui_locale_for_profile_panel.as_deref(),
+                                    err,
+                                )
+                                .into_message(),
+                                Some(Ok(list)) => build_product_admin_profile_panel_ready_view_model(
+                                    ui_locale_for_profile_panel.as_deref(),
+                                    &list.items,
+                                )
+                                .into_message(),
                             }}
                         </div>
                     </section>
