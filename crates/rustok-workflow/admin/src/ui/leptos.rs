@@ -5,7 +5,8 @@ use leptos_router::components::A;
 use rustok_api::UiRouteContext;
 
 use crate::core::{
-    workflow_name_from_template_input, workflow_row_view_model, workflow_template_card_view_model,
+    workflow_admin_nav_view_model, workflow_admin_transport_context, workflow_error_view_model,
+    workflow_row_view_model, workflow_template_card_view_model, workflow_template_create_command,
     WorkflowStatusPresentation,
 };
 use crate::i18n::t;
@@ -30,10 +31,6 @@ pub fn WorkflowAdmin() -> impl IntoView {
     let tenant = use_tenant();
     let (refresh_nonce, set_refresh_nonce) = signal(0_u64);
     let route_context = use_context::<UiRouteContext>().unwrap_or_default();
-    let route_segment = route_context
-        .route_segment
-        .clone()
-        .unwrap_or_else(|| "workflow".to_string());
     let locale = route_context.locale.clone();
     let badge = t(locale.as_deref(), "workflow.badge", "workflow");
     let title = t(locale.as_deref(), "workflow.title", "Workflow Automation");
@@ -65,12 +62,17 @@ pub fn WorkflowAdmin() -> impl IntoView {
         "Failed to load workflows",
     );
     let showing_templates = route_context.subpath_matches("templates");
+    let nav =
+        workflow_admin_nav_view_model(route_context.route_segment.as_deref(), showing_templates);
 
     let workflows_resource = local_resource(
-        move || (token.get(), tenant.get(), refresh_nonce.get()),
-        move |(token_value, tenant_value, _)| async move {
-            transport::fetch_workflows(token_value, tenant_value).await
+        move || {
+            (
+                workflow_admin_transport_context(token.get(), tenant.get()),
+                refresh_nonce.get(),
+            )
         },
+        move |(context, _)| async move { transport::fetch_workflows(context).await },
     );
 
     view! {
@@ -89,11 +91,7 @@ pub fn WorkflowAdmin() -> impl IntoView {
                 </div>
                 <div class="flex flex-wrap gap-2">
                     <A
-                        href=if showing_templates {
-                            format!("/modules/{route_segment}")
-                        } else {
-                            format!("/modules/{route_segment}/templates")
-                        }
+                        href=nav.toggle_href.clone()
                         attr:class="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-accent hover:text-accent-foreground"
                     >
                         {if showing_templates {
@@ -103,7 +101,7 @@ pub fn WorkflowAdmin() -> impl IntoView {
                         }}
                     </A>
                     <A
-                        href="/workflows"
+                        href=nav.legacy_href
                         attr:class="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
                     >
                         {open_legacy.clone()}
@@ -153,7 +151,7 @@ pub fn WorkflowAdmin() -> impl IntoView {
                                 }.into_any(),
                                 Err(err) => view! {
                                     <div class="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                                        {format!("{}: {err}", load_workflows_error)}
+                                        {workflow_error_view_model(&load_workflows_error, err).message}
                                     </div>
                                 }.into_any(),
                             }
@@ -194,7 +192,7 @@ fn WorkflowList(workflows: Vec<WorkflowSummary>) -> impl IntoView {
                     {empty_message}
                 </p>
                 <A
-                    href="/workflows"
+                    href=workflow_admin_nav_view_model(None, false).legacy_href
                     attr:class="mt-4 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
                 >
                     {open_workflows}
@@ -292,10 +290,13 @@ fn TemplateGallery(
     let token_for_templates = token.clone();
     let tenant_for_templates = tenant_slug.clone();
     let templates_resource = local_resource(
-        move || (token_for_templates.clone(), tenant_for_templates.clone()),
-        move |(token_value, tenant_value)| async move {
-            transport::fetch_templates(token_value, tenant_value).await
+        move || {
+            workflow_admin_transport_context(
+                token_for_templates.clone(),
+                tenant_for_templates.clone(),
+            )
         },
+        move |context| async move { transport::fetch_templates(context).await },
     );
 
     view! {
@@ -338,23 +339,20 @@ fn TemplateGallery(
                                                 name=current_name.clone()
                                                 on_name_change=Callback::new(move |value| set_name_input.set(value))
                                                 on_use=Callback::new(move |_| {
-                                                    let token_value = token_for_request.clone();
-                                                    let tenant_value = tenant_for_request.clone();
+                                                    let context = workflow_admin_transport_context(
+                                                        token_for_request.clone(),
+                                                        tenant_for_request.clone(),
+                                                    );
                                                     let template_id = template_id.clone();
-                                                    let workflow_name = workflow_name_from_template_input(
+                                                    let command = workflow_template_create_command(
+                                                        &template_id,
                                                         &name_input.get_untracked(),
                                                         &default_name_prefix,
-                                                        &template_id,
                                                     );
-                                                    set_pending_id.set(Some(template_id.clone()));
+                                                    set_pending_id.set(Some(command.template_id.clone()));
 
                                                     spawn_local(async move {
-                                                        match transport::create_from_template(
-                                                            token_value,
-                                                            tenant_value,
-                                                            template_id.clone(),
-                                                            workflow_name,
-                                                        ).await {
+                                                        match transport::create_from_template(context, command).await {
                                                             Ok(workflow_id) => {
                                                                 set_pending_id.set(None);
                                                                 set_name_input.set(String::new());
@@ -373,7 +371,7 @@ fn TemplateGallery(
                             }.into_any(),
                             Err(err) => view! {
                                 <div class="rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-                                    {format!("{}: {err}", load_templates_error)}
+                                    {workflow_error_view_model(&load_templates_error, err).message}
                                 </div>
                             }.into_any(),
                         }

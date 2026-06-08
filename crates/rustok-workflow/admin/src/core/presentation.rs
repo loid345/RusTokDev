@@ -92,19 +92,6 @@ pub fn workflow_template_card_view_model(
     }
 }
 
-pub fn workflow_name_from_template_input(
-    entered_name: &str,
-    default_name_prefix: &str,
-    template_id: &str,
-) -> String {
-    let trimmed = entered_name.trim();
-    if trimmed.is_empty() {
-        format!("{default_name_prefix} {template_id}")
-    } else {
-        trimmed.to_string()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -167,18 +154,6 @@ mod tests {
         assert_eq!(
             template_category_class_name("custom"),
             "bg-muted text-muted-foreground"
-        );
-    }
-
-    #[test]
-    fn workflow_name_from_template_input_trims_or_builds_default() {
-        assert_eq!(
-            workflow_name_from_template_input("  Custom flow  ", "Workflow from", "tpl-1"),
-            "Custom flow"
-        );
-        assert_eq!(
-            workflow_name_from_template_input("   ", "Workflow from", "tpl-1"),
-            "Workflow from tpl-1"
         );
     }
 }
