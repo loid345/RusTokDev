@@ -37,6 +37,32 @@ pub struct ProductStorefrontShellViewModel {
     pub load_error: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ProductTransportErrorDomEvidence {
+    pub failed_path: String,
+    pub fallback_attempted: String,
+    pub native_error: String,
+    pub graphql_error: String,
+    pub message: String,
+}
+
+pub fn build_product_transport_error_dom_evidence(
+    context: &str,
+    failed_path: &str,
+    fallback_attempted: bool,
+    native_error: Option<&str>,
+    graphql_error: Option<&str>,
+    error_message: &str,
+) -> ProductTransportErrorDomEvidence {
+    ProductTransportErrorDomEvidence {
+        failed_path: failed_path.to_string(),
+        fallback_attempted: fallback_attempted.to_string(),
+        native_error: native_error.unwrap_or_default().to_string(),
+        graphql_error: graphql_error.unwrap_or_default().to_string(),
+        message: format!("{context}: {error_message}"),
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub fn build_storefront_route_input(
     handle: Option<String>,
@@ -869,6 +895,26 @@ mod tests {
         assert_eq!(
             view_model.body,
             "Publish a product from the product admin package or open one with `?handle=`."
+        );
+    }
+    #[test]
+    fn transport_error_dom_evidence_is_built_without_ui_runtime() {
+        let evidence = build_product_transport_error_dom_evidence(
+            "Failed to load storefront product data",
+            "graphql",
+            true,
+            Some("server function unavailable"),
+            Some("network unavailable"),
+            "product transport fallback failed: native_server=server function unavailable; graphql=network unavailable",
+        );
+
+        assert_eq!(evidence.failed_path, "graphql");
+        assert_eq!(evidence.fallback_attempted, "true");
+        assert_eq!(evidence.native_error, "server function unavailable");
+        assert_eq!(evidence.graphql_error, "network unavailable");
+        assert_eq!(
+            evidence.message,
+            "Failed to load storefront product data: product transport fallback failed: native_server=server function unavailable; graphql=network unavailable"
         );
     }
 }

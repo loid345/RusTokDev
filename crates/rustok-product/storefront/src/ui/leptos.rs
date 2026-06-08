@@ -1,7 +1,8 @@
 use crate::core::{
     build_product_catalog_rail_view_model, build_product_storefront_shell_view_model,
-    build_selected_product_empty_view_model, build_selected_product_view_model,
-    build_storefront_fetch_request, build_storefront_route_input, ProductCatalogRailLabels,
+    build_product_transport_error_dom_evidence, build_selected_product_empty_view_model,
+    build_selected_product_view_model, build_storefront_fetch_request,
+    build_storefront_route_input, ProductCatalogRailLabels,
 };
 use crate::i18n::t;
 use crate::model::{
@@ -49,13 +50,40 @@ pub fn ProductView() -> impl IntoView {
                         Suspend::new(async move {
                             match resource.await {
                                 Ok(data) => view! { <ProductShowcase data /> }.into_any(),
-                                Err(err) => view! { <div class="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">{format!("{}: {err}", load_error)}</div> }.into_any(),
+                                Err(err) => view! { <ProductTransportErrorMessage context=load_error error=err /> }.into_any(),
                             }
                         })
                     }}
                 </Suspense>
             </div>
         </section>
+    }
+}
+
+#[component]
+fn ProductTransportErrorMessage(
+    context: String,
+    error: transport::ProductTransportError,
+) -> impl IntoView {
+    let evidence = build_product_transport_error_dom_evidence(
+        &context,
+        error.failed_path.as_str(),
+        error.fallback_attempted,
+        error.native_error.as_deref(),
+        error.graphql_error.as_deref(),
+        error.to_string().as_str(),
+    );
+
+    view! {
+        <div
+            class="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+            data-product-transport-failed-path=evidence.failed_path
+            data-product-transport-fallback-attempted=evidence.fallback_attempted
+            data-product-transport-native-error=evidence.native_error
+            data-product-transport-graphql-error=evidence.graphql_error
+        >
+            {evidence.message}
+        </div>
     }
 }
 
