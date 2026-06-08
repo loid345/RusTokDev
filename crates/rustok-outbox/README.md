@@ -10,7 +10,7 @@
 - Relay pending events with claim, dispatch, retry, and DLQ semantics.
 - Own the `sys_events` schema and related migrations.
 - Expose the runtime services used by `apps/server` event bootstrap and background delivery.
-- Ship the module-owned Leptos admin UI package for relay visibility.
+- Ship the module-owned Leptos admin UI package for relay visibility with a `core/transport/ui` FFA split.
 
 ## Entry points
 
@@ -24,7 +24,7 @@
 - Depends on `rustok-core` for event contracts and transport abstractions.
 - Used by `apps/server` for runtime relay wiring, background processing, and migrations.
 - Integrates with target transports such as `rustok-iggy` instead of owning transport-specific adapters inline.
-- The Leptos admin UI lives in `crates/rustok-outbox/admin` and is mounted through manifest-driven host wiring.
+- The Leptos admin UI lives in `crates/rustok-outbox/admin`, keeps framework-agnostic DTO/view-model helpers in `admin/src/core.rs`, and is mounted through manifest-driven host wiring.
 
 ## Docs
 

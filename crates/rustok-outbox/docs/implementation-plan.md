@@ -5,12 +5,22 @@ manifest/doc contract.
 
 ## Execution checkpoint
 
-- Current phase: plan_sync
-- Last checkpoint: Initial bootstrap by registry workflow.
-- Next step: Синхронизировать план с текущим кодом и выбрать первый незавершённый пункт.
+- Current phase: ffa_admin_slice
+- Last checkpoint: Admin UI переведён на FFA `core/transport/ui` split: `admin/src/core.rs` владеет Leptos-free DTO/view-model fallback policy, `admin/src/transport/` содержит native server-function facade, а `admin/src/ui/leptos.rs` стал тонким render adapter.
+- Next step: Добавить быстрый boundary verifier для отсутствия raw server-function/transport calls в UI и расширить relay/backlog evidence без долгой full-workspace компиляции.
 - Open blockers: None.
-- Hand-off notes for next agent: После каждого инкремента обновлять этот блок.
-- Last updated at (UTC): 2026-05-20T00:00:00Z
+- Hand-off notes for next agent: Сохранять read-only admin UI поверх module-owned transport facade; не переносить relay/runtime ownership в host UI.
+- Last updated at (UTC): 2026-06-08T00:00:00Z
+
+## FFA/FBA status block
+
+- FFA status: `in_progress`
+- FBA status: `not_started`
+- Structural shape: `core_transport_ui`
+- Evidence / notes:
+  - admin UI имеет явный FFA split: `admin/src/lib.rs` только wiring/re-export, `admin/src/core.rs` содержит Leptos-free DTO/view-model helpers, `admin/src/transport/` владеет native server-function facade, `admin/src/ui/leptos.rs` владеет Leptos rendering;
+  - GraphQL/REST fallback не добавлялся в этом срезе, потому что legacy outbox admin surface был native-only read-only bootstrap; это temporary single-adapter state до появления headless parity requirement для operator UI;
+  - fast evidence: `cargo check -p rustok-outbox-admin --lib` (25.04s, без full-workspace build).
 
 ## Область работ
 
@@ -22,7 +32,7 @@ manifest/doc contract.
 
 - write-side transactional publishing contract уже реализован;
 - relay/retry/DLQ semantics уже входят в базовый runtime surface;
-- модуль публикует admin visibility через `rustok-outbox-admin`;
+- модуль публикует admin visibility через `rustok-outbox-admin`, где UI split выровнен до `core/transport/ui`;
 - root README, local docs и manifest contract входят в scoped audit path.
 
 ## Этапы
@@ -31,6 +41,7 @@ manifest/doc contract.
 
 - [x] выровнять root README, local docs и manifest metadata под единый standard path;
 - [x] зафиксировать transactional publishing как основной bounded-context contract;
+- [x] выделить FFA `core/transport/ui` boundary для read-only admin visibility surface;
 - [ ] удерживать sync между public crate API и server event-runtime tests;
 - [ ] контрактные тесты покрывают все публичные use-case для transactional publishing, relay, retry и DLQ semantics.
 

@@ -1,34 +1,11 @@
 use leptos::prelude::*;
-use serde::{Deserialize, Serialize};
-use std::fmt::{Display, Formatter};
 
-use crate::model::OutboxAdminBootstrap;
+use crate::core::OutboxAdminBootstrap;
 #[cfg(feature = "ssr")]
-use crate::model::OutboxCounterSnapshot;
+use crate::core::OutboxCounterSnapshot;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum ApiError {
-    ServerFn(String),
-}
-
-impl Display for ApiError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::ServerFn(error) => write!(f, "{error}"),
-        }
-    }
-}
-
-impl std::error::Error for ApiError {}
-
-impl From<ServerFnError> for ApiError {
-    fn from(value: ServerFnError) -> Self {
-        Self::ServerFn(value.to_string())
-    }
-}
-
-pub async fn fetch_bootstrap() -> Result<OutboxAdminBootstrap, ApiError> {
-    outbox_bootstrap_native().await.map_err(Into::into)
+pub async fn fetch_bootstrap_native() -> Result<OutboxAdminBootstrap, ServerFnError> {
+    outbox_bootstrap_native().await
 }
 
 #[server(prefix = "/api/fn", endpoint = "outbox/bootstrap")]
