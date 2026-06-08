@@ -92,6 +92,7 @@ Structural shape фиксирует глубину code-level FFA split неза
 | `payment` | no module-owned UI | `in_progress` | `not_started` | `no_ui_boundary` | `crates/rustok-payment/docs/implementation-plan.md` |
 | `fulfillment` | admin | `in_progress` | `not_started` | `core_transport_ui` | `crates/rustok-fulfillment/docs/implementation-plan.md` (slice: admin core list/filter policy + transport facade + explicit `ui/leptos.rs` render adapter over existing GraphQL shipping-option transport; CRUD behavior unchanged) |
 | `seo` | admin + storefront contracts | `in_progress` | `not_started` | `core_transport_ui` | `crates/rustok-seo/docs/implementation-plan.md` (`rustok-seo-admin` slice: `core.rs` form/view-model helpers + index replay/sitemap guard/schema-fix prefill/busy-key policy, `transport.rs` native/server-function facade and explicit `ui/leptos.rs` render adapter; storefront parity wave D7..D9 regrouped as Milestones A..E, A/B runtime Next adapter cutover is in progress) |
+| `media` | admin | `in_progress` | `not_started` | `core_transport_ui` | `crates/rustok-media/docs/implementation-plan.md` (admin FFA slice: crate root only wires/re-exports `MediaAdmin`; `admin/src/core.rs` owns Leptos-free form/presentation helpers with unit tests; `admin/src/transport/` owns native-first + GraphQL fallback + REST upload facade; `admin/src/ui/leptos.rs` is the explicit Leptos render adapter) |
 
 ## Hotspot contract (DOC-12 / H1)
 

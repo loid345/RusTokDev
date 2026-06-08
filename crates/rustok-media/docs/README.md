@@ -16,7 +16,7 @@
 - typed cross-module image contract `MediaImageDescriptor` (`url/alt/size/mime` + derived helpers);
 - GraphQL и REST adapters модуля;
 - upload validation по size/MIME policy и tenant isolation;
-- module-owned admin UI package `rustok-media-admin`;
+- module-owned admin UI package `rustok-media-admin` with an FFA `core`/`transport`/`ui/leptos` split;
 - observability signals для upload/delete/storage health.
 
 ## Интеграция
@@ -24,7 +24,7 @@
 - использует `rustok-storage` как storage backend contract;
 - `apps/server` остаётся composition root и wiring-слоем для media routes/graphql;
 - runtime guard опирается на tenant-scoped module enablement для public surfaces;
-- upload остаётся REST-first path, а GraphQL сохраняется для read/mutation flows без multipart expansion;
+- upload остаётся REST-first path, GraphQL сохраняется для read/mutation flows без multipart expansion, а Leptos admin adapter вызывает transport facade вместо raw API module;
 - `rustok-seo` и owner SEO providers потребляют `MediaImageDescriptor` как единственный image boundary для OG/Twitter/schema fallback.
 
 ## Проверка
