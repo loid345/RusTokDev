@@ -1,4 +1,4 @@
-﻿# RusTok: карта документации
+# RusTok: карта документации
 
 Этот файл является канонической точкой входа в документацию репозитория.
 С него нужно начинать работу по правилам [AGENTS.md](../AGENTS.md).
@@ -34,23 +34,27 @@
 - [FFA/FBA readiness board (внутри реестра модулей)](./modules/registry.md#ffafba-readiness-board-module-owned-ui)
 - [Реестр crate-ов модульной платформы](./modules/crates-registry.md)
 - [Runtime-контракт `rustok-page-builder`](../crates/rustok-page-builder/docs/README.md)
+- [Machine-readable FBA registry page-builder](../crates/rustok-page-builder/contracts/page-builder-fba-registry.json)
+- [Machine-readable Page Builder Wave evidence template](../crates/rustok-page-builder/contracts/page-builder-wave-evidence-template.json)
+- [Synthetic pages Wave 0 dry-run evidence packet](../crates/rustok-page-builder/contracts/evidence/pages-wave0-dry-run-evidence.json)
 - [Индекс документации по модулям](./modules/_index.md)
 - [Реестр implementation plans](./modules/implementation-plans-registry.md)
 - [Шаблон документации модуля](./templates/module_contract.md)
 - [Индекс UI-пакетов модулей](./modules/UI_PACKAGES_INDEX.md)
 - [Быстрый старт по UI-пакетам](./modules/UI_PACKAGES_QUICKSTART.md)
-- [Спец-план rich-text и визуального page builder](
-  ./modules/tiptap-page-builder-implementation-plan.md)
+- [Спец-план rich-text и визуального page builder](./modules/tiptap-page-builder-implementation-plan.md)
 
 ## UI и клиентские поверхности
 
 - [Обзор UI](./UI/README.md)
 - [GraphQL и Leptos server functions](./UI/graphql-architecture.md)
 - [Контракт storefront](./UI/storefront.md)
+- [Flutter mobile host витрины](../rustok_mobile/apps/rustok_frontend_mobile/README.md)
+- [Flutter mobile package catalog/cart](../rustok_mobile/packages/rustok_catalog_mobile/README.md)
 - [Быстрый старт для Admin ↔ Server](./UI/admin-server-connection-quickstart.md)
+- [SEO runtime/control-plane contracts (`rustok-seo`)](../crates/rustok-seo/docs/README.md)
 - [Каталог Rust UI-компонентов](./UI/rust-ui-component-catalog.md)
-- [Трек rich-text и визуального page builder](
-  ./modules/tiptap-page-builder-implementation-plan.md)
+- [Трек rich-text и визуального page builder](./modules/tiptap-page-builder-implementation-plan.md)
 - [Архитектура i18n](./architecture/i18n.md)
 
 ## Архитектура и foundation
@@ -75,8 +79,7 @@
 - [Тестирование](./guides/testing.md)
 - [Быстрый старт по observability](./guides/observability-quickstart.md)
 - [Runtime guardrails](./guides/runtime-guardrails.md)
-- [ADR: control-plane lifecycle and migration ordering contracts](
-  ../DECISIONS/2026-05-18-control-plane-lifecycle-and-migration-contracts.md)
+- [ADR: control-plane lifecycle and migration ordering contracts](../DECISIONS/2026-05-18-control-plane-lifecycle-and-migration-contracts.md)
 - [Валидация входных данных](./guides/input-validation.md)
 - [Обработка ошибок](./guides/error-handling.md)
 - [Аудит безопасности](./guides/security-audit.md)
@@ -90,19 +93,13 @@
 
 - [Инструмент workspace CLI `xtask`](../xtask/README.md)
 - [Главный README по верификации](./verification/README.md)
-- [Проверка Flex multilingual contract](
-  ../scripts/verify/verify-flex-multilingual-contract.mjs)
+- [Проверка Flex multilingual contract](../scripts/verify/verify-flex-multilingual-contract.mjs)
 - [Сводный план верификации](./verification/PLATFORM_VERIFICATION_PLAN.md)
-- [Верификация foundation-слоя](
-  ./verification/platform-foundation-verification-plan.md)
-- [Верификация API-поверхностей](
-  ./verification/platform-api-surfaces-verification-plan.md)
-- [Верификация frontend-поверхностей](
-  ./verification/platform-frontend-surfaces-verification-plan.md)
-- [Верификация целостности ядра](
-  ./verification/platform-core-integrity-verification-plan.md)
-- [Верификация качества и эксплуатации](
-  ./verification/platform-quality-operations-verification-plan.md)
+- [Верификация foundation-слоя](./verification/platform-foundation-verification-plan.md)
+- [Верификация API-поверхностей](./verification/platform-api-surfaces-verification-plan.md)
+- [Верификация frontend-поверхностей](./verification/platform-frontend-surfaces-verification-plan.md)
+- [Верификация целостности ядра](./verification/platform-core-integrity-verification-plan.md)
+- [Верификация качества и эксплуатации](./verification/platform-quality-operations-verification-plan.md)
 
 ## AI, исследования и шаблоны
 
@@ -114,9 +111,8 @@
 - [Fluid Frontend Architecture для RusTok](./research/fluid-frontend-architecture.md)
 - [Fluid Backend Architecture для RusTok](./research/fluid-backend-architecture.md)
 - [Архитектура Flutter-приложения для RusTok](./research/flutter.md)
+- [FFA для Flutter: статья о платформенной mobile-архитектуре](./research/flutter-ffa-architecture-article.md)
 - [Единый план реализации Fluid Backend Architecture](./research/fluid-backend-architecture-unified-plan.md)
-- [Historical input: deep research report (control plane/module lifecycle)](./research/deep-research-report%20(4).md)
-- [План устранения недостатков control plane и module lifecycle](./research/control-plane-module-lifecycle-remediation-plan.md)
 - [План FFA-рефакторинга UI и подготовки к Dioxus](./research/dioxus-ffa-ui-migration-plan.md)
 - [Карта связности пилотов FFA/Dioxus (Phase A)](./research/dioxus-ffa-pilot-connectivity-map.md)
 - [Checklist parity для FFA UI migration](./verification/ffa-ui-parity-checklist.md)
@@ -131,6 +127,7 @@
 - [Документация Next Admin](../apps/next-admin/docs/README.md)
 - [Документация Next Frontend](../apps/next-frontend/docs/README.md)
 - [Документация Flutter Admin Mobile](../rustok_mobile/apps/rustok_admin_mobile/README.md)
+- [Документация Flutter Frontend Mobile](../rustok_mobile/apps/rustok_frontend_mobile/README.md)
 
 ## Документация crate-ов
 
@@ -166,9 +163,6 @@
 
 - [Индекс ADR](../DECISIONS/README.md)
 
-- [Security: RUSTSEC-2026-0045 remediation note](
-  ./security/aws-lc-rustsec-2026-0045.md)
-- [Security: RUSTSEC-2026-0098 / 0099 / 0104 remediation note](
-  ./security/rustls-webpki-rustsec-2026-0099-0104.md)
-- [Security: RUSTSEC-2023-0071 remediation note](
-  ./security/rsa-rustsec-2023-0071.md)
+- [Security: RUSTSEC-2026-0045 remediation note](./security/aws-lc-rustsec-2026-0045.md)
+- [Security: RUSTSEC-2026-0098 / 0099 / 0104 remediation note](./security/rustls-webpki-rustsec-2026-0099-0104.md)
+- [Security: RUSTSEC-2023-0071 remediation note](./security/rsa-rustsec-2023-0071.md)

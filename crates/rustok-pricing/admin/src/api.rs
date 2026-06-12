@@ -4,14 +4,22 @@ use leptos::prelude::*;
 #[cfg(target_arch = "wasm32")]
 use leptos::web_sys;
 use leptos_graphql::{execute as execute_graphql, GraphqlHttpError, GraphqlRequest};
+
+#[cfg(feature = "ssr")]
+use crate::core::{parse_optional_currency_code, text_or_none};
+use crate::core::{
+    parse_optional_uuid_string, sanitize_channel_slug, sanitize_resolution_context,
+    PricingAdminRequestError,
+};
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
+#[cfg(feature = "ssr")]
 use uuid::Uuid;
 
 use crate::model::{
     CurrentTenant, PricingAdjustmentPreview, PricingAdminBootstrap, PricingChannelOption,
     PricingDiscountDraft, PricingPriceDraft, PricingPriceListOption, PricingPriceListRuleDraft,
-    PricingPriceListScopeDraft, PricingProductDetail, PricingProductList, PricingResolutionContext,
+    PricingPriceListScopeDraft, PricingProductDetail, PricingProductList,
 };
 #[cfg(feature = "ssr")]
 use crate::model::{
@@ -43,6 +51,12 @@ impl From<GraphqlHttpError> for ApiError {
 
 impl From<ServerFnError> for ApiError {
     fn from(value: ServerFnError) -> Self {
+        Self::ServerFn(value.to_string())
+    }
+}
+
+impl From<PricingAdminRequestError> for ApiError {
+    fn from(value: PricingAdminRequestError) -> Self {
         Self::ServerFn(value.to_string())
     }
 }
@@ -432,23 +446,10 @@ async fn fetch_product_graphql(
     Ok(response.product)
 }
 
-fn parse_optional_currency_code(
-    currency_code: Option<String>,
-) -> Result<Option<String>, ServerFnError> {
-    let Some(currency_code) = currency_code.and_then(text_or_none) else {
-        return Ok(None);
-    };
-    let normalized = currency_code.to_ascii_uppercase();
-    if normalized.len() != 3 || !normalized.chars().all(|ch| ch.is_ascii_alphabetic()) {
-        return Err(ServerFnError::new("currency_code must be a 3-letter code"));
-    }
-
-    Ok(Some(normalized))
-}
-
 #[cfg(feature = "ssr")]
 fn parse_required_currency_code(currency_code: String) -> Result<String, ServerFnError> {
-    parse_optional_currency_code(Some(currency_code))?
+    parse_optional_currency_code(Some(currency_code))
+        .map_err(|error| ServerFnError::new(error.to_string()))?
         .ok_or_else(|| ServerFnError::new("currency_code must be a 3-letter code"))
 }
 
@@ -499,89 +500,6 @@ fn parse_optional_uuid(value: &str, field_name: &str) -> Result<Option<Uuid>, Se
     Uuid::parse_str(value.as_str())
         .map(Some)
         .map_err(|_| ServerFnError::new(format!("Invalid {field_name}")))
-}
-
-fn sanitize_channel_slug(channel_slug: Option<String>) -> Option<String> {
-    channel_slug
-        .map(|value| value.trim().to_ascii_lowercase())
-        .filter(|value| !value.is_empty())
-}
-
-fn text_or_none(value: String) -> Option<String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
-}
-
-#[cfg(feature = "ssr")]
-fn resolve_requested_locale(
-    requested: Option<String>,
-    request_context_locale: Option<&str>,
-    tenant_default_locale: &str,
-) -> String {
-    requested
-        .and_then(text_or_none)
-        .or_else(|| request_context_locale.and_then(|value| text_or_none(value.to_string())))
-        .or_else(|| text_or_none(tenant_default_locale.to_string()))
-        .unwrap_or_default()
-}
-
-fn parse_optional_uuid_string(
-    value: Option<String>,
-    field_name: &str,
-) -> Result<Option<String>, ServerFnError> {
-    let Some(value) = value.and_then(text_or_none) else {
-        return Ok(None);
-    };
-
-    Uuid::parse_str(value.as_str())
-        .map(|_| Some(value))
-        .map_err(|_| ServerFnError::new(format!("Invalid {field_name}")))
-}
-
-fn parse_resolution_quantity(quantity: Option<i32>) -> Result<i32, ServerFnError> {
-    match quantity {
-        Some(value) if value < 1 => Err(ServerFnError::new("quantity must be at least 1")),
-        Some(value) => Ok(value),
-        None => Ok(1),
-    }
-}
-
-fn sanitize_resolution_context(
-    currency_code: Option<String>,
-    region_id: Option<String>,
-    price_list_id: Option<String>,
-    quantity: Option<i32>,
-) -> Result<Option<PricingResolutionContext>, ServerFnError> {
-    let requires_currency = region_id
-        .as_ref()
-        .and_then(|value| text_or_none(value.clone()))
-        .is_some()
-        || price_list_id
-            .as_ref()
-            .and_then(|value| text_or_none(value.clone()))
-            .is_some()
-        || quantity.is_some();
-    let Some(currency_code) = parse_optional_currency_code(currency_code)? else {
-        if requires_currency {
-            return Err(ServerFnError::new(
-                "currency_code is required for pricing resolution context",
-            ));
-        }
-        return Ok(None);
-    };
-
-    Ok(Some(PricingResolutionContext {
-        currency_code,
-        region_id: parse_optional_uuid_string(region_id, "region_id")?,
-        price_list_id: parse_optional_uuid_string(price_list_id, "price_list_id")?,
-        channel_id: None,
-        channel_slug: None,
-        quantity: parse_resolution_quantity(quantity)?,
-    }))
 }
 
 #[cfg(feature = "ssr")]
@@ -883,11 +801,13 @@ async fn list_active_price_lists_native_with_context(
             .map(|context| context.locale.as_str()),
         tenant.default_locale.as_str(),
     );
-    let channel_id = parse_optional_uuid_string(channel_id, "channel_id")?.or_else(|| {
-        request_context
-            .as_ref()
-            .and_then(|ctx| ctx.channel_id.map(|item| item.to_string()))
-    });
+    let channel_id = parse_optional_uuid_string(channel_id, "channel_id")
+        .map_err(|error| ServerFnError::new(error.to_string()))?
+        .or_else(|| {
+            request_context
+                .as_ref()
+                .and_then(|ctx| ctx.channel_id.map(|item| item.to_string()))
+        });
     let channel_slug = sanitize_channel_slug(channel_slug).or_else(|| {
         request_context
             .as_ref()
@@ -1386,13 +1306,15 @@ async fn pricing_admin_product_native(
 
         let requested_locale =
             resolve_requested_locale(Some(locale), None, tenant.default_locale.as_str());
-        let explicit_channel_id = parse_optional_uuid_string(channel_id, "channel_id")?;
+        let explicit_channel_id = parse_optional_uuid_string(channel_id, "channel_id")
+            .map_err(|error| ServerFnError::new(error.to_string()))?;
         let mut resolution_context = sanitize_resolution_context(
             currency_code.clone(),
             region_id.clone(),
             price_list_id.clone(),
             quantity,
-        )?;
+        )
+        .map_err(|error| ServerFnError::new(error.to_string()))?;
         if let Some(context) = resolution_context.as_mut() {
             context.channel_id = explicit_channel_id.or_else(|| {
                 request_context

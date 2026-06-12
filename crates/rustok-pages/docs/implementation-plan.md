@@ -6,9 +6,9 @@
 
 ## Execution checkpoint
 
-- Current phase: phase_b_closed
-- Last checkpoint: Phase B pilot closure зафиксирован (core extraction + validate/test + docs double-check).
-- Next step: Выполнить PB-FBA-1 (typed fallback matrix + error catalog parity + anti-drift CI checks) и подготовить Wave 0 evidence package для tenant toggles.
+- Current phase: phase_b_storefront_ui_split
+- Last checkpoint: FFA storefront slice перенёс Leptos render/bind слой в `storefront/src/ui/leptos.rs`; crate root теперь только wires `core`/`transport`/`ui` modules и re-export `PagesView`, а dual-path (`native #[server]` + GraphQL fallback) остаётся в `storefront/src/api.rs` через facade `storefront/src/transport.rs`.
+- Next step: Провести реальный control-plane Wave 0 dry-run на internal tenant и заменить синтетический пакет фактическими before/after snapshots; затем оставить pages в maintenance mode до следующего явного builder/FBA среза.
 - Open blockers: None.
 - Hand-off notes for next agent:
   1. Перед любыми изменениями pages сначала сверить `docs/research/dioxus-ffa-pilot-connectivity-map.md` и этот файл; не открывать новый slice без явной цели в трекере.
@@ -19,24 +19,42 @@
 - Last updated at (UTC): 2026-05-24T10:05:00Z
 - Last updated at (UTC): 2026-05-24T12:20:00Z
 - Last updated at (UTC): 2026-05-25T11:10:00Z
+- Last updated at (UTC): 2026-05-29T00:00:00Z
+- Last updated at (UTC): 2026-06-01T00:00:00Z
+- Last updated at (UTC): 2026-06-01T01:00:00Z
+- Last updated at (UTC): 2026-06-01T02:00:00Z
+- Last updated at (UTC): 2026-06-01T03:00:00Z
+- Last updated at (UTC): 2026-06-01T04:00:00Z
+- Last updated at (UTC): 2026-06-01T04:30:00Z
+- Last updated at (UTC): 2026-06-01T11:45:00Z
+- Last updated at (UTC): 2026-06-07T00:00:00Z
 - Latest maintenance update: Leptos admin package now exposes capability surfaces `preview/tree/properties/publish` for `grapesjs_v1` and keeps legacy `blocks` compatibility visible in the same write-path.
-- Latest maintenance update: зафиксирован typed builder error catalog parity (`validation/sanitization/runtime/feature-disabled`) для admin UI + service/runtime с опорой на `WritePathIssueKind` и `PagesError::FeatureDisabled`.
+- Latest maintenance update: зафиксирован typed builder error catalog parity (`validation/sanitize/runtime/feature-disabled`) для admin UI + service/runtime с опорой на `WritePathIssueKind`, `PagesError::FeatureDisabled`, manifest/registry binding и `verify-page-builder-error-catalog-binding.mjs`.
+- Latest maintenance update: create-page draft normalization теперь собирается в `admin/src/core.rs` и переиспользует `rustok-api::normalize_ui_text` / `parse_ui_csv`, а Leptos слой остаётся thin bind/render adapter.
+- Latest maintenance update: admin UI получил явный FFA split `core` + `transport` + `ui/leptos`; GraphQL operations остаются в `admin/src/api.rs`, а render/effect код вызывает только facade из `admin/src/transport/`.
+- Latest FFA update: storefront UI получил matching split `core` + `transport` + `ui/leptos`; crate root re-export-ит `PagesView`, Leptos adapter вызывает только `storefront/src/transport.rs`, а native/GraphQL transport contract не менялся.
 
 - PB-FBA-1 platform sync note: central plan `docs/modules/tiptap-page-builder-implementation-plan.md` now содержит delivery slices и exit criteria для Wave 0 hand-off; pages track должен обновляться синхронно по dependency notes.
 - PB-FBA-1 execution note: sync с central section `8.5 Execution backlog` принят как active queue (`PB-FBA-1A..1D`, фокус Week1=P0/P1, Week2=P2/P3).
-
-
-
-
+- PB-FBA-1A update: `consumer_min_version = "1.0"` добавлен в `fba.builder_consumer`, а machine-readable registry `crates/rustok-page-builder/contracts/page-builder-fba-registry.json` теперь проверяется через `verify-page-builder-contract-registry.mjs` и aggregate baseline gate.
+- PB-FBA-1B host update: `pages_builder_fallback_*` gate покрывает все baseline-профили (`all_on`, `publish_off`, `preview_off`, `builder_off`) на service boundary и admin/storefront host helpers: read/list остаются стабильными, disabled capabilities возвращают typed `FeatureDisabled`, storefront render не требует builder capability.
+- PB-FBA-1B catalog update: `fba.builder_consumer.error_catalog`, `error_codes` и `degraded_mode_errors` синхронизированы с provider metadata, FBA registry и runtime constants; aggregate baseline gate теперь включает anti-drift проверку error-catalog binding.
+- PB-FBA-1B Next parity update: `apps/next-admin` save-flow отображает тот же typed catalog (`validation/sanitize/runtime/feature-disabled`) и operator guidance для `FEATURE_DISABLED`; baseline gate включает static parity-check для Next Admin.
+- PB-FBA-1B Leptos parity update: module-owned Leptos admin показывает localized operator guidance для `validation/sanitize/runtime/feature-disabled`; baseline gate включает static parity-check для `rustok-pages-admin`.
+- PB-FBA-1B Flutter parity update: `rustok_mobile/packages/app_core` содержит shared mapper для того же typed catalog и `FEATURE_DISABLED` guidance; baseline gate включает static parity-check для Flutter app-core.
 
 ## FFA/FBA status
 
 - FFA status: `in_progress`
-- FBA status: `in_progress`
+- FBA status: `not_started`
+- Structural shape: `core_transport_ui`
 - Evidence:
   - module plan синхронизирован с central FFA/FBA readiness board;
-  - дальнейшее повышение статуса выполняется только вместе с verification evidence и обновлением local+central docs.
-- Last verified at (UTC): 2026-05-24T00:00:00Z
+  - дальнейшее повышение статуса выполняется только вместе с verification evidence и обновлением local+central docs;
+  - FFA maintenance slice: create-page draft normalization, channel slug CSV parsing and route text checks переиспользуют shared UI helpers из `rustok-api` без изменения native/GraphQL транспорта;
+  - FFA admin slice: Leptos render/effect adapter живёт в `admin/src/ui/leptos.rs`, transport facade — в `admin/src/transport/`, GraphQL adapter — в `admin/src/api.rs`; внешний GraphQL contract не менялся;
+  - FFA storefront slice: Leptos render/bind adapter живёт в `storefront/src/ui/leptos.rs`, crate root только wires modules/re-export `PagesView`, transport facade — в `storefront/src/transport.rs`, native/GraphQL adapter — в `storefront/src/api.rs`.
+- Last verified at (UTC): 2026-06-01T11:45:00Z
 - Owner: `rustok-pages` module team
 
 ## PB-FBA immediate sprint (продолжение page builder разработки)
@@ -47,10 +65,30 @@
 
 ### Sprint scope (must-have)
 
-- [ ] Typed fallback matrix: `builder_off`, `preview_off`, `publish_off` с ожидаемыми runtime/error outcomes.
+- [x] Typed fallback matrix: `builder_off`, `preview_off`, `publish_off` с ожидаемыми runtime/error outcomes.
 - [x] Unified builder error catalog для `validation/sanitize/runtime/feature-disabled` без расхождения между GraphQL, `#[server]` и UI adapters.
-- [ ] CI fallback gate для профилей `builder.enabled=false` и `builder.publish.enabled=false`.
-- [ ] Wave 0 evidence template: flags snapshot + smoke output + observability snapshot + keep/rollback decision.
+- [x] CI fallback gate для профилей `all_on`, `publish_off`, `preview_off`, `builder_off`: provider runtime gate и `rustok-pages` service/admin/storefront consumer fallback gate подключены к baseline-проверке.
+- [x] Contract freeze anti-drift: `builder_contract_version`, `consumer_min_version`, capability set и fallback profile names зафиксированы в machine-readable registry и проверяются aggregate baseline gate.
+
+### Fallback matrix (admin/list/read/publish snapshots)
+
+Эта матрица является consumer-side snapshot для `rustok-pages` и должна совпадать с provider matrix в `rustok-page-builder::rollout`. Read/list/menu paths остаются owned by pages и не должны зависеть от доступности builder capability endpoint.
+
+| Профиль | Admin visual path | Preview | Properties/tree | Publish | Read/list/storefront paths | Disabled capabilities |
+|---|---|---|---|---|---|---|
+| `all_on` | `editable_builder` | `available` | `available` | `available` | `stable` | — |
+| `publish_off` | `editable_builder_publish_disabled` | `available` | `available` | `typed_feature_disabled_error` | `stable` | `publish` |
+| `preview_off` | `preview_hidden_properties_available` | `typed_feature_disabled_error` | `available` | `typed_feature_disabled_error` | `stable` | `preview`, `publish` |
+| `builder_off` | `readonly_fallback` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `stable` | `preview`, `tree`, `properties`, `publish` |
+
+Операционные заметки:
+
+1. `builder_off` не отключает pages-owned list/read/menu runtime; admin visual path обязан показать read-only fallback вместо 5xx.
+2. `publish_off` возвращает typed `feature-disabled`/`typed_feature_disabled_error` только на builder publish path; legacy/direct read paths остаются стабильными.
+3. `preview_off` скрывает или блокирует preview capability, но не должен запрещать properties/tree чтение, если `builder.properties.enabled=true`.
+
+- [x] Wave 0 evidence template: flags snapshot + smoke output + observability snapshot + keep/rollback decision (`crates/rustok-page-builder/contracts/page-builder-wave-evidence-template.json`).
+- [x] Синтетический Wave 0 dry-run packet для всех baseline-профилей: `crates/rustok-page-builder/contracts/evidence/pages-wave0-dry-run-evidence.json` (проверяет только форму и семантику, не заменяет фактическое tenant evidence).
 
 ### Out of scope (for this sprint)
 
@@ -142,13 +180,14 @@ Rollback trigger:
 
 - [x] Обновить runtime metadata/manifest: явно указать внешний `builder capability-provider` и поддерживаемые capability surfaces (`preview/tree/properties/publish`) — см. `rustok-module.toml` (`dependencies.page_builder`, `fba.builder_consumer`).
 - [x] Добавить contract-version marker для anti-drift проверок между `pages`, Next/Leptos adapters и reference builder (`contract_version = "1.0"` в metadata consumer/provider link).
+- [x] Добавить `consumer_min_version = "1.0"` и синхронизировать machine-readable registry `crates/rustok-page-builder/contracts/page-builder-fba-registry.json` с manifest provider/consumer contract values.
 - [x] Зафиксировать machine-readable degraded modes (`builder_disabled`, `publish_disabled`, `preview_disabled`) в `fba.builder_consumer.degraded_modes`.
 
 ### B2. Fallback & error semantics
 
-- [x] Закрепить единый typed error catalog для builder-related runtime ошибок (`validation/sanitize/runtime/feature-disabled`).
-- [ ] Добавить fallback snapshots в docs для admin/list/read/publish surfaces.
-- [ ] Убедиться, что partial disable не ломает page read/list/menu paths в storefront/admin.
+- [x] Закрепить единый typed error catalog для builder-related runtime ошибок (`validation/sanitize/runtime/feature-disabled`) и связать его с `degraded_modes` через machine-readable manifest/registry gate.
+- [x] Добавить fallback snapshots в docs для admin/list/read/publish surfaces.
+- [x] Убедиться, что baseline-профили `all_on`, `publish_off`, `preview_off`, `builder_off` не ломают page read/list/menu paths на service fallback gate и host-level admin/storefront helper checks; Next Admin, Leptos и Flutter app-core typed-error parity зафиксированы; runtime device-level evidence остаётся в Wave hand-off.
 
 ### B3. Operability & rollout
 
@@ -158,29 +197,29 @@ Rollback trigger:
 
 ### B4. Verification gates
 
-- [ ] Включить fallback regression checks в `cargo xtask module test pages` (или эквивалентный CI gate).
-- [ ] Добавить targeted integration checks для `builder.publish.enabled=false` и `builder.enabled=false`.
-- [ ] Зафиксировать evidence-template для Wave hand-off (platform + pages owner approval).
+- [x] Включить fallback regression checks в `cargo xtask module test pages` (или эквивалентный CI gate): `verify-page-builder-fba-baseline.mjs` запускает provider runtime gate, registry anti-drift gate, error-catalog binding gate, Next Admin parity gate, Leptos admin parity gate, Flutter parity gate, Wave evidence-template gate, gate синтетического evidence packet и `rustok-pages` service/admin/storefront fallback gates по всем четырём baseline-профилям.
+- [x] Добавить targeted integration checks для `all_on`, `publish_off`, `preview_off`, `builder_off` на уровне `pages` service/transport boundary (`pages_builder_fallback_*` checks).
+- [x] Зафиксировать evidence-template для Wave hand-off (platform + pages owner approval): `crates/rustok-page-builder/contracts/page-builder-wave-evidence-template.json` + `verify-page-builder-wave-evidence-template.mjs`.
 
 ## Wave 0 execution checklist (операционный минимум для `pages`)
 
 ### C1. Toggle profiles (обязательно)
 
-- [ ] `all_on`: `builder.enabled=true`, `preview/properties/publish=true`.
-- [ ] `publish_off`: `builder.publish.enabled=false`, publish-path возвращает typed `feature-disabled` error.
-- [ ] `preview_off`: preview capability недоступен, read/list surfaces не деградируют.
-- [ ] `builder_off`: admin visual path в read-only fallback, storefront read-path стабилен.
+- [x] `all_on`: `builder.enabled=true`, `preview/properties/publish=true` (service + admin/storefront host fallback gate).
+- [x] `publish_off`: `builder.publish.enabled=false`, publish-path возвращает typed `feature-disabled` error, read/list paths стабильны.
+- [x] `preview_off`: preview capability недоступен, read/list surfaces не деградируют (service + admin/storefront host fallback gate).
+- [x] `builder_off`: service read/list paths стабильны, publish-path возвращает typed `feature-disabled`; UI read-only fallback остаётся Wave evidence.
 
 ### C2. Evidence package для каждого профиля
 
-- [ ] before/after snapshot флагов и module health.
-- [ ] smoke output: `list -> open -> preview -> save-draft -> publish-dry` (с ожидаемым результатом для профиля).
-- [ ] observability snapshot: `sanitize`, `runtime`, `publish_latency`.
-- [ ] решение `keep/rollback` + owner подпись в control-plane audit trail.
+- [~] before/after snapshot флагов и module health: синтетический dry-run packet зафиксирован; фактические tenant snapshots ещё ожидаются.
+- [~] smoke output: `list -> open -> preview -> save-draft -> publish-dry` (синтетические ожидаемые outcomes зафиксированы; фактический control-plane smoke output ещё ожидается).
+- [~] observability snapshot: `sanitize`, `runtime`, `publish_latency` (синтетические placeholders зафиксированы; фактические метрики ещё ожидаются).
+- [~] решение `keep/rollback` + owner подпись в control-plane audit trail (синтетическое решение `keep` зафиксировано; фактический owner sign-off ещё ожидается).
 
 ### C3. Exit criteria для Wave 1
 
-- [ ] fallback regression checks зелёные в CI на актуальном коммите.
+- [x] service-level fallback regression checks и admin/storefront host-helper static checks зелёные на актуальном коммите; Next/Flutter typed error parity ещё требуется для Wave 1.
 - [ ] нет RBAC regression для editor/moderator/admin в builder-related сценариях.
 - [ ] подтверждён rollback execution <= 10 минут без redeploy `pages` runtime.
 
@@ -238,11 +277,13 @@ Rollback trigger:
 - [x] Slice 15: storefront open-link label composition moved to core (`open_link_label`).
 - [x] Slice 16: storefront label/value pair rendering moved to core (`label_value_pair`).
 - [x] Slice 17: storefront core extraction cleanup after full module test evidence (unused import removal).
+- [x] Slice 18: storefront Leptos render/bind code moved to explicit `storefront/src/ui/leptos.rs` adapter; crate root now only wires modules and re-exports `PagesView`.
 
 
 ## Phase B pilot closure (rustok-pages)
 
 - [x] Core extraction slices for admin/storefront completed for planned helper scope.
+- [x] Explicit `ui/leptos.rs` adapters exist for both admin and storefront surfaces while dual-path transport remains unchanged.
 - [x] Module validation evidence attached (`cargo xtask module validate pages`).
 - [x] Module test evidence attached (`cargo xtask module test pages`).
 - [x] Double documentation verification completed and synced in central tracker.

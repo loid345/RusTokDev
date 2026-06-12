@@ -1082,6 +1082,71 @@ fn assert_graphql_only_helper(
 }
 
 #[test]
+fn module_recovery_helpers_use_canonical_graphql_surface() {
+    let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let api_path = crate_root.join("src/features/modules/api.rs");
+    let content = fs::read_to_string(&api_path).expect("read api.rs");
+    let modules_list_path = crate_root.join("src/features/modules/components/modules_list.rs");
+    let modules_list = fs::read_to_string(&modules_list_path).expect("read modules_list.rs");
+
+    for required in [
+        "pub const MODULE_OPERATION_RECOVERY_PLAN_QUERY",
+        "moduleOperationRecoveryPlan(operationId: $operationId)",
+        "pub const FAILED_MODULE_OPERATION_RECOVERY_PLANS_QUERY",
+        "failedModuleOperationRecoveryPlans(moduleSlug: $moduleSlug, limit: $limit)",
+        "pub const RETRY_FAILED_MODULE_OPERATION_POST_HOOK_MUTATION",
+        "retryFailedModuleOperationPostHook(operationId: $operationId)",
+        "pub const COMPENSATE_FAILED_MODULE_OPERATION_MUTATION",
+        "compensateFailedModuleOperation(operationId: $operationId)",
+        "pub async fn module_operation_recovery_plan(",
+        "pub async fn failed_module_operation_recovery_plans(",
+        "pub async fn retry_failed_module_operation_post_hook(",
+        "pub async fn compensate_failed_module_operation(",
+    ] {
+        assert!(
+            content.contains(required),
+            "admin module recovery API must expose canonical GraphQL fragment `{required}`"
+        );
+    }
+
+    for forbidden in [
+        "retry_failed_module_operation_post_hook_native(",
+        "compensate_failed_module_operation_native(",
+        "module_operation_recovery_plan_native(",
+        "failed_module_operation_recovery_plans_native(",
+        "UPDATE tenant_modules",
+        "UPDATE module_operations",
+        "DELETE FROM module_operations",
+    ] {
+        assert!(
+            !content.contains(forbidden),
+            "module recovery helpers must not reintroduce native/raw-SQL path `{forbidden}`"
+        );
+        assert!(
+            !modules_list.contains(forbidden),
+            "module recovery UI must not reintroduce native/raw-SQL path `{forbidden}`"
+        );
+    }
+
+    for required_ui_fragment in [
+        "failed_module_operation_recovery_plans(",
+        "Some(10)",
+        "retry_failed_module_operation_post_hook(",
+        "compensate_failed_module_operation(",
+        "Lifecycle recovery",
+        "Recovery retry processed",
+        "Compensation applied",
+        "let compensatable = plan.issue == \"post_hook_failed\";",
+        "|| !compensatable",
+    ] {
+        assert!(
+            modules_list.contains(required_ui_fragment),
+            "module recovery UI must consume canonical GraphQL helper fragment `{required_ui_fragment}`"
+        );
+    }
+}
+
+#[test]
 fn module_composition_helper_signatures_are_unique() {
     let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let api_path = crate_root.join("src/features/modules/api.rs");
@@ -1180,6 +1245,232 @@ pub async fn toggle_module() {
 fn extract_function_block_returns_none_when_body_brace_missing() {
     let source = "pub async fn toggle_module() -> Result<(), ()>";
     assert!(extract_function_block(source, "pub async fn toggle_module()").is_none());
+}
+
+#[test]
+fn lifecycle_runtime_and_journal_parity_contract_is_shared_across_surfaces() {
+    let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let repo_root = crate_root
+        .parent()
+        .and_then(Path::parent)
+        .expect("workspace root");
+    let admin_api_path = crate_root.join("src/features/modules/api.rs");
+    let admin_api = fs::read_to_string(&admin_api_path).expect("read admin api.rs");
+    let modules_list_path = crate_root.join("src/features/modules/components/modules_list.rs");
+    let modules_list = fs::read_to_string(&modules_list_path).expect("read modules_list.rs");
+    let shared_api_path = crate_root.join("src/shared/api/mod.rs");
+    let shared_api = fs::read_to_string(&shared_api_path).expect("read shared api.rs");
+    let server_mutations_path = repo_root.join("apps/server/src/graphql/mutations.rs");
+    let server_mutations =
+        fs::read_to_string(&server_mutations_path).expect("read server graphql mutations.rs");
+    let lifecycle_tests_path = repo_root.join("apps/server/tests/module_lifecycle.rs");
+    let lifecycle_tests =
+        fs::read_to_string(&lifecycle_tests_path).expect("read server module lifecycle tests");
+
+    for adapter_test in [
+        "lifecycle_runtime_taxonomy_matrix_is_forwarded_without_remapping",
+        "lifecycle_journal_metadata_fragments_are_forwarded_without_parsing",
+        "lifecycle_operation_status_matrix_is_forwarded_without_local_parsing",
+        "lifecycle_retryable_issue_fragments_are_forwarded_without_local_parsing",
+        "lifecycle_journal_actor_and_correlation_matrix_is_forwarded_without_local_remap",
+        "lifecycle_operation_issue_matrix_is_forwarded_without_local_interpretation",
+    ] {
+        assert!(
+            shared_api.contains(adapter_test),
+            "Leptos SSR adapter lifecycle parity test `{adapter_test}` must remain present"
+        );
+    }
+
+    for mapper_test in [
+        "toggle_error_mapping_sets_expected_error_codes",
+        "toggle_user_input_taxonomy_maps_only_to_bad_user_input_code",
+        "toggle_hook_failed_taxonomy_maps_only_to_module_hook_failed_code",
+        "toggle_internal_error_taxonomy_maps_only_to_internal_error_code",
+        "toggle_error_mapping_matrix_preserves_message_and_code_contract",
+        "toggle_hook_failed_pre_hook_sets_non_retryable_issue_extensions",
+        "toggle_hook_failed_post_hook_sets_retryable_issue_extensions",
+    ] {
+        assert!(
+            server_mutations.contains(mapper_test),
+            "server GraphQL lifecycle mapper test `{mapper_test}` must remain present"
+        );
+    }
+
+    for lifecycle_test in [
+        "successful_toggle_writes_committed_module_operation",
+        "successful_toggle_with_actor_persists_requested_by",
+        "toggle_without_actor_records_null_requested_by",
+        "hook_failure_with_actor_records_failed_operation_with_actor",
+        "hook_failure_without_actor_records_failed_operation_with_null_actor",
+        "post_enable_failure_keeps_committed_state_and_marks_failed_operation",
+        "post_disable_failure_keeps_committed_state_and_marks_failed_operation",
+        "dependency_validation_failure_does_not_create_journal_row",
+        "dependent_validation_failure_does_not_create_journal_row",
+        "unknown_module_failure_does_not_create_journal_row",
+        "core_module_disable_failure_does_not_create_journal_row",
+        "noop_disable_for_already_disabled_module_does_not_create_journal_row",
+        "noop_enable_for_already_enabled_module_does_not_create_extra_journal_row",
+    ] {
+        assert!(
+            lifecycle_tests.contains(lifecycle_test),
+            "server lifecycle journal metadata/parity test `{lifecycle_test}` must remain present"
+        );
+    }
+
+    let toggle_helper = extract_function_block(&admin_api, "pub async fn toggle_module(")
+        .expect("toggle_module helper should exist");
+    assert!(
+        toggle_helper.contains("TOGGLE_MODULE_MUTATION")
+            && toggle_helper.contains("Ok(response.toggle_module)"),
+        "admin toggle helper must continue to pass through canonical GraphQL lifecycle payload"
+    );
+    for forbidden in [
+        "UNKNOWN_MODULE",
+        "CORE_MODULE",
+        "MISSING_DEPENDENCIES",
+        "HAS_DEPENDENTS",
+        "MODULE_HOOK_FAILED",
+        "extensions.code",
+        "module_operations",
+        "correlation_id",
+        "requested_by",
+        ".map_err(",
+    ] {
+        assert!(
+            !toggle_helper.contains(forbidden),
+            "admin toggle helper must not parse server-owned lifecycle/journal fragment `{forbidden}`"
+        );
+    }
+
+    for recovery_ui_fragment in [
+        "failed_module_operation_recovery_plans(",
+        "retry_failed_module_operation_post_hook(",
+        "compensate_failed_module_operation(",
+        "Lifecycle recovery",
+    ] {
+        assert!(
+            modules_list.contains(recovery_ui_fragment),
+            "admin recovery UI must keep canonical lifecycle recovery fragment `{recovery_ui_fragment}`"
+        );
+    }
+}
+
+#[test]
+fn manifest_hash_ref_revision_contract_is_shared_across_surfaces() {
+    let crate_root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let repo_root = crate_root
+        .parent()
+        .and_then(Path::parent)
+        .expect("workspace root");
+    let admin_api_path = crate_root.join("src/features/modules/api.rs");
+    let admin_api = fs::read_to_string(&admin_api_path).expect("read admin api.rs");
+    let server_composition_path =
+        repo_root.join("apps/server/src/services/platform_composition.rs");
+    let server_composition =
+        fs::read_to_string(&server_composition_path).expect("read server platform_composition.rs");
+    let server_mutations_path = repo_root.join("apps/server/src/graphql/mutations.rs");
+    let server_mutations =
+        fs::read_to_string(&server_mutations_path).expect("read server graphql mutations.rs");
+    let server_build_tests_path =
+        repo_root.join("apps/server/tests/platform_composition_build_service.rs");
+    let server_build_tests = fs::read_to_string(&server_build_tests_path)
+        .expect("read server platform composition build tests");
+    let shared_api_path = crate_root.join("src/shared/api/mod.rs");
+    let shared_api = fs::read_to_string(&shared_api_path).expect("read shared api.rs");
+
+    let admin_hash_helper = extract_function_block(
+        &admin_api,
+        "fn runtime_manifest_hash(manifest: &RuntimeModulesManifest) -> String",
+    )
+    .expect("runtime_manifest_hash helper should exist");
+    assert!(
+        admin_hash_helper.contains("rustok_api::manifest_hash::hash_manifest(manifest)"),
+        "admin SSR runtime manifest hashing must use the shared typed hash helper"
+    );
+
+    let server_hash_helper = extract_function_block(
+        &server_composition,
+        "pub fn manifest_hash(manifest: &ModulesManifest) -> String",
+    )
+    .expect("server manifest_hash helper should exist");
+    assert!(
+        server_hash_helper.contains("hash_manifest(manifest)"),
+        "server composition hashing must use the shared typed hash helper"
+    );
+
+    for mutation_decl in [
+        "pub const INSTALL_MODULE_MUTATION: &str = \"",
+        "pub const UNINSTALL_MODULE_MUTATION: &str = \"",
+        "pub const UPGRADE_MODULE_MUTATION: &str = \"",
+    ] {
+        let mutation = extract_const_string_literal(&admin_api, mutation_decl)
+            .unwrap_or_else(|| panic!("mutation declaration not found: {mutation_decl}"));
+        for required in ["manifestRef", "manifestHash", "manifestRevision"] {
+            assert!(
+                mutation.contains(required),
+                "GraphQL mutation `{mutation_decl}` must request build manifest field `{required}`"
+            );
+        }
+    }
+
+    for helper in [
+        (
+            "pub async fn install_module(",
+            "Ok(response.install_module)",
+        ),
+        (
+            "pub async fn uninstall_module(",
+            "Ok(response.uninstall_module)",
+        ),
+        (
+            "pub async fn upgrade_module(",
+            "Ok(response.upgrade_module)",
+        ),
+    ] {
+        let helper_body = extract_function_block(&admin_api, helper.0)
+            .unwrap_or_else(|| panic!("helper signature not found: {}", helper.0));
+        assert!(
+            helper_body.contains(helper.1),
+            "{} must return canonical GraphQL build payload directly",
+            helper.0
+        );
+        assert!(
+            !helper_body.contains("manifest_ref")
+                && !helper_body.contains("platform_state:")
+                && !helper_body.contains("manifest_revision"),
+            "{} must not locally parse manifest ref/revision contract",
+            helper.0
+        );
+    }
+
+    for server_fragment in [
+        "persist_manifest_and_request_build(",
+        "format!(\"platform_state:{}\", result.snapshot.revision)",
+        "assert_eq!(result.build.manifest_revision, result.snapshot.revision)",
+        "successful_enqueue_keeps_hash_parity_between_snapshot_and_build",
+        "successful_enqueue_keeps_manifest_snapshot_parity_with_hash",
+        "same_manifest_keeps_hash_and_snapshot_stable_across_revisions",
+    ] {
+        let haystack = if server_fragment == "persist_manifest_and_request_build(" {
+            server_mutations.as_str()
+        } else {
+            server_build_tests.as_str()
+        };
+        assert!(
+            haystack.contains(server_fragment),
+            "server composition surface must preserve manifest parity fragment `{server_fragment}`"
+        );
+    }
+
+    for adapter_test in [
+        "composition_runtime_taxonomy_matrix_is_forwarded_without_remapping",
+        "composition_manifest_fragments_are_forwarded_without_local_parsing",
+    ] {
+        assert!(
+            shared_api.contains(adapter_test),
+            "Leptos SSR adapter parity test `{adapter_test}` must remain present"
+        );
+    }
 }
 
 #[test]

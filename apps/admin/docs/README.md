@@ -69,7 +69,7 @@
 - `/modules` больше не читает legacy registry audit shape: lifecycle/event read-side работает только с typed payload (`stage_key`, nested `owner_transition`, structured principal objects) и не парсит historical `*_actor` keys.
 - Для `apps/admin` это считается конечным repo-side contract: дальше здесь не нужен новый client-owned lifecycle, а только targeted verification mapping и периодическая сверка `/modules` UX с server-driven policy surface.
 - Toggle/install/uninstall/upgrade module composition не должны иметь локальный SSR SQL lifecycle duplicate: host использует canonical server GraphQL/control-plane entrypoints, где CAS-update `platform_state` и build enqueue атомарны, а `manifest_ref`/`manifest_hash` берутся из server-side snapshot contract.
-- Для module toggle `apps/admin` держит GraphQL-only entrypoint contract (без native fallback toggle path): error taxonomy, dependency/core checks и journal semantics (`module_operations`) задаются server lifecycle service, а не локальной Leptos-логикой.
+- Для module toggle `apps/admin` держит GraphQL-only entrypoint contract (без native fallback toggle path): error taxonomy, dependency/core checks и journal semantics (`module_operations`) задаются server lifecycle service, а не локальной Leptos-логикой. Leptos SSR adapter и UI обязаны прокидывать `BAD_USER_INPUT`/`MODULE_HOOK_FAILED`/`INTERNAL_ERROR`, `correlation_id`, `requested_by`, `status`, `retryable_issue` и related recovery fields без client-side remap.
 
 ## Локальный debug-запуск
 
@@ -122,6 +122,7 @@ route-selection UX и контейнеры module-owned UI должны след
 - Canonical source для подменю модуля — `[[provides.admin_ui.child_pages]]`. Legacy `[[provides.admin_ui.pages]]` пока читается только как compatibility alias, новые manifests должны использовать `child_pages`.
 - Каждый module-owned admin surface получает корневой пункт `Overview`; declared child pages становятся nested links под контейнером модуля. Host скрывает disabled tenant modules и пустые containers.
 - Tenant/module settings остаются в host-owned `/modules` governance UI. Если `rustok-module.toml` содержит `[settings]`, sidebar добавляет контекстный link `/modules?module_slug=<slug>`; module-owned packages не дублируют этот editor.
+- Recovery для failed module lifecycle post-hook операций остаётся host/control-plane сценарием: Leptos admin показывает host-owned блок `Lifecycle recovery`, читает `failedModuleOperationRecoveryPlans` и вызывает `retryFailedModuleOperationPostHook` / `compensateFailedModuleOperation` через canonical GraphQL helpers в `features/modules/api.rs`; локальный SQL, локальный rollback и собственная lifecycle taxonomy запрещены.
 - Host прокидывает effective locale через `UiRouteContext.locale`; module-owned Leptos packages обязаны использовать это значение и не должны вводить собственную query/header/cookie fallback-цепочку.
 - Module-owned admin packages обязаны поддерживать тот же runtime split: `#[server]` preferred в SSR/hydrate, GraphQL/REST fallback для standalone CSR/debug. Пакет не должен становиться ни GraphQL-only для monolith, ни `#[server]`-only для headless/debug.
 - Core modules с UI подчиняются тому же ownership rule, что и optional modules: наличие UI не делает host владельцем модульной поверхности.

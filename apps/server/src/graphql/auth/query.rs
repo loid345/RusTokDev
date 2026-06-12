@@ -7,7 +7,7 @@ use crate::graphql::errors::GraphQLError;
 use crate::models::users;
 use crate::services::auth_lifecycle::{AuthLifecycleError, AuthLifecycleService};
 
-use super::types::{AuthUser, SessionItem, SessionsPayload};
+use super::types::{auth_permission_strings, AuthUser, SessionItem, SessionsPayload};
 
 const DEFAULT_SESSION_LIMIT: u64 = 50;
 
@@ -42,6 +42,7 @@ impl AuthQuery {
             name: user.name,
             role: infer_user_role_from_permissions(&auth.permissions).to_string(),
             status: user.status.to_string(),
+            permissions: auth_permission_strings(&auth.permissions),
         })
     }
 

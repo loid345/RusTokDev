@@ -85,14 +85,15 @@
 ### Что уже сделано в `rustok-pages`
 
 - добавлен `crates/rustok-pages/storefront/src/core.rs`;
-- `SelectedPageCard` в `crates/rustok-pages/storefront/src/lib.rs` переведён на `core::*` функции;
+- `SelectedPageCard` переведён на `core::*` функции;
+- Leptos storefront render/bind слой перенесён в `crates/rustok-pages/storefront/src/ui/leptos.rs`, а crate root только wires modules/re-export `PagesView`;
 - dual-path transport контракт (`native #[server]` + GraphQL fallback) не менялся.
 
 
 ### Перепроверка после выполненного (double-check)
 
 - [x] Проход №1 (code/docs consistency):
-  - `rustok-pages/storefront` фактически использует выделенный `core` слой для selected-page logic;
+  - `rustok-pages/storefront` фактически использует выделенный `core` слой для selected-page logic и explicit `ui/leptos.rs` adapter для render/bind;
   - dual-path transport (`native #[server]` + GraphQL fallback) сохранён без удаления fallback surface.
 - [x] Проход №2 (устранение устаревших формулировок):
   - в текущих central docs для этого шага не осталось формулировок, противоречащих `core`-срезу в `rustok-pages`.
@@ -198,3 +199,10 @@
 - `rustok-search` slice #14 evidence: admin tab and diagnostics/consistency badge CSS class mapping moved from Leptos render module to `admin/src/core.rs`; transport split (`native #[server]` + GraphQL fallback) не менялся.
 - `rustok-search` slice #15 evidence: admin navigation href, engine option label and rebuild feedback rendering moved from Leptos render module to `admin/src/core.rs`; transport split (`native #[server]` + GraphQL fallback) не менялся.
 - `rustok-search` slice #16 evidence: admin relevance editor merge and JSON-array validation moved from Leptos render module to `admin/src/core.rs`; transport split (`native #[server]` + GraphQL fallback) не менялся.
+- `rustok-search` slice #31 evidence: storefront transport split into `transport/native_server_adapter.rs` and `transport/graphql_adapter.rs`; native-first fallback orchestration moved to `transport/mod.rs`, while raw `api.rs` keeps the existing native server-function and GraphQL endpoints.
+- `rustok-search` slice #32 evidence: storefront suggestions presentation and document-vs-query navigation decision moved into `storefront/src/core.rs`; Leptos adapter renders core-owned suggestion view-models and only executes the prepared navigation target.
+- `rustok-search` slice #33 evidence: storefront filter preset chip state/class/next-selection mapping moved into `storefront/src/core.rs`; Leptos adapter renders core-owned chip view-models and keeps only signal wiring/navigation execution.
+- `rustok-search` slice #34 evidence: storefront facet display names and bucket labels moved into `storefront/src/core.rs`; Leptos facet cards render core-owned facet view-models without inline facet formatting.
+- `rustok-search` slice #35 evidence: storefront result action no-target/open-link state and click-tracking position moved into `storefront/src/core.rs`; Leptos result cards render the prepared action model and only execute click tracking/navigation.
+- `rustok-search` slice #36 evidence: storefront empty-state and feature-card title/body presentation moved into `storefront/src/core.rs`; Leptos cards render core-owned view-models without local presentation ownership.
+- `rustok-search` slice #37 evidence: storefront results header query label/query/summary/preset/locale presentation moved into `storefront/src/core.rs`; Leptos header renders the core-owned header view-model.

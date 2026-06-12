@@ -3,8 +3,8 @@ use super::module_detail_panel::ModuleDetailPanel;
 use super::module_update_card::ModuleUpdateCard;
 use crate::app::providers::enabled_modules::use_enabled_modules_context;
 use crate::entities::module::{
-    BuildJob, InstalledModule, MarketplaceModule, ModuleInfo, ModuleSettingField, ReleaseInfo,
-    TenantModule,
+    BuildJob, InstalledModule, MarketplaceModule, ModuleInfo, ModuleOperationRecoveryPlan,
+    ModuleSettingField, ReleaseInfo, TenantModule,
 };
 use crate::features::modules::api;
 #[cfg(target_arch = "wasm32")]
@@ -274,6 +274,28 @@ fn apply_build_progress_to_job(job: &mut BuildJob, event: &api::BuildProgressEve
     job.error_message = event.error_message.clone();
 }
 
+fn recovery_plan_action_label(plan: &ModuleOperationRecoveryPlan) -> &'static str {
+    match plan.recommended_action.as_str() {
+        "retry_post_hook" => "Retry post-hook",
+        "compensating_toggle" | "compensate" => "Compensate",
+        _ if plan.retryable => "Retry available",
+        _ => "Manual review",
+    }
+}
+
+fn recovery_plan_summary(plan: &ModuleOperationRecoveryPlan) -> String {
+    let issue = humanize_label(&plan.issue);
+    let action = recovery_plan_action_label(plan);
+    match plan
+        .error_message
+        .as_ref()
+        .filter(|message| !message.is_empty())
+    {
+        Some(error) => format!("{issue}: {error} ({action})"),
+        None => format!("{issue} ({action})"),
+    }
+}
+
 fn normalize_catalog_filters(filters: &CatalogFilters) -> api::MarketplaceVariables {
     api::MarketplaceVariables {
         search: (!filters.search.trim().is_empty()).then(|| filters.search.trim().to_string()),
@@ -390,6 +412,11 @@ pub fn ModulesList(
         signal(HashMap::<String, String>::new());
     let (form_state, set_form_state) = signal(FormState::idle());
     let (success_message, set_success_message) = signal::<Option<String>>(None);
+    let (failed_recovery_plans, set_failed_recovery_plans) =
+        signal(Vec::<ModuleOperationRecoveryPlan>::new());
+    let (recovery_refreshing, set_recovery_refreshing) = signal(false);
+    let (recovery_action_operation_id, set_recovery_action_operation_id) =
+        signal::<Option<String>>(None);
     let (live_subscription_connected, set_live_subscription_connected) = signal(false);
     let token = use_token();
     let tenant = use_tenant();
@@ -533,10 +560,34 @@ pub fn ModulesList(
                 }
             });
         };
+    let refresh_module_recovery_plans =
+        move |token_value: Option<String>, tenant_value: Option<String>| {
+            set_recovery_refreshing.set(true);
+            spawn_local(async move {
+                match api::failed_module_operation_recovery_plans(
+                    None,
+                    Some(10),
+                    token_value,
+                    tenant_value,
+                )
+                .await
+                {
+                    Ok(plans) => set_failed_recovery_plans.set(plans),
+                    Err(err) => set_form_state.set(FormState::with_form_error(format!("{}", err))),
+                }
+                set_recovery_refreshing.set(false);
+            });
+        };
+
     let refresh_live_state = move || {
         let token_value = token.get();
         let tenant_value = tenant.get();
-        refresh_orchestration_state(token_value, tenant_value, applied_catalog_filters.get());
+        refresh_orchestration_state(
+            token_value.clone(),
+            tenant_value.clone(),
+            applied_catalog_filters.get(),
+        );
+        refresh_module_recovery_plans(token_value, tenant_value);
     };
     let live_polling = use_interval_fn(refresh_live_state, 5000);
     (live_polling.pause)();
@@ -837,6 +888,97 @@ pub fn ModulesList(
                 Err(err) => set_form_state.set(FormState::with_form_error(format!("{}", err))),
             }
             set_loading_slug.set(None);
+        });
+    });
+
+    let on_refresh_recovery_plans = Callback::new(move |_| {
+        let token_value = token.get();
+        let tenant_value = tenant.get();
+        refresh_module_recovery_plans(token_value, tenant_value);
+    });
+
+    let on_retry_recovery = Callback::new(move |operation_id: String| {
+        let token_val = token.get();
+        let tenant_val = tenant.get();
+        let operation_id_for_call = operation_id.clone();
+        set_form_state.set(FormState::idle());
+        set_success_message.set(None);
+        set_recovery_action_operation_id.set(Some(operation_id.clone()));
+        spawn_local(async move {
+            match api::retry_failed_module_operation_post_hook(
+                operation_id_for_call.clone(),
+                token_val.clone(),
+                tenant_val.clone(),
+            )
+            .await
+            {
+                Ok(plan) => {
+                    set_failed_recovery_plans.update(|plans| {
+                        plans.retain(|existing| existing.operation_id != plan.operation_id);
+                        if plan.retryable {
+                            plans.insert(0, plan.clone());
+                        }
+                    });
+                    set_success_message.set(Some(format!(
+                        "Recovery retry processed for {}",
+                        plan.module_slug
+                    )));
+                    refresh_module_recovery_plans(token_val, tenant_val);
+                }
+                Err(err) => set_form_state.set(FormState::with_form_error(format!("{}", err))),
+            }
+            set_recovery_action_operation_id.set(None);
+        });
+    });
+
+    let enabled_modules_for_compensation = enabled_modules.clone();
+    let on_compensate_recovery = Callback::new(move |operation_id: String| {
+        let token_val = token.get();
+        let tenant_val = tenant.get();
+        let operation_id_for_call = operation_id.clone();
+        set_form_state.set(FormState::idle());
+        set_success_message.set(None);
+        set_recovery_action_operation_id.set(Some(operation_id.clone()));
+        let enabled_modules_for_compensation = enabled_modules_for_compensation.clone();
+        spawn_local(async move {
+            match api::compensate_failed_module_operation(
+                operation_id_for_call.clone(),
+                token_val.clone(),
+                tenant_val.clone(),
+            )
+            .await
+            {
+                Ok(module) => {
+                    set_tenant_module_list.update(|modules: &mut Vec<TenantModule>| {
+                        if let Some(existing) = modules
+                            .iter_mut()
+                            .find(|existing| existing.module_slug == module.module_slug)
+                        {
+                            *existing = module.clone();
+                        } else {
+                            modules.push(module.clone());
+                            modules.sort_by(|left, right| left.module_slug.cmp(&right.module_slug));
+                        }
+                    });
+                    set_module_list.update(|modules| {
+                        if let Some(existing) = modules
+                            .iter_mut()
+                            .find(|existing| existing.module_slug == module.module_slug)
+                        {
+                            existing.enabled = module.enabled;
+                        }
+                    });
+                    enabled_modules_for_compensation
+                        .set_module_enabled(&module.module_slug, module.enabled);
+                    set_success_message.set(Some(format!(
+                        "Compensation applied for {}",
+                        module.module_slug
+                    )));
+                    refresh_module_recovery_plans(token_val, tenant_val);
+                }
+                Err(err) => set_form_state.set(FormState::with_form_error(format!("{}", err))),
+            }
+            set_recovery_action_operation_id.set(None);
         });
     });
 
@@ -1250,6 +1392,82 @@ pub fn ModulesList(
             <Show when=move || success_message.get().is_some()>
                 <UiSuccessMessage message=success_message.get().unwrap_or_default() />
             </Show>
+            <div class="rounded-xl border border-border bg-card p-6 shadow-sm">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="space-y-2">
+                        <h3 class="text-base font-semibold text-card-foreground">"Lifecycle recovery"</h3>
+                        <p class="text-sm text-muted-foreground">"Failed post-hook operations are recovered through the canonical GraphQL control-plane surface."</p>
+                    </div>
+                    <button
+                        type="button"
+                        class="inline-flex items-center justify-center rounded-md border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
+                        disabled=move || recovery_refreshing.get()
+                        on:click=move |_| on_refresh_recovery_plans.run(())
+                    >
+                        {move || if recovery_refreshing.get() { "Refreshing..." } else { "Refresh recovery" }}
+                    </button>
+                </div>
+                <div class="mt-4 space-y-3">
+                    <Show
+                        when=move || !failed_recovery_plans.get().is_empty()
+                        fallback=move || view! {
+                            <p class="text-sm text-muted-foreground">"No retryable lifecycle recovery items."</p>
+                        }
+                    >
+                        {move || failed_recovery_plans.get().into_iter().map(|plan| {
+                            let operation_id = StoredValue::new(plan.operation_id.clone());
+                            let operation_id_for_retry = operation_id;
+                            let operation_id_for_compensate = operation_id;
+                            let operation_id_for_loading = operation_id;
+                            let module_slug = plan.module_slug.clone();
+                            let requested_state = if plan.requested_enabled { "enable" } else { "disable" };
+                            let summary = recovery_plan_summary(&plan);
+                            let status_label = humanize_label(&plan.status);
+                            let action_label = recovery_plan_action_label(&plan);
+                            let retryable = plan.retryable;
+                            let compensatable = plan.issue == "post_hook_failed";
+                            let correlation_id = plan.correlation_id.clone();
+                            let correlation_id_for_badge = correlation_id.clone();
+                            view! {
+                                <div class="rounded-lg border border-border px-3 py-3">
+                                    <div class="flex flex-wrap items-start justify-between gap-3">
+                                        <div class="space-y-1">
+                                            <p class="text-sm font-medium text-card-foreground">{format!("{} / {}", module_slug, requested_state)}</p>
+                                            <p class="text-xs text-muted-foreground">{summary}</p>
+                                            <div class="flex flex-wrap items-center gap-2 text-xs">
+                                                <span class="inline-flex items-center rounded-full border border-border px-2.5 py-0.5 font-medium text-muted-foreground">{status_label}</span>
+                                                <span class="inline-flex items-center rounded-full border border-border px-2.5 py-0.5 font-medium text-muted-foreground">{action_label}</span>
+                                                <Show when=move || correlation_id.is_some()>
+                                                    <span class="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 font-semibold text-secondary-foreground">{format!("corr {}", correlation_id_for_badge.clone().unwrap_or_default())}</span>
+                                                </Show>
+                                            </div>
+                                        </div>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <button
+                                                type="button"
+                                                class="inline-flex items-center justify-center rounded-md border border-border bg-background px-3 py-2 text-xs font-medium text-foreground transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-50"
+                                                disabled=move || recovery_action_operation_id.get().as_deref() == Some(operation_id_for_loading.get_value().as_str()) || !retryable
+                                                on:click=move |_| on_retry_recovery.run(operation_id_for_retry.get_value())
+                                            >
+                                                "Retry"
+                                            </button>
+                                            <button
+                                                type="button"
+                                                class="inline-flex items-center justify-center rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:pointer-events-none disabled:opacity-50"
+                                                disabled=move || recovery_action_operation_id.get().as_deref() == Some(operation_id.get_value().as_str()) || !compensatable
+                                                on:click=move |_| on_compensate_recovery.run(operation_id_for_compensate.get_value())
+                                            >
+                                                "Compensate"
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        }).collect_view()}
+                    </Show>
+                </div>
+            </div>
+
             <div class="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_repeat(3,minmax(0,0.8fr))]">
                 <div class="rounded-xl border border-border bg-card p-6 shadow-sm xl:col-span-2">
                     <div class="space-y-2">

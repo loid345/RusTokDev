@@ -6,9 +6,11 @@
 
 - схема `orders`, `order_line_items`, `order_line_item_translations` и `order_adjustments` (localized line-item titles вынесены из base rows);
 - `OrderModule` и `OrderService`;
+- `order_returns` и `order_return_items` для order-owned post-order returns foundation с resolution-ссылками на refund/order-change orchestration;
+- `order_changes` для draft/edit preview-apply skeleton без payment/fulfillment side effects;
 - write-side lifecycle заказа: `pending -> confirmed -> paid -> shipped -> delivered/cancelled`;
 - публикация order events через transactional outbox;
-- module-owned admin UI пакет `rustok-order/admin` для order operations.
+- module-owned admin UI пакет `rustok-order/admin` для order operations с разделением `admin/src/core.rs`, `admin/src/transport.rs` и `admin/src/ui/leptos.rs`.
 
 ## Зона ответственности
 
@@ -21,7 +23,9 @@
 - checkout snapshot переносит pricing repricing из cart в order так, что discounted line items сохраняют
   `base/compare_at unit_price`, а savings остаются в `order_adjustments`;
 - GraphQL и REST transport пока остаются в фасаде `rustok-commerce`;
-- admin UI ownership вынесен в `rustok-order/admin`.
+- admin UI ownership вынесен в `rustok-order/admin`;
+- returns foundation хранит item-level lines с validation количества и принадлежности line-item к заказу, а `resolution_type/refund_id/order_change_id` связывают completed return с refund/exchange/claim orchestration без переноса payment logic в order boundary;
+- order-change skeleton хранит `preview`, `change_type`, lifecycle `pending -> applied|cancelled` и metadata, но пока не применяет cross-domain effects.
 
 ## Контракты событий
 
@@ -48,6 +52,10 @@
   уже получает ту же net pricing semantics без повторного скрытого дисконта;
 - изменения cross-module контракта нужно синхронизировать с `rustok-commerce`
   и соседними split-модулями.
+
+## Разделение FFA для admin
+
+Пакет admin теперь использует framework-agnostic defaults `admin/src/core.rs`, фасад `admin/src/transport.rs` поверх GraphQL order transport и явный Leptos-адаптер отрисовки `admin/src/ui/leptos.rs`; корень crate только подключает слои модуля и повторно экспортирует `OrderAdmin`.
 
 ## Проверка
 

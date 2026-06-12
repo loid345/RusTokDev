@@ -1,7 +1,7 @@
 use axum::{
     body::Body,
     extract::State,
-    http::{HeaderMap, Request},
+    http::{Extensions, HeaderMap, Request},
     middleware::Next,
     response::Response,
 };
@@ -17,7 +17,10 @@ use crate::common::{
 use crate::context::{
     ChannelContext, ChannelContextExtension, ChannelResolutionSource, TenantContextExt,
 };
-use rustok_api::{ChannelResolutionOutcome, ChannelResolutionStage, ChannelResolutionTraceStep};
+use rustok_api::{
+    context::AuthContextExtension, request::ResolvedRequestLocale, ChannelResolutionOutcome,
+    ChannelResolutionStage, ChannelResolutionTraceStep,
+};
 use rustok_channel::{
     ChannelResolutionOrigin, ChannelResolver, RequestFacts, ResolutionDecision, TargetSurface,
 };
@@ -41,6 +44,8 @@ struct ChannelCacheKey {
     header_channel_slug: Option<String>,
     query_channel_slug: Option<String>,
     host: Option<String>,
+    oauth_app_id: Option<Uuid>,
+    locale: Option<String>,
 }
 
 impl ChannelResolutionCache {
@@ -105,16 +110,11 @@ pub async fn resolve(
         req.uri().query(),
         peer_ip_from_extensions(req.extensions()),
         settings,
+        req.extensions(),
     );
     let cache = channel_cache(&ctx);
-    let cache_key = ChannelCacheKey {
-        tenant_id: facts.tenant_id,
-        version: cache.tenant_version(facts.tenant_id).await,
-        header_channel_id: facts.header_channel_id,
-        header_channel_slug: facts.header_channel_slug.clone(),
-        query_channel_slug: facts.query_channel_slug.clone(),
-        host: facts.host.clone(),
-    };
+    let cache_key =
+        channel_cache_key_from_facts(&facts, cache.tenant_version(facts.tenant_id).await);
 
     if let Some(cached_context) = cache.cache.get(&cache_key).await {
         if let Some(context) = cached_context {
@@ -167,6 +167,7 @@ fn build_request_facts(
     query: Option<&str>,
     peer_ip: Option<std::net::IpAddr>,
     settings: &RustokSettings,
+    extensions: &Extensions,
 ) -> RequestFacts {
     RequestFacts {
         tenant_id,
@@ -175,8 +176,25 @@ fn build_request_facts(
         header_channel_slug: channel_slug_from_header(headers),
         query_channel_slug: channel_slug_from_query(query),
         host: extract_effective_host(headers, peer_ip, &settings.runtime.request_trust),
-        oauth_app_id: None,
-        locale: None,
+        oauth_app_id: extensions
+            .get::<AuthContextExtension>()
+            .and_then(|auth| auth.0.client_id),
+        locale: extensions
+            .get::<ResolvedRequestLocale>()
+            .map(|resolved| resolved.effective_locale.clone()),
+    }
+}
+
+fn channel_cache_key_from_facts(facts: &RequestFacts, version: u64) -> ChannelCacheKey {
+    ChannelCacheKey {
+        tenant_id: facts.tenant_id,
+        version,
+        header_channel_id: facts.header_channel_id,
+        header_channel_slug: facts.header_channel_slug.clone(),
+        query_channel_slug: facts.query_channel_slug.clone(),
+        host: facts.host.clone(),
+        oauth_app_id: facts.oauth_app_id,
+        locale: facts.locale.clone(),
     }
 }
 
@@ -255,13 +273,17 @@ pub async fn invalidate_tenant_channel_cache(ctx: &AppContext, tenant_id: Uuid) 
 #[cfg(test)]
 mod tests {
     use super::{
-        build_request_facts, channel_id_from_header, channel_slug_from_header,
-        channel_slug_from_query, resolved_detail_source_and_trace, ChannelResolutionOutcome,
-        ChannelResolutionStage,
+        build_request_facts, channel_cache_key_from_facts, channel_id_from_header,
+        channel_slug_from_header, channel_slug_from_query, resolved_detail_source_and_trace,
+        ChannelResolutionOutcome, ChannelResolutionStage,
     };
     use crate::common::RustokSettings;
     use crate::context::ChannelResolutionSource;
-    use axum::http::{header::HOST, HeaderMap};
+    use axum::http::{header::HOST, Extensions, HeaderMap};
+    use rustok_api::{
+        context::{AuthContext, AuthContextExtension},
+        request::ResolvedRequestLocale,
+    };
     use rustok_channel::{
         migrations, ChannelResolver, ChannelService, CreateChannelInput, CreateChannelTargetInput,
     };
@@ -366,6 +388,70 @@ mod tests {
         RustokSettings::default()
     }
 
+    fn empty_extensions() -> Extensions {
+        Extensions::new()
+    }
+
+    #[test]
+    fn request_facts_include_auth_and_locale_extensions() {
+        let tenant_id = Uuid::new_v4();
+        let client_id = Uuid::new_v4();
+        let mut extensions = Extensions::new();
+        extensions.insert(AuthContextExtension(AuthContext {
+            user_id: Uuid::new_v4(),
+            session_id: Uuid::new_v4(),
+            tenant_id,
+            permissions: Vec::new(),
+            client_id: Some(client_id),
+            scopes: vec!["catalog:read".to_string()],
+            grant_type: "client_credentials".to_string(),
+        }));
+        extensions.insert(ResolvedRequestLocale {
+            requested_locale: Some("ru".to_string()),
+            effective_locale: "ru-RU".to_string(),
+        });
+
+        let facts = build_request_facts(
+            tenant_id,
+            &HeaderMap::new(),
+            None,
+            None,
+            &test_settings(),
+            &extensions,
+        );
+
+        assert_eq!(facts.oauth_app_id, Some(client_id));
+        assert_eq!(facts.locale.as_deref(), Some("ru-RU"));
+    }
+
+    #[test]
+    fn channel_cache_key_varies_by_oauth_app_and_locale() {
+        let tenant_id = Uuid::new_v4();
+        let client_id = Uuid::new_v4();
+
+        let base_facts = build_request_facts(
+            tenant_id,
+            &HeaderMap::new(),
+            Some("channel=storefront"),
+            None,
+            &test_settings(),
+            &empty_extensions(),
+        );
+
+        let mut locale_facts = base_facts.clone();
+        locale_facts.locale = Some("ru-RU".to_string());
+        let mut oauth_facts = base_facts.clone();
+        oauth_facts.oauth_app_id = Some(client_id);
+
+        let base_key = channel_cache_key_from_facts(&base_facts, 7);
+        let locale_key = channel_cache_key_from_facts(&locale_facts, 7);
+        let oauth_key = channel_cache_key_from_facts(&oauth_facts, 7);
+
+        assert_ne!(base_key, locale_key);
+        assert_ne!(base_key, oauth_key);
+        assert_ne!(locale_key, oauth_key);
+    }
+
     #[test]
     fn parses_channel_id_header() {
         let mut headers = HeaderMap::new();
@@ -430,6 +516,7 @@ mod tests {
                     Some("channel=query-channel"),
                     None,
                     &test_settings(),
+                    &empty_extensions(),
                 ))
                 .await
                 .expect("resolution should succeed"),
@@ -464,6 +551,7 @@ mod tests {
                     Some("channel=missing"),
                     None,
                     &test_settings(),
+                    &empty_extensions(),
                 ))
                 .await
                 .expect("resolution should succeed"),
@@ -501,6 +589,7 @@ mod tests {
                     Some("channel=missing"),
                     None,
                     &test_settings(),
+                    &empty_extensions(),
                 ))
                 .await
                 .expect("resolution should succeed"),
@@ -545,6 +634,7 @@ mod tests {
                     None,
                     None,
                     &test_settings(),
+                    &empty_extensions(),
                 ))
                 .await
                 .expect("resolution should succeed"),
@@ -579,6 +669,7 @@ mod tests {
                     Some("channel=missing"),
                     None,
                     &test_settings(),
+                    &empty_extensions(),
                 ))
                 .await
                 .expect("resolution should succeed"),

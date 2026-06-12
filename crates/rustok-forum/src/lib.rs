@@ -22,8 +22,8 @@ pub use entities::*;
 pub use error::{ForumError, ForumResult};
 pub use graphql::{ForumMutation, ForumQuery};
 pub use services::{
-    CategoryService, ModerationService, ReplyService, SubscriptionService, TopicService,
-    UserStatsService, VoteService,
+    CategoryService, ForumWidgetContractService, ModerationService, ReplyService,
+    SubscriptionService, TopicService, UserStatsService, VoteService,
 };
 pub use state_machine::{ReplyStatus, TopicStatus};
 
@@ -87,6 +87,10 @@ impl RusToKModule for ForumModule {
 impl MigrationSource for ForumModule {
     fn migrations(&self) -> Vec<Box<dyn MigrationTrait>> {
         migrations::migrations()
+    }
+
+    fn migration_dependencies(&self) -> Vec<rustok_core::MigrationDependencyDescriptor> {
+        migrations::migration_dependencies()
     }
 }
 

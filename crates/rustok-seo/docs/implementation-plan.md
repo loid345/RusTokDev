@@ -1,34 +1,33 @@
 # План реализации `rustok-seo`
 
-Статус: SEO Suite v1 собран как optional platform module. Phase A–C (templates/bulk/diagnostics/schema/cross-link/image boundary) закрыты по baseline. Следующий execution wave — **Phase D: Productionization & Integration Parity**.
+Статус: SEO Suite v1 собран как optional platform module. Phase A–C (templates/bulk/diagnostics/schema/cross-link/image boundary) закрыты по baseline. В Phase D закрыт полный D6 execution пакет; активный фокус смещён на **D7–D9 (storefront parity + verification + runbooks)**.
 
 ## Execution checkpoint
 
-- Current phase: `phase_d1_contract_freeze`
-- Last checkpoint: Зафиксирован большой прогон Phase D (D1..D9) с contract freeze для GraphQL/REST/DTO, rollout-флагами и dependency-гейтами для `rustok-outbox`, `rustok-index`, admin/storefront/next-host интеграций.
-- Next step: Стартовать Batch D2 (typed SEO events + outbox foundation) и подготовить migration skeleton для event/idempotency tracking.
+- Current phase: `phase_d7a_runtime_seo_data_plumbing`
+- Last checkpoint: запущен крупный D7 execution wave с regrouping D7–D9 в Milestones `A–E`; в `apps/next-frontend` добавлен runtime SEO adapter (`REST-first + GraphQL fallback`, typed error taxonomy, deterministic route/query normalization), `robots.ts`/`sitemap.ts` переведены на runtime source с safe static fallback, home `generateMetadata` теперь потребляет `SeoPageContext` как primary source и рендерит JSON-LD blocks из runtime contract.
+- Next step: закрыть Milestone A целиком (route ownership matrix + fallback policy evidence + fixture baseline), затем довести Milestone B как единый cutover для runtime-driven robots/sitemap/metadata на owner routes beyond home.
 - Open blockers:
-  - В этой VM отсутствует `cargo` в `PATH`, поэтому локальные verification gates не запускались вручную.
-  - Для D2/D3 нужен синхронный contract sign-off между владельцами `rustok-seo`, `rustok-outbox` и `rustok-index`.
+  - Для Milestone C нужен согласованный route ownership matrix (owner module -> route patterns -> target_kind) по non-home Next routes.
+  - Для Milestone D нужен единый fixture allowlist допустимых long-tail metadata differences между Rust storefront и Next host.
 - Hand-off notes for next agent:
   - Не обходить boundary `MediaImageDescriptor` и existing `SeoPageContext` contract.
   - REST/GraphQL расширять только additive-изменениями в стабильном `v1`.
-  - В bulk loops не допускать duplicate event emission: один deterministic key на фактическое state transition.
-- Last updated at (UTC): 2026-05-28T23:58:00Z
+  - Для delivery tracker держать invariant: один idempotency key = один фактический state transition.
+  - Для replay mode сохранять forward-only semantics (`not_started -> repair_only -> replay_requested -> replaying -> replay_completed`) без backward transitions.
+  - Для Next runtime adapter сохранять semantic error mapping (`BAD_USER_INPUT` / `PERMISSION_DENIED` / `NOT_FOUND` / transport failures) и не возвращаться к blanket `catch {}`.
+- Last updated at (UTC): 2026-06-08T10:20:00Z
 
 ## FFA/FBA status block
 
 - FFA status: `in_progress`
-- FBA status: `in_progress`
+- FBA status: `not_started`
+- Structural shape: `core_transport_ui`
 - Last verification evidence:
-  - `cargo xtask module validate seo` *(blocked in this VM: `cargo` binary unavailable in PATH)*
-  - `cargo check -p rustok-media --tests --config profile.dev.debug=0` *(blocked in this VM: `cargo` binary unavailable in PATH)*
-  - `cargo check -p rustok-seo --tests --config profile.dev.debug=0` *(blocked in this VM: `cargo` binary unavailable in PATH)*
-  - `cargo check -p rustok-seo-admin --features ssr --config profile.dev.debug=0` *(blocked in this VM: `cargo` binary unavailable in PATH)*
-  - `cargo check -p rustok-seo-admin-support --tests --config profile.dev.debug=0` *(blocked in this VM: `cargo` binary unavailable in PATH)*
-  - `cargo check -p rustok-storefront --config profile.dev.debug=0` *(blocked in this VM: `cargo` binary unavailable in PATH)*
-  - `cargo check -p rustok-server --lib --config profile.dev.debug=0` *(blocked in this VM: `cargo` binary unavailable in PATH)*
-- Scope note: module-owned UI остаётся infrastructure control-plane (`rustok-seo-admin` + owner-side SEO panels в `pages/product/blog/forum`); transport boundary развивается через GraphQL + REST `/api/seo/page-context`, `/api/seo/cross-link-suggestions` и planned parity expansion в рамках Phase D.
+  - `cargo fmt --all -- --check` *(pass, 2026-06-07)*
+  - `cargo check -p rustok-seo-admin --config profile.dev.debug=0` *(pass, 2026-06-07)*
+  - `cargo test -p rustok-seo-admin --lib --config profile.dev.debug=0` *(pass, 2026-06-07; 12 pure-core tests)*
+- Scope note: module-owned UI остаётся infrastructure control-plane (`rustok-seo-admin` + owner-side SEO panels в `pages/product/blog/forum`); `rustok-seo-admin` теперь имеет явный `core/transport/ui` FFA split, а transport boundary продолжает развиваться через GraphQL + REST `/api/seo/page-context`, `/api/seo/cross-link-suggestions`, control-plane parity endpoints и унифицированный GraphQL-compatible REST error envelope в рамках Phase D.
 
 ## Область работ
 
@@ -46,7 +45,7 @@
 - `SeoModuleSettings` включает typed `sitemap_submission_endpoints` с server-side normalization (`http/https`, trim, dedupe, strip fragment);
 - storefront SEO read-side живёт на permanent contract `SeoPageContext = route + document`;
 - Rust-side SSR head rendering вынесен в `rustok-seo-render`;
-- `rustok-seo-admin` разбит на `lib/component/model/api/i18n/sections` и не является universal entity editor;
+- `rustok-seo-admin` разбит на FFA-слои `core/transport/ui/leptos/sections/i18n` и не является universal entity editor;
 - owner-side SEO panels встроены в `rustok-pages/admin`, `rustok-product/admin`, `rustok-blog/admin`, `rustok-forum/admin`;
 - target extensibility идёт через `rustok-seo-targets` и runtime registration providers;
 - tenant templates и diagnostics уже first-class read/control-plane слой; diagnostics покрывает issue aggregates, canonical redirect chains/loops, hreflang gaps, `cross_link_gap`, `missing_image_alt`, `missing_image_size`;
@@ -54,10 +53,11 @@
 - `SeoDocument.structured_data_blocks` больше не raw JSON passthrough: JSON-LD нормализуется в typed schema blocks (`schema_kind`, `schema_type`, legacy `kind`, `source`, payload);
 - boundary contract C3 закреплён через `rustok-media::MediaImageDescriptor` -> `rustok-seo-targets::SeoTargetImageRecord`;
 - **open productionization gaps (Phase D):**
-  - typed SEO event model + outbox delivery/idempotency tracking пока не formalized;
-  - direct SEO -> `rustok-index` consumer seam и retry/DLQ policy не доведены;
-  - REST control-plane parity с GraphQL неполная (diagnostics summary/job detail/bulk status);
-  - `apps/next-admin` и `apps/next-frontend` покрывают только baseline SEO integration, без полного runtime-driven control-plane/data-plane parity.
+  - D2 закрыт: typed SEO event model и delivery/idempotency tracking live (`seo_event_deliveries` + outbox envelope linkage + duplicate guard);
+  - D3 закрыт: SEO->index adapter seam live (`Seo*` events -> `index.reindex_requested`), tenant/kind-scoped triggers и bounded retry/dead-letter tracking в `seo_index_deliveries`;
+  - D4 закрыт: REST control-plane parity завершён, включая GraphQL-compatible error envelope для validation/config/not_found/permission сценариев;
+  - D5 закрыт: schema/index cursor foundation, repair path и historical replay mode завершены (`run_index_repair_replay` + forward-only cursor replay transitions);
+  - `apps/next-admin` API helper расширен до control-plane read/write surfaces (включая index tracking/replay) и error mapping parity; owner-side observability/remediation widgets через `rustok-seo-admin-support` и wiring в `pages/product/blog/forum` закрыты, open focus смещён на Next storefront runtime parity.
 
 ## Итог последней exploration-сессии
 
@@ -65,8 +65,13 @@
 - C1 закрыт: sitemap submit имеет adapter seam + telemetry-friendly per-endpoint aggregation;
 - C2 закрыт: read-only cross-link suggestions доступны через GraphQL/REST, diagnostics включает `cross_link_gap`;
 - C3 закрыт: `rustok-media` ↔ `rustok-seo` image boundary переведён на typed descriptors;
-- guardrail по Next route coverage остаётся deferred до появления реального route ownership surface;
-- для следующего execution wave зафиксирован Phase D (D1..D9) с приоритетом event/outbox/index, API parity и host integration completeness.
+- D2 закрыт: publish path пишет delivery tracker (`seo_event_deliveries`), связывает с outbox envelope id и держит duplicate guard по idempotency key;
+- D3 закрыт: SEO->index seam публикует selective `index.reindex_requested` triggers и пишет retry/DLQ tracking в `seo_index_deliveries` с cursor/high-water state в `seo_index_cursors`;
+- D4 закрыт: REST control-plane parity endpoints и GraphQL surfaces дополнены унифицированным error envelope (`errors[].extensions.code`) и Next admin error mapping parity;
+- D5 закрыт: operator-triggered replay path и control-plane surface уже live (`runSeoIndexRepairReplay`, `/api/seo/index/repair-replay`), cursor replay mode удерживает forward-only transitions и покрыт targeted tests;
+- D6 закрыт end-to-end: owner-side reusable control-plane widgets + typed remediation mapping + host-locale wiring в `pages/product/blog/forum` + Next admin operator parity;
+- guardrail по Next route coverage остаётся deferred до появления реального route ownership surface beyond home route;
+- для следующего execution wave приоритет: D7 storefront parity -> D8 verification matrix -> D9 runbooks/docs closeout.
 
 ## Контракт совместимости (Phase D freeze)
 
@@ -167,58 +172,122 @@
   - [x] Явно выделить breaking/non-breaking policy для GraphQL/REST/DTO.
   - [x] Зафиксировать rollout-флаги для event/outbox/index/API/Next parity.
 
-- [ ] **Batch D2 — Backend domain: SEO events + outbox foundation**
-  - [ ] Ввести typed events для: meta upsert/publish/rollback, redirect upsert/disable, sitemap generated/submitted, bulk completed/partial/failed.
-  - [ ] Добавить deterministic idempotency key (`tenant_id + target_kind + target_id + revision_or_job_id`).
-  - [ ] Интегрировать emission path с `rustok-outbox` без duplicate emission в bulk loops.
+- [x] **Batch D2 — Backend domain: SEO events + outbox foundation**
+  - [x] Ввести typed events для: meta upsert/publish/rollback, redirect upsert/disable, sitemap generated/submitted, bulk completed/partial/failed.
+  - [x] Добавить deterministic idempotency key (`tenant_id + target_kind + target_id + revision_or_job_id`) и scope-sensitive keys для terminal bulk states.
+  - [x] Интегрировать emission path с `rustok-outbox` без duplicate emission в bulk loops: publish path пишет `seo_event_deliveries`, связывает delivery с outbox envelope id и фиксирует duplicate guard integration tests для bulk terminal events.
 
-- [ ] **Batch D3 — Indexing integration seam (SEO -> rustok-index)**
-  - [ ] Добавить consumer/adapter contract для selective invalidate/rebuild index documents.
-  - [ ] Добавить tenant/kind-scoped reindex trigger.
-  - [ ] Зафиксировать bounded retry + dead-letter policy для indexing failures.
+- [x] **Batch D3 — Indexing integration seam (SEO -> rustok-index)**
+  - [x] Добавить consumer/adapter contract для selective invalidate/rebuild index documents.
+  - [x] Добавить tenant/kind-scoped reindex trigger.
+  - [x] Зафиксировать bounded retry + dead-letter policy для indexing failures.
 
-- [ ] **Batch D4 — GraphQL/REST parity completion**
-  - [ ] Добавить REST parity для diagnostics summary/filtering.
-  - [ ] Добавить REST для sitemap status/job detail.
-  - [ ] Добавить REST для bulk jobs list/detail/status (и preview endpoint при необходимости).
-  - [ ] Унифицировать error envelope между GraphQL/REST (validation/config/not_found/permission).
+- [x] **Batch D4 — GraphQL/REST parity completion**
+  - [x] Добавить REST parity для diagnostics summary/filtering.
+  - [x] Добавить REST для sitemap status/job detail.
+  - [x] Добавить REST для bulk jobs list/detail/status (и preview endpoint при необходимости).
+  - [x] Унифицировать error envelope между GraphQL/REST (validation/config/not_found/permission).
 
-- [ ] **Batch D5 — Миграции и backfill**
-  - [ ] Добавить schema changes для event/outbox/index tracking.
-  - [ ] Подготовить backfill/repair path: initial cursor/high-water mark.
-  - [ ] Подготовить optional replay mode для исторических SEO changes.
-  - [ ] Зафиксировать forward-only rollback policy.
+- [x] **Batch D5 — Миграции, backfill и replay foundation**
+  - [x] Добавить schema changes для event/outbox/index tracking.
+  - [x] Подготовить backfill/repair path: initial cursor/high-water mark.
+  - [x] Подготовить optional replay mode для исторических SEO changes (`run_index_repair_replay`, `replay_historical`).
+  - [x] Зафиксировать forward-only replay policy (cursor state machine + tests).
+  - [x] Добавить control-plane transport parity для tracking/replay: GraphQL + REST.
 
-- [ ] **Batch D6 — Admin integrations (Leptos admin + next-admin)**
-  - [ ] Расширить `rustok-seo/admin` observability блоком (events, delivery status, reindex actions, failure drilldown).
-  - [ ] Расширить `rustok-seo-admin-support` reusable cards под diagnostics remediation и event status hints.
-  - [ ] Расширить `apps/next-admin/src/shared/api/seo.ts` до полного control-plane API.
+- [x] **Batch D6 — Admin integrations (Leptos admin + next-admin + owner panels)**
+  - [x] **D6.1 `rustok-seo/admin` observability surface**
+    - [x] Добавить index delivery summary card (`pending/sent/retry/failed/dead_letter`) с tenant/target filter.
+    - [x] Добавить cursor timeline card (`initial/high_water/last_repair/replay timestamps`) с forward-only replay badge.
+    - [x] Добавить operator actions: `repair_only` и `repair+historical_replay` с explicit confirmation UX.
+    - [x] Добавить failure drilldown (last_error sample + retry counters + dead-letter hints).
+  - [x] **D6.2 `rustok-seo-admin-support` reusable widgets**
 
-- [ ] **Batch D7 — Storefront + Next frontend integrations**
-  - [ ] Довести Rust storefront `SeoPageContext` consume flow до uniform режима (`#[server]` + GraphQL fallback + telemetry).
-  - [ ] Перевести `apps/next-frontend` с static `robots.ts`/`sitemap.ts` на runtime-driven SEO данные.
-  - [ ] Закрыть текущий guardrail по Next route expansion только при появлении реальных route owners beyond home.
+    - [x] Добавить typed remediation mapping (`issue_code -> action`), включая `run_reindex` и `open_bulk_job`.
+    - [x] Добавить общий error/permission/empty-state contract для SEO control-plane виджетов.
+  - [x] **D6.3 host wiring (`apps/next-admin`)**
+    - [x] Подключить index tracking/replay API в operator UI (используя существующий REST-first helper).
+    - [x] Добавить semantic error handling для replay flows (`BAD_USER_INPUT`, `PERMISSION_DENIED`, `NOT_FOUND`).
+    - [x] Добавить telemetry hooks (action started/success/failure) для replay/remediation операций.
+  - [x] **D6.4 owner-module wiring (`pages/product/blog/forum`)**
 
-- [ ] **Batch D8 — Verification matrix и quality gates**
-  - [ ] Unit: DTO normalization, schema validation, event payload mapping, idempotency keys.
-  - [ ] Integration: GraphQL/REST parity, outbox emission, index consumer pipeline, tenant/module gating.
-  - [ ] E2E: admin remediation flow, storefront canonical/alternates/robots, Next metadata parity.
-  - [ ] Contract tests: parity `SeoPageContext` между Rust storefront и Next adapter.
+    - [x] Проверить locale contract: использовать host effective locale, без package-local fallback цепочек.
+  - [x] **D6.5 transport/contract hardening**
+    - [x] Зафиксировать DTO limits/validation для replay input (`limit 1..500`, `target_type content|product`).
+    - [x] Добавить anti-regression checks на idempotency key invariants после operator replay.
 
-- [ ] **Batch D9 — Docs / runbooks / DoD**
-  - [ ] Обновить `README.md`/`docs/README.md` у `rustok-seo`, `rustok-seo-admin-support`, `rustok-seo-render` и host docs (`storefront`, `next-frontend`).
-  - [ ] Добавить runbooks: `SEO event backlog stuck`, `partial indexing failures`, `replay/reindex procedures`.
-  - [ ] Зафиксировать Definition of Ready/Done для следующего execution wave.
+- [ ] **Batch D7 — Storefront + Next frontend runtime parity (regrouped in Milestones A–C)**
+  - [ ] **Milestone A — Runtime SEO Data Plumbing (D7 foundation, large batch)**
+    - [x] A.1 Добавить shared Next runtime adapter: REST-first + GraphQL fallback с typed semantic error mapping (`BAD_USER_INPUT`, `PERMISSION_DENIED`, `NOT_FOUND`, transport failures).
+    - [x] A.2 Зафиксировать deterministic locale/route/query normalization policy в Next adapter (`routeSegment -> /modules/*`, `lang` исключается, query keys сортируются).
+    - [x] A.3 Унифицировать response->metadata mapping (`canonical/hreflang/robots/OG/Twitter/verification`) и добавить runtime JSON-LD script extraction из `structuredDataBlocks`.
+    - [ ] A.4 Зафиксировать fallback-behavior evidence (module disabled / not found / permission / transport) на fixture-наборе.
+  - [ ] **Milestone B — End-to-End Next Runtime Migration (D7 cutover, large batch)**
+    - [x] B.1 Перевести `apps/next-frontend/src/app/robots.ts` на runtime-driven source с safe static fallback.
+    - [x] B.2 Перевести `apps/next-frontend/src/app/sitemap.ts` на runtime-driven source с fallback на host-local static metadata.
+    - [x] B.3 Перевести home `generateMetadata` на runtime `SeoPageContext` adapter semantics.
+    - [ ] B.4 Расширить metadata smoke минимум на два non-home owner route и зафиксировать parity evidence.
+  - [ ] **Milestone C — Route ownership matrix + cross-host fixture parity (D7 guardrail closure)**
+    - [ ] C.1 Зафиксировать route ownership matrix: owner module -> route patterns -> `target_kind` (beyond home route).
+    - [ ] C.2 Добавить единый fixture-set Rust storefront vs Next host.
+    - [ ] C.3 Документировать explicit allowlist допустимых long-tail metadata differences.
 
-## Осталось сделать (оценка на 2026-05-28)
+- [ ] **Batch D8 — Verification matrix и quality gates (Milestone D, heavy QA batch)**
+  - [ ] D.1 Прогнать unit coverage для normalization/validation/idempotency/replay transitions.
+  - [ ] D.2 Прогнать `rustok-seo` integration matrix (GraphQL/REST parity + outbox/index pipeline + tenant/module gating).
+  - [ ] D.3 Прогнать host integration matrix (`apps/storefront`, `apps/next-frontend`, `apps/next-admin`) с RBAC/module gating parity.
+  - [ ] D.4 Собрать evidence packet (команды, логи, snapshots), закрыть high-severity parity defects.
 
-- **Phase C**: технически закрыт, guardrail по Next route coverage перенесён в D7 rollout criteria.
-- **Phase D**: D1 закрыт; D2–D9 открыты.
-- **Незавершённые batch-пункты в Phase D**: **8**.
-- **Quality backlog**: verification evidence по новым D-потокам ожидает CI/runner из-за отсутствия `cargo` локально.
-- **Итого open batch-пунктов в документе**: **8**.
+- [ ] **Batch D9 — Docs / runbooks / readiness closeout (Milestone E, operational batch)**
+  - [ ] E.1 Обновить docs в `rustok-seo`, `rustok-seo-admin-support`, `rustok-seo-render`, `apps/storefront`, `apps/next-frontend`, `apps/next-admin`, central docs registry/index.
+  - [ ] E.2 Финализировать runbooks: `SEO event backlog stuck`, `Partial indexing failures`, `Replay/Reindex procedures` с rollback/stop criteria.
+  - [ ] E.3 Зафиксировать owner sign-off checklist и DoD/DoR для следующего execution wave.
 
-Приоритет исполнения: D2 -> D3 -> D4 -> D5 как backend/control-plane foundation, затем D6/D7 host parity, затем D8/D9 verification + docs closeout.
+## Осталось сделать (оценка на 2026-06-08)
+
+- **Phase C**: технически закрыт; route ownership guardrail формально ведётся в Milestone C.
+- **Phase D**: D1–D6 закрыты; D7–D9 ведутся как крупные Milestones `A–E`.
+- **Прогресс по Milestones**:
+  - `A` — в работе (A.1–A.3 закрыты, A.4 открыт);
+  - `B` — в работе (B.1–B.3 закрыты, B.4 открыт);
+  - `C`, `D`, `E` — не начаты.
+- **Execution focus**: закрыть A/B до non-home route smoke, затем C (guardrails/fixtures), после чего единым прогоном D и E.
+- **Итого open milestone-пакетов**: **5** (`A..E`).
+
+## Детализированный execution план на текущую итерацию (крупные пакеты)
+
+### Milestone A — Runtime SEO Data Plumbing
+
+- [x] A.1 Shared Next runtime adapter (`REST-first + GraphQL fallback + typed errors`).
+- [x] A.2 Deterministic locale/route/query normalization parity со storefront.
+- [x] A.3 Unified metadata mapper + JSON-LD extraction helper.
+- [ ] A.4 Fallback fixtures/evidence: `module_disabled`, `not_found`, `permission_denied`, transport failures.
+
+### Milestone B — End-to-End Next runtime migration
+
+- [x] B.1 Runtime-driven `robots.ts`.
+- [x] B.2 Runtime-driven `sitemap.ts`.
+- [x] B.3 Home route `generateMetadata` + JSON-LD runtime rendering.
+- [ ] B.4 Minimum 2 non-home owner routes на runtime metadata adapter + smoke proof.
+
+### Milestone C — Route ownership + cross-host fixtures
+
+- [ ] C.1 Route ownership matrix (owner -> patterns -> `target_kind`).
+- [ ] C.2 Unified fixture set Rust storefront vs Next host.
+- [ ] C.3 Explicit long-tail diff allowlist.
+
+### Milestone D — Verification matrix execution
+
+- [ ] D.1 Unit/integration/host matrix прогон.
+- [ ] D.2 RBAC/module gating parity checks.
+- [ ] D.3 Replay/index pipeline regression checks.
+- [ ] D.4 Evidence packet + high-severity defect closure.
+
+### Milestone E — Docs / runbooks / readiness closeout
+
+- [ ] E.1 Docs sync (`rustok-seo*`, host docs, central docs).
+- [ ] E.2 Operational runbooks (backlog stuck / partial indexing / replay-reindex).
+- [ ] E.3 Owner sign-off checklist + DoD/DoR finalization.
 
 ## Проверка
 
@@ -243,6 +312,7 @@
 
 ## Quality backlog
 
-- [ ] Закрыть D8 verification matrix с реальным CI evidence packet.
-- [ ] Зафиксировать D9 runbooks и operational remediation playbooks.
-- [ ] Обновлять execution checkpoint после каждого batch-инкремента Phase D.
+- [ ] Закрыть Milestone C route ownership + fixture parity guardrails с explicit diff allowlist.
+- [ ] Закрыть Milestone D verification matrix с реальным CI evidence packet.
+- [ ] Зафиксировать Milestone E runbooks и operational remediation playbooks.
+- [ ] Обновлять execution checkpoint после каждого milestone-инкремента Phase D.

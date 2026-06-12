@@ -48,16 +48,128 @@ mod m20260522_000001_add_module_operation_correlation_id;
 
 pub struct Migrator;
 
+struct ModuleMigrationSource {
+    slug: &'static str,
+    source: &'static dyn rustok_core::MigrationSource,
+}
+
+static MODULE_MIGRATION_SOURCES: &[ModuleMigrationSource] = &[
+    ModuleMigrationSource {
+        slug: "alloy",
+        source: &alloy::AlloyModule,
+    },
+    ModuleMigrationSource {
+        slug: "auth",
+        source: &rustok_auth::AuthModule,
+    },
+    ModuleMigrationSource {
+        slug: "channel",
+        source: &rustok_channel::ChannelModule,
+    },
+    ModuleMigrationSource {
+        slug: "cart",
+        source: &rustok_cart::CartModule,
+    },
+    ModuleMigrationSource {
+        slug: "customer",
+        source: &rustok_customer::CustomerModule,
+    },
+    ModuleMigrationSource {
+        slug: "product",
+        source: &rustok_product::ProductModule,
+    },
+    ModuleMigrationSource {
+        slug: "region",
+        source: &rustok_region::RegionModule,
+    },
+    ModuleMigrationSource {
+        slug: "pricing",
+        source: &rustok_pricing::PricingModule,
+    },
+    ModuleMigrationSource {
+        slug: "inventory",
+        source: &rustok_inventory::InventoryModule,
+    },
+    ModuleMigrationSource {
+        slug: "order",
+        source: &rustok_order::OrderModule,
+    },
+    ModuleMigrationSource {
+        slug: "payment",
+        source: &rustok_payment::PaymentModule,
+    },
+    ModuleMigrationSource {
+        slug: "fulfillment",
+        source: &rustok_fulfillment::FulfillmentModule,
+    },
+    ModuleMigrationSource {
+        slug: "commerce",
+        source: &rustok_commerce::CommerceModule,
+    },
+    ModuleMigrationSource {
+        slug: "content",
+        source: &rustok_content::ContentModule,
+    },
+    ModuleMigrationSource {
+        slug: "blog",
+        source: &rustok_blog::BlogModule,
+    },
+    ModuleMigrationSource {
+        slug: "comments",
+        source: &rustok_comments::CommentsModule,
+    },
+    ModuleMigrationSource {
+        slug: "pages",
+        source: &rustok_pages::PagesModule,
+    },
+    ModuleMigrationSource {
+        slug: "seo",
+        source: &rustok_seo::SeoModule,
+    },
+    ModuleMigrationSource {
+        slug: "forum",
+        source: &rustok_forum::ForumModule,
+    },
+    ModuleMigrationSource {
+        slug: "index",
+        source: &rustok_index::IndexModule,
+    },
+    ModuleMigrationSource {
+        slug: "search",
+        source: &rustok_search::SearchModule,
+    },
+    ModuleMigrationSource {
+        slug: "taxonomy",
+        source: &rustok_taxonomy::TaxonomyModule,
+    },
+    ModuleMigrationSource {
+        slug: "workflow",
+        source: &rustok_workflow::WorkflowModule,
+    },
+];
+
+fn module_migration_sources() -> &'static [ModuleMigrationSource] {
+    MODULE_MIGRATION_SOURCES
+}
+
 fn collect_migration_descriptors() -> Vec<MigrationDescriptor> {
     // Module-owned dependency metadata collection point.
-    // Keep each module's descriptors close to its migration exporter and aggregate here.
-    let mut dependencies: Vec<MigrationDescriptor> = Vec::new();
-    dependencies.extend(
-        rustok_product::migrations::migration_dependencies()
-            .into_iter()
-            .map(MigrationDescriptor::from),
-    );
-    dependencies
+    // Keep descriptors behind the MigrationSource contract for every module whose
+    // migrations are included in this server migrator. Modules without
+    // cross-module ordering metadata use the trait default.
+    module_migration_sources()
+        .iter()
+        .flat_map(|module| {
+            let _module_slug = module.slug;
+            module_dependency_descriptors(module.source.migration_dependencies())
+        })
+        .collect()
+}
+
+fn module_dependency_descriptors(
+    descriptors: Vec<rustok_core::MigrationDependencyDescriptor>,
+) -> impl Iterator<Item = MigrationDescriptor> {
+    descriptors.into_iter().map(MigrationDescriptor::from)
 }
 
 #[async_trait::async_trait]
@@ -260,6 +372,44 @@ mod tests {
     use sea_orm_migration::MigratorTrait;
 
     #[test]
+    fn module_migration_sources_cover_server_module_crates() {
+        let slugs = super::module_migration_sources()
+            .iter()
+            .map(|module| module.slug)
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            slugs,
+            vec![
+                "alloy",
+                "auth",
+                "channel",
+                "cart",
+                "customer",
+                "product",
+                "region",
+                "pricing",
+                "inventory",
+                "order",
+                "payment",
+                "fulfillment",
+                "commerce",
+                "content",
+                "blog",
+                "comments",
+                "pages",
+                "seo",
+                "forum",
+                "index",
+                "search",
+                "taxonomy",
+                "workflow",
+            ],
+            "descriptor aggregation must cover every module crate whose migrations are included in the server migrator"
+        );
+    }
+
+    #[test]
     fn dependency_sort_rejects_missing_dependency() {
         let mut migrations: Vec<Box<dyn sea_orm_migration::MigrationTrait>> = vec![
             Box::new(super::m20250101_000001_create_tenants::Migration),
@@ -441,6 +591,50 @@ mod tests {
                 seen.insert(descriptor.migration.clone()),
                 "duplicate collected descriptor key '{}'",
                 descriptor.migration
+            );
+        }
+    }
+
+    #[test]
+    fn collected_descriptors_include_module_cross_boundaries() {
+        let descriptors = super::collect_migration_descriptors();
+
+        for (migration, dependency) in [
+            (
+                "m20260325_000004_create_channel_oauth_apps",
+                "m20260308_000001_create_oauth_apps",
+            ),
+            (
+                "m20250130_000015_create_commerce_prices",
+                "m20250130_000014_create_commerce_variants",
+            ),
+            (
+                "m20250130_000016_create_commerce_inventory",
+                "m20250130_000014_create_commerce_variants",
+            ),
+            (
+                "m20250130_000017_create_commerce_collections",
+                "m20250130_000012_create_commerce_products",
+            ),
+            (
+                "m20250130_000018_create_commerce_categories",
+                "m20250130_000012_create_commerce_products",
+            ),
+            (
+                "m20260328_000002_create_blog_taxonomy_tables",
+                "m20260329_000001_create_taxonomy_tables",
+            ),
+            (
+                "m20260329_000005_create_forum_topic_tags",
+                "m20260329_000001_create_taxonomy_tables",
+            ),
+        ] {
+            assert!(
+                descriptors
+                    .iter()
+                    .any(|descriptor| descriptor.migration == migration
+                        && descriptor.after.iter().any(|after| after == dependency)),
+                "descriptor {migration} -> {dependency} must be collected by server migrator"
             );
         }
     }

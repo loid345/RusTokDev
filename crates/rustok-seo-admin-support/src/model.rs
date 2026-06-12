@@ -408,6 +408,188 @@ pub enum SeoRecommendation {
     AddOpenGraphImage,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SeoEventDeliveryStatus {
+    Pending,
+    Sent,
+    Retry,
+    Failed,
+    DeadLetter,
+}
+
+impl SeoEventDeliveryStatus {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Pending => "pending",
+            Self::Sent => "sent",
+            Self::Retry => "retry",
+            Self::Failed => "failed",
+            Self::DeadLetter => "dead_letter",
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SeoEventDeliverySummary {
+    pub pending: i32,
+    pub sent: i32,
+    pub retry: i32,
+    pub failed: i32,
+    pub dead_letter: i32,
+}
+
+impl SeoEventDeliverySummary {
+    pub fn total(&self) -> i32 {
+        self.pending + self.sent + self.retry + self.failed + self.dead_letter
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SeoControlPlaneWidgetStateKind {
+    Loading,
+    Ready,
+    Empty,
+    PermissionDenied,
+    Error,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SeoControlPlaneWidgetState {
+    pub kind: SeoControlPlaneWidgetStateKind,
+    pub message: Option<String>,
+}
+
+impl SeoControlPlaneWidgetState {
+    pub fn loading() -> Self {
+        Self {
+            kind: SeoControlPlaneWidgetStateKind::Loading,
+            message: None,
+        }
+    }
+
+    pub fn ready() -> Self {
+        Self {
+            kind: SeoControlPlaneWidgetStateKind::Ready,
+            message: None,
+        }
+    }
+
+    pub fn empty() -> Self {
+        Self {
+            kind: SeoControlPlaneWidgetStateKind::Empty,
+            message: None,
+        }
+    }
+
+    pub fn permission_denied(message: Option<String>) -> Self {
+        Self {
+            kind: SeoControlPlaneWidgetStateKind::PermissionDenied,
+            message,
+        }
+    }
+
+    pub fn error(message: Option<String>) -> Self {
+        Self {
+            kind: SeoControlPlaneWidgetStateKind::Error,
+            message,
+        }
+    }
+}
+
+impl Default for SeoControlPlaneWidgetState {
+    fn default() -> Self {
+        Self::ready()
+    }
+}
+
+pub fn derive_control_plane_widget_state(
+    has_target: bool,
+    is_loading: bool,
+    message: Option<&str>,
+) -> SeoControlPlaneWidgetState {
+    if !has_target {
+        return SeoControlPlaneWidgetState::empty();
+    }
+
+    if is_loading {
+        return SeoControlPlaneWidgetState::loading();
+    }
+
+    let Some(message) = message.map(str::trim).filter(|value| !value.is_empty()) else {
+        return SeoControlPlaneWidgetState::ready();
+    };
+
+    let normalized = message.to_ascii_lowercase();
+
+    if normalized.contains("permission_denied")
+        || normalized.contains("unauthenticated")
+        || normalized.contains("forbidden")
+    {
+        return SeoControlPlaneWidgetState::permission_denied(Some(message.to_string()));
+    }
+
+    if normalized.contains("error") || normalized.contains("failed") {
+        return SeoControlPlaneWidgetState::error(Some(message.to_string()));
+    }
+
+    SeoControlPlaneWidgetState::ready()
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SeoRemediationAction {
+    OpenEntityEditor,
+    OpenBulkJob,
+    RunReindex,
+}
+
+impl SeoRemediationAction {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::OpenEntityEditor => "open_entity_editor",
+            Self::OpenBulkJob => "open_bulk_job",
+            Self::RunReindex => "run_reindex",
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SeoRemediationHint {
+    pub issue_code: String,
+    pub action: SeoRemediationAction,
+    pub reason_key: String,
+}
+
+pub fn remediation_hint_for_issue_code(issue_code: &str) -> SeoRemediationHint {
+    let normalized = issue_code.trim().to_ascii_lowercase();
+    let (action, reason_key) = match normalized.as_str() {
+        "duplicate_canonical_url"
+        | "fallback_only"
+        | "cross_link_gap"
+        | "missing_hreflang"
+        | "missing_x_default_hreflang" => {
+            (SeoRemediationAction::OpenBulkJob, "bulk_consistency_fix")
+        }
+        "missing_sitemap_candidate"
+        | "index_delivery_failed"
+        | "index_delivery_dead_letter"
+        | "canonical_points_to_redirect_chain"
+        | "canonical_redirect_loop" => (SeoRemediationAction::RunReindex, "index_sync_required"),
+        _ => (
+            SeoRemediationAction::OpenEntityEditor,
+            "entity_metadata_fix",
+        ),
+    };
+
+    SeoRemediationHint {
+        issue_code: normalized,
+        action,
+        reason_key: reason_key.to_string(),
+    }
+}
+
 pub fn validate_target_id(value: &str) -> Result<Uuid, String> {
     if value.trim().is_empty() {
         return Err("Target id is required.".to_string());
@@ -427,7 +609,11 @@ fn non_empty_option(value: &str) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{SeoEntityForm, SeoMetaTranslationView, SeoMetaView, SeoRecommendation};
+    use super::{
+        derive_control_plane_widget_state, remediation_hint_for_issue_code,
+        SeoControlPlaneWidgetStateKind, SeoEntityForm, SeoEventDeliverySummary,
+        SeoMetaTranslationView, SeoMetaView, SeoRecommendation, SeoRemediationAction,
+    };
     use rustok_seo_targets::{builtin_slug as seo_builtin_slug, SeoTargetSlug};
     use serde_json::json;
     use uuid::Uuid;
@@ -678,5 +864,67 @@ mod tests {
         form.apply_record(&record);
 
         assert_eq!(form.structured_data_type, "Product");
+    }
+
+    #[test]
+    fn remediation_mapping_returns_expected_actions() {
+        assert_eq!(
+            remediation_hint_for_issue_code("duplicate_canonical_url").action,
+            SeoRemediationAction::OpenBulkJob,
+        );
+        assert_eq!(
+            remediation_hint_for_issue_code("missing_hreflang").action,
+            SeoRemediationAction::OpenBulkJob,
+        );
+        assert_eq!(
+            remediation_hint_for_issue_code("missing_sitemap_candidate").action,
+            SeoRemediationAction::RunReindex,
+        );
+        assert_eq!(
+            remediation_hint_for_issue_code("canonical_redirect_loop").action,
+            SeoRemediationAction::RunReindex,
+        );
+        assert_eq!(
+            remediation_hint_for_issue_code("missing_title").action,
+            SeoRemediationAction::OpenEntityEditor,
+        );
+    }
+
+    #[test]
+    fn derive_control_plane_widget_state_uses_shared_contract() {
+        assert_eq!(
+            derive_control_plane_widget_state(false, false, None).kind,
+            SeoControlPlaneWidgetStateKind::Empty,
+        );
+        assert_eq!(
+            derive_control_plane_widget_state(true, true, None).kind,
+            SeoControlPlaneWidgetStateKind::Loading,
+        );
+        assert_eq!(
+            derive_control_plane_widget_state(true, false, Some("PERMISSION_DENIED: seo:manage"))
+                .kind,
+            SeoControlPlaneWidgetStateKind::PermissionDenied,
+        );
+        assert_eq!(
+            derive_control_plane_widget_state(true, false, Some("SEO replay failed")).kind,
+            SeoControlPlaneWidgetStateKind::Error,
+        );
+        assert_eq!(
+            derive_control_plane_widget_state(true, false, Some("SEO metadata saved")).kind,
+            SeoControlPlaneWidgetStateKind::Ready,
+        );
+    }
+
+    #[test]
+    fn event_delivery_summary_total_counts_all_statuses() {
+        let summary = SeoEventDeliverySummary {
+            pending: 2,
+            sent: 5,
+            retry: 1,
+            failed: 3,
+            dead_letter: 1,
+        };
+
+        assert_eq!(summary.total(), 12);
     }
 }

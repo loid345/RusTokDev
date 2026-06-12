@@ -51,6 +51,29 @@ Support/crate/capability слой может жить рядом с модуле
 
 Если target участвует в bulk SEO, provider должен давать стабильные summaries и fields, достаточные для safe remediation: `preview_only`, `apply_missing_only`, `overwrite_generated_only` и `force_overwrite_explicit` выполняются в `rustok-seo`, а не в owner module.
 
+## FFA/FBA-first gate для новых модулей
+
+Новый модуль или крупный module split нельзя начинать с host-owned UI, ad-hoc transport
+handler-а или прямого добавления таблиц в umbrella-модуль. До первого transport/UI PR
+обязателен FFA/FBA gate:
+
+1. Зафиксировать `slug`, ownership, runtime role и local `docs/implementation-plan.md` с
+   FFA/FBA status block.
+2. Описать canonical domain/application service contract до REST, GraphQL, `#[server]` или
+   host wiring.
+3. Описать typed request context для tenant/auth/locale/channel/policy/trace data и stable
+   error mapping между domain errors и transport errors.
+4. Описать data ownership, consistency model, migrations и i18n storage contract.
+5. Выразить cross-module dependencies через explicit ports/events/provider seams, а не через
+   доступ к чужим repository internals или host-specific globals.
+6. Добавить строку в central FFA/FBA readiness board до появления module-owned UI, а при
+   отсутствии UI оставить surface как `no module-owned UI` / `no_ui_boundary` с FBA статусом.
+7. Только после этого добавлять transport adapters (`#[server]`, GraphQL, REST/RPC) и
+   module-owned UI как thin adapter через module-owned `transport/` facade.
+
+Если уже готовый функциональный slice не проходит этот gate, следующий change set сначала
+доводит его до FBA-ready boundary evidence и только потом расширяет функциональность.
+
 ## Backend
 
 ### 1. Сначала зафиксируйте runtime contract
@@ -96,7 +119,9 @@ Backend модуля должен встраиваться в общий platfor
 - короткие локализуемые поля живут в `*_translations`;
 - тяжёлый локализуемый контент при необходимости живёт в `*_bodies`;
 - `locale` хранится нормализованно;
-- audit payload и technical metadata не должны превращаться в business copy.
+- audit payload и technical metadata не должны превращаться в business copy;
+- module-owned migrations экспортируются через локальный `migrations()` и trait `MigrationSource`; если migration создаёт FK или другой строгий порядок к таблицам другого module crate, рядом должен быть `migration_dependencies()` с `MigrationDependencyDescriptor`, а module `MigrationSource::migration_dependencies()` обязан возвращать этот exporter; `apps/server/migration` агрегирует descriptors через `MigrationSource` для всех module crates, чьи migrations включены в server migrator;
+- descriptor должен ссылаться только на реальные migration names и проходить server migrator tests на missing dependency, duplicate descriptor и cycle.
 
 Канон:
 
@@ -187,7 +212,37 @@ Module-owned UI package не имеет права invent-ить свою locale
 - manifest/UI wiring: [manifest.md](./manifest.md)
 - module registry/index: [registry.md](./registry.md), [_index.md](./_index.md)
 
-### 5. Проверка UI-части
+### 5. Migration dependencies и descriptor evidence
+
+Если module migrations имеют cross-module FK/order assumptions, модуль обязан
+объявить эти зависимости рядом со своими migrations через `migration_dependencies()`
+в реализации module migration source. Это не заменяет `depends_on` из `modules.toml`:
+
+- `depends_on` описывает runtime/module graph;
+- `migration_dependencies()` описывает ordering constraints между конкретными migrations.
+
+Правила для новых migrations:
+
+1. Если migration ссылается на таблицу, index, enum/type или seed state другого модуля,
+   добавить descriptor dependency на конкретную upstream migration.
+2. Descriptor должен ссылаться только на реально существующую migration name/id.
+3. Server migrator должен агрегировать descriptors через module `MigrationSource`, а не
+   через package-local allowlist одного crate.
+4. Duplicate, missing descriptor и cycle failures считаются ошибкой migration contract, а
+   не flaky test.
+5. Для PostgreSQL smoke использовать apply-from-zero и, для критичных изменений,
+   incremental mode.
+
+Минимальные проверки:
+
+```bash
+./scripts/verify/verify-migration-smoke.sh
+RUSTOK_MIGRATION_SMOKE_INCREMENTAL=1 ./scripts/verify/verify-migration-smoke.sh
+```
+
+Для диагностики failures см. [runtime guardrails runbook](../guides/runtime-guardrails.md#wave-6-diagnostics-runbook).
+
+### 6. Проверка UI-части
 
 Минимальный check-list:
 
@@ -196,7 +251,7 @@ Module-owned UI package не имеет права invent-ить свою locale
 3. `npm run verify:i18n:ui`, если тронуты locale bundles или locale wiring
 4. UI package docs и host docs обновлены, если поменялся surface contract
 
-### 6. Обязательный FFA/FBA status block для модулей с UI
+### 7. Обязательный FFA/FBA status block для модулей с UI
 
 Для каждого module-owned UI пакета (admin/storefront/host-integrated surface) в локальном
 `docs/implementation-plan.md` обязателен status block:
@@ -220,7 +275,7 @@ Module-owned UI package не имеет права invent-ить свою locale
 2. Если меняется статус локального блока, синхронно обновляется central entry в `docs/modules/registry.md` (раздел FFA/FBA readiness board).
 3. Нельзя выставлять `parity_verified`/`transport_verified` без явного verification evidence в PR и в локальном плане.
 
-### 7. Правило для модулей, у которых UI запланирован, но ещё не реализован
+### 8. Правило для модулей, у которых UI запланирован, но ещё не реализован
 
 Чтобы не терять контроль над будущими UI-surface, для модулей с планируемым UI действует
 обязательное предварительное правило:

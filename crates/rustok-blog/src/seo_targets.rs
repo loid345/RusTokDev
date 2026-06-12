@@ -4,11 +4,10 @@ use rustok_core::SecurityContext;
 use rustok_media::MediaImageDescriptor;
 use rustok_seo_targets::{
     builtin_slug, populate_image_template_fields, schema, SeoBulkSummaryRecord,
-    SeoLoadedTargetRecord, SeoRouteMatchRecord, SeoSitemapCandidateRecord,
-    SeoTargetAlternateRoute, SeoTargetBulkListRequest, SeoTargetCapabilities,
-    SeoTargetLoadRequest, SeoTargetLoadScope, SeoTargetOpenGraphRecord, SeoTargetProvider,
-    SeoTargetRouteResolveRequest, SeoTargetRuntimeContext, SeoTargetSitemapRequest,
-    SeoTargetSlug, SeoTemplateFieldMap,
+    SeoLoadedTargetRecord, SeoRouteMatchRecord, SeoSitemapCandidateRecord, SeoTargetAlternateRoute,
+    SeoTargetBulkListRequest, SeoTargetCapabilities, SeoTargetLoadRequest, SeoTargetLoadScope,
+    SeoTargetOpenGraphRecord, SeoTargetProvider, SeoTargetRouteResolveRequest,
+    SeoTargetRuntimeContext, SeoTargetSitemapRequest, SeoTargetSlug, SeoTemplateFieldMap,
 };
 use url::Url;
 
@@ -327,7 +326,10 @@ fn map_post_response(post: PostResponse) -> SeoLoadedTargetRecord {
     }
 }
 
-fn primary_post_image_descriptor(post: &PostResponse, fallback_alt: &str) -> Option<MediaImageDescriptor> {
+fn primary_post_image_descriptor(
+    post: &PostResponse,
+    fallback_alt: &str,
+) -> Option<MediaImageDescriptor> {
     let alt = post
         .metadata
         .get("featured_image_alt")
@@ -337,13 +339,7 @@ fn primary_post_image_descriptor(post: &PostResponse, fallback_alt: &str) -> Opt
         .map(ToOwned::to_owned)
         .or_else(|| Some(fallback_alt.to_string()));
 
-    MediaImageDescriptor::from_parts(
-        post.featured_image_url.clone()?,
-        alt,
-        None,
-        None,
-        None,
-    )
+    MediaImageDescriptor::from_parts(post.featured_image_url.clone()?, alt, None, None, None)
 }
 
 fn parse_blog_route(route: &str) -> AnyResult<Option<String>> {

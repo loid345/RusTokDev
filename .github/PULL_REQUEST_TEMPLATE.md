@@ -1,28 +1,28 @@
 # Pull Request
 
-## рџ“‹ Summary
+## 📋 Description
 
-<!-- РљСЂР°С‚РєРѕ: С‡С‚Рѕ РёР·РјРµРЅРµРЅРѕ Рё Р·Р°С‡РµРј. -->
+<!-- Provide a brief description of the changes -->
 
-## рџЋЇ Scope
+## 🎯 Related Issues
 
-- DOC / code scope:
-- Affected modules/apps:
-- Out of scope:
+<!-- Link to related issues, e.g., Fixes #123 -->
 
-## рџ”Ќ Type of Change
+## 📝 Type of Change
 
-- [ ] рџђ› Bug fix
-- [ ] вњЁ New feature
-- [ ] рџ’Ґ Breaking change
-- [ ] рџ“ќ Documentation update
-- [ ] рџ”§ Configuration change
-- [ ] в™»пёЏ Code refactoring
-- [ ] рџЋЁ UI/UX improvement
-- [ ] вљЎ Performance improvement
-- [ ] рџ§Є Test addition or improvement
+<!-- Mark the appropriate option with an 'x' -->
 
-## вњ… Checklist
+- [ ] 🐛 Bug fix (non-breaking change which fixes an issue)
+- [ ] ✨ New feature (non-breaking change which adds functionality)
+- [ ] 💥 Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] 📝 Documentation update
+- [ ] 🔧 Configuration change
+- [ ] ♻️ Code refactoring
+- [ ] 🎨 UI/UX improvement
+- [ ] ⚡ Performance improvement
+- [ ] 🧪 Test addition or improvement
+
+## ✅ Checklist
 
 ### Code Quality
 - [ ] My code follows the project's coding style
@@ -56,7 +56,7 @@
 - [ ] Events are validated before publishing (using `ValidateEvent`)
 - [ ] Events are published within transactions (using `publish_in_tx`)
 - [ ] No events are lost due to transaction rollbacks
-- [ ] РџСЂРѕРІРµСЂРєР° С‚СЂР°РЅР·Р°РєС†РёРѕРЅРЅРѕСЃС‚Рё + outbox РІС‹РїРѕР»РЅРµРЅР° (domain write + outbox write РІ РѕРґРЅРѕР№ С‚СЂР°РЅР·Р°РєС†РёРё)
+- [ ] Проверка транзакционности + outbox выполнена (domain write + outbox write в одной транзакции)
 
 ### Performance & Reliability
 - [ ] No potential memory leaks
@@ -70,7 +70,7 @@
 - [ ] If breaking changes exist, I have documented the migration path
 - [ ] API versioning is maintained if applicable
 
-## рџ“Љ Test Results
+## 📊 Test Results
 
 <!-- List exact commands with outcomes; do not claim passed checks if command failed. -->
 
@@ -82,16 +82,16 @@ $ cargo test
 ```
 
 
-## рџ§ѕ Verification Evidence
+## 🧾 Verification Evidence
 
 <!-- Required for docs PRs and recommended for all PRs. -->
-<!-- Format: YYYY-MM-DD вЂ” <exact command> вЂ” pass/fail/blocked -->
+<!-- Format: YYYY-MM-DD — <exact command> — pass/fail/blocked -->
 <!-- For fail/blocked add: reason: <stderr or environment limitation> -->
 
-- YYYY-MM-DD вЂ” `<command>` вЂ” pass/fail/blocked
+- YYYY-MM-DD — `<command>` — pass/fail/blocked
   - output/reason: `<1-3 lines or reason: ...>`
 
-## рџ“љ Docs PR Reporting (required when docs changed)
+## 📚 Docs PR Reporting (required when docs changed)
 
 - [ ] I included exact commands in **Testing** (or used `text-only: checks skipped by policy`)
 - [ ] I mirrored the same command list/statuses in **Verification Evidence**
@@ -99,22 +99,22 @@ $ cargo test
 - [ ] Each `blocked`/`fail` row includes `reason: ...`
 
 
-## рџ§­ Hotspot (required for docs PR in hotspot zones H1..H5)
+## 🧭 Hotspot (required for docs PR in hotspot zones H1..H5)
 
 <!-- Required when PR touches hotspot zones from docs/research/fix docs.md -->
 - Hotspot: `H1|H2|H3|H4|H5` / `n/a`
 - Doc contracts updated: `<file list>`
 - Residual drift risk: `<what remains out of scope or n/a>`
 
-## рџ“ё Screenshots (if applicable)
+## 📸 Screenshots (if applicable)
 
 <!-- Add screenshots for UI changes -->
 
-## рџ”— Additional Context
+## 📗 Additional Context
 
 <!-- Add any other context about the pull request here -->
 
-## рџљЂ Deployment Notes
+## 🚀 Deployment Notes
 
 <!-- Any special deployment steps or considerations -->
 

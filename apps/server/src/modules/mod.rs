@@ -40,7 +40,7 @@ pub fn build_registry() -> ModuleRegistry {
 
 #[cfg(test)]
 mod contract_tests {
-    use super::build_registry;
+    use super::{build_registry, ManifestManager};
     use rustok_core::permissions::{Action, Resource};
     use rustok_core::Permission;
 
@@ -228,12 +228,21 @@ mod contract_tests {
             ]
         );
         assert_eq!(forum.dependencies(), &["content", "taxonomy"]);
-        assert_eq!(pages.dependencies(), &["content"]);
+        assert_eq!(pages.dependencies(), &["content", "page_builder"]);
         assert_eq!(seo.dependencies(), &["content"]);
         assert_eq!(taxonomy.dependencies(), &["content"]);
         assert!(workflow.dependencies().is_empty());
         assert!(alloy.dependencies().is_empty());
         assert!(flex.dependencies().is_empty());
+    }
+
+    #[test]
+    fn runtime_registry_dependencies_match_modules_manifest() {
+        let manifest = ManifestManager::load().expect("modules.toml must load");
+        let registry = build_registry();
+
+        ManifestManager::validate_with_registry(&manifest, &registry)
+            .expect("runtime registry dependencies must match modules.toml");
     }
 
     #[test]

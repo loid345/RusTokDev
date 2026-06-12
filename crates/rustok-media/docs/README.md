@@ -1,37 +1,37 @@
 # Документация `rustok-media`
 
 `rustok-media` — доменный модуль управления медиаактивами платформы. Он
-держит upload/storage metadata, translations и module-owned admin surface,
-опираясь на `rustok-storage` как физический storage backend.
+держит метаданные загрузок и хранения, переводы и модульную административную поверхность,
+опираясь на `rustok-storage` как физический слой хранения.
 
 ## Назначение
 
-- публиковать канонический media runtime contract для upload/list/delete/translation flows;
-- держать media metadata, validation и transport surfaces внутри модуля;
-- предоставлять platform-wide media capability без размывания domain логики по host-слою.
+- публиковать канонический runtime-контракт медиа для сценариев загрузки, списка, удаления и переводов;
+- держать метаданные медиа, валидацию и транспортные поверхности внутри модуля;
+- предоставлять платформенную media-возможность без размывания доменной логики по host-слою.
 
 ## Зона ответственности
 
-- `MediaService`, media entities/DTOs и translation upsert contract;
-- typed cross-module image contract `MediaImageDescriptor` (`url/alt/size/mime` + derived helpers);
-- GraphQL и REST adapters модуля;
-- upload validation по size/MIME policy и tenant isolation;
-- module-owned admin UI package `rustok-media-admin`;
-- observability signals для upload/delete/storage health.
+- `MediaService`, media entities/DTOs и контракт обновления переводов;
+- типизированный межмодульный image-контракт `MediaImageDescriptor` (`url/alt/size/mime` + derived helpers);
+- GraphQL- и REST-адаптеры модуля;
+- валидацию загрузок по size/MIME policy и tenant isolation;
+- модульный admin UI package `rustok-media-admin` с FFA-разделением `core`/`transport`/`ui/leptos`;
+- observability-сигналы для здоровья загрузки, удаления и хранения.
 
 ## Интеграция
 
-- использует `rustok-storage` как storage backend contract;
+- использует `rustok-storage` как контракт backend-хранилища;
 - `apps/server` остаётся composition root и wiring-слоем для media routes/graphql;
-- runtime guard опирается на tenant-scoped module enablement для public surfaces;
-- upload остаётся REST-first path, а GraphQL сохраняется для read/mutation flows без multipart expansion;
-- `rustok-seo` и owner SEO providers потребляют `MediaImageDescriptor` как единственный image boundary для OG/Twitter/schema fallback.
+- runtime guard опирается на tenant-scoped module enablement для публичных поверхностей;
+- загрузка остаётся REST-first path, GraphQL сохраняется для read/mutation flows без multipart-расширения, а Leptos admin adapter вызывает transport facade вместо raw API module; transport facade внутри admin package разделяет native server functions, GraphQL fallback и REST upload adapters;
+- `rustok-seo` и owner SEO providers потребляют `MediaImageDescriptor` как единственную image boundary для OG/Twitter/schema fallback.
 
 ## Проверка
 
 - `cargo xtask module validate media`
 - `cargo xtask module test media`
-- targeted tests для upload validation, translation upsert, storage cleanup и admin-facing read/write contracts
+- targeted tests для валидации загрузок, обновления переводов, очистки хранилища и admin-facing read/write contracts
 
 ## Связанные документы
 

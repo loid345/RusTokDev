@@ -20,7 +20,8 @@ use crate::graphql::errors::GraphQLError;
 ))]
 use crate::graphql::schema::module_slug;
 use crate::graphql::types::{
-    BuildJob, CreateUserInput, DeleteUserPayload, TenantModule, UpdateUserInput, User,
+    BuildJob, CreateUserInput, DeleteUserPayload, ModuleOperationRecoveryPlan, TenantModule,
+    UpdateUserInput, User,
 };
 #[cfg(all(
     feature = "mod-content",
@@ -55,7 +56,8 @@ use crate::services::flex_attached_values::{
     FlexAttachedValuesService, PreparedAttachedValuesWrite,
 };
 use crate::services::module_lifecycle::{
-    ModuleLifecycleService, ToggleModuleError, UpdateModuleSettingsError,
+    ModuleLifecycleService, ModuleOperationRecoveryError, ToggleModuleError,
+    UpdateModuleSettingsError,
 };
 use crate::services::platform_composition::{
     PlatformCompositionBuildError, PlatformCompositionBuildService, PlatformCompositionError,
@@ -335,15 +337,15 @@ fn map_toggle_module_error(error: ToggleModuleError) -> FieldError {
             <FieldError as GraphQLError>::bad_user_input(TOGGLE_ERR_UNKNOWN_MODULE)
         }
         ToggleModuleError::CoreModuleCannotBeDisabled(module_slug) => {
-            <FieldError as GraphQLError>::bad_user_input(toggle_err_core_module_cannot_be_disabled(
-                &module_slug,
-            ))
+            <FieldError as GraphQLError>::bad_user_input(
+                &toggle_err_core_module_cannot_be_disabled(&module_slug),
+            )
         }
         ToggleModuleError::MissingDependencies(missing) => {
-            <FieldError as GraphQLError>::bad_user_input(toggle_err_missing_dependencies(&missing))
+            <FieldError as GraphQLError>::bad_user_input(&toggle_err_missing_dependencies(&missing))
         }
         ToggleModuleError::HasDependents(dependents) => {
-            <FieldError as GraphQLError>::bad_user_input(toggle_err_has_dependents(&dependents))
+            <FieldError as GraphQLError>::bad_user_input(&toggle_err_has_dependents(&dependents))
         }
         ToggleModuleError::Database(err) => {
             <FieldError as GraphQLError>::internal_error(&err.to_string())
@@ -361,6 +363,46 @@ fn map_toggle_module_error(error: ToggleModuleError) -> FieldError {
                 ext.set("operation_issue", "post_hook_failed");
             }),
         ToggleModuleError::Policy(err) => <FieldError as GraphQLError>::internal_error(&err),
+    }
+}
+
+fn map_module_operation_recovery_error(error: ModuleOperationRecoveryError) -> FieldError {
+    match error {
+        ModuleOperationRecoveryError::OperationNotFound => {
+            <FieldError as GraphQLError>::bad_user_input("Module operation not found")
+        }
+        ModuleOperationRecoveryError::NotRetryable(reason) => {
+            FieldError::new(format!("Module operation is not retryable: {reason}"))
+                .extend_with(|_, ext| {
+                    ext.set("code", "MODULE_OPERATION_NOT_RETRYABLE");
+                    ext.set("retryable_issue", false);
+                })
+        }
+        ModuleOperationRecoveryError::StateMismatch {
+            requested_enabled,
+            current_enabled,
+        } => FieldError::new(format!(
+            "Module operation state mismatch: requested enabled={requested_enabled}, current enabled={current_enabled}"
+        ))
+        .extend_with(|_, ext| {
+            ext.set("code", "MODULE_OPERATION_STATE_MISMATCH");
+            ext.set("retryable_issue", false);
+        }),
+        ModuleOperationRecoveryError::PostHookFailed(err) => {
+            FieldError::new(format!("Module hook failed: {err}"))
+                .extend_with(|_, ext| {
+                    ext.set("code", "MODULE_HOOK_FAILED");
+                    ext.set("retryable_issue", true);
+                    ext.set("operation_issue", "post_hook_failed");
+                })
+        }
+        ModuleOperationRecoveryError::Database(err) => {
+            <FieldError as GraphQLError>::internal_error(&err.to_string())
+        }
+        ModuleOperationRecoveryError::Policy(err) => {
+            <FieldError as GraphQLError>::internal_error(&err)
+        }
+        ModuleOperationRecoveryError::Toggle(err) => map_toggle_module_error(err),
     }
 }
 
@@ -1070,6 +1112,75 @@ impl RootMutation {
         })
     }
 
+    async fn retry_failed_module_operation_post_hook(
+        &self,
+        ctx: &Context<'_>,
+        operation_id: Uuid,
+    ) -> Result<ModuleOperationRecoveryPlan> {
+        let (auth, tenant) = ensure_modules_manage_permission(ctx).await?;
+        let app_ctx = ctx.data::<loco_rs::app::AppContext>()?;
+        let registry = ctx.data::<ModuleRegistry>()?;
+
+        let existing_plan =
+            ModuleLifecycleService::module_operation_recovery_plan(&app_ctx.db, operation_id)
+                .await
+                .map_err(map_module_operation_recovery_error)?;
+        if existing_plan.tenant_id != tenant.id {
+            return Err(map_module_operation_recovery_error(
+                ModuleOperationRecoveryError::OperationNotFound,
+            ));
+        }
+
+        let operation = ModuleLifecycleService::retry_failed_post_hook_operation(
+            &app_ctx.db,
+            registry,
+            operation_id,
+            Some(auth.user_id.to_string()),
+        )
+        .await
+        .map_err(map_module_operation_recovery_error)?;
+        let plan = crate::services::module_lifecycle::ModuleOperationRecoveryPlan::from_operation(
+            &operation,
+        );
+
+        Ok(ModuleOperationRecoveryPlan::from(&plan))
+    }
+
+    async fn compensate_failed_module_operation(
+        &self,
+        ctx: &Context<'_>,
+        operation_id: Uuid,
+    ) -> Result<TenantModule> {
+        let (auth, tenant) = ensure_modules_manage_permission(ctx).await?;
+        let app_ctx = ctx.data::<loco_rs::app::AppContext>()?;
+        let registry = ctx.data::<ModuleRegistry>()?;
+
+        let existing_plan =
+            ModuleLifecycleService::module_operation_recovery_plan(&app_ctx.db, operation_id)
+                .await
+                .map_err(map_module_operation_recovery_error)?;
+        if existing_plan.tenant_id != tenant.id {
+            return Err(map_module_operation_recovery_error(
+                ModuleOperationRecoveryError::OperationNotFound,
+            ));
+        }
+
+        let module = ModuleLifecycleService::compensate_failed_operation(
+            &app_ctx.db,
+            registry,
+            operation_id,
+            Some(auth.user_id.to_string()),
+        )
+        .await
+        .map_err(map_module_operation_recovery_error)?;
+
+        Ok(TenantModule {
+            module_slug: module.module_slug,
+            enabled: module.enabled,
+            settings: module.settings.to_string(),
+        })
+    }
+
     async fn update_module_settings(
         &self,
         ctx: &Context<'_>,
@@ -1123,8 +1234,10 @@ mod tests {
     use super::{
         map_create_user_error, map_manifest_error, map_platform_composition_build_error,
         map_platform_composition_error, map_toggle_module_error, prepare_user_custom_fields_write,
-        validate_custom_fields, AuthLifecycleError, ManifestError, PlatformCompositionBuildError,
-        PlatformCompositionError, ToggleModuleError,
+        toggle_err_core_module_cannot_be_disabled, toggle_err_has_dependents,
+        toggle_err_hook_failed, toggle_err_missing_dependencies, validate_custom_fields,
+        AuthLifecycleError, ManifestError, PlatformCompositionBuildError, PlatformCompositionError,
+        ToggleModuleError, TOGGLE_ERR_UNKNOWN_MODULE,
     };
     use crate::models::user_field_definitions::ActiveModel as UserFieldDefinitionActiveModel;
     use async_graphql::ErrorExtensions;
@@ -1531,13 +1644,13 @@ mod tests {
             Case {
                 name: "serialize failure",
                 error: PlatformCompositionError::Serialize("serde exploded".to_string()),
-                expected_code: "INTERNAL_SERVER_ERROR",
+                expected_code: "INTERNAL_ERROR",
                 message_fragment: "serde exploded",
             },
             Case {
                 name: "deserialize failure",
                 error: PlatformCompositionError::Deserialize("bad snapshot".to_string()),
-                expected_code: "INTERNAL_SERVER_ERROR",
+                expected_code: "INTERNAL_ERROR",
                 message_fragment: "bad snapshot",
             },
             Case {
@@ -1545,7 +1658,7 @@ mod tests {
                 error: PlatformCompositionError::Database(sea_orm::DbErr::Custom(
                     "db is unavailable".to_string(),
                 )),
-                expected_code: "INTERNAL_SERVER_ERROR",
+                expected_code: "INTERNAL_ERROR",
                 message_fragment: "db is unavailable",
             },
             Case {
@@ -1596,10 +1709,8 @@ mod tests {
         let cases = vec![
             Case {
                 name: "build enqueue failure",
-                error: PlatformCompositionBuildError::Build(sea_orm::DbErr::Custom(
-                    "enqueue failed".to_string(),
-                )),
-                expected_code: "INTERNAL_SERVER_ERROR",
+                error: PlatformCompositionBuildError::Build("enqueue failed".to_string()),
+                expected_code: "INTERNAL_ERROR",
                 expected_message_fragment: "enqueue failed",
                 exact_message: None,
             },
@@ -1619,7 +1730,7 @@ mod tests {
                 error: PlatformCompositionBuildError::Composition(
                     PlatformCompositionError::Serialize("serde exploded".to_string()),
                 ),
-                expected_code: "INTERNAL_SERVER_ERROR",
+                expected_code: "INTERNAL_ERROR",
                 expected_message_fragment: "serde exploded",
                 exact_message: None,
             },
@@ -1628,7 +1739,7 @@ mod tests {
                 error: PlatformCompositionBuildError::Composition(
                     PlatformCompositionError::Deserialize("bad snapshot".to_string()),
                 ),
-                expected_code: "INTERNAL_SERVER_ERROR",
+                expected_code: "INTERNAL_ERROR",
                 expected_message_fragment: "bad snapshot",
                 exact_message: None,
             },
@@ -1639,7 +1750,7 @@ mod tests {
                         "db is unavailable".to_string(),
                     )),
                 ),
-                expected_code: "INTERNAL_SERVER_ERROR",
+                expected_code: "INTERNAL_ERROR",
                 expected_message_fragment: "db is unavailable",
                 exact_message: None,
             },
@@ -1686,9 +1797,7 @@ mod tests {
     #[test]
     fn platform_composition_build_error_mapping_never_mentions_partial_rollback() {
         let errors = vec![
-            PlatformCompositionBuildError::Build(sea_orm::DbErr::Custom(
-                "enqueue failed".to_string(),
-            )),
+            PlatformCompositionBuildError::Build("enqueue failed".to_string()),
             PlatformCompositionBuildError::Composition(PlatformCompositionError::Manifest(
                 ManifestError::RequiredModule("pages".to_string()),
             )),
@@ -1720,23 +1829,47 @@ mod tests {
 
     #[test]
     fn platform_composition_build_wrapper_preserves_composition_mapping_contract() {
-        let composition_errors = vec![
-            PlatformCompositionError::RevisionConflict {
-                expected: 5,
-                current: 8,
-            },
-            PlatformCompositionError::Manifest(ManifestError::RequiredModule("pages".to_string())),
-            PlatformCompositionError::Serialize("serde exploded".to_string()),
-            PlatformCompositionError::Deserialize("bad snapshot".to_string()),
-            PlatformCompositionError::Database(sea_orm::DbErr::Custom(
-                "db is unavailable".to_string(),
-            )),
+        let composition_error_pairs = vec![
+            (
+                PlatformCompositionError::RevisionConflict {
+                    expected: 5,
+                    current: 8,
+                },
+                PlatformCompositionError::RevisionConflict {
+                    expected: 5,
+                    current: 8,
+                },
+            ),
+            (
+                PlatformCompositionError::Manifest(ManifestError::RequiredModule(
+                    "pages".to_string(),
+                )),
+                PlatformCompositionError::Manifest(ManifestError::RequiredModule(
+                    "pages".to_string(),
+                )),
+            ),
+            (
+                PlatformCompositionError::Serialize("serde exploded".to_string()),
+                PlatformCompositionError::Serialize("serde exploded".to_string()),
+            ),
+            (
+                PlatformCompositionError::Deserialize("bad snapshot".to_string()),
+                PlatformCompositionError::Deserialize("bad snapshot".to_string()),
+            ),
+            (
+                PlatformCompositionError::Database(sea_orm::DbErr::Custom(
+                    "db is unavailable".to_string(),
+                )),
+                PlatformCompositionError::Database(sea_orm::DbErr::Custom(
+                    "db is unavailable".to_string(),
+                )),
+            ),
         ];
 
-        for composition_error in composition_errors {
-            let direct = map_platform_composition_error(composition_error.clone());
+        for (direct_error, wrapped_error) in composition_error_pairs {
+            let direct = map_platform_composition_error(direct_error);
             let wrapped = map_platform_composition_build_error(
-                PlatformCompositionBuildError::Composition(composition_error),
+                PlatformCompositionBuildError::Composition(wrapped_error),
             );
 
             assert_eq!(

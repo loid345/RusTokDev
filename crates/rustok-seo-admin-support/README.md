@@ -10,6 +10,7 @@
 - Keep shared SEO GraphQL transport helpers out of domain-specific admin packages.
 - Provide lightweight scoring and form helpers for explicit SEO metadata editing.
 - Prepare reusable observability/remediation widgets for the SEO Phase D control-plane expansion.
+- Provide a shared control-plane widget state contract (`loading/ready/empty/permission_denied/error`) for owner-module SEO surfaces.
 - Consume the host-provided effective locale and canonicalize it before read/write flows instead of inventing a package-local locale override.
 - Preserve the ownership rule: content modules own their screens, while `rustok-seo` owns the shared capability contract.
 
@@ -24,6 +25,8 @@
 
 - `SeoEntityPanel`
 - `SeoCapabilityNotice`
+- `SeoControlPlaneWidgets`
+- `SeoControlPlaneWidgetStateCard`
 - `SeoSnippetPreviewCard`
 - `SeoRecommendationsCard`
 - `SeoSummaryTile`
@@ -35,6 +38,8 @@
 The crate is aligned with SEO Phase D for:
 
 - reusable event/delivery-status and remediation UI cards
+- shared control-plane widget state contract with semantic permission/error handling
+- host-locale-only owner-panel wiring for `pages/product/blog/forum`
 - GraphQL/REST transport helper parity for Next and Leptos admin hosts
 - verification and UX consistency checks across owner-module panels
 

@@ -7,6 +7,7 @@ mod m20260402_000001_create_shipping_profiles;
 mod m20260405_000003_add_is_localized_to_order_field_definitions;
 mod m20260411_000004_add_shipping_profile_translations;
 
+use rustok_core::MigrationDependencyDescriptor;
 use sea_orm_migration::MigrationTrait;
 
 pub fn migrations() -> Vec<Box<dyn MigrationTrait>> {
@@ -17,5 +18,18 @@ pub fn migrations() -> Vec<Box<dyn MigrationTrait>> {
         Box::new(m20260402_000001_create_shipping_profiles::Migration),
         Box::new(m20260405_000003_add_is_localized_to_order_field_definitions::Migration),
         Box::new(m20260411_000004_add_shipping_profile_translations::Migration),
+    ]
+}
+
+pub fn migration_dependencies() -> Vec<MigrationDependencyDescriptor> {
+    vec![
+        MigrationDependencyDescriptor::new(
+            "m20250130_000017_create_commerce_collections",
+            vec!["m20250130_000012_create_commerce_products"],
+        ),
+        MigrationDependencyDescriptor::new(
+            "m20250130_000018_create_commerce_categories",
+            vec!["m20250130_000012_create_commerce_products"],
+        ),
     ]
 }

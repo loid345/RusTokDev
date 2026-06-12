@@ -5,6 +5,7 @@ use rustok_api::{
     AuthContext, RequestContext, TenantContext,
 };
 use rustok_core::{locale_tags_match, Permission};
+use rustok_inventory::check_variant_availability_for_public_channel;
 use rustok_pricing::PriceResolutionContext;
 use sea_orm::{ColumnTrait, EntityTrait, QueryFilter};
 use serde_json::Value;
@@ -13,16 +14,15 @@ use uuid::Uuid;
 
 use crate::{
     entities::{price_list, product, product_translation, product_variant, variant_translation},
-    storefront_channel::{
-        is_metadata_visible_for_public_channel,
-        load_available_inventory_for_variant_in_public_channel, normalize_public_channel_slug,
-    },
+    storefront_channel::{is_metadata_visible_for_public_channel, normalize_public_channel_slug},
     storefront_shipping::{
         effective_shipping_profile_slug, enrich_cart_delivery_groups,
         is_shipping_option_compatible_with_profiles, normalize_shipping_profile_slug,
     },
-    CartService, CatalogService, CheckoutService, CustomerService, FulfillmentOrchestrationService,
-    FulfillmentService, OrderService, PaymentService, PricingService, ShippingProfileService,
+    CartService, CatalogService, CheckoutService, CreateReturnDecisionInput, CustomerService,
+    FulfillmentOrchestrationService, FulfillmentService, OrderService, PaymentService,
+    PostOrderOrchestrationService, PricingService, ReturnClaimDecisionInput, ReturnDecisionInput,
+    ReturnExchangeDecisionInput, ReturnRefundDecisionInput, ShippingProfileService,
     StoreContextService,
 };
 
@@ -826,6 +826,31 @@ impl CommerceMutation {
         .into())
     }
 
+    async fn create_storefront_order_return(
+        &self,
+        ctx: &Context<'_>,
+        order_id: Uuid,
+        tenant_id: Option<Uuid>,
+        input: CreateOrderReturnInputObject,
+    ) -> Result<GqlOrderReturn> {
+        require_module_enabled(ctx, MODULE_SLUG).await?;
+        super::require_storefront_channel_enabled(ctx).await?;
+
+        let db = ctx.data::<sea_orm::DatabaseConnection>()?;
+        let tenant = ctx.data::<TenantContext>()?;
+        let event_bus = ctx.data::<rustok_outbox::TransactionalEventBus>()?;
+        let tenant_id = tenant_id.unwrap_or(tenant.id);
+
+        ensure_storefront_order_access(db, event_bus, tenant_id, ctx, order_id).await?;
+
+        let item = OrderService::new(db.clone(), event_bus.clone())
+            .create_return(tenant_id, order_id, build_create_order_return_input(input)?)
+            .await
+            .map_err(|err| async_graphql::Error::new(err.to_string()))?;
+
+        Ok(item.into())
+    }
+
     async fn create_storefront_payment_collection(
         &self,
         ctx: &Context<'_>,
@@ -1139,6 +1164,94 @@ impl CommerceMutation {
         Ok(order.into())
     }
 
+    async fn create_order_change(
+        &self,
+        ctx: &Context<'_>,
+        tenant_id: Uuid,
+        order_id: Uuid,
+        input: CreateOrderChangeInputObject,
+    ) -> Result<GqlOrderChange> {
+        require_module_enabled(ctx, MODULE_SLUG).await?;
+        require_commerce_permission(
+            ctx,
+            &[Permission::ORDERS_UPDATE],
+            "Permission denied: orders:update required",
+        )?;
+
+        let auth = ctx.data::<AuthContext>()?;
+        let db = ctx.data::<sea_orm::DatabaseConnection>()?;
+        let event_bus = ctx.data::<rustok_outbox::TransactionalEventBus>()?;
+        let item = OrderService::new(db.clone(), event_bus.clone())
+            .create_order_change(
+                tenant_id,
+                auth.user_id,
+                order_id,
+                build_create_order_change_input(input)?,
+            )
+            .await?;
+
+        Ok(item.into())
+    }
+
+    async fn apply_order_change(
+        &self,
+        ctx: &Context<'_>,
+        tenant_id: Uuid,
+        id: Uuid,
+        input: ApplyOrderChangeInputObject,
+    ) -> Result<GqlOrderChange> {
+        require_module_enabled(ctx, MODULE_SLUG).await?;
+        require_commerce_permission(
+            ctx,
+            &[Permission::ORDERS_UPDATE],
+            "Permission denied: orders:update required",
+        )?;
+
+        let db = ctx.data::<sea_orm::DatabaseConnection>()?;
+        let event_bus = ctx.data::<rustok_outbox::TransactionalEventBus>()?;
+        let item = OrderService::new(db.clone(), event_bus.clone())
+            .apply_order_change(
+                tenant_id,
+                id,
+                crate::dto::ApplyOrderChangeInput {
+                    metadata: parse_optional_metadata(input.metadata.as_deref())?,
+                },
+            )
+            .await?;
+
+        Ok(item.into())
+    }
+
+    async fn cancel_order_change(
+        &self,
+        ctx: &Context<'_>,
+        tenant_id: Uuid,
+        id: Uuid,
+        input: CancelOrderChangeInputObject,
+    ) -> Result<GqlOrderChange> {
+        require_module_enabled(ctx, MODULE_SLUG).await?;
+        require_commerce_permission(
+            ctx,
+            &[Permission::ORDERS_UPDATE],
+            "Permission denied: orders:update required",
+        )?;
+
+        let db = ctx.data::<sea_orm::DatabaseConnection>()?;
+        let event_bus = ctx.data::<rustok_outbox::TransactionalEventBus>()?;
+        let item = OrderService::new(db.clone(), event_bus.clone())
+            .cancel_order_change(
+                tenant_id,
+                id,
+                crate::dto::CancelOrderChangeInput {
+                    reason: input.reason,
+                    metadata: parse_optional_metadata(input.metadata.as_deref())?,
+                },
+            )
+            .await?;
+
+        Ok(item.into())
+    }
+
     async fn create_order_return(
         &self,
         ctx: &Context<'_>,
@@ -1156,18 +1269,50 @@ impl CommerceMutation {
         let db = ctx.data::<sea_orm::DatabaseConnection>()?;
         let event_bus = ctx.data::<rustok_outbox::TransactionalEventBus>()?;
         let item = OrderService::new(db.clone(), event_bus.clone())
-            .create_return(
-                tenant_id,
-                order_id,
-                crate::dto::CreateOrderReturnInput {
-                    reason: input.reason,
-                    note: input.note,
-                    metadata: parse_optional_metadata(input.metadata.as_deref())?,
-                },
-            )
+            .create_return(tenant_id, order_id, build_create_order_return_input(input)?)
             .await?;
 
         Ok(item.into())
+    }
+
+    async fn create_order_return_decision(
+        &self,
+        ctx: &Context<'_>,
+        tenant_id: Uuid,
+        order_id: Uuid,
+        input: CreateReturnDecisionInputObject,
+    ) -> Result<GqlReturnDecision> {
+        require_module_enabled(ctx, MODULE_SLUG).await?;
+        let auth = require_commerce_permission(
+            ctx,
+            &[Permission::ORDERS_UPDATE],
+            "Permission denied: orders:update required",
+        )?;
+
+        if graphql_decision_requires_payments_update(
+            input.decision.action.as_str(),
+            input.decision.refund.is_some(),
+        ) {
+            require_commerce_permission(
+                ctx,
+                &[Permission::PAYMENTS_UPDATE],
+                "Permission denied: payments:update required",
+            )?;
+        }
+
+        let db = ctx.data::<sea_orm::DatabaseConnection>()?;
+        let event_bus = ctx.data::<rustok_outbox::TransactionalEventBus>()?;
+        let decision = PostOrderOrchestrationService::new(db.clone(), event_bus.clone())
+            .create_return_decision(
+                tenant_id,
+                auth.user_id,
+                order_id,
+                build_create_return_decision_input(input)?,
+            )
+            .await
+            .map_err(|err| async_graphql::Error::new(err.to_string()))?;
+
+        Ok(decision.into())
     }
 
     async fn complete_order_return(
@@ -1184,16 +1329,38 @@ impl CommerceMutation {
             "Permission denied: orders:update required",
         )?;
 
+        if input.refund.is_some() {
+            require_commerce_permission(
+                ctx,
+                &[Permission::PAYMENTS_UPDATE],
+                "Permission denied: payments:update required",
+            )?;
+        }
+
         let db = ctx.data::<sea_orm::DatabaseConnection>()?;
         let event_bus = ctx.data::<rustok_outbox::TransactionalEventBus>()?;
-        let item = OrderService::new(db.clone(), event_bus.clone())
-            .complete_return(
+        let order_service = OrderService::new(db.clone(), event_bus.clone());
+        let mut complete_input = crate::dto::CompleteOrderReturnInput {
+            resolution_type: input.resolution_type,
+            refund_id: input.refund_id,
+            order_change_id: input.order_change_id,
+            metadata: parse_optional_metadata(input.metadata.as_deref())?,
+        };
+
+        if let Some(refund_input) = input.refund {
+            complete_input = build_refund_resolution_return_completion(
+                db,
+                &order_service,
                 tenant_id,
                 id,
-                crate::dto::CompleteOrderReturnInput {
-                    metadata: parse_optional_metadata(input.metadata.as_deref())?,
-                },
+                complete_input,
+                refund_input,
             )
+            .await?;
+        }
+
+        let item = order_service
+            .complete_return(tenant_id, id, complete_input)
             .await?;
 
         Ok(item.into())
@@ -2201,6 +2368,231 @@ fn normalize_pricing_channel_slug(channel_slug: Option<&str>) -> Option<String> 
         .map(|value| value.to_ascii_lowercase())
 }
 
+async fn build_refund_resolution_return_completion(
+    db: &sea_orm::DatabaseConnection,
+    order_service: &OrderService,
+    tenant_id: Uuid,
+    return_id: Uuid,
+    mut complete_input: crate::dto::CompleteOrderReturnInput,
+    refund_input: CompleteOrderReturnRefundInputObject,
+) -> Result<crate::dto::CompleteOrderReturnInput> {
+    if complete_input.refund_id.is_some() || complete_input.order_change_id.is_some() {
+        return Err(async_graphql::Error::new(
+            "refund helper cannot be combined with explicit refund_id or order_change_id",
+        ));
+    }
+    if complete_input
+        .resolution_type
+        .as_deref()
+        .map(|value| value.trim().eq_ignore_ascii_case("refund"))
+        == Some(false)
+    {
+        return Err(async_graphql::Error::new(
+            "refund helper requires resolution_type to be omitted or `refund`",
+        ));
+    }
+
+    let existing_return = order_service.get_return(tenant_id, return_id).await?;
+    let payment_service = PaymentService::new(db.clone());
+    let collection_id = match refund_input.payment_collection_id {
+        Some(collection_id) => {
+            let collection = payment_service
+                .get_collection(tenant_id, collection_id)
+                .await?;
+            if collection.order_id != Some(existing_return.order_id) {
+                return Err(async_graphql::Error::new(format!(
+                    "payment collection {collection_id} is not attached to order {}",
+                    existing_return.order_id
+                )));
+            }
+            collection_id
+        }
+        None => payment_service
+            .find_latest_collection_by_order(tenant_id, existing_return.order_id)
+            .await?
+            .map(|collection| collection.id)
+            .ok_or_else(|| {
+                async_graphql::Error::new(format!(
+                    "order {} has no payment collection for return refund",
+                    existing_return.order_id
+                ))
+            })?,
+    };
+
+    let refund = payment_service
+        .create_refund(
+            tenant_id,
+            collection_id,
+            crate::dto::CreateRefundInput {
+                amount: parse_decimal(&refund_input.amount)?,
+                reason: refund_input.reason,
+                metadata: parse_optional_metadata(refund_input.metadata.as_deref())?,
+            },
+        )
+        .await?;
+    let refund = if refund_input.complete.unwrap_or(false) {
+        payment_service
+            .complete_refund(
+                tenant_id,
+                refund.id,
+                crate::dto::CompleteRefundInput {
+                    metadata: serde_json::json!({
+                        "source": "order_return_completion",
+                        "return_id": return_id,
+                    }),
+                },
+            )
+            .await?
+    } else {
+        refund
+    };
+
+    complete_input.resolution_type = Some("refund".to_string());
+    complete_input.refund_id = Some(refund.id);
+    Ok(complete_input)
+}
+
+fn build_create_order_change_input(
+    input: CreateOrderChangeInputObject,
+) -> Result<crate::dto::CreateOrderChangeInput> {
+    Ok(crate::dto::CreateOrderChangeInput {
+        change_type: input.change_type,
+        description: input.description,
+        preview: parse_json_payload(input.preview.as_str(), "Invalid JSON preview payload")?,
+        metadata: parse_optional_metadata(input.metadata.as_deref())?,
+    })
+}
+
+fn build_create_order_return_input(
+    input: CreateOrderReturnInputObject,
+) -> Result<crate::dto::CreateOrderReturnInput> {
+    Ok(crate::dto::CreateOrderReturnInput {
+        reason: input.reason,
+        note: input.note,
+        items: input
+            .items
+            .unwrap_or_default()
+            .into_iter()
+            .map(|item| {
+                Ok(crate::dto::CreateOrderReturnItemInput {
+                    line_item_id: item.line_item_id,
+                    quantity: item.quantity,
+                    reason: item.reason,
+                    note: item.note,
+                    metadata: parse_optional_metadata(item.metadata.as_deref())?,
+                })
+            })
+            .collect::<Result<Vec<_>>>()?,
+        metadata: parse_optional_metadata(input.metadata.as_deref())?,
+    })
+}
+
+fn build_create_return_decision_input(
+    input: CreateReturnDecisionInputObject,
+) -> Result<CreateReturnDecisionInput> {
+    Ok(CreateReturnDecisionInput {
+        return_request: build_create_order_return_input(input.return_request)?,
+        decision: ReturnDecisionInput {
+            action: input.decision.action,
+            refund: input
+                .decision
+                .refund
+                .map(build_return_refund_decision_input)
+                .transpose()?,
+            exchange: input
+                .decision
+                .exchange
+                .map(build_return_exchange_decision_input)
+                .transpose()?,
+            claim: input
+                .decision
+                .claim
+                .map(build_return_claim_decision_input)
+                .transpose()?,
+            metadata: parse_optional_metadata(input.decision.metadata.as_deref())?,
+        },
+    })
+}
+
+fn build_return_refund_decision_input(
+    input: ReturnRefundDecisionInputObject,
+) -> Result<ReturnRefundDecisionInput> {
+    Ok(ReturnRefundDecisionInput {
+        payment_collection_id: input.payment_collection_id,
+        amount: parse_optional_decimal(input.amount.as_deref())?,
+        reason: input.reason,
+        metadata: parse_optional_metadata(input.metadata.as_deref())?,
+    })
+}
+
+fn build_return_exchange_decision_input(
+    input: ReturnExchangeDecisionInputObject,
+) -> Result<ReturnExchangeDecisionInput> {
+    let preview = input.preview.unwrap_or_else(|| "{}".to_string());
+    Ok(ReturnExchangeDecisionInput {
+        description: input.description,
+        preview: parse_json_payload(preview.as_str(), "Invalid JSON preview payload")?,
+        metadata: parse_optional_metadata(input.metadata.as_deref())?,
+    })
+}
+
+fn build_return_claim_decision_input(
+    input: ReturnClaimDecisionInputObject,
+) -> Result<ReturnClaimDecisionInput> {
+    let preview = input.preview.unwrap_or_else(|| "{}".to_string());
+    Ok(ReturnClaimDecisionInput {
+        description: input.description,
+        preview: parse_json_payload(preview.as_str(), "Invalid JSON preview payload")?,
+        metadata: parse_optional_metadata(input.metadata.as_deref())?,
+    })
+}
+
+fn graphql_decision_requires_payments_update(action: &str, has_refund_payload: bool) -> bool {
+    if has_refund_payload {
+        return true;
+    }
+
+    action.trim().to_ascii_lowercase().replace('-', "_") == "refund"
+}
+
+async fn ensure_storefront_order_access(
+    db: &sea_orm::DatabaseConnection,
+    event_bus: &rustok_outbox::TransactionalEventBus,
+    tenant_id: Uuid,
+    ctx: &Context<'_>,
+    order_id: Uuid,
+) -> Result<()> {
+    let auth = ctx
+        .data::<AuthContext>()
+        .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
+    let customer = CustomerService::new(db.clone())
+        .get_customer_by_user(tenant_id, auth.user_id)
+        .await
+        .map_err(|err| match err {
+            rustok_customer::error::CustomerError::CustomerByUserNotFound(_) => {
+                <FieldError as GraphQLError>::unauthenticated()
+            }
+            other => async_graphql::Error::new(other.to_string()),
+        })?;
+
+    let order = OrderService::new(db.clone(), event_bus.clone())
+        .get_order(tenant_id, order_id)
+        .await
+        .map_err(|err| async_graphql::Error::new(err.to_string()))?;
+
+    if order.customer_id != Some(customer.id) {
+        return Err(<FieldError as GraphQLError>::permission_denied(
+            "Order does not belong to the current customer",
+        ));
+    }
+
+    Ok(())
+}
+
+fn parse_json_payload(value: &str, message: &str) -> Result<Value> {
+    serde_json::from_str(value).map_err(|_| async_graphql::Error::new(message))
+}
+
 fn parse_optional_metadata(value: Option<&str>) -> Result<Value> {
     match value.map(str::trim) {
         None | Some("") => Ok(Value::Object(Default::default())),
@@ -2946,19 +3338,16 @@ async fn validate_storefront_variant_inventory(
     requested_quantity: i32,
     public_channel_slug: Option<&str>,
 ) -> Result<()> {
-    if variant.inventory_policy == "continue" {
-        return Ok(());
-    }
-
-    let available_inventory = load_available_inventory_for_variant_in_public_channel(
+    let available = check_variant_availability_for_public_channel(
         db,
         tenant_id,
-        variant.id,
+        variant,
+        requested_quantity,
         public_channel_slug,
     )
     .await
     .map_err(|err| async_graphql::Error::new(err.to_string()))?;
-    if available_inventory < requested_quantity {
+    if !available {
         return Err(async_graphql::Error::new(format!(
             "Variant {} does not have enough available inventory for the current channel",
             variant.id

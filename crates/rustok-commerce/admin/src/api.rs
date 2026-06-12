@@ -7,7 +7,8 @@ use std::fmt::{Display, Formatter};
 
 use crate::model::{
     CommerceAdminBootstrap, CommerceAdminCartSnapshot, CommerceCartPromotionDraft,
-    CommerceCartPromotionPreview, ShippingProfile, ShippingProfileDraft, ShippingProfileList,
+    CommerceCartPromotionPreview, CommerceOrderChange, CommerceOrderChangeActionDraft,
+    CommerceOrderChangeList, ShippingProfile, ShippingProfileDraft, ShippingProfileList,
 };
 #[cfg(feature = "ssr")]
 use crate::model::{CommerceCartPromotionKind, CommerceCartPromotionScope};
@@ -48,6 +49,9 @@ const CREATE_SHIPPING_PROFILE_MUTATION: &str = "mutation CommerceCreateShippingP
 const UPDATE_SHIPPING_PROFILE_MUTATION: &str = "mutation CommerceUpdateShippingProfile($tenantId: UUID!, $id: UUID!, $input: UpdateShippingProfileInput!) { updateShippingProfile(tenantId: $tenantId, id: $id, input: $input) { id tenantId slug name description active metadata createdAt updatedAt } }";
 const DEACTIVATE_SHIPPING_PROFILE_MUTATION: &str = "mutation CommerceDeactivateShippingProfile($tenantId: UUID!, $id: UUID!) { deactivateShippingProfile(tenantId: $tenantId, id: $id) { id tenantId slug name description active metadata createdAt updatedAt } }";
 const REACTIVATE_SHIPPING_PROFILE_MUTATION: &str = "mutation CommerceReactivateShippingProfile($tenantId: UUID!, $id: UUID!) { reactivateShippingProfile(tenantId: $tenantId, id: $id) { id tenantId slug name description active metadata createdAt updatedAt } }";
+const ORDER_CHANGES_QUERY: &str = "query CommerceOrderChanges($tenantId: UUID!, $filter: OrderChangesFilter) { orderChanges(tenantId: $tenantId, filter: $filter) { total page perPage hasNext items { id tenantId orderId createdBy changeType status description preview metadata createdAt updatedAt appliedAt cancelledAt } } }";
+const APPLY_ORDER_CHANGE_MUTATION: &str = "mutation CommerceApplyOrderChange($tenantId: UUID!, $id: UUID!, $input: ApplyOrderChangeInputObject!) { applyOrderChange(tenantId: $tenantId, id: $id, input: $input) { id tenantId orderId createdBy changeType status description preview metadata createdAt updatedAt appliedAt cancelledAt } }";
+const CANCEL_ORDER_CHANGE_MUTATION: &str = "mutation CommerceCancelOrderChange($tenantId: UUID!, $id: UUID!, $input: CancelOrderChangeInputObject!) { cancelOrderChange(tenantId: $tenantId, id: $id, input: $input) { id tenantId orderId createdBy changeType status description preview metadata createdAt updatedAt appliedAt cancelledAt } }";
 
 #[derive(Debug, Deserialize)]
 struct BootstrapResponse {
@@ -91,6 +95,24 @@ struct ReactivateShippingProfileResponse {
     reactivate_shipping_profile: ShippingProfile,
 }
 
+#[derive(Debug, Deserialize)]
+struct OrderChangesResponse {
+    #[serde(rename = "orderChanges")]
+    order_changes: CommerceOrderChangeList,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApplyOrderChangeResponse {
+    #[serde(rename = "applyOrderChange")]
+    apply_order_change: CommerceOrderChange,
+}
+
+#[derive(Debug, Deserialize)]
+struct CancelOrderChangeResponse {
+    #[serde(rename = "cancelOrderChange")]
+    cancel_order_change: CommerceOrderChange,
+}
+
 #[derive(Debug, Serialize)]
 struct TenantScopedVariables<T> {
     #[serde(rename = "tenantId")]
@@ -118,6 +140,40 @@ struct CreateShippingProfileVariables {
 struct UpdateShippingProfileVariables {
     id: String,
     input: UpdateShippingProfileInput,
+}
+
+#[derive(Debug, Serialize)]
+struct OrderChangesVariables {
+    filter: OrderChangesFilter,
+}
+
+#[derive(Debug, Serialize)]
+struct OrderChangeActionVariables<T> {
+    id: String,
+    input: T,
+}
+
+#[derive(Debug, Serialize)]
+struct OrderChangesFilter {
+    #[serde(rename = "orderId")]
+    order_id: Option<String>,
+    status: Option<String>,
+    #[serde(rename = "changeType")]
+    change_type: Option<String>,
+    page: Option<u64>,
+    #[serde(rename = "perPage")]
+    per_page: Option<u64>,
+}
+
+#[derive(Debug, Serialize)]
+struct ApplyOrderChangeInput {
+    metadata: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct CancelOrderChangeInput {
+    reason: Option<String>,
+    metadata: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -328,6 +384,143 @@ pub async fn reactivate_shipping_profile(
     )
     .await?;
     Ok(response.reactivate_shipping_profile)
+}
+
+pub async fn fetch_order_changes(
+    token: Option<String>,
+    tenant_slug: Option<String>,
+    tenant_id: String,
+    order_id: Option<String>,
+    status: Option<String>,
+) -> Result<CommerceOrderChangeList, ApiError> {
+    match commerce_admin_order_changes_native(tenant_id.clone(), order_id.clone(), status.clone())
+        .await
+    {
+        Ok(list) => Ok(list),
+        Err(error) if is_native_transport_unavailable(&error) => {
+            fetch_order_changes_graphql(token, tenant_slug, tenant_id, order_id, status).await
+        }
+        Err(error) => Err(ApiError::from(error)),
+    }
+}
+
+pub async fn apply_order_change(
+    token: Option<String>,
+    tenant_slug: Option<String>,
+    tenant_id: String,
+    id: String,
+    draft: CommerceOrderChangeActionDraft,
+) -> Result<CommerceOrderChange, ApiError> {
+    match commerce_admin_apply_order_change_native(tenant_id.clone(), id.clone(), draft.clone())
+        .await
+    {
+        Ok(change) => Ok(change),
+        Err(error) if is_native_transport_unavailable(&error) => {
+            apply_order_change_graphql(token, tenant_slug, tenant_id, id, draft).await
+        }
+        Err(error) => Err(ApiError::from(error)),
+    }
+}
+
+pub async fn cancel_order_change(
+    token: Option<String>,
+    tenant_slug: Option<String>,
+    tenant_id: String,
+    id: String,
+    draft: CommerceOrderChangeActionDraft,
+) -> Result<CommerceOrderChange, ApiError> {
+    match commerce_admin_cancel_order_change_native(tenant_id.clone(), id.clone(), draft.clone())
+        .await
+    {
+        Ok(change) => Ok(change),
+        Err(error) if is_native_transport_unavailable(&error) => {
+            cancel_order_change_graphql(token, tenant_slug, tenant_id, id, draft).await
+        }
+        Err(error) => Err(ApiError::from(error)),
+    }
+}
+
+async fn fetch_order_changes_graphql(
+    token: Option<String>,
+    tenant_slug: Option<String>,
+    tenant_id: String,
+    order_id: Option<String>,
+    status: Option<String>,
+) -> Result<CommerceOrderChangeList, ApiError> {
+    let response: OrderChangesResponse = request(
+        ORDER_CHANGES_QUERY,
+        Some(TenantScopedVariables {
+            tenant_id,
+            extra: OrderChangesVariables {
+                filter: OrderChangesFilter {
+                    order_id: order_id.and_then(|value| optional_text(value.as_str())),
+                    status: status.and_then(|value| optional_text(value.as_str())),
+                    change_type: None,
+                    page: Some(1),
+                    per_page: Some(20),
+                },
+            },
+        }),
+        token,
+        tenant_slug,
+    )
+    .await?;
+    Ok(response.order_changes)
+}
+
+async fn apply_order_change_graphql(
+    token: Option<String>,
+    tenant_slug: Option<String>,
+    tenant_id: String,
+    id: String,
+    draft: CommerceOrderChangeActionDraft,
+) -> Result<CommerceOrderChange, ApiError> {
+    let response: ApplyOrderChangeResponse = request(
+        APPLY_ORDER_CHANGE_MUTATION,
+        Some(TenantScopedVariables {
+            tenant_id,
+            extra: OrderChangeActionVariables {
+                id,
+                input: ApplyOrderChangeInput {
+                    metadata: optional_json_text(draft.metadata_json.as_str()),
+                },
+            },
+        }),
+        token,
+        tenant_slug,
+    )
+    .await?;
+    Ok(response.apply_order_change)
+}
+
+async fn cancel_order_change_graphql(
+    token: Option<String>,
+    tenant_slug: Option<String>,
+    tenant_id: String,
+    id: String,
+    draft: CommerceOrderChangeActionDraft,
+) -> Result<CommerceOrderChange, ApiError> {
+    let response: CancelOrderChangeResponse = request(
+        CANCEL_ORDER_CHANGE_MUTATION,
+        Some(TenantScopedVariables {
+            tenant_id,
+            extra: OrderChangeActionVariables {
+                id,
+                input: CancelOrderChangeInput {
+                    reason: optional_text(draft.reason.as_str()),
+                    metadata: optional_json_text(draft.metadata_json.as_str()),
+                },
+            },
+        }),
+        token,
+        tenant_slug,
+    )
+    .await?;
+    Ok(response.cancel_order_change)
+}
+
+fn is_native_transport_unavailable(error: &ServerFnError) -> bool {
+    error.to_string().contains("requires the `ssr` feature")
 }
 
 #[allow(dead_code)]
@@ -670,6 +863,171 @@ async fn apply_cart_promotion_native_with_context(
 }
 
 #[cfg(feature = "ssr")]
+fn parse_uuid(value: &str, field: &str) -> Result<uuid::Uuid, ServerFnError> {
+    uuid::Uuid::parse_str(value.trim())
+        .map_err(|_| ServerFnError::new(format!("{field} must be a valid UUID")))
+}
+
+#[cfg(feature = "ssr")]
+fn parse_optional_uuid(
+    value: Option<String>,
+    field: &str,
+) -> Result<Option<uuid::Uuid>, ServerFnError> {
+    value
+        .and_then(|value| optional_text(value.as_str()))
+        .map(|value| parse_uuid(value.as_str(), field))
+        .transpose()
+}
+
+#[cfg(feature = "ssr")]
+fn order_service_from_context(app_ctx: &loco_rs::app::AppContext) -> rustok_order::OrderService {
+    rustok_order::OrderService::new(
+        app_ctx.db.clone(),
+        rustok_api::loco::transactional_event_bus_from_context(app_ctx),
+    )
+}
+
+#[cfg(feature = "ssr")]
+fn map_order_change(change: rustok_order::dto::OrderChangeResponse) -> CommerceOrderChange {
+    CommerceOrderChange {
+        id: change.id.to_string(),
+        tenant_id: change.tenant_id.to_string(),
+        order_id: change.order_id.to_string(),
+        created_by: change.created_by.to_string(),
+        change_type: change.change_type,
+        status: change.status,
+        description: change.description,
+        preview: change.preview.to_string(),
+        metadata: change.metadata.to_string(),
+        created_at: change.created_at.to_rfc3339(),
+        updated_at: change.updated_at.to_rfc3339(),
+        applied_at: change.applied_at.map(|value| value.to_rfc3339()),
+        cancelled_at: change.cancelled_at.map(|value| value.to_rfc3339()),
+    }
+}
+
+#[cfg(feature = "ssr")]
+async fn fetch_order_changes_native_with_context(
+    app_ctx: &loco_rs::app::AppContext,
+    auth: &rustok_api::AuthContext,
+    tenant: &rustok_api::TenantContext,
+    tenant_id: String,
+    order_id: Option<String>,
+    status: Option<String>,
+) -> Result<CommerceOrderChangeList, ServerFnError> {
+    use rustok_core::Permission;
+
+    ensure_permission(
+        &auth.permissions,
+        &[Permission::ORDERS_READ],
+        "orders:read required",
+    )?;
+    let requested_tenant_id = parse_uuid(tenant_id.as_str(), "tenant_id")?;
+    if requested_tenant_id != tenant.id {
+        return Err(ServerFnError::new(
+            "tenant_id must match the effective tenant context",
+        ));
+    }
+
+    let (items, total) = order_service_from_context(app_ctx)
+        .list_order_changes(
+            tenant.id,
+            rustok_order::dto::ListOrderChangesInput {
+                page: 1,
+                per_page: 20,
+                order_id: parse_optional_uuid(order_id, "order_id")?,
+                status: status.and_then(|value| optional_text(value.as_str())),
+                change_type: None,
+            },
+        )
+        .await
+        .map_err(ServerFnError::new)?;
+
+    Ok(CommerceOrderChangeList {
+        items: items.into_iter().map(map_order_change).collect(),
+        total,
+        page: 1,
+        per_page: 20,
+        has_next: total > 20,
+    })
+}
+
+#[cfg(feature = "ssr")]
+async fn apply_order_change_native_with_context(
+    app_ctx: &loco_rs::app::AppContext,
+    auth: &rustok_api::AuthContext,
+    tenant: &rustok_api::TenantContext,
+    tenant_id: String,
+    id: String,
+    draft: CommerceOrderChangeActionDraft,
+) -> Result<CommerceOrderChange, ServerFnError> {
+    use rustok_core::Permission;
+
+    ensure_permission(
+        &auth.permissions,
+        &[Permission::ORDERS_UPDATE],
+        "orders:update required",
+    )?;
+    let requested_tenant_id = parse_uuid(tenant_id.as_str(), "tenant_id")?;
+    if requested_tenant_id != tenant.id {
+        return Err(ServerFnError::new(
+            "tenant_id must match the effective tenant context",
+        ));
+    }
+
+    let change = order_service_from_context(app_ctx)
+        .apply_order_change(
+            tenant.id,
+            parse_uuid(id.as_str(), "order_change_id")?,
+            rustok_order::dto::ApplyOrderChangeInput {
+                metadata: parse_metadata_json(&draft.metadata_json)?,
+            },
+        )
+        .await
+        .map_err(ServerFnError::new)?;
+
+    Ok(map_order_change(change))
+}
+
+#[cfg(feature = "ssr")]
+async fn cancel_order_change_native_with_context(
+    app_ctx: &loco_rs::app::AppContext,
+    auth: &rustok_api::AuthContext,
+    tenant: &rustok_api::TenantContext,
+    tenant_id: String,
+    id: String,
+    draft: CommerceOrderChangeActionDraft,
+) -> Result<CommerceOrderChange, ServerFnError> {
+    use rustok_core::Permission;
+
+    ensure_permission(
+        &auth.permissions,
+        &[Permission::ORDERS_UPDATE],
+        "orders:update required",
+    )?;
+    let requested_tenant_id = parse_uuid(tenant_id.as_str(), "tenant_id")?;
+    if requested_tenant_id != tenant.id {
+        return Err(ServerFnError::new(
+            "tenant_id must match the effective tenant context",
+        ));
+    }
+
+    let change = order_service_from_context(app_ctx)
+        .cancel_order_change(
+            tenant.id,
+            parse_uuid(id.as_str(), "order_change_id")?,
+            rustok_order::dto::CancelOrderChangeInput {
+                reason: optional_text(draft.reason.as_str()),
+                metadata: parse_metadata_json(&draft.metadata_json)?,
+            },
+        )
+        .await
+        .map_err(ServerFnError::new)?;
+
+    Ok(map_order_change(change))
+}
+
+#[cfg(feature = "ssr")]
 fn map_cart_promotion_preview(
     scope: CommerceCartPromotionScope,
     preview: rustok_cart::services::cart::CartPromotionPreview,
@@ -718,6 +1076,103 @@ fn map_cart_snapshot(cart: rustok_cart::dto::CartResponse) -> CommerceAdminCartS
                 metadata: adjustment.metadata.to_string(),
             })
             .collect(),
+    }
+}
+
+#[server(prefix = "/api/fn", endpoint = "commerce/admin/order-changes")]
+async fn commerce_admin_order_changes_native(
+    tenant_id: String,
+    order_id: Option<String>,
+    status: Option<String>,
+) -> Result<CommerceOrderChangeList, ServerFnError> {
+    #[cfg(feature = "ssr")]
+    {
+        use leptos::prelude::expect_context;
+        use loco_rs::app::AppContext;
+        use rustok_api::{AuthContext, TenantContext};
+
+        let app_ctx = expect_context::<AppContext>();
+        let auth = leptos_axum::extract::<AuthContext>()
+            .await
+            .map_err(ServerFnError::new)?;
+        let tenant = leptos_axum::extract::<TenantContext>()
+            .await
+            .map_err(ServerFnError::new)?;
+
+        fetch_order_changes_native_with_context(
+            &app_ctx, &auth, &tenant, tenant_id, order_id, status,
+        )
+        .await
+    }
+    #[cfg(not(feature = "ssr"))]
+    {
+        let _ = (tenant_id, order_id, status);
+        Err(ServerFnError::new(
+            "commerce/admin/order-changes requires the `ssr` feature",
+        ))
+    }
+}
+
+#[server(prefix = "/api/fn", endpoint = "commerce/admin/apply-order-change")]
+async fn commerce_admin_apply_order_change_native(
+    tenant_id: String,
+    id: String,
+    draft: CommerceOrderChangeActionDraft,
+) -> Result<CommerceOrderChange, ServerFnError> {
+    #[cfg(feature = "ssr")]
+    {
+        use leptos::prelude::expect_context;
+        use loco_rs::app::AppContext;
+        use rustok_api::{AuthContext, TenantContext};
+
+        let app_ctx = expect_context::<AppContext>();
+        let auth = leptos_axum::extract::<AuthContext>()
+            .await
+            .map_err(ServerFnError::new)?;
+        let tenant = leptos_axum::extract::<TenantContext>()
+            .await
+            .map_err(ServerFnError::new)?;
+
+        apply_order_change_native_with_context(&app_ctx, &auth, &tenant, tenant_id, id, draft).await
+    }
+    #[cfg(not(feature = "ssr"))]
+    {
+        let _ = (tenant_id, id, draft);
+        Err(ServerFnError::new(
+            "commerce/admin/apply-order-change requires the `ssr` feature",
+        ))
+    }
+}
+
+#[server(prefix = "/api/fn", endpoint = "commerce/admin/cancel-order-change")]
+async fn commerce_admin_cancel_order_change_native(
+    tenant_id: String,
+    id: String,
+    draft: CommerceOrderChangeActionDraft,
+) -> Result<CommerceOrderChange, ServerFnError> {
+    #[cfg(feature = "ssr")]
+    {
+        use leptos::prelude::expect_context;
+        use loco_rs::app::AppContext;
+        use rustok_api::{AuthContext, TenantContext};
+
+        let app_ctx = expect_context::<AppContext>();
+        let auth = leptos_axum::extract::<AuthContext>()
+            .await
+            .map_err(ServerFnError::new)?;
+        let tenant = leptos_axum::extract::<TenantContext>()
+            .await
+            .map_err(ServerFnError::new)?;
+
+        cancel_order_change_native_with_context(&app_ctx, &auth, &tenant, tenant_id, id, draft)
+            .await
+    }
+    #[cfg(not(feature = "ssr"))]
+    {
+        let _ = (tenant_id, id, draft);
+        Err(ServerFnError::new(
+            "commerce/admin/cancel-order-change requires the `ssr` feature",
+        ))
     }
 }
 
@@ -796,8 +1251,9 @@ mod tests {
     use rustok_core::Permission;
     use rustok_fulfillment::dto::CreateShippingOptionInput;
     use rustok_fulfillment::FulfillmentService;
+    use rustok_order::dto::{CreateOrderChangeInput, CreateOrderInput, CreateOrderLineItemInput};
     use rustok_test_utils::db::setup_test_db;
-    use rustok_test_utils::MockEventTransport;
+    use rustok_test_utils::{mock_transactional_event_bus, MockEventTransport};
     use serde_json::json;
     use std::sync::Arc;
 
@@ -947,6 +1403,58 @@ mod tests {
         option.id
     }
 
+    async fn seed_order_change(
+        db: &sea_orm::DatabaseConnection,
+        tenant: &TenantContext,
+        actor_id: uuid::Uuid,
+        change_type: &str,
+    ) -> (uuid::Uuid, uuid::Uuid) {
+        support::ensure_commerce_schema(db).await;
+        let order_service =
+            rustok_order::OrderService::new(db.clone(), mock_transactional_event_bus());
+        let order = order_service
+            .create_order(
+                tenant.id,
+                actor_id,
+                CreateOrderInput {
+                    customer_id: Some(uuid::Uuid::new_v4()),
+                    currency_code: "usd".to_string(),
+                    shipping_total: rust_decimal::Decimal::ZERO,
+                    line_items: vec![CreateOrderLineItemInput {
+                        product_id: None,
+                        variant_id: None,
+                        shipping_profile_slug: "default".to_string(),
+                        seller_id: None,
+                        sku: Some("POST-ORDER-1".to_string()),
+                        title: "Post-order operator item".to_string(),
+                        quantity: 1,
+                        unit_price: rust_decimal::Decimal::new(1250, 2),
+                        metadata: json!({}),
+                    }],
+                    adjustments: Vec::new(),
+                    tax_lines: Vec::new(),
+                    metadata: json!({"source":"commerce-admin-native-order-change-test"}),
+                },
+            )
+            .await
+            .expect("create order");
+        let change = order_service
+            .create_order_change(
+                tenant.id,
+                actor_id,
+                order.id,
+                CreateOrderChangeInput {
+                    change_type: change_type.to_string(),
+                    description: Some("Exchange generated from return decision".to_string()),
+                    preview: json!({"replacement_sku":"POST-ORDER-2"}),
+                    metadata: json!({"order_return_id": uuid::Uuid::new_v4().to_string()}),
+                },
+            )
+            .await
+            .expect("create order change");
+        (order.id, change.id)
+    }
+
     async fn seed_cart_with_shipping(
         db: &sea_orm::DatabaseConnection,
         tenant: &TenantContext,
@@ -991,6 +1499,124 @@ mod tests {
             .await
             .expect("add line item");
         (cart.id, cart.line_items[0].id)
+    }
+
+    #[tokio::test]
+    async fn fetch_order_changes_native_with_context_filters_pending_changes() {
+        let db = setup_test_db().await;
+        let app = test_app_context(db.clone());
+        let tenant = test_tenant();
+        let actor_id = uuid::Uuid::new_v4();
+        let auth = auth_with_permissions(vec![Permission::ORDERS_READ]);
+        let (order_id, change_id) = seed_order_change(&db, &tenant, actor_id, "exchange").await;
+
+        let list = fetch_order_changes_native_with_context(
+            &app,
+            &auth,
+            &tenant,
+            tenant.id.to_string(),
+            Some(order_id.to_string()),
+            Some("pending".to_string()),
+        )
+        .await
+        .expect("fetch order changes");
+
+        assert_eq!(list.total, 1);
+        assert_eq!(list.page, 1);
+        assert_eq!(list.per_page, 20);
+        assert!(!list.has_next);
+        let change = list.items.first().expect("one change");
+        assert_eq!(change.id, change_id.to_string());
+        assert_eq!(change.order_id, order_id.to_string());
+        assert_eq!(change.change_type, "exchange");
+        assert_eq!(change.status, "pending");
+        assert!(change.preview.contains("replacement_sku"));
+        assert!(change.metadata.contains("order_return_id"));
+    }
+
+    #[tokio::test]
+    async fn apply_order_change_native_with_context_uses_order_service_lifecycle() {
+        let db = setup_test_db().await;
+        let app = test_app_context(db.clone());
+        let tenant = test_tenant();
+        let actor_id = uuid::Uuid::new_v4();
+        let auth = auth_with_permissions(vec![Permission::ORDERS_UPDATE]);
+        let (_, change_id) = seed_order_change(&db, &tenant, actor_id, "claim").await;
+
+        let change = apply_order_change_native_with_context(
+            &app,
+            &auth,
+            &tenant,
+            tenant.id.to_string(),
+            change_id.to_string(),
+            CommerceOrderChangeActionDraft {
+                metadata_json: "{\"operator\":\"returns-desk\"}".to_string(),
+                reason: String::new(),
+            },
+        )
+        .await
+        .expect("apply order change");
+
+        assert_eq!(change.id, change_id.to_string());
+        assert_eq!(change.status, "applied");
+        assert!(change.applied_at.is_some());
+        assert!(change.cancelled_at.is_none());
+        assert!(change.metadata.contains("returns-desk"));
+    }
+
+    #[tokio::test]
+    async fn cancel_order_change_native_with_context_records_reason_patch() {
+        let db = setup_test_db().await;
+        let app = test_app_context(db.clone());
+        let tenant = test_tenant();
+        let actor_id = uuid::Uuid::new_v4();
+        let auth = auth_with_permissions(vec![Permission::ORDERS_UPDATE]);
+        let (_, change_id) = seed_order_change(&db, &tenant, actor_id, "exchange").await;
+
+        let change = cancel_order_change_native_with_context(
+            &app,
+            &auth,
+            &tenant,
+            tenant.id.to_string(),
+            change_id.to_string(),
+            CommerceOrderChangeActionDraft {
+                metadata_json: "{\"operator\":\"returns-desk\"}".to_string(),
+                reason: "customer withdrew exchange".to_string(),
+            },
+        )
+        .await
+        .expect("cancel order change");
+
+        assert_eq!(change.status, "cancelled");
+        assert!(change.cancelled_at.is_some());
+        assert!(change.metadata.contains("returns-desk"));
+        assert!(change.metadata.contains("customer withdrew exchange"));
+    }
+
+    #[tokio::test]
+    async fn fetch_order_changes_native_with_context_enforces_orders_read_permission() {
+        let db = setup_test_db().await;
+        let app = test_app_context(db);
+        let tenant = test_tenant();
+        let auth = auth_with_permissions(Vec::new());
+
+        let error = fetch_order_changes_native_with_context(
+            &app,
+            &auth,
+            &tenant,
+            tenant.id.to_string(),
+            None,
+            None,
+        )
+        .await
+        .expect_err("orders:read must be required");
+
+        assert!(
+            error
+                .to_string()
+                .contains("Permission denied: orders:read required"),
+            "unexpected error: {error}"
+        );
     }
 
     #[tokio::test]

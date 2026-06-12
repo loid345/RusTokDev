@@ -1,4 +1,11 @@
-use std::collections::HashMap;
+use std::{
+    collections::HashMap,
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc,
+    },
+    time::Duration,
+};
 
 use axum::{
     extract::{Request, State},
@@ -7,6 +14,7 @@ use axum::{
     response::Response,
 };
 use loco_rs::app::AppContext;
+use moka::future::Cache;
 use rustok_api::request::{resolve_request_locale, ResolvedRequestLocale};
 use rustok_core::i18n::Locale;
 use sea_orm::sea_query::{Alias, Expr, Order, Query};
@@ -15,12 +23,91 @@ use uuid::Uuid;
 
 use crate::context::TenantContextExt;
 
+const TENANT_LOCALE_CACHE_TTL: Duration = Duration::from_secs(60);
+const TENANT_LOCALE_CACHE_MAX_CAPACITY: u64 = 2_000;
+
 #[derive(Debug, Clone)]
 struct TenantLocaleRecord {
     locale: String,
     is_enabled: bool,
     is_default: bool,
     fallback_locale: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TenantLocaleCacheStats {
+    pub hits: u64,
+    pub misses: u64,
+    pub db_queries: u64,
+    pub invalidations: u64,
+    pub entries: u64,
+}
+
+#[derive(Clone)]
+struct TenantLocaleCache {
+    cache: Cache<Uuid, Arc<Vec<TenantLocaleRecord>>>,
+    hits: Arc<AtomicU64>,
+    misses: Arc<AtomicU64>,
+    db_queries: Arc<AtomicU64>,
+    invalidations: Arc<AtomicU64>,
+}
+
+impl TenantLocaleCache {
+    fn new() -> Self {
+        Self {
+            cache: Cache::builder()
+                .time_to_live(TENANT_LOCALE_CACHE_TTL)
+                .max_capacity(TENANT_LOCALE_CACHE_MAX_CAPACITY)
+                .build(),
+            hits: Arc::new(AtomicU64::new(0)),
+            misses: Arc::new(AtomicU64::new(0)),
+            db_queries: Arc::new(AtomicU64::new(0)),
+            invalidations: Arc::new(AtomicU64::new(0)),
+        }
+    }
+
+    async fn get(&self, tenant_id: Uuid) -> Option<Arc<Vec<TenantLocaleRecord>>> {
+        let cached = self.cache.get(&tenant_id).await;
+        if cached.is_some() {
+            self.hits.fetch_add(1, Ordering::Relaxed);
+        } else {
+            self.misses.fetch_add(1, Ordering::Relaxed);
+        }
+        cached
+    }
+
+    async fn insert(&self, tenant_id: Uuid, locales: Arc<Vec<TenantLocaleRecord>>) {
+        self.cache.insert(tenant_id, locales).await;
+    }
+
+    async fn invalidate(&self, tenant_id: Uuid) {
+        self.invalidations.fetch_add(1, Ordering::Relaxed);
+        self.cache.invalidate(&tenant_id).await;
+    }
+
+    fn record_db_query(&self) {
+        self.db_queries.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn stats(&self) -> TenantLocaleCacheStats {
+        TenantLocaleCacheStats {
+            hits: self.hits.load(Ordering::Relaxed),
+            misses: self.misses.load(Ordering::Relaxed),
+            db_queries: self.db_queries.load(Ordering::Relaxed),
+            invalidations: self.invalidations.load(Ordering::Relaxed),
+            entries: self.cache.entry_count(),
+        }
+    }
+}
+
+fn tenant_locale_cache(ctx: &AppContext) -> Arc<TenantLocaleCache> {
+    if let Some(cache) = ctx.shared_store.get::<Arc<TenantLocaleCache>>() {
+        return cache;
+    }
+
+    let cache = Arc::new(TenantLocaleCache::new());
+    ctx.shared_store.insert(cache.clone());
+    cache
 }
 
 pub async fn resolve_locale(
@@ -38,12 +125,12 @@ pub async fn resolve_locale(
     );
 
     if let Some(tenant) = tenant_context.as_ref() {
-        let locales = load_tenant_locales(&ctx, tenant.id)
+        let locales = get_tenant_locales_cached(&ctx, tenant.id)
             .await
             .map_err(|_| axum::http::StatusCode::INTERNAL_SERVER_ERROR)?;
         if !locales.is_empty() {
             resolved.effective_locale =
-                constrain_locale_to_tenant(&resolved, &locales, &tenant.default_locale);
+                constrain_locale_to_tenant(&resolved, locales.as_ref(), &tenant.default_locale);
         }
     }
 
@@ -57,6 +144,32 @@ pub async fn resolve_locale(
         response.headers_mut().insert("content-language", value);
     }
     Ok(response)
+}
+
+async fn get_tenant_locales_cached(
+    ctx: &AppContext,
+    tenant_id: Uuid,
+) -> Result<Arc<Vec<TenantLocaleRecord>>, sea_orm::DbErr> {
+    let cache = tenant_locale_cache(ctx);
+    if let Some(locales) = cache.get(tenant_id).await {
+        return Ok(locales);
+    }
+
+    cache.record_db_query();
+    let locales = Arc::new(load_tenant_locales(ctx, tenant_id).await?);
+    cache.insert(tenant_id, locales.clone()).await;
+    Ok(locales)
+}
+
+pub async fn invalidate_tenant_locale_cache(ctx: &AppContext, tenant_id: Uuid) {
+    tenant_locale_cache(ctx).invalidate(tenant_id).await;
+}
+
+pub async fn tenant_locale_cache_stats(ctx: &AppContext) -> TenantLocaleCacheStats {
+    ctx.shared_store
+        .get::<Arc<TenantLocaleCache>>()
+        .map(|cache| cache.stats())
+        .unwrap_or_default()
 }
 
 async fn load_tenant_locales(
@@ -146,8 +259,40 @@ fn constrain_locale_to_tenant(
 
 #[cfg(test)]
 mod tests {
-    use super::{constrain_locale_to_tenant, TenantLocaleRecord};
+    use super::{constrain_locale_to_tenant, TenantLocaleCache, TenantLocaleRecord};
     use rustok_api::request::ResolvedRequestLocale;
+    use std::sync::Arc;
+    use uuid::Uuid;
+
+    #[tokio::test]
+    async fn tenant_locale_cache_tracks_hits_misses_and_invalidations() {
+        let cache = TenantLocaleCache::new();
+        let tenant_id = Uuid::new_v4();
+
+        assert!(cache.get(tenant_id).await.is_none());
+        cache.record_db_query();
+        cache
+            .insert(
+                tenant_id,
+                Arc::new(vec![TenantLocaleRecord {
+                    locale: "en".to_string(),
+                    is_enabled: true,
+                    is_default: true,
+                    fallback_locale: None,
+                }]),
+            )
+            .await;
+
+        assert!(cache.get(tenant_id).await.is_some());
+        cache.invalidate(tenant_id).await;
+        assert!(cache.get(tenant_id).await.is_none());
+
+        let stats = cache.stats();
+        assert_eq!(stats.hits, 1);
+        assert_eq!(stats.misses, 2);
+        assert_eq!(stats.db_queries, 1);
+        assert_eq!(stats.invalidations, 1);
+    }
 
     #[test]
     fn prefers_requested_enabled_locale() {

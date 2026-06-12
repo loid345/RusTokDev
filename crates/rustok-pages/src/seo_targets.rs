@@ -5,17 +5,15 @@ use rustok_core::SecurityContext;
 use rustok_media::MediaImageDescriptor;
 use rustok_seo_targets::{
     builtin_slug, populate_image_template_fields, schema, SeoBulkSummaryRecord,
-    SeoLoadedTargetRecord, SeoRouteMatchRecord, SeoSitemapCandidateRecord,
-    SeoTargetAlternateRoute, SeoTargetBulkListRequest, SeoTargetCapabilities,
-    SeoTargetLoadRequest, SeoTargetLoadScope, SeoTargetOpenGraphRecord, SeoTargetProvider,
-    SeoTargetRouteResolveRequest, SeoTargetRuntimeContext, SeoTargetSitemapRequest,
-    SeoTargetSlug, SeoTemplateFieldMap,
+    SeoLoadedTargetRecord, SeoRouteMatchRecord, SeoSitemapCandidateRecord, SeoTargetAlternateRoute,
+    SeoTargetBulkListRequest, SeoTargetCapabilities, SeoTargetLoadRequest, SeoTargetLoadScope,
+    SeoTargetOpenGraphRecord, SeoTargetProvider, SeoTargetRouteResolveRequest,
+    SeoTargetRuntimeContext, SeoTargetSitemapRequest, SeoTargetSlug, SeoTemplateFieldMap,
 };
 use url::Url;
 
 use crate::{
-    BlockPayload, ListPagesFilter, PageListItem, PageResponse, PageService,
-    PageTranslationResponse,
+    BlockPayload, ListPagesFilter, PageListItem, PageResponse, PageService, PageTranslationResponse,
 };
 
 const BULK_FETCH_SIZE: u64 = 48;
@@ -341,7 +339,8 @@ fn page_primary_image_descriptor(
     let fallback_alt = normalize_image_text(Some(fallback_alt.to_string()));
 
     for block in &page.blocks {
-        let Ok(payload) = BlockPayload::from_block_type(&block.block_type, block.data.clone()) else {
+        let Ok(payload) = BlockPayload::from_block_type(&block.block_type, block.data.clone())
+        else {
             continue;
         };
         let descriptor = match payload {
@@ -350,7 +349,9 @@ fn page_primary_image_descriptor(
             }),
             BlockPayload::Image(data) => MediaImageDescriptor::from_parts(
                 data.src,
-                normalize_image_text(data.alt).or_else(|| normalize_image_text(data.caption)).or_else(|| fallback_alt.clone()),
+                normalize_image_text(data.alt)
+                    .or_else(|| normalize_image_text(data.caption))
+                    .or_else(|| fallback_alt.clone()),
                 None,
                 None,
                 None,

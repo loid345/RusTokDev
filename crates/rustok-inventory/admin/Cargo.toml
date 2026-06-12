@@ -11,13 +11,25 @@ crate-type = ["rlib"]
 [features]
 default = []
 hydrate = ["leptos/hydrate"]
-ssr = ["leptos/ssr"]
+ssr = [
+  "leptos/ssr",
+  "rustok-api/loco-adapter",
+  "dep:leptos_axum",
+  "dep:loco-rs",
+  "dep:rustok-core",
+  "dep:rustok-inventory",
+  "dep:uuid",
+]
 
 [dependencies]
-leptos = { workspace = true, features = ["csr"] }
-leptos-auth.workspace = true
-leptos-graphql.workspace = true
+leptos.workspace = true
+leptos_axum = { workspace = true, optional = true }
+loco-rs = { workspace = true, optional = true }
 rustok-api = { workspace = true, default-features = false }
+rustok-core = { workspace = true, optional = true }
+rustok-inventory = { workspace = true, optional = true }
 leptos-ui-routing.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
+uuid = { workspace = true, optional = true }
+

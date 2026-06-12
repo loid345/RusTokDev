@@ -5,22 +5,44 @@
 
 ## Execution checkpoint
 
-- Current phase: plan_sync
-- Last checkpoint: План синхронизирован с кросс-модульным приоритетом ускоренного FFA/FBA rollout по всей ecommerce family (раньше закрываем migration cost — меньше обратных переделок).
-- Next step: Выполнять ближайшие незавершённые пункты через FFA/FBA-first sequencing (module-owned UI + boundary-ready service contracts + transport parity evidence) без откладывания на поздние фазы.
+- Current phase: ffa_product_admin_shell_profile_panel_slice
+- Last checkpoint: Product admin shell copy and shipping-profile panel loading/error/ready messages now build through `ProductAdminShellViewModel` and `ProductAdminProfilePanelViewModel` in `admin/src/core.rs`; Leptos only renders prepared strings without changing the current GraphQL transport contract.
+- Next step: Continue FFA-first sequencing by extracting remaining admin field labels and editor action copy into typed core helpers without changing the current GraphQL transport contract.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок.
-- Last updated at (UTC): 2026-05-24T20:10:00Z
+- Last updated at (UTC): 2026-06-08T00:00:00Z
 
 
 ## FFA/FBA status
 
 - FFA status: `in_progress`
-- FBA status: `in_progress`
+- FBA status: `not_started`
+- Structural shape: `core_transport_ui`
 - Evidence:
   - module plan синхронизирован с central FFA/FBA readiness board; UI surface уже опубликован и ведётся в migration/backlog ритме;
+  - FFA slice: storefront catalog rail title/total/empty/open labels, item fallback labels, seller boundary text, published timestamp fallback and handle links now live in framework-agnostic `ProductCatalogRailViewModel` with unit-test evidence;
+  - FFA slice: selected-product card empty state, pricing context label, ownership note, metric labels and pricing action label now live in `SelectedProductEmptyViewModel` / `SelectedProductViewModel` with unit-test evidence;
+  - FFA slice: storefront shell badge/title/subtitle/load-error copy and typed fetch request shape now live in `ProductStorefrontShellViewModel` / `ProductStorefrontFetchRequest` with unit-test evidence;
+  - FFA slice: storefront pricing-context sanitization/defaulting moved into core, native/GraphQL fetch adapters now sit behind `storefront/src/transport/`, and Leptos rendering is isolated in `storefront/src/ui/leptos.rs`; evidence: `cargo test -p rustok-product-storefront --lib`;
+  - FFA slice: storefront transport errors now keep serializable native/GraphQL fallback evidence (`ProductTransportError`, `ProductTransportPath`), core composes `ProductTransportErrorDomEvidence`, and the Leptos error adapter exposes stable `data-product-transport-*` attributes for host/parity smoke checks;
+  - FFA slice: product admin list/status/filter, shipping-profile, pricing-preview and pricing deep-link helpers moved into `admin/src/core.rs`; Leptos admin remains the render/effect adapter while GraphQL transport stays unchanged for this slice;
+  - FFA slice: product admin GraphQL operations now route through `admin/src/transport.rs`, keeping `admin/src/api.rs` as the GraphQL adapter and preserving the existing `rustok-commerce` GraphQL contract;
+  - FFA slice: product admin Leptos rendering moved under `admin/src/ui/leptos.rs`, and `admin/src/lib.rs` now acts as the module/re-export boundary for `ProductAdmin`;
+  - FFA slice: selected product admin summary labels, pricing preview state and pricing deep-link are composed by `SelectedProductSummaryViewModel` in `admin/src/core.rs`, keeping Leptos summary rendering as markup-only;
+  - FFA slice: product admin list-card display state (status label/badge, type fallback, meta label, shipping profile chip and published/created timestamp) is composed by `ProductAdminListItemViewModel` in `admin/src/core.rs`, keeping Leptos list rendering as markup/action binding only;
+  - FFA slice: product admin editor shell state (create/edit mode, title, subtitle and submit label) is composed by `ProductAdminEditorViewModel` in `admin/src/core.rs`, keeping Leptos editor rendering as markup/action binding only;
+  - FFA slice: product admin submit validation, locale/bootstrap guardrails, create/update mode selection and `ProductDraft` command preparation are composed by `ProductAdminSaveCommand` / `ProductAdminDraftForm` in `admin/src/core.rs`; Leptos submit handling remains a thin signal/effect adapter over `admin/src/transport.rs`;
+  - FFA slice: product admin editor reset/apply signal values are composed by `ProductAdminEditorFormState` in `admin/src/core.rs`, keeping product-to-form mapping and default form policy outside Leptos;
+  - FFA slice: product admin publish/draft/archive command preparation is composed by `ProductAdminStatusMutationCommand` / `ProductAdminStatusTarget` in `admin/src/core.rs`; Leptos status actions dispatch typed core commands over `admin/src/transport.rs`;
+  - FFA slice: product admin delete command preparation is composed by `ProductAdminDeleteCommand` in `admin/src/core.rs`; Leptos delete action dispatches a typed core command and clears the editor through the shared core-owned empty form state;
+  - FFA slice: product admin delete-result view policy (clear-selection intent, refresh intent, no-op/error copy) is composed by `ProductAdminDeleteResultViewModel` / `ProductAdminDeleteOutcome` in `admin/src/core.rs`; Leptos delete action only applies those intents;
+  - FFA slice: product admin list action labels and busy-state availability are composed by `ProductAdminListActionLabels` / `product_admin_list_actions_disabled` in `admin/src/core.rs`; Leptos list actions bind prepared labels and use the core disabled predicate;
+  - FFA slice: product admin list loading/empty/error state copy is composed by semantic `ProductAdminListStateViewModel` helpers in `admin/src/core.rs`; Leptos list rendering maps semantic state kind to framework-specific classes;
+  - FFA slice: product admin list controls copy/search placeholder/status filter options are composed by `ProductAdminListControlsViewModel` in `admin/src/core.rs`; Leptos list controls only bind prepared labels/options;
+  - FFA slice: product admin shell copy and shipping-profile panel loading/error/ready messages are composed by `ProductAdminShellViewModel` and `ProductAdminProfilePanelViewModel` in `admin/src/core.rs`; Leptos renders prepared strings without owning this copy/state policy;
+  - FFA slice: product admin route/query selection writes are composed by `ProductAdminRouteQueryIntent` helpers in `admin/src/core.rs`; Leptos applies typed push/replace/clear intents without owning the product selection query policy;
   - дальнейшее повышение статуса выполняется только вместе с verification evidence и обновлением local+central docs.
-- Last verified at (UTC): 2026-05-24T00:00:00Z
+- Last verified at (UTC): 2026-06-08T00:00:00Z
 - Owner: `rustok-product` module team
 
 ## Область работ
@@ -36,10 +58,32 @@
 - taxonomy-backed `product_tags` уже служат first-class product tag surface;
 - typed `shipping_profile_slug` уже закреплён в product/variant persistence и DTO;
 - module-owned admin UI пакет `rustok-product/admin` уже поднят и подключён в
-  manifest-driven admin composition как первый шаг UI split;
+  manifest-driven admin composition как первый шаг UI split; admin list/status/filter,
+  shipping-profile, pricing-preview и pricing deep-link helpers вынесены в
+  framework-agnostic `admin/src/core.rs`, GraphQL операции проходят через
+  `admin/src/transport.rs`, selected-product summary собирается через
+  `SelectedProductSummaryViewModel`, list-card display state собирается через
+  `ProductAdminListItemViewModel`, editor shell state собирается через
+  `ProductAdminEditorViewModel`, а submit command/validation state собирается через
+  `ProductAdminSaveCommand` / `ProductAdminDraftForm`, а editor reset/apply mapping — через
+  `ProductAdminEditorFormState`, а publish/draft/archive command mapping — через
+  `ProductAdminStatusMutationCommand` / `ProductAdminStatusTarget`, а delete command mapping — через
+  `ProductAdminDeleteCommand`, а delete-result policy — через
+  `ProductAdminDeleteResultViewModel` / `ProductAdminDeleteOutcome`, а list action labels/availability — через
+  `ProductAdminListActionLabels` / `product_admin_list_actions_disabled`, loading/empty/error list state — через `ProductAdminListStateViewModel` helpers, а list controls/search/status options — через `ProductAdminListControlsViewModel`, shell/profile-panel copy — через `ProductAdminShellViewModel` / `ProductAdminProfilePanelViewModel`, а product selection route/query writes — через `ProductAdminRouteQueryIntent` helpers в `admin/src/core.rs`; Leptos слой
+  изолирован в `admin/src/ui/leptos.rs` как render/effect adapter;
 - module-owned storefront UI пакет `rustok-product/storefront` уже поднят и
   подключён в manifest-driven storefront composition для published catalog
   discovery через native Leptos server functions с GraphQL fallback;
+- storefront UI продолжает FFA-декомпозицию: route/query normalization, typed fetch
+  request shape, shell copy, selected-product view-model composition, selected-card
+  labels/empty state, catalog rail view-model, pricing/seller labels, pricing
+  deep-link state и pricing-context sanitization/defaulting вынесены в
+  framework-agnostic `storefront/src/core.rs`, native/GraphQL storefront fetch
+  paths оформлены как `storefront/src/transport/` adapters with serializable
+  fallback error evidence, `ProductTransportErrorDomEvidence` composes host-visible
+  failure attributes в core, а Leptos слой изолирован в `storefront/src/ui/leptos.rs`
+  как thin render/host-context adapter;
 - transport-level validation и public transport по-прежнему публикуются фасадом `rustok-commerce`.
 
 ## Этапы
@@ -62,6 +106,17 @@
 - [x] поднять module-owned admin UI пакет для product catalog surface;
 - [x] документировать новые catalog guarantees одновременно с изменением runtime surface;
 - [ ] удерживать local docs и `README.md` синхронизированными;
+- [x] вынести storefront FFA core slice для route/query state, selected-product view-model и pricing/seller helpers;
+- [x] вынести storefront catalog rail presentation в core view-model без Leptos runtime;
+- [x] вынести selected-product card labels и empty state в core view-model без Leptos runtime;
+- [x] вынести storefront shell copy и typed fetch request shape в core без Leptos runtime;
+- [x] выделить storefront native/GraphQL transport adapters и явный Leptos UI adapter поверх core-owned request/policy state;
+- [x] вынести product admin list/status/filter, shipping-profile и pricing-preview helpers в framework-agnostic admin core;
+- [x] выделить product admin GraphQL operations behind a module-owned transport facade without changing `rustok-commerce` GraphQL contract;
+- [x] изолировать product admin Leptos rendering under `admin/src/ui/leptos.rs` with crate-root re-export boundary;
+- [x] вынести selected product admin summary state into `SelectedProductSummaryViewModel` in framework-agnostic admin core;
+- [x] вынести product admin list-card display state into `ProductAdminListItemViewModel` in framework-agnostic admin core;
+- [x] вынести product admin editor shell state into `ProductAdminEditorViewModel` in framework-agnostic admin core;
 - [ ] обновлять consumer-module docs при изменении tag/deliverability integration rules.
 
 ## Проверка

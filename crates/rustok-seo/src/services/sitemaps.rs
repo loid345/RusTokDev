@@ -258,12 +258,14 @@ impl SeoService {
             .await?;
         let mut map = HashMap::<Uuid, Vec<SeoSitemapFileRecord>>::new();
         for file in files {
-            map.entry(file.job_id).or_default().push(SeoSitemapFileRecord {
-                id: file.id,
-                path: file.path,
-                url_count: file.url_count,
-                created_at: file.created_at.into(),
-            });
+            map.entry(file.job_id)
+                .or_default()
+                .push(SeoSitemapFileRecord {
+                    id: file.id,
+                    path: file.path,
+                    url_count: file.url_count,
+                    created_at: file.created_at.into(),
+                });
         }
 
         Ok(map)
@@ -536,14 +538,13 @@ pub(super) fn normalize_sitemap_submission_endpoints(values: &[String]) -> Vec<S
 
 #[cfg(test)]
 mod tests {
+    use super::submission_aggregation::{
+        SITEMAP_SUBMIT_MAX_ERRORS, SITEMAP_SUBMIT_MAX_ERROR_LEN, SITEMAP_SUBMIT_MAX_TIMEOUT_DETAILS,
+    };
     use super::{
         normalize_sitemap_submission_endpoints, record_invalid_endpoint, record_submission_failure,
         record_submission_success, render_robots_body, SitemapSubmissionAdapter,
         SitemapSubmissionSummary, SitemapSubmitEndpoint,
-    };
-    use super::submission_aggregation::{
-        SITEMAP_SUBMIT_MAX_ERROR_LEN, SITEMAP_SUBMIT_MAX_ERRORS,
-        SITEMAP_SUBMIT_MAX_TIMEOUT_DETAILS,
     };
     use crate::SeoService;
     use rustok_api::TenantContext;
@@ -1200,7 +1201,10 @@ mod tests {
 
         let message = result.expect_err("expected aggregate error");
         assert!(message.contains("0 success(es) and 28 failure(s)"));
-        assert!(message.contains(&format!("errors omitted: {}", 16 - SITEMAP_SUBMIT_MAX_ERRORS)));
+        assert!(message.contains(&format!(
+            "errors omitted: {}",
+            16 - SITEMAP_SUBMIT_MAX_ERRORS
+        )));
         assert!(message.contains(&format!(
             "timeout details omitted: {}",
             12 - SITEMAP_SUBMIT_MAX_TIMEOUT_DETAILS
@@ -1255,7 +1259,10 @@ mod tests {
         record_submission_failure(
             &mut summary,
             "https://failure.example.com/ping",
-            format!("failure: {}", "x".repeat(SITEMAP_SUBMIT_MAX_ERROR_LEN + 200)),
+            format!(
+                "failure: {}",
+                "x".repeat(SITEMAP_SUBMIT_MAX_ERROR_LEN + 200)
+            ),
         );
         let message = summary.into_error().expect("error expected");
         assert!(message.len() <= SITEMAP_SUBMIT_MAX_ERROR_LEN + 3);
@@ -1316,7 +1323,10 @@ mod tests {
         assert_eq!(snapshot.endpoint_statuses.len(), 24);
         assert_eq!(snapshot.omitted_endpoint_status_count, 17);
         assert_eq!(
-            snapshot.endpoint_statuses.first().map(|status| status.endpoint.as_str()),
+            snapshot
+                .endpoint_statuses
+                .first()
+                .map(|status| status.endpoint.as_str()),
             Some("https://endpoint-00.example.com/ping")
         );
     }

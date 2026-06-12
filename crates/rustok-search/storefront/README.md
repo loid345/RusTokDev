@@ -7,7 +7,9 @@ Leptos storefront UI package for the `rustok-search` module.
 - Exposes the search storefront root view used by `apps/storefront`.
 - Keeps search-specific storefront UX inside the module package.
 - Participates in the manifest-driven UI composition path through `rustok-module.toml`.
+- Keeps the crate root wiring-only: `src/lib.rs` declares `core`, `transport`, and `ui`, while `src/ui/leptos.rs` owns the Leptos render adapter for `SearchView`.
 - Provides the baseline route/slot scaffold for query input, suggestions, filters, and results.
+- Keeps storefront results summary, preset, locale, item, source, score, and snippet presentation in framework-agnostic core view-model helpers so the Leptos layer renders prepared fields and host click actions.
 - Uses native Leptos `#[server]` entry points in parallel with the existing GraphQL transport.
 - Ships package-owned `storefront/locales/en.json` and `storefront/locales/ru.json` bundles declared through `[provides.storefront_ui.i18n]`.
 

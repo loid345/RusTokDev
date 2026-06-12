@@ -100,7 +100,52 @@ pub struct CancelOrderInput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
+pub struct CreateOrderChangeInput {
+    #[validate(length(min = 1, max = 64))]
+    pub change_type: String,
+    #[validate(length(max = 2000))]
+    pub description: Option<String>,
+    pub preview: Value,
+    pub metadata: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
+pub struct ApplyOrderChangeInput {
+    pub metadata: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
+pub struct CancelOrderChangeInput {
+    #[validate(length(max = 255))]
+    pub reason: Option<String>,
+    pub metadata: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct ListOrderChangesInput {
+    pub page: u64,
+    pub per_page: u64,
+    pub order_id: Option<Uuid>,
+    pub status: Option<String>,
+    pub change_type: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
 pub struct CreateOrderReturnInput {
+    #[validate(length(max = 255))]
+    pub reason: Option<String>,
+    #[validate(length(max = 2000))]
+    pub note: Option<String>,
+    #[serde(default)]
+    pub items: Vec<CreateOrderReturnItemInput>,
+    pub metadata: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
+pub struct CreateOrderReturnItemInput {
+    pub line_item_id: Uuid,
+    #[validate(range(min = 1))]
+    pub quantity: i32,
     #[validate(length(max = 255))]
     pub reason: Option<String>,
     #[validate(length(max = 2000))]
@@ -110,6 +155,10 @@ pub struct CreateOrderReturnInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize, Validate, ToSchema)]
 pub struct CompleteOrderReturnInput {
+    #[validate(length(max = 64))]
+    pub resolution_type: Option<String>,
+    pub refund_id: Option<Uuid>,
+    pub order_change_id: Option<Uuid>,
     pub metadata: Value,
 }
 
@@ -210,6 +259,23 @@ pub struct OrderTaxLineResponse {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct OrderChangeResponse {
+    pub id: Uuid,
+    pub tenant_id: Uuid,
+    pub order_id: Uuid,
+    pub created_by: Uuid,
+    pub change_type: String,
+    pub status: String,
+    pub description: Option<String>,
+    pub preview: Value,
+    pub metadata: Value,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub applied_at: Option<DateTime<Utc>>,
+    pub cancelled_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct OrderReturnResponse {
     pub id: Uuid,
     pub tenant_id: Uuid,
@@ -217,9 +283,28 @@ pub struct OrderReturnResponse {
     pub reason: Option<String>,
     pub note: Option<String>,
     pub status: String,
+    pub resolution_type: Option<String>,
+    pub refund_id: Option<Uuid>,
+    pub order_change_id: Option<Uuid>,
     pub metadata: Value,
+    pub items: Vec<OrderReturnItemResponse>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub completed_at: Option<DateTime<Utc>>,
     pub cancelled_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct OrderReturnItemResponse {
+    pub id: Uuid,
+    pub tenant_id: Uuid,
+    pub return_id: Uuid,
+    pub order_id: Uuid,
+    pub line_item_id: Uuid,
+    pub quantity: i32,
+    pub reason: Option<String>,
+    pub note: Option<String>,
+    pub metadata: Value,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }

@@ -180,17 +180,20 @@ pub fn compose_application_router(
     )
     .layer(Extension(runtime.registry))
     .layer(Extension(runtime.graphql_schema))
+    // Axum executes layers from the bottom of this chain outward, so keep
+    // channel above auth_context to let auth_context populate extensions before
+    // channel resolution reads OAuth/client dimensions.
     .layer(axum_middleware::from_fn_with_state(
         runtime.rate_limit_state,
         rate_limit_for_paths,
     ))
     .layer(axum_middleware::from_fn_with_state(
         ctx.clone(),
-        middleware::auth_context::resolve_optional,
+        middleware::channel::resolve,
     ))
     .layer(axum_middleware::from_fn_with_state(
         ctx.clone(),
-        middleware::channel::resolve,
+        middleware::auth_context::resolve_optional,
     ))
     .layer(axum_middleware::from_fn_with_state(
         ctx.clone(),

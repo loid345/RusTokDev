@@ -4,12 +4,24 @@
 
 ## Execution checkpoint
 
-- Current phase: plan_sync
-- Last checkpoint: Initial bootstrap by registry workflow.
-- Next step: Синхронизировать план с текущим кодом и выбрать первый незавершённый пункт.
-- Open blockers: None.
-- Hand-off notes for next agent: После каждого инкремента обновлять этот блок.
-- Last updated at (UTC): 2026-05-20T00:00:00Z
+- Current phase: FFA admin transport/native-adapter split
+- Last checkpoint: Comments admin продолжил FFA slice: pre-FFA `admin/src/api.rs` удалён, `admin/src/transport/mod.rs` теперь владеет `CommentsAdminTransportError`/`CommentThreadsPayload` и facade routing, а `admin/src/transport/native_server_adapter.rs` единственным adapter-слоем содержит native `#[server]` functions и вызовы `CommentsService`.
+- Next step: Закрепить contract-freeze evidence для native-only comments admin exception и продолжить FFA hardening без изобретения package-local GraphQL/REST fallback.
+- Open blockers: отсутствуют; native-only comments admin exception зафиксирован, потому что у модуля не было legacy GraphQL/REST admin surface.
+- Hand-off notes for next agent: После каждого FFA/FBA инкремента обновлять этот блок, локальный FFA/FBA status block и central readiness board в одном PR.
+- Last updated at (UTC): 2026-06-07T00:00:00Z
+
+## FFA/FBA status
+
+- FFA status: `in_progress`
+- FBA status: `not_started`
+- Structural shape: `core_transport_ui`
+- Evidence:
+  - `rustok-comments-admin` теперь имеет явные `admin/src/core.rs`, `admin/src/transport/mod.rs`, `admin/src/transport/native_server_adapter.rs` и `admin/src/ui/leptos.rs`; `admin/src/lib.rs` больше не содержит render/business logic, не wires pre-FFA `api.rs` и публикует только `CommentsAdmin`;
+  - covered admin UI больше не вызывает raw `api::*` напрямую из Leptos render layer, а идёт через module-owned transport facade;
+  - status filter parsing, thread list/detail target/status labels, comment row identity/locale/body mapping и transport request/command DTO construction вынесены в Leptos-free core и покрыты unit tests;
+  - текущий admin transport остаётся native-only single-adapter server-function path, path зафиксирован typed `CommentsAdminTransportPath`/`ACTIVE_TRANSPORT_PATH`, а отдельный GraphQL/REST fallback не добавляется как module-documented exception без legacy admin transport surface.
+- Owner: `rustok-comments` module team
 
 ## Область работ
 

@@ -11,6 +11,7 @@ import tomllib
 
 _PERMISSION_RE = re.compile(r"^[a-z0-9_.:]+$")
 
+
 _ICON_RULES: tuple[tuple[str, str], ...] = (
     ("auth", "shield"),
     ("rbac", "shield"),
@@ -48,6 +49,12 @@ def parse_args() -> argparse.Namespace:
         default=("rustok_mobile/tooling/snapshots/mobile_manifest.snapshot.json"),
         help="Output JSON snapshot path for registry contract checks",
     )
+    parser.add_argument(
+        "--surface",
+        choices=("admin", "storefront"),
+        default="admin",
+        help="Manifest surface to generate. Defaults to admin for backward compatibility.",
+    )
     return parser.parse_args()
 
 
@@ -67,34 +74,43 @@ def _pick_icon(slug: str) -> str:
     return "module"
 
 
-def _parse_permissions(admin_ui: dict[str, object]) -> list[str]:
-    raw = admin_ui.get("permissions")
+def _parse_string_list(
+    raw: object, *, pattern: re.Pattern[str] | None = None
+) -> list[str]:
     if not isinstance(raw, list):
         return []
 
-    permissions: list[str] = []
+    values: list[str] = []
     seen: set[str] = set()
     for item in raw:
         if not isinstance(item, str):
             continue
         value = item.strip().lower()
-        if not value or not _PERMISSION_RE.fullmatch(value) or value in seen:
+        if not value or value in seen:
+            continue
+        if pattern is not None and not pattern.fullmatch(value):
             continue
         seen.add(value)
-        permissions.append(value)
-    return sorted(permissions)
+        values.append(value)
+    return sorted(values)
 
 
-def _parse_locale_namespace(admin_ui: dict[str, object], module_slug: str) -> str:
-    raw = str(admin_ui.get("locale_namespace", "")).strip()
+def _parse_permissions(surface_ui: dict[str, object]) -> list[str]:
+    return _parse_string_list(surface_ui.get("permissions"), pattern=_PERMISSION_RE)
+
+
+def _parse_locale_namespace(surface_ui: dict[str, object], module_slug: str) -> str:
+    raw = str(surface_ui.get("locale_namespace", "")).strip()
     normalized = _normalize_key(raw or module_slug)
     if normalized:
         return normalized
     return _normalize_key(module_slug)
 
 
-def _parse_child_pages(admin_ui: dict[str, object]) -> list[dict[str, str]]:
-    pages_raw = admin_ui.get("child_pages")
+def _parse_child_pages(surface_ui: dict[str, object]) -> list[dict[str, str]]:
+    pages_raw = surface_ui.get("child_pages")
+    if not isinstance(pages_raw, list):
+        pages_raw = surface_ui.get("pages")
     if not isinstance(pages_raw, list):
         return []
 
@@ -115,40 +131,48 @@ def _parse_child_pages(admin_ui: dict[str, object]) -> list[dict[str, str]]:
     return sorted(pages, key=lambda item: item["subpath"])
 
 
-def scan_modules(repo_root: pathlib.Path) -> list[dict[str, object]]:
+def scan_modules(
+    repo_root: pathlib.Path, *, surface: str = "admin"
+) -> list[dict[str, object]]:
+    if surface not in {"admin", "storefront"}:
+        raise ValueError(f"Unsupported mobile surface: {surface}")
+
     manifests = sorted(repo_root.glob("crates/*/rustok-module.toml"))
     modules: list[dict[str, object]] = []
     used_segments: dict[str, pathlib.Path] = {}
+    provides_key = f"{surface}_ui"
 
     for manifest in manifests:
         data = tomllib.loads(manifest.read_text(encoding="utf-8"))
         module = data.get("module", {})
         provides = data.get("provides", {})
-        admin_ui = provides.get("admin_ui")
-        if not isinstance(admin_ui, dict):
+        surface_ui = provides.get(provides_key)
+        if not isinstance(surface_ui, dict):
             continue
 
         slug = str(module.get("slug", "")).strip()
         if not slug:
             continue
 
-        route_segment = str(admin_ui.get("route_segment", slug)).strip() or slug
+        route_segment = str(surface_ui.get("route_segment", slug)).strip() or slug
         route_segment = _normalize_key(route_segment)
         if not route_segment:
             continue
         previous_manifest = used_segments.get(route_segment)
         if previous_manifest is not None:
             raise ValueError(
-                "Duplicate admin_ui.route_segment "
+                f"Duplicate {provides_key}.route_segment "
                 f"'{route_segment}' in {manifest}; already declared in {previous_manifest}"
             )
 
         nav_label = str(
-            admin_ui.get("nav_label", module.get("name", slug.title()))
+            surface_ui.get(
+                "nav_label",
+                surface_ui.get("page_title", module.get("name", slug.title())),
+            )
         ).strip()
         nav_label = nav_label or slug.title()
         module_key = f"rustok_{_normalize_key(slug.replace('-', '_'))}"
-
         modules.append(
             {
                 "module_key": module_key,
@@ -156,9 +180,10 @@ def scan_modules(repo_root: pathlib.Path) -> list[dict[str, object]]:
                 "route_segment": route_segment,
                 "nav_label": nav_label,
                 "icon": _pick_icon(slug),
-                "child_pages": _parse_child_pages(admin_ui),
-                "permissions": _parse_permissions(admin_ui),
-                "locale_namespace": _parse_locale_namespace(admin_ui, slug),
+                "surface_kind": surface,
+                "child_pages": _parse_child_pages(surface_ui),
+                "permissions": _parse_permissions(surface_ui),
+                "locale_namespace": _parse_locale_namespace(surface_ui, slug),
             }
         )
         used_segments[route_segment] = manifest
@@ -180,7 +205,23 @@ def render(modules: list[dict[str, object]]) -> str:
             [
                 "  MobileModuleEntry(",
                 f"    moduleKey: '{_dart_escape(module['module_key'])}',",
-                f"    routeSegment: '{_dart_escape(module['route_segment'])}',",
+            ]
+        )
+        surface_kind = str(module.get("surface_kind", "admin"))
+        if surface_kind == "storefront":
+            lines.append("    surfaceKind: MobileSurfaceKind.storefront,")
+        lines.append(f"    routeSegment: '{_dart_escape(module['route_segment'])}',")
+        locale_namespace = module.get("locale_namespace")
+        if isinstance(locale_namespace, str) and locale_namespace:
+            lines.append(f"    localeNamespace: '{_dart_escape(locale_namespace)}',")
+        permissions = module.get("permissions")
+        if isinstance(permissions, list) and permissions:
+            lines.append("    permissions: <String>[")
+            for permission in permissions:
+                lines.append(f"      '{_dart_escape(str(permission))}',")
+            lines.append("    ],")
+        lines.extend(
+            [
                 (
                     "    nav: MobileNavMeta("
                     f"title: '{_dart_escape(module['nav_label'])}', icon: '{_dart_escape(module['icon'])}'),"
@@ -202,7 +243,8 @@ def render(modules: list[dict[str, object]]) -> str:
                 if isinstance(nav_label, str):
                     lines.append(f"        navLabel: '{_dart_escape(nav_label)}',")
                 lines.append("      ),")
-        lines.extend(["    ],", "  ),"])
+        lines.append("    ],")
+        lines.append("  ),")
     lines.append("];")
     lines.append("")
     return "\n".join(lines)
@@ -212,32 +254,31 @@ def to_snapshot(modules: list[dict[str, object]]) -> list[dict[str, object]]:
     snapshot: list[dict[str, object]] = []
     for module in modules:
         route_segment = str(module["route_segment"])
-        snapshot.append(
-            {
-                "module_slug": str(
-                    module.get("module_slug")
-                    or str(module["module_key"]).removeprefix("rustok_")
-                ),
-                "surface_kind": "admin_mobile",
-                "route_segment": route_segment,
-                "nav_icon": str(module.get("icon") or "module"),
-                "permissions": list(module.get("permissions", [])),
-                "locale_namespace": str(
-                    module.get("locale_namespace")
-                    or module.get("module_slug")
-                    or route_segment
-                ),
-                "child_pages": [
-                    {
-                        "subpath": str(page["subpath"]),
-                        "title": str(page["title"]),
-                        "nav_label": str(page.get("nav_label") or page["title"]),
-                    }
-                    for page in module.get("child_pages", [])
-                    if isinstance(page, dict)
-                ],
-            }
-        )
+        item = {
+            "module_slug": str(
+                module.get("module_slug")
+                or str(module["module_key"]).removeprefix("rustok_")
+            ),
+            "surface_kind": f"{str(module.get('surface_kind', 'admin'))}_mobile",
+            "route_segment": route_segment,
+            "nav_icon": str(module.get("icon") or "module"),
+            "permissions": list(module.get("permissions", [])),
+            "locale_namespace": str(
+                module.get("locale_namespace")
+                or module.get("module_slug")
+                or route_segment
+            ),
+            "child_pages": [
+                {
+                    "subpath": str(page["subpath"]),
+                    "title": str(page["title"]),
+                    "nav_label": str(page.get("nav_label") or page["title"]),
+                }
+                for page in module.get("child_pages", [])
+                if isinstance(page, dict)
+            ],
+        }
+        snapshot.append(item)
     return snapshot
 
 
@@ -250,7 +291,7 @@ def main() -> None:
     repo_root = pathlib.Path(args.repo_root).resolve()
     output = pathlib.Path(args.output).resolve()
     snapshot_output = pathlib.Path(args.snapshot_output).resolve()
-    modules = scan_modules(repo_root)
+    modules = scan_modules(repo_root, surface=args.surface)
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(render(modules), encoding="utf-8")
     snapshot_output.parent.mkdir(parents=True, exist_ok=True)

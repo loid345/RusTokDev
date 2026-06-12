@@ -38,13 +38,15 @@ usage() {
     echo "  i18n-contract     Verify i18n contract drift (repo-side)"
     echo "  ui-i18n-parity    Verify module UI i18n parity"
     echo "  flex-multilingual-contract  Verify Flex multilingual live contract guardrails"
+    echo "  runtime-context-invariants  Verify runtime context/cache-key source invariants"
+    echo "  inventory-admin-boundary  Verify inventory admin native write/read boundary invariants"
     echo "  module-lifecycle-bypass-usage  Verify lifecycle bypass helper is blocked in production paths"
     echo "  page-builder-contract-parity  Verify page-builder provider/consumer contract version parity"
+    echo "  page-builder-contract-registry  Verify machine-readable page-builder provider/consumer registry"
     echo "  page-builder-fallback-profiles  Verify required page-builder fallback/toggle profile structure"
     echo "  page-builder-toggle-profiles-consistency  Verify page-builder toggle profile flag combinations"
     echo "  page-builder-fba-baseline  Run full page-builder FBA baseline gate (parity + fallback + toggle consistency)"
     echo "  page-builder-consumer-readiness  Verify module-level consumer readiness for page-builder (uses PBC_MODULE)"
-    echo "  control-plane-remediation-minimal  Run control-plane remediation minimal verification bundle"
     echo ""
     echo "Without arguments, runs all scripts."
 }
@@ -72,13 +74,15 @@ SCRIPTS=(
     "verify-i18n-contract.mjs:i18n Contract"
     "verify-ui-i18n-parity.mjs:UI i18n Parity"
     "verify-flex-multilingual-contract.mjs:Flex Multilingual Contract"
+    "verify-runtime-context-invariants.mjs:Runtime Context Invariants"
+    "verify-inventory-admin-boundary.mjs:Inventory Admin Boundary"
     "verify-module-lifecycle-bypass-usage.mjs:Module Lifecycle Bypass Usage"
     "../../crates/rustok-page-builder/scripts/verify/verify-page-builder-contract-parity.mjs:Page Builder Contract Parity"
+    "../../crates/rustok-page-builder/scripts/verify/verify-page-builder-contract-registry.mjs:Page Builder Contract Registry"
     "../../crates/rustok-page-builder/scripts/verify/verify-page-builder-fallback-profiles.mjs:Page Builder Fallback Profiles"
     "../../crates/rustok-page-builder/scripts/verify/verify-page-builder-toggle-profiles-consistency.mjs:Page Builder Toggle Profiles Consistency"
     "../../crates/rustok-page-builder/scripts/verify/verify-page-builder-fba-baseline.mjs:Page Builder FBA Baseline Gate"
     "../../crates/rustok-page-builder/scripts/verify/verify-page-builder-consumer-readiness.mjs:Page Builder Consumer Readiness"
-    "run-control-plane-remediation-minimal.sh:Control Plane Remediation Minimal"
 )
 
 # Filter to selected script if specified
@@ -131,7 +135,7 @@ for entry in "${SCRIPTS[@]}"; do
     echo -e "${SEPARATOR}"
 
     if [[ "$script_file" == *.mjs ]]; then
-        if [[ "$script_file" == "../../crates/rustok-page-builder/scripts/verify/verify-page-builder-consumer-readiness.mjs" ]]; then
+        if [[ "$script_file" == "../../crates/rustok-page-builder/scripts/verify/verify-page-builder-consumer-readiness.mjs" || "$script_file" == "../../crates/rustok-page-builder/scripts/verify/verify-page-builder-contract-registry.mjs" || "$script_file" == "../../crates/rustok-page-builder/scripts/verify/verify-page-builder-contract-parity.mjs" || "$script_file" == "../../crates/rustok-page-builder/scripts/verify/verify-page-builder-fba-baseline.mjs" ]]; then
             runner=(node "$script_path" "${PBC_MODULE:-pages}")
         else
             runner=(node "$script_path")

@@ -1700,8 +1700,7 @@ impl SeoService {
             }],
         };
 
-        self
-            .upsert_meta_with_transition(tenant, input, Some(format!("job:{job_id}")))
+        self.upsert_meta_with_transition(tenant, input, Some(format!("job:{job_id}")))
             .await?;
         if publish_after_write {
             let revision = self
@@ -1745,8 +1744,7 @@ impl SeoService {
             }],
         };
 
-        self
-            .upsert_meta_with_transition(tenant, input, Some(format!("job:{job_id}")))
+        self.upsert_meta_with_transition(tenant, input, Some(format!("job:{job_id}")))
             .await?;
         if publish_after_write {
             let revision = self

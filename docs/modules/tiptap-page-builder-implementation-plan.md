@@ -116,6 +116,23 @@
 2. Выключение `builder.enabled` переводит UI в fallback-поведение (read-only + диагностическое сообщение), без 5xx на storefront/admin list views.
 3. Для pilot-tenants запрещено включать `builder.publish.enabled=true`, если `builder.preview.enabled=false`.
 
+### Фаза 3.1.1 — Fallback matrix для capability-профилей
+
+Единая матрица fallback-поведения синхронизирована с runtime helper-ами `rustok-page-builder::rollout` и consumer manifest `rustok-pages`. Она задаёт минимальный ожидаемый outcome для Next/Leptos/Flutter adapters без требования 1:1 UI-клона.
+
+| Профиль | Admin visual path | Preview | Properties/tree | Publish | Read/list/storefront paths | Disabled capabilities |
+|---|---|---|---|---|---|---|
+| `all_on` | `editable_builder` | `available` | `available` | `available` | `stable` | — |
+| `publish_off` | `editable_builder_publish_disabled` | `available` | `available` | `typed_feature_disabled_error` | `stable` | `publish` |
+| `preview_off` | `preview_hidden_properties_available` | `typed_feature_disabled_error` | `available` | `typed_feature_disabled_error` | `stable` | `preview`, `publish` |
+| `builder_off` | `readonly_fallback` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `stable` | `preview`, `tree`, `properties`, `publish` |
+
+Правила синхронизации:
+
+1. При изменении профилей сначала обновляется runtime matrix в `crates/rustok-page-builder/src/rollout.rs`.
+2. Затем синхронизируются consumer manifest/docs (`rustok-pages`) и этот центральный план.
+3. Anti-drift gate `verify-page-builder-fallback-matrix-docs.mjs`, provider runtime gate `verify-page-builder-runtime-fallback-gate.mjs` и `rustok-pages` consumer gate `verify-page-builder-pages-fallback-gate.mjs` должны оставаться частью baseline-проверки до Wave 1.
+
 ### Фаза 3.2 — Матрица rollout по волнам
 
 Ниже — минимально обязательная матрица включений для baseline rollout.
@@ -367,7 +384,7 @@ Notes: <known deviations or waivers>
 
 **Итерация PB-FBA-1 (contract hardening + metadata parity)**
 
-- [~] Зафиксировать в `rustok-pages` machine-readable матрицу capability fallback (`builder_off`, `preview_off`, `publish_off`) и связать её с runtime error catalog (toggle profiles + degraded modes зафиксированы в manifest; связка с error catalog закрывается в Phase 5).
+- [~] Зафиксировать в `rustok-pages` machine-readable матрицу capability fallback (`builder_off`, `preview_off`, `publish_off`) и связать её с runtime error catalog (toggle profiles + degraded modes + error-catalog binding зафиксированы в manifest/registry/runtime gate; cross-runtime parity evidence остаётся в Wave hand-off).
 - [ ] Закрыть contract-parity по consumer adapters (Next/Leptos/Flutter) на уровне одинаковых error semantics, без требования UI 1:1.
 - [ ] Зафиксировать anti-drift checks: `contract_version` между provider/consumer должен валидироваться в CI.
 
@@ -458,8 +475,8 @@ Notes: <known deviations or waivers>
    - обновить `docs/modules/implementation-plans-registry.md` после фиксации Wave 0 evidence packet;
    - приложить ссылки на `toggle snapshots` и `fallback gate` результаты для `all_on/publish_off/preview_off/builder_off`.
 2. **PB-FBA-1b — error catalog binding**
-   - связать `degraded_modes` из `rustok-module.toml` с typed runtime error catalog в `rustok-pages`;
-   - добавить проверку anti-drift: каждый degraded mode должен иметь documented error code.
+   - [x] связать `degraded_modes` из `rustok-module.toml` с typed runtime error catalog в `rustok-pages`;
+   - [x] добавить проверку anti-drift: каждый degraded mode должен иметь documented error code.
 3. **PB-FBA-2a — CI fallback gate hardening**
    - довести до required-check сценарии `builder_off` и `publish_off` без 5xx на read/list surfaces;
    - зафиксировать waiver policy: временные исключения только с owner sign-off и expiry date.
@@ -488,7 +505,7 @@ Notes: <known deviations or waivers>
 **Цель:** довести reference-модуль builder-а до стабильного provider-контракта.
 
 - [ ] Зафиксировать `builder_contract_version` в provider metadata и добавить anti-drift проверку в CI.
-- [ ] Формализовать typed error catalog для `preview/tree/properties/publish` (validation/sanitize/rbac/runtime).
+- [x] Формализовать baseline typed error catalog для `preview/tree/properties/publish` (`validation/sanitize/runtime/feature-disabled`) в provider/consumer metadata и runtime gate; RBAC parity остаётся Wave evidence.
 - [ ] Довести health contract до machine-readable профиля (`ready/degraded/unavailable`) с причиной деградации.
 - [ ] Подготовить SLO-baseline для capability endpoints по pilot-tenant классу нагрузки.
 
@@ -498,9 +515,9 @@ Notes: <known deviations or waivers>
 
 **Цель:** на примере `pages` зафиксировать канонический migration path module-owned → FBA-consumer.
 
-- [ ] В `rustok-pages` metadata зафиксировать dependency profile на внешний builder provider (без локального ownership fallback).
-- [ ] Внедрить fallback-matrix для admin/storefront сценариев (`builder_off`, `publish_off`, `preview_off`) и подтвердить отсутствие 5xx в read/list.
-- [ ] Добавить publish gating contract: typed runtime error + UX guidance вместо аварийного падения publish flow.
+- [x] В `rustok-pages` metadata зафиксировать dependency profile на внешний builder provider (без локального ownership fallback).
+- [x] Внедрить fallback-matrix для admin/storefront сценариев (`builder_off`, `publish_off`, `preview_off`) и подтвердить отсутствие 5xx в read/list.
+- [x] Добавить publish gating contract: typed runtime error + UX guidance вместо аварийного падения publish flow.
 - [ ] Свести observability correlation: один trace/correlation-id на путь `builder write -> pages publish -> storefront read`.
 
 **Выход итерации:** `pages` подтверждён как эталонный FBA-consumer, пригодный как шаблон для `content`-подобных модулей.
@@ -695,7 +712,7 @@ Notes: <known deviations or waivers>
 
 ### 12.6 Минимальный evidence packet template (для Wave 0/Wave 1)
 
-Для унификации пакета между модулями после `pages` используется единая структура:
+Для унификации пакета между модулями после `pages` используется единая структура. Machine-readable baseline закреплён в `crates/rustok-page-builder/contracts/page-builder-wave-evidence-template.json` и проверяется `verify-page-builder-wave-evidence-template.mjs`; синтетический dry-run packet для `pages` лежит в `crates/rustok-page-builder/contracts/evidence/pages-wave0-dry-run-evidence.json` и проверяется `verify-page-builder-wave-evidence-packet.mjs`, но не заменяет фактическое tenant evidence:
 
 1. `metadata/`
    - provider snapshot (`builder_contract_version`, health profile, degraded modes);
@@ -710,17 +727,17 @@ Notes: <known deviations or waivers>
    - rollback decision log (`keep` / `rollback`) с причиной;
    - owner on-call подтверждение и timestamp.
 
-Минимальный стандарт: без полного packet template модуль не может перейти из Wave 0 в Wave 1.
+Минимальный стандарт: без полного packet template модуль не может перейти из Wave 0 в Wave 1. Template и gate синтетического packet должны оставаться частью aggregate baseline gate `verify-page-builder-fba-baseline.mjs`; переход в Wave 1 требует заменить синтетические snapshots фактическими before/after артефактами tenant dry-run.
 
 ### 12.7 Следующий практический шаг “прямо сейчас” (next 10 working days)
 
 Чтобы команда могла продолжить работу без дополнительного re-planning, фиксируется минимальный стартовый пакет на ближайшие 10 рабочих дней:
 
 1. **Contract registry update**
-   - [ ] создать/обновить machine-readable запись `builder_contract_version=v1` для provider и `consumer_min_version` для `rustok-pages`;
-   - [ ] добавить ссылку на запись в `docs/modules/registry.md` и локальный implementation-plan `crates/rustok-pages/docs/implementation-plan.md`.
+   - [x] создать/обновить machine-readable запись `builder_contract_version=1.0` для provider и `consumer_min_version=1.0` для `rustok-pages`;
+   - [x] добавить ссылку на запись в `docs/modules/registry.md` и локальный implementation-plan `crates/rustok-pages/docs/implementation-plan.md`.
 2. **Fallback smoke baseline**
-   - [ ] выполнить smoke по профилям `all_on`, `publish_off`, `builder_off` на одном internal tenant;
+   - [ ] выполнить smoke по профилям `all_on`, `publish_off`, `preview_off`, `builder_off` на одном internal tenant;
    - [ ] приложить краткий отчёт с фактами по `admin list/read`, `storefront read`, `publish(dry)`.
 3. **Observability wiring check**
    - [ ] подтвердить наличие correlation-id в цепочке `builder write -> pages publish -> storefront read`;
@@ -731,7 +748,7 @@ Notes: <known deviations or waivers>
 
 **Exit criteria (next 10 working days):**
 - есть валидный contract registry snapshot;
-- есть fallback smoke evidence минимум для `all_on/publish_off/builder_off`;
+- есть fallback smoke evidence минимум для `all_on/publish_off/preview_off/builder_off`;
 - есть observability baseline с correlation examples;
 - есть черновик readiness packet с незакрытыми рисками и owner-назначениями.
 
@@ -770,7 +787,7 @@ Notes: <known deviations or waivers>
 Переход разрешён только при одновременном выполнении:
 
 1. **Contract integrity**
-   - [ ] `builder_contract_version` и `consumer_min_version` подтверждены CI anti-drift gate без waiver.
+   - [x] `builder_contract_version` и `consumer_min_version` подтверждены anti-drift gate без waiver (`verify-page-builder-contract-registry.mjs`; CI aggregate gate обновлён).
 2. **Fallback integrity**
    - [ ] проверены `all_on/publish_off/preview_off/builder_off` и нет 5xx в `admin list/read` + `storefront read`.
 3. **Operational integrity**
@@ -829,10 +846,10 @@ Notes: <known deviations or waivers>
 
 ### 13.5 Очередь внедрения forum widgets после `pages`
 
-1. **FW-1 (contract freeze):** утвердить widget catalog v1 (`topic_list/topic_detail/reply_stream`) и schema validation.
-2. **FW-2 (fallback hardening):** подтвердить `builder_off/publish_off` без деградации forum read/moderation surfaces.
-3. **FW-3 (pilot):** включить 1–2 low-traffic tenant с evidence packet (metadata/fallback/observability/rollback).
-4. **FW-4 (promotion):** расширять rollout только после owner sign-off и SLO stability 24–72h.
+- [x] **FW-1 (contract freeze):** widget catalog v1 (`topic_list/topic_detail/reply_stream`), `data_contract_version`/compatibility matrix и typed error mapping зафиксированы как machine-readable contract (manifest + REST/GraphQL catalog surface), без rollout activation до `P5`.
+- [ ] **FW-2 (fallback hardening):** подтвердить `builder_off/publish_off` без деградации forum read/moderation surfaces.
+- [ ] **FW-3 (pilot):** включить 1–2 low-traffic tenant с evidence packet (metadata/fallback/observability/rollback).
+- [ ] **FW-4 (promotion):** расширять rollout только после owner sign-off и SLO stability 24–72h.
 
 ## 14. Актуализация порядка исполнения: “без хвостов” (single critical path)
 
@@ -840,7 +857,7 @@ Notes: <known deviations or waivers>
 
 ### 14.1 Правило приоритезации
 
-- До закрытия `Section 12 / Sprint 1–3` новые scope-расширения (включая FW-1..FW-4 для forum widgets) не стартуют в delivery, допускаются только как design-ready backlog.
+- До закрытия `Section 12 / Sprint 1–3` новые scope-расширения (включая FW-1..FW-4 для forum widgets) не стартуют в delivery, допускаются только к��к design-ready backlog.
 - Любая задача, которая не влияет на текущий wave-gate (`Wave 0 -> Wave 1`), получает статус `deferred`.
 - Считаем “хвостом” любую незакрытую задачу из текущего checkpoint, если по ней нет артефакта в evidence packet.
 
@@ -892,8 +909,8 @@ Notes: <known deviations or waivers>
 - Закрыть typed fallback matrix для профилей `builder_off`, `preview_off`, `publish_off`.
 - Зафиксировать единый error catalog (`validation`, `sanitize`, `runtime`, `feature-disabled`)
   без дрейфа между `#[server]`, GraphQL и UI adapters.
-- Добавить CI fallback-gate для профилей `builder.enabled=false` и
-  `builder.publish.enabled=false`.
+- Добавить CI fallback-gate для профилей `all_on`, `publish_off`,
+  `preview_off` и `builder_off`.
 - Сформировать Wave 0 evidence package: toggle snapshots + smoke output +
   observability snapshot + decision note (`keep/rollback`).
 
@@ -904,7 +921,7 @@ Notes: <known deviations or waivers>
 2. **Error semantics slice:** привести payload typed ошибок к одному catalog key-space
    для `preview/properties/publish` capability endpoints.
 3. **Verification slice:** расширить module test gate целевыми проверками
-   `publish_disabled` и `builder_disabled` без деградации list/read.
+   `all_on/publish_off/preview_off/builder_off` без деградации list/read.
 4. **Operability slice:** оформить единый evidence-template для Wave 0 и привязать
    к control-plane audit trail.
 
@@ -931,33 +948,40 @@ Notes: <known deviations or waivers>
 
 #### Week 1 — закрыть P0/P1
 
-- [ ] **PB-FBA-1A / Contract freeze:**
-  - [ ] зафиксировать `builder_contract_version=v1` и `consumer_min_version` в machine-readable registry;
-  - [ ] приложить anti-drift diff-check в CI (`fail-fast` при несовместимости).
-- [ ] **PB-FBA-1B / Fallback hardening:**
-  - [ ] подтвердить smoke-профили `all_on/publish_off/preview_off/builder_off` без `5xx` на `admin list/read` и `storefront read`;
-  - [ ] собрать parity-таблицу typed errors для Next/Leptos/Flutter adapters.
+- [x] **PB-FBA-1A / Contract freeze:**
+  - [x] зафиксировать `builder_contract_version=1.0` и `consumer_min_version=1.0` в machine-readable registry `crates/rustok-page-builder/contracts/page-builder-fba-registry.json`;
+  - [x] приложить anti-drift diff-check в baseline gate (`verify-page-builder-contract-registry.mjs`, aggregate `verify-page-builder-fba-baseline.mjs`, fail-fast при несовместимости).
+- [~] **PB-FBA-1B / Fallback hardening:**
+  - [x] подтвердить service-level smoke-профили `all_on/publish_off/preview_off/builder_off` без деградации `pages` read/list через `pages_builder_fallback_*` gate;
+  - [x] приложить admin/storefront host-helper evidence без деградации read/list и без builder capability requirement на storefront render;
+  - [x] связать `degraded_modes` с typed error catalog (`FEATURE_DISABLED`) в provider/consumer metadata, FBA registry и runtime anti-drift gate;
+  - [x] закрепить Next Admin typed-error parity (`validation/sanitize/runtime/feature-disabled`) и operator guidance через static baseline gate;
+  - [x] закрепить Leptos admin typed-error parity и localized operator guidance через static baseline gate;
+  - [x] закрепить Flutter app-core typed-error parity и operator guidance через static baseline gate;
+  - [ ] собрать device/runtime evidence packet для Flutter adapters в Wave hand-off.
 
 #### Week 2 — закрыть P2/P3
 
-- [ ] **PB-FBA-1C / Control-plane operability:**
-  - [ ] провести dry-run toggle change-set (tenant internal), сохранить `before/after` snapshots;
-  - [ ] оформить decision log (`keep|rollback`) с owner sign-off.
+- [~] **PB-FBA-1C / Control-plane operability:**
+  - [x] зафиксировать machine-readable evidence template для metadata/control-plane/fallback/observability/rollback/approvals;
+  - [x] зафиксировать синтетический Wave 0 dry-run packet для всех baseline toggle profiles как gate формы/семантики;
+  - [ ] провести реальный dry-run toggle change-set (tenant internal), сохранить фактические `before/after` snapshots;
+  - [ ] оформить реальный decision log (`keep|rollback`) с owner sign-off.
 - [ ] **PB-FBA-1D / Observability baseline:**
   - [ ] зафиксировать baseline-метрики `preview p95`, `publish p95`, `sanitize failure rate`;
   - [ ] приложить минимум 2 correlation trace (`builder write -> pages publish -> storefront read`).
 
 #### Артефакты, обязательные для checkpoint update
 
-1. `metadata snapshot` (provider/consumer versions + fallback profile mapping);
-2. `fallback smoke report` (`all_on`, `publish_off`, `preview_off`, `builder_off`);
+1. `metadata snapshot` (provider/consumer versions + fallback profile mapping): `crates/rustok-page-builder/contracts/page-builder-fba-registry.json`;
+2. `fallback smoke report` (`all_on`, `publish_off`, `preview_off`, `builder_off`): service-level gate `cargo test -p rustok-pages --test page_service_kind_guard pages_builder_fallback`, admin/storefront host-helper static checks inside `verify-page-builder-pages-fallback-gate.mjs`;
 3. `toggle audit log` (change-set id, before/after, decision);
 4. `observability snapshot` (p95/error-rate/sanitize + traces).
 
 #### Жёсткие ограничения на период backlog
 
 - Запрещено открывать delivery по `FW-1..FW-4` до полного закрытия `P5` (раздел 14.2).
-- Любой waiver по anti-drift или fallback-check автоматически ставит статус Wave 1 readiness в `hold`.
+- Любой waiver по anti-drift или fallback-check автоматически ставит статус Wave 1 readiness в `hold`; текущий PB-FBA-1A anti-drift gate должен проходить без waiver.
 - Любой change в builder-contract без синхронного обновления:
   - `crates/rustok-pages/docs/implementation-plan.md`;
   - `docs/modules/registry.md`;

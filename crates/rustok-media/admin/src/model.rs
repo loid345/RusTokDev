@@ -1,19 +1,19 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MediaUsageSnapshot {
     pub tenant_id: String,
     pub file_count: i64,
     pub total_bytes: i64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MediaListPayload {
     pub items: Vec<MediaListItem>,
     pub total: u64,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MediaListItem {
     pub id: String,
     pub tenant_id: String,
@@ -29,7 +29,7 @@ pub struct MediaListItem {
     pub created_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MediaTranslationPayload {
     pub id: String,
     pub media_id: String,
@@ -39,7 +39,7 @@ pub struct MediaTranslationPayload {
     pub caption: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UpsertTranslationPayload {
     pub locale: String,
     pub title: Option<String>,

@@ -4,11 +4,10 @@ use rustok_core::SecurityContext;
 use rustok_media::MediaImageDescriptor;
 use rustok_seo_targets::{
     builtin_slug, populate_image_template_fields, schema, SeoBulkSummaryRecord,
-    SeoLoadedTargetRecord, SeoRouteMatchRecord, SeoSitemapCandidateRecord,
-    SeoTargetAlternateRoute, SeoTargetBulkListRequest, SeoTargetCapabilities,
-    SeoTargetLoadRequest, SeoTargetLoadScope, SeoTargetOpenGraphRecord, SeoTargetProvider,
-    SeoTargetRouteResolveRequest, SeoTargetRuntimeContext, SeoTargetSitemapRequest,
-    SeoTargetSlug, SeoTemplateFieldMap,
+    SeoLoadedTargetRecord, SeoRouteMatchRecord, SeoSitemapCandidateRecord, SeoTargetAlternateRoute,
+    SeoTargetBulkListRequest, SeoTargetCapabilities, SeoTargetLoadRequest, SeoTargetLoadScope,
+    SeoTargetOpenGraphRecord, SeoTargetProvider, SeoTargetRouteResolveRequest,
+    SeoTargetRuntimeContext, SeoTargetSitemapRequest, SeoTargetSlug, SeoTemplateFieldMap,
 };
 use url::Url;
 use uuid::Uuid;
@@ -621,9 +620,14 @@ fn category_image_descriptor(
     )
 }
 
-fn topic_image_descriptor(topic: &TopicResponse, fallback_alt: &str) -> Option<MediaImageDescriptor> {
+fn topic_image_descriptor(
+    topic: &TopicResponse,
+    fallback_alt: &str,
+) -> Option<MediaImageDescriptor> {
     image_descriptor_from_metadata(topic.metadata.get("featured_image"), fallback_alt)
-        .or_else(|| image_descriptor_from_metadata(topic.metadata.get("featured_image_url"), fallback_alt))
+        .or_else(|| {
+            image_descriptor_from_metadata(topic.metadata.get("featured_image_url"), fallback_alt)
+        })
         .or_else(|| image_descriptor_from_metadata(topic.metadata.get("og_image"), fallback_alt))
         .or_else(|| first_markdown_image_descriptor(topic.body.as_str(), fallback_alt))
 }

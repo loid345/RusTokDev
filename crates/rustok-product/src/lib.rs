@@ -56,4 +56,8 @@ impl MigrationSource for ProductModule {
     fn migrations(&self) -> Vec<Box<dyn MigrationTrait>> {
         migrations::migrations()
     }
+
+    fn migration_dependencies(&self) -> Vec<rustok_core::MigrationDependencyDescriptor> {
+        migrations::migration_dependencies()
+    }
 }

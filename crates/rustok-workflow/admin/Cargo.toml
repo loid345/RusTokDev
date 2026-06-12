@@ -8,12 +8,30 @@ description = "Leptos admin UI package for the rustok-workflow module"
 [lib]
 crate-type = ["rlib"]
 
+[features]
+default = []
+csr = ["leptos/csr"]
+hydrate = ["leptos/hydrate", "leptos-auth/hydrate"]
+ssr = [
+  "leptos/ssr",
+  "leptos-auth/ssr",
+  "rustok-api/server",
+  "dep:leptos_axum",
+  "dep:loco-rs",
+  "dep:rustok-core",
+  "dep:rustok-workflow",
+]
+
 [dependencies]
-leptos = { workspace = true, features = ["csr"] }
+leptos.workspace = true
+leptos_axum = { workspace = true, optional = true }
 leptos-auth.workspace = true
 leptos-graphql.workspace = true
 leptos_router.workspace = true
+loco-rs = { workspace = true, optional = true }
+rustok-api = { workspace = true, default-features = false }
+rustok-core = { workspace = true, optional = true }
+rustok-workflow = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
-rustok-api = { workspace = true, default-features = false }
 web-sys = { version = "0.3", features = ["Location", "Window"] }

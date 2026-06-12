@@ -1,4 +1,4 @@
-﻿# RusTok — Verification Scripts
+# RusTok — Verification Scripts
 
 Автоматизированные проверки платформы, встроенные в общий verification workflow. Точка входа для ручного orchestration-прогона: [PLATFORM_VERIFICATION_PLAN.md](../../docs/verification/PLATFORM_VERIFICATION_PLAN.md).
 
@@ -19,9 +19,11 @@
 # Запустить скрипт напрямую (всегда полный вывод)
 ./scripts/verify/verify-tenant-isolation.sh
 ./scripts/verify/verify-deployment-profiles.sh
+./scripts/verify/verify-migration-smoke.sh
 node scripts/verify/verify-flex-multilingual-contract.mjs
 node scripts/verify/verify-module-lifecycle-bypass-usage.mjs
 node crates/rustok-page-builder/scripts/verify/verify-page-builder-contract-parity.mjs
+node crates/rustok-page-builder/scripts/verify/verify-page-builder-contract-registry.mjs
 node crates/rustok-page-builder/scripts/verify/verify-page-builder-fallback-profiles.mjs
 node crates/rustok-page-builder/scripts/verify/verify-page-builder-toggle-profiles-consistency.mjs
 node crates/rustok-page-builder/scripts/verify/verify-page-builder-fba-baseline.mjs
@@ -38,13 +40,16 @@ node crates/rustok-page-builder/scripts/verify/verify-page-builder-consumer-read
 | Добавили новый endpoint | `./scripts/verify/verify-all.sh api-quality` |
 | Добавили новый event | `./scripts/verify/verify-all.sh events` |
 | Проверка anti-bypass drift | `./scripts/verify/verify-all.sh anti-bypass` |
-| Добавили миграцию | `./scripts/verify/verify-all.sh tenant-isolation` |
+| Добавили миграцию | `./scripts/verify/verify-all.sh tenant-isolation` + `./scripts/verify/verify-migration-smoke.sh`; в CI тот же smoke закреплён отдельным job `migration-smoke` |
 | Подозрение на дыру в RBAC | `./scripts/verify/verify-all.sh rbac-coverage` |
 | Аудит безопасности | `./scripts/verify/verify-security.sh` |
 | Проверка deployment profile matrix | `./scripts/verify/verify-all.sh deployment-profiles` |
 | Проверка drift в Flex multilingual contract | `node scripts/verify/verify-flex-multilingual-contract.mjs` |
+| Проверка runtime-context/cache-key invariants | `node scripts/verify/verify-runtime-context-invariants.mjs` |
+| Проверка inventory admin native/write boundary | `node scripts/verify/verify-inventory-admin-boundary.mjs` |
 | Проверка запрета lifecycle bypass helper в production | `node scripts/verify/verify-module-lifecycle-bypass-usage.mjs` |
 | Проверка parity provider/consumer для page-builder контракта | `node crates/rustok-page-builder/scripts/verify/verify-page-builder-contract-parity.mjs` |
+| Проверка machine-readable registry page-builder против manifests | `node crates/rustok-page-builder/scripts/verify/verify-page-builder-contract-registry.mjs` |
 | Проверка required fallback/toggle профилей page-builder | `node crates/rustok-page-builder/scripts/verify/verify-page-builder-fallback-profiles.mjs` |
 | Проверка консистентности значений в toggle профилях page-builder | `node crates/rustok-page-builder/scripts/verify/verify-page-builder-toggle-profiles-consistency.mjs` |
 | Полный baseline gate page-builder FBA перед Wave 0/Wave 1 | `node crates/rustok-page-builder/scripts/verify/verify-page-builder-fba-baseline.mjs` |
@@ -62,6 +67,71 @@ npm run verify:page-builder:consumer:forum
 ```
 
 ## Описание скриптов
+
+### `verify-migration-smoke.sh`
+**Wave 4 migration-safety smoke** — PostgreSQL apply-from-zero для server migrator.
+
+Что делает:
+- создаёт временную PostgreSQL database через `RUSTOK_MIGRATION_SMOKE_ADMIN_URL` внутри Rust integration test, без зависимости от локального `psql`;
+- запускает ignored integration test `postgres_zero_migration_smoke_applies_from_empty_database`;
+- применяет `migration::Migrator` с нуля и проверяет, что pending migrations не осталось;
+- при `RUSTOK_MIGRATION_SMOKE_INCREMENTAL=1` применяет миграции по одной, чтобы отдельно проверить incremental apply path; shell script и Rust test одинаково принимают только `0`/`1`, поэтому direct test runs не обходят эту валидацию;
+- проверяет наличие representative platform/module tables (`tenants`, `product_variants`, `prices`, `inventory_items`, `channels`, `oauth_apps`, `blog_post_tags`, `forum_topic_tags`, `taxonomy_terms`);
+- удаляет временную database из Rust test, если `RUSTOK_MIGRATION_SMOKE_KEEP_DB=1` не установлен.
+
+Пример:
+
+```bash
+RUSTOK_MIGRATION_SMOKE_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres \
+  ./scripts/verify/verify-migration-smoke.sh
+
+RUSTOK_MIGRATION_SMOKE_INCREMENTAL=1 \
+RUSTOK_MIGRATION_SMOKE_ADMIN_URL=postgres://postgres:postgres@localhost:5432/postgres \
+  ./scripts/verify/verify-migration-smoke.sh
+```
+
+---
+
+### `verify-runtime-context-invariants.mjs`
+**Wave 6 runtime-context guardrail** — быстрый source-level gate для уже исправленных P0/P1 invariants без полной Rust-компиляции.
+
+Что проверяет:
+- `ChannelCacheKey` содержит OAuth/client и locale dimensions;
+- `RequestFacts` берёт `oauth_app_id` из `AuthContextExtension`, а `locale` — из `ResolvedRequestLocale.effective_locale`;
+- source-order middleware в `compose_application_router` сохраняет фактический порядок выполнения Axum `locale -> auth_context -> channel`;
+- tenant locale cache metrics экспортируют counter names с `_total` и gauge `rustok_tenant_locale_cache_entries`;
+- `modules.toml` и central registry evidence сохраняют `pages -> [content, page_builder]`.
+
+Пример:
+
+```bash
+node scripts/verify/verify-runtime-context-invariants.mjs
+./scripts/verify/verify-all.sh runtime-context-invariants
+```
+
+---
+
+### `verify-inventory-admin-boundary.mjs`
+**Wave 5/Wave 6 inventory guardrail** — быстрый source-level gate для inventory-owned admin read/write boundary без полной Rust-компиляции.
+
+Что проверяет:
+- `InventoryQuantityWriteResult` строит `inStock` из committed quantity и backorder policy;
+- native `set_variant_quantity`/`adjust_variant_quantity` используют internal mutation update result и не делают отдельный pre-read variant policy;
+- removed GraphQL fallback stays removed: no `src/transport.rs`, `leptos-graphql`, `CommerceGraphqlInventoryReadAdapter`, GraphQL runtime markers, token/tenant-slug fallback inputs or `mod transport`;
+- admin API read facades fetch-bootstrap/products/product and write facades set/adjust/reserve/release/check-availability go through inventory-owned native facades without GraphQL fallback;
+- native server-function endpoints for inventory read/write/validation surfaces remain declared;
+- commerce storefront/public-channel callers use inventory-owned availability/projection facades instead of direct loaders/backorder branching;
+- admin UI/locales describe the native inventory facade and docs mark current admin stock operations as native/API covered.
+
+Пример:
+
+```bash
+node scripts/verify/verify-inventory-admin-boundary.mjs
+./scripts/verify/verify-all.sh inventory-admin-boundary
+node scripts/verify/verify-inventory-admin-boundary.test.mjs
+```
+
+---
 
 ### `verify-tenant-isolation.sh`
 **Фаза 19.1 + 5** — Multi-tenancy safety
@@ -237,6 +307,18 @@ npm run verify:page-builder:consumer:forum
 
 ---
 
+
+### `verify-page-builder-contract-registry.mjs`
+**Page Builder FBA baseline** — Machine-readable registry anti-drift
+
+Что проверяет:
+- `crates/rustok-page-builder/contracts/page-builder-fba-registry.json` существует и имеет `schema_version = 1`;
+- provider metadata (`contract`, `builder_contract_version`, `consumer_min_version`, capabilities) совпадает с `rustok-page-builder/rustok-module.toml`;
+- выбранный consumer (`pages` или `forum`) совпадает с registry по `contract_version`, `builder_contract_version`, `consumer_min_version` и capabilities;
+- consumer version не ниже provider `consumer_min_version`.
+
+**Severity:** HIGH. Registry drift блокирует Wave 0/Wave 1 promotion, потому что contract freeze становится непроверяемым.
+
 ### `verify-page-builder-fallback-profiles.mjs`
 **Page Builder FBA baseline** — Required fallback/toggle structure
 
@@ -266,10 +348,11 @@ npm run verify:page-builder:consumer:forum
 Что делает:
 - последовательно запускает:
   1) `verify-page-builder-contract-parity.mjs`,
-  2) `verify-page-builder-consumer-readiness.mjs <module-slug>` (по умолчанию `pages` в агрегаторе),
-  3) `verify-page-builder-fallback-profiles.mjs`,
-  4) `verify-page-builder-toggle-profiles-consistency.mjs`,
-  5) `verify-page-builder-terminology.mjs`.
+  2) `verify-page-builder-contract-registry.mjs <module-slug>`,
+  3) `verify-page-builder-consumer-readiness.mjs <module-slug>` (по умолчанию `pages` в агрегаторе),
+  4) `verify-page-builder-fallback-profiles.mjs <module-slug>`,
+  5) `verify-page-builder-toggle-profiles-consistency.mjs <module-slug>`,
+  6) `verify-page-builder-terminology.mjs`.
 - возвращает non-zero exit code при падении любого шага.
 
 **Severity:** GATE. Это канонический baseline-check перед promotion в следующий rollout wave.
@@ -477,42 +560,3 @@ fi
 - [Forbidden Actions](../../docs/standards/forbidden-actions.md) — запреты с примерами
 - [Patterns vs Antipatterns](../../docs/standards/patterns-vs-antipatterns.md) — ✅/❌ сравнения
 - [Known Pitfalls](../../docs/ai/KNOWN_PITFALLS.md) — частые ошибки AI-агентов
-
-
-## Control-plane remediation progress snapshot
-
-```bash
-python3 scripts/verify/report-control-plane-remediation-progress.py
-```
-
-Если путь к плану не существует, скрипт завершится с кодом `1` и сообщением `ERROR: remediation plan not found: ...`.
-
-Машиночитаемый формат (для CI-артефактов/ботов):
-
-```bash
-python3 scripts/verify/report-control-plane-remediation-progress.py --json
-```
-
-Чтобы использовать отчёт как gate (падать при наличии `[ ]`):
-
-```bash
-python3 scripts/verify/report-control-plane-remediation-progress.py --fail-on-pending
-```
-
-Код выхода `2` означает, что в плане остались pending-пункты.
-
-
-## Control-plane remediation minimal runner
-
-Точечный bundle remediation-плана можно запускать через:
-
-```bash
-./scripts/verify/run-control-plane-remediation-minimal.sh
-# или alias
-./scripts/verify/verify-all.sh control-plane-remediation-minimal
-```
-
-Полезные флаги окружения:
-- `RUSTOK_VERIFY_SKIP_FMT=1` — пропустить `cargo fmt --check` для triage-циклов.
-- `RUSTOK_VERIFY_CONTINUE_ON_FMT_FAIL=1` — при fail форматирования продолжить остальные шаги и завершиться кодом `2` (partial pass).
-- `RUSTOK_VERIFY_STEP_TIMEOUT=<duration>` — ограничить длительность каждого шага через `timeout`.

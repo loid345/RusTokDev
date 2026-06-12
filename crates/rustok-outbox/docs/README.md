@@ -14,7 +14,7 @@ infrastructure для event runtime платформы.
 - `TransactionalEventBus` и atomic publish-with-transaction semantics;
 - persistence в `sys_events` через transactional transport;
 - relay, retry и DLQ semantics для event runtime;
-- module-owned Leptos admin package `rustok-outbox-admin`.
+- module-owned Leptos admin package `rustok-outbox-admin` с FFA-разделением `core/transport/ui` для read-only relay visibility.
 
 ## Интеграция
 

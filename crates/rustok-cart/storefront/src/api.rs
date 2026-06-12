@@ -1,10 +1,14 @@
 use leptos::prelude::*;
 use leptos_graphql::{execute as execute_graphql, GraphqlHttpError, GraphqlRequest};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "ssr")]
 use serde_json::Value;
 use std::fmt::{Display, Formatter};
 use uuid::Uuid;
 
+#[cfg(feature = "ssr")]
+use crate::core::normalize_public_channel_slug;
+use crate::core::{parse_adjustment_scope, parse_cart_id, parse_line_item_id, CartCoreError};
 use crate::model::{
     StorefrontCart, StorefrontCartAdjustment, StorefrontCartData, StorefrontCartDeliveryGroup,
     StorefrontCartLineItem,
@@ -32,6 +36,14 @@ impl std::error::Error for ApiError {}
 impl From<GraphqlHttpError> for ApiError {
     fn from(value: GraphqlHttpError) -> Self {
         Self::Graphql(value.to_string())
+    }
+}
+
+impl From<CartCoreError> for ApiError {
+    fn from(value: CartCoreError) -> Self {
+        match value {
+            CartCoreError::Validation(error) => Self::Validation(error),
+        }
     }
 }
 
@@ -236,70 +248,6 @@ where
     .map_err(ApiError::from)
 }
 
-fn normalize_cart_id(value: Option<String>) -> Option<String> {
-    value.and_then(|value| {
-        let trimmed = value.trim();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_string())
-        }
-    })
-}
-
-fn parse_adjustment_scope(metadata: &str) -> Option<String> {
-    serde_json::from_str::<Value>(metadata)
-        .ok()
-        .and_then(|value| {
-            value
-                .get("scope")
-                .and_then(Value::as_str)
-                .map(str::to_string)
-        })
-}
-
-#[allow(dead_code)]
-fn normalize_public_channel_slug(value: Option<&str>) -> Option<String> {
-    value
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(|value| value.to_ascii_lowercase())
-}
-
-fn parse_cart_id(value: Option<String>) -> Result<Option<(String, Uuid)>, ApiError> {
-    match normalize_cart_id(value) {
-        Some(cart_id) => {
-            let parsed = Uuid::parse_str(cart_id.as_str())
-                .map_err(|_| ApiError::Validation("cart_id must be a valid UUID".to_string()))?;
-            Ok(Some((cart_id, parsed)))
-        }
-        None => Ok(None),
-    }
-}
-
-fn parse_line_item_id(value: String) -> Result<(String, Uuid), ApiError> {
-    let normalized = value.trim().to_string();
-    if normalized.is_empty() {
-        return Err(ApiError::Validation(
-            "line_item_id must not be empty".to_string(),
-        ));
-    }
-
-    let parsed = Uuid::parse_str(normalized.as_str())
-        .map_err(|_| ApiError::Validation("line_item_id must be a valid UUID".to_string()))?;
-    Ok((normalized, parsed))
-}
-
-pub async fn fetch_storefront_cart(
-    selected_cart_id: Option<String>,
-    locale: Option<String>,
-) -> Result<StorefrontCartData, ApiError> {
-    match fetch_storefront_cart_server(selected_cart_id.clone(), locale.clone()).await {
-        Ok(data) => Ok(data),
-        Err(_) => fetch_storefront_cart_graphql(selected_cart_id, locale).await,
-    }
-}
-
 pub async fn fetch_storefront_cart_server(
     selected_cart_id: Option<String>,
     locale: Option<String>,
@@ -333,30 +281,6 @@ pub async fn fetch_storefront_cart_graphql(
     })
 }
 
-pub async fn decrement_storefront_cart_line_item(
-    cart_id: String,
-    line_item_id: String,
-    current_quantity: i32,
-) -> Result<(), ApiError> {
-    match decrement_storefront_cart_line_item_server(cart_id.clone(), line_item_id.clone()).await {
-        Ok(()) => Ok(()),
-        Err(_) => {
-            decrement_storefront_cart_line_item_graphql(cart_id, line_item_id, current_quantity)
-                .await
-        }
-    }
-}
-
-pub async fn remove_storefront_cart_line_item(
-    cart_id: String,
-    line_item_id: String,
-) -> Result<(), ApiError> {
-    match remove_storefront_cart_line_item_server(cart_id.clone(), line_item_id.clone()).await {
-        Ok(()) => Ok(()),
-        Err(_) => remove_storefront_cart_line_item_graphql(cart_id, line_item_id).await,
-    }
-}
-
 pub async fn decrement_storefront_cart_line_item_server(
     cart_id: String,
     line_item_id: String,
@@ -375,10 +299,10 @@ pub async fn remove_storefront_cart_line_item_server(
         .map_err(ApiError::from)
 }
 
-pub async fn decrement_storefront_cart_line_item_graphql(
+pub async fn update_storefront_cart_line_item_quantity_graphql(
     cart_id: String,
     line_item_id: String,
-    current_quantity: i32,
+    next_quantity: i32,
 ) -> Result<(), ApiError> {
     let Some((_, parsed_cart_id)) = parse_cart_id(Some(cart_id))? else {
         return Err(ApiError::Validation(
@@ -387,21 +311,13 @@ pub async fn decrement_storefront_cart_line_item_graphql(
     };
     let (_, parsed_line_item_id) = parse_line_item_id(line_item_id)?;
 
-    if current_quantity <= 1 {
-        return remove_storefront_cart_line_item_graphql(
-            parsed_cart_id.to_string(),
-            parsed_line_item_id.to_string(),
-        )
-        .await;
-    }
-
     let response: UpdateStorefrontCartLineItemResponse = request(
         UPDATE_STOREFRONT_CART_LINE_ITEM_MUTATION,
         UpdateStorefrontCartLineItemVariables {
             cart_id: parsed_cart_id,
             line_id: parsed_line_item_id,
             input: UpdateStorefrontCartLineItemInput {
-                quantity: current_quantity - 1,
+                quantity: next_quantity,
             },
         },
     )

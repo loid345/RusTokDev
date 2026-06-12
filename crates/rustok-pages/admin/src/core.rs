@@ -1,5 +1,5 @@
-use crate::model::{PageBlock, PageDetail};
-use rustok_api::{WritePathIssue, WritePathIssueKind};
+use crate::model::{CreatePageDraft, PageBlock, PageDetail};
+use rustok_api::{normalize_ui_text, parse_ui_csv, WritePathIssue, WritePathIssueKind};
 use serde_json::{json, Value};
 
 pub const GRAPESJS_FORMAT: &str = "grapesjs_v1";
@@ -22,14 +22,63 @@ pub fn slugify(value: &str) -> String {
 }
 
 pub fn parse_channel_slugs(value: &str) -> Vec<String> {
-    let mut items = value
-        .split(',')
-        .map(|item| item.trim().to_ascii_lowercase())
-        .filter(|item| !item.is_empty())
+    let mut items = parse_ui_csv(value)
+        .into_iter()
+        .map(|item| item.to_ascii_lowercase())
         .collect::<Vec<_>>();
     items.sort();
     items.dedup();
     items
+}
+
+pub fn optional_ui_text(value: &str) -> Option<String> {
+    normalize_ui_text(value)
+}
+
+pub fn ui_text_or_default(value: &str) -> String {
+    normalize_ui_text(value).unwrap_or_default()
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PageRequiredField {
+    Title,
+    Slug,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PageDraftFormInput<'a> {
+    pub locale: &'a str,
+    pub title: &'a str,
+    pub slug: &'a str,
+    pub channel_slugs: &'a str,
+    pub publish: bool,
+}
+
+pub fn build_create_page_draft(
+    input: PageDraftFormInput<'_>,
+    project_data: Value,
+) -> CreatePageDraft {
+    CreatePageDraft {
+        locale: ui_text_or_default(input.locale),
+        title: ui_text_or_default(input.title),
+        slug: ui_text_or_default(input.slug),
+        body_content: String::new(),
+        body_format: GRAPESJS_FORMAT.to_string(),
+        body_content_json: project_data,
+        template: Some("default".to_string()),
+        channel_slugs: parse_channel_slugs(input.channel_slugs),
+        publish: input.publish,
+    }
+}
+
+pub fn missing_required_page_field(draft: &CreatePageDraft) -> Option<PageRequiredField> {
+    if draft.title.is_empty() {
+        Some(PageRequiredField::Title)
+    } else if draft.slug.is_empty() {
+        Some(PageRequiredField::Slug)
+    } else {
+        None
+    }
 }
 
 pub fn error_with_context(context: &str, error: &str) -> String {
@@ -61,6 +110,98 @@ pub fn issue_label<'a>(
         WritePathIssueKind::Validation => validation_label,
         WritePathIssueKind::Sanitization => sanitization_label,
         WritePathIssueKind::Runtime => runtime_label,
+    }
+}
+
+pub fn issue_guidance<'a>(
+    issue: &WritePathIssue,
+    validation_guidance: &'a str,
+    sanitization_guidance: &'a str,
+    runtime_guidance: &'a str,
+    feature_disabled_guidance: &'a str,
+) -> &'a str {
+    if is_builder_feature_disabled_issue(issue) {
+        return feature_disabled_guidance;
+    }
+
+    match issue.kind {
+        WritePathIssueKind::Validation => validation_guidance,
+        WritePathIssueKind::Sanitization => sanitization_guidance,
+        WritePathIssueKind::Runtime => runtime_guidance,
+    }
+}
+
+pub fn is_builder_feature_disabled_issue(issue: &WritePathIssue) -> bool {
+    let normalized = issue.message.to_ascii_lowercase();
+    normalized.contains("feature disabled")
+        || normalized.contains("feature_disabled")
+        || normalized.contains("feature-disabled")
+        || normalized.contains("builder.enabled")
+        || normalized.contains("builder.preview.enabled")
+        || normalized.contains("builder.properties.enabled")
+        || normalized.contains("builder.publish.enabled")
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BuilderHostFallbackSurface {
+    pub profile: &'static str,
+    pub admin_visual_path: &'static str,
+    pub preview_available: bool,
+    pub properties_available: bool,
+    pub publish_available: bool,
+    pub read_list_paths_stable: bool,
+    pub disabled_capabilities: &'static [&'static str],
+}
+
+#[allow(dead_code)]
+pub fn builder_host_fallback_surface(profile: &str) -> Option<BuilderHostFallbackSurface> {
+    match profile {
+        "all_on" => Some(BuilderHostFallbackSurface {
+            profile: "all_on",
+            admin_visual_path: "editable_builder",
+            preview_available: true,
+            properties_available: true,
+            publish_available: true,
+            read_list_paths_stable: true,
+            disabled_capabilities: &[],
+        }),
+        "publish_off" => Some(BuilderHostFallbackSurface {
+            profile: "publish_off",
+            admin_visual_path: "editable_builder_publish_disabled",
+            preview_available: true,
+            properties_available: true,
+            publish_available: false,
+            read_list_paths_stable: true,
+            disabled_capabilities: &["publish"],
+        }),
+        "preview_off" => Some(BuilderHostFallbackSurface {
+            profile: "preview_off",
+            admin_visual_path: "preview_hidden_properties_available",
+            preview_available: false,
+            properties_available: true,
+            publish_available: false,
+            read_list_paths_stable: true,
+            disabled_capabilities: &["preview", "publish"],
+        }),
+        "builder_off" => Some(BuilderHostFallbackSurface {
+            profile: "builder_off",
+            admin_visual_path: "readonly_fallback",
+            preview_available: false,
+            properties_available: false,
+            publish_available: false,
+            read_list_paths_stable: true,
+            disabled_capabilities: &["preview", "tree", "properties", "publish"],
+        }),
+        _ => None,
+    }
+}
+
+#[allow(dead_code)]
+pub fn builder_disabled_capability_error_key(capability: &str) -> &'static str {
+    match capability {
+        "preview" | "tree" | "properties" | "publish" => "feature-disabled",
+        _ => "runtime",
     }
 }
 
@@ -152,11 +293,11 @@ fn body_to_project_data(body: &crate::model::PageBody) -> Option<Value> {
 }
 
 pub fn default_project_data(title: &str) -> Value {
-    let normalized_title = title.trim();
-    let title = if normalized_title.is_empty() {
-        "New page"
-    } else {
+    let normalized_title = normalize_ui_text(title);
+    let title = if let Some(normalized_title) = normalized_title.as_deref() {
         normalized_title
+    } else {
+        "New page"
     };
 
     json!({
@@ -373,6 +514,142 @@ mod tests {
         assert_eq!(
             parse_channel_slugs(" web, mobile-app,WEB, , mobile-app "),
             vec!["mobile-app".to_string(), "web".to_string()]
+        );
+    }
+
+    #[test]
+    fn page_draft_builder_normalizes_form_state_without_ui_runtime() {
+        let project_data = default_project_data("Landing");
+        let draft = build_create_page_draft(
+            PageDraftFormInput {
+                locale: " en ",
+                title: " Landing ",
+                slug: " landing-page ",
+                channel_slugs: " web, MOBILE, web ",
+                publish: true,
+            },
+            project_data.clone(),
+        );
+
+        assert_eq!(draft.locale, "en");
+        assert_eq!(draft.title, "Landing");
+        assert_eq!(draft.slug, "landing-page");
+        assert_eq!(draft.body_format, GRAPESJS_FORMAT);
+        assert_eq!(draft.body_content_json, project_data);
+        assert_eq!(draft.template.as_deref(), Some("default"));
+        assert_eq!(
+            draft.channel_slugs,
+            vec!["mobile".to_string(), "web".to_string()]
+        );
+        assert!(draft.publish);
+        assert_eq!(missing_required_page_field(&draft), None);
+    }
+
+    #[test]
+    fn required_page_fields_reject_blank_title() {
+        let draft = build_create_page_draft(
+            PageDraftFormInput {
+                locale: "en",
+                title: " ",
+                slug: "landing",
+                channel_slugs: "web",
+                publish: false,
+            },
+            default_project_data(""),
+        );
+
+        assert_eq!(
+            missing_required_page_field(&draft),
+            Some(PageRequiredField::Title)
+        );
+    }
+
+    #[test]
+    fn builder_host_fallback_profiles_keep_read_list_stable() {
+        let expected = [
+            ("all_on", "editable_builder", true, true, true, &[][..]),
+            (
+                "publish_off",
+                "editable_builder_publish_disabled",
+                true,
+                true,
+                false,
+                &["publish"][..],
+            ),
+            (
+                "preview_off",
+                "preview_hidden_properties_available",
+                false,
+                true,
+                false,
+                &["preview", "publish"][..],
+            ),
+            (
+                "builder_off",
+                "readonly_fallback",
+                false,
+                false,
+                false,
+                &["preview", "tree", "properties", "publish"][..],
+            ),
+        ];
+
+        for (profile, visual_path, preview, properties, publish, disabled) in expected {
+            let surface = builder_host_fallback_surface(profile)
+                .expect("profile must have an admin fallback surface");
+            assert_eq!(surface.profile, profile);
+            assert_eq!(surface.admin_visual_path, visual_path);
+            assert_eq!(surface.preview_available, preview);
+            assert_eq!(surface.properties_available, properties);
+            assert_eq!(surface.publish_available, publish);
+            assert!(surface.read_list_paths_stable);
+            assert_eq!(surface.disabled_capabilities, disabled);
+        }
+
+        assert!(builder_host_fallback_surface("unknown").is_none());
+    }
+
+    #[test]
+    fn disabled_builder_capabilities_map_to_typed_feature_disabled_errors() {
+        for capability in ["preview", "tree", "properties", "publish"] {
+            assert_eq!(
+                builder_disabled_capability_error_key(capability),
+                "feature-disabled"
+            );
+        }
+
+        assert_eq!(builder_disabled_capability_error_key("storage"), "runtime");
+    }
+
+    #[test]
+    fn builder_feature_disabled_issues_use_operator_guidance() {
+        let issue = WritePathIssue::new(
+            "Feature disabled: builder.publish.enabled is disabled for this tenant",
+        );
+
+        assert!(is_builder_feature_disabled_issue(&issue));
+        assert_eq!(
+            issue_guidance(
+                &issue,
+                "validation guidance",
+                "sanitize guidance",
+                "runtime guidance",
+                "feature disabled guidance",
+            ),
+            "feature disabled guidance"
+        );
+
+        let validation = WritePathIssue::new("Validation error: title is required");
+        assert!(!is_builder_feature_disabled_issue(&validation));
+        assert_eq!(
+            issue_guidance(
+                &validation,
+                "validation guidance",
+                "sanitize guidance",
+                "runtime guidance",
+                "feature disabled guidance",
+            ),
+            "validation guidance"
         );
     }
 

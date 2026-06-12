@@ -12,6 +12,8 @@ pub enum OrderError {
     OrderNotFound(Uuid),
     #[error("order return {0} not found")]
     OrderReturnNotFound(Uuid),
+    #[error("order change {0} not found")]
+    OrderChangeNotFound(Uuid),
     #[error("invalid order status transition: {from} -> {to}")]
     InvalidTransition { from: String, to: String },
     #[error(transparent)]

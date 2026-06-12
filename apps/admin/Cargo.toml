@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 
 [features]
 default = ["csr"]
-csr = ["leptos/csr", "leptos_i18n/csr"]
+csr = ["leptos/csr", "leptos_i18n/csr", "rustok-workflow-admin/csr"]
 hydrate = [
   "leptos/hydrate",
   "leptos_i18n/hydrate",
@@ -33,6 +33,7 @@ hydrate = [
   "rustok-rbac-admin/hydrate",
   "rustok-search-admin/hydrate",
   "rustok-tenant-admin/hydrate",
+  "rustok-workflow-admin/hydrate",
 ]
 ssr = [
   "leptos/ssr",
@@ -71,6 +72,7 @@ ssr = [
   "rustok-rbac-admin/ssr",
   "rustok-search-admin/ssr",
   "rustok-tenant-admin/ssr",
+  "rustok-workflow-admin/ssr",
 ]
 
 [dependencies]

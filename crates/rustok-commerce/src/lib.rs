@@ -25,10 +25,12 @@ pub use dto::*;
 pub use error::{CommerceError, CommerceResult};
 pub use graphql::{CommerceMutation, CommerceQuery};
 pub use services::{
-    CartService, CatalogService, CheckoutError, CheckoutResult, CheckoutService, CustomerService,
-    FulfillmentService, InventoryService, OrderService, PaymentService, PricingService,
-    RegionService, ShippingProfileService, StoreContextError, StoreContextResult,
-    StoreContextService,
+    CartService, CatalogService, CheckoutError, CheckoutResult, CheckoutService,
+    CreateReturnDecisionInput, CustomerService, FulfillmentService, InventoryService, OrderService,
+    PaymentService, PostOrderOrchestrationError, PostOrderOrchestrationService, PricingService,
+    RegionService, ReturnClaimDecisionInput, ReturnDecisionInput, ReturnDecisionResponse,
+    ReturnExchangeDecisionInput, ReturnRefundDecisionInput, ShippingProfileService,
+    StoreContextError, StoreContextResult, StoreContextService,
 };
 pub(crate) use services::{FulfillmentOrchestrationError, FulfillmentOrchestrationService};
 pub use state_machine::{
@@ -134,6 +136,10 @@ impl RusToKModule for CommerceModule {
 impl MigrationSource for CommerceModule {
     fn migrations(&self) -> Vec<Box<dyn MigrationTrait>> {
         migrations::migrations()
+    }
+
+    fn migration_dependencies(&self) -> Vec<rustok_core::MigrationDependencyDescriptor> {
+        migrations::migration_dependencies()
     }
 }
 

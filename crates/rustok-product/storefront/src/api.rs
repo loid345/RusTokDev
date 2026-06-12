@@ -5,6 +5,10 @@ use leptos_graphql::{execute as execute_graphql, GraphqlHttpError, GraphqlReques
 use serde::{Deserialize, Serialize};
 use std::fmt::{Display, Formatter};
 
+use crate::core::build_pricing_context;
+#[cfg(feature = "ssr")]
+use crate::core::{resolve_requested_locale, sanitize_channel_slug, sanitize_uuid_string};
+
 #[allow(unused_imports)]
 use crate::model::{
     ProductDetail, ProductEffectivePrice, ProductList, ProductListItem, ProductPricingContext,
@@ -157,129 +161,6 @@ where
     )
     .await
     .map_err(ApiError::from)
-}
-
-fn sanitize_currency_code(currency_code: Option<String>) -> Option<String> {
-    currency_code
-        .map(|value| value.trim().to_ascii_uppercase())
-        .filter(|value| value.len() == 3)
-}
-
-fn sanitize_uuid_string(value: Option<String>) -> Option<String> {
-    value
-        .map(|item| item.trim().to_string())
-        .filter(|item| !item.is_empty() && uuid::Uuid::parse_str(item).is_ok())
-}
-
-fn sanitize_channel_slug(channel_slug: Option<String>) -> Option<String> {
-    channel_slug
-        .map(|value| value.trim().to_ascii_lowercase())
-        .filter(|value| !value.is_empty())
-}
-
-#[allow(dead_code)]
-fn normalize_optional(value: Option<String>) -> Option<String> {
-    value.and_then(|value| {
-        let trimmed = value.trim();
-        if trimmed.is_empty() {
-            None
-        } else {
-            Some(trimmed.to_string())
-        }
-    })
-}
-
-#[allow(dead_code)]
-fn resolve_requested_locale(
-    requested: Option<String>,
-    request_context_locale: Option<&str>,
-    tenant_default_locale: &str,
-) -> String {
-    normalize_optional(requested)
-        .or_else(|| {
-            request_context_locale.and_then(|value| normalize_optional(Some(value.to_string())))
-        })
-        .or_else(|| normalize_optional(Some(tenant_default_locale.to_string())))
-        .unwrap_or_default()
-}
-
-fn sanitize_quantity(quantity: Option<i32>) -> Option<i32> {
-    quantity.filter(|value| *value > 0)
-}
-
-fn derive_pricing_currency(
-    selected_product: Option<&ProductDetail>,
-    currency_code: Option<String>,
-) -> Option<String> {
-    sanitize_currency_code(currency_code).or_else(|| {
-        selected_product.and_then(|product| {
-            product
-                .variants
-                .first()
-                .and_then(|variant| variant.prices.first())
-                .map(|price| price.currency_code.clone())
-                .and_then(|currency| sanitize_currency_code(Some(currency)))
-        })
-    })
-}
-
-fn build_pricing_context(
-    selected_product: Option<&ProductDetail>,
-    currency_code: Option<String>,
-    region_id: Option<String>,
-    price_list_id: Option<String>,
-    channel_id: Option<String>,
-    channel_slug: Option<String>,
-    quantity: Option<i32>,
-) -> Option<ProductPricingContext> {
-    let currency_code = derive_pricing_currency(selected_product, currency_code)?;
-    Some(ProductPricingContext {
-        currency_code,
-        region_id: sanitize_uuid_string(region_id),
-        price_list_id: sanitize_uuid_string(price_list_id),
-        channel_id: sanitize_uuid_string(channel_id),
-        channel_slug: sanitize_channel_slug(channel_slug),
-        quantity: sanitize_quantity(quantity).unwrap_or(1),
-    })
-}
-
-pub async fn fetch_storefront_products(
-    selected_handle: Option<String>,
-    locale: Option<String>,
-    currency_code: Option<String>,
-    region_id: Option<String>,
-    price_list_id: Option<String>,
-    channel_id: Option<String>,
-    channel_slug: Option<String>,
-    quantity: Option<i32>,
-) -> Result<StorefrontProductsData, ApiError> {
-    match fetch_storefront_products_server(
-        selected_handle.clone(),
-        locale.clone(),
-        currency_code.clone(),
-        region_id.clone(),
-        price_list_id.clone(),
-        channel_id.clone(),
-        channel_slug.clone(),
-        quantity,
-    )
-    .await
-    {
-        Ok(data) => Ok(data),
-        Err(_) => {
-            fetch_storefront_products_graphql(
-                selected_handle,
-                locale,
-                currency_code,
-                region_id,
-                price_list_id,
-                channel_id,
-                channel_slug,
-                quantity,
-            )
-            .await
-        }
-    }
 }
 
 pub async fn fetch_storefront_products_server(

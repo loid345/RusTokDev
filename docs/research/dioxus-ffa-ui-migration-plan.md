@@ -58,16 +58,61 @@
 
 Для каждого пилотного UI пакета ввести 3 слоя:
 
-1. `core/` (framework-agnostic)
+1. `core.rs` или `core/` (framework-agnostic)
    - use-cases, typed state transitions, view-model mapping;
-   - ошибки и policy-результаты в transport-agnostic форме.
+   - ошибки и policy-результаты в transport-agnostic форме;
+   - `core.rs` допустим для маленького среза, `core/` обязателен при появлении нескольких поддоменов (`view_model`, `policy`, `error`, `ports`, `identifiers`).
 2. `transport/`
    - `native_server_adapter` (текущий Leptos native path);
-   - `graphql_adapter` (fallback/headless-compatible path).
-3. `ui/leptos/`
-   - только render/bind слой без transport/business ownership.
+   - `graphql_adapter` (fallback/headless-compatible path);
+   - если срез временно имеет только один adapter, это фиксируется как temporary single-adapter state с next-step parity plan.
+3. `ui/leptos.rs` или `ui/leptos/`
+   - только render/bind слой без transport/business ownership;
+   - `ui/leptos.rs` допустим для одного adapter file, `ui/leptos/` используется при разрастании render adapter слоя.
 
-Ключевое правило: компоненты не вызывают transport напрямую; только через core ports.
+Ключевое правило: UI adapter не вызывает raw GraphQL/native functions напрямую. Он может обращаться только к module-owned `transport/` facade; request/command/state construction, validation и business/policy decisions остаются в `core` ports/helpers.
+
+### Стандарт минимального FFA-среза и anti-over-extraction
+
+FFA-срез должен уменьшать связность, а не механически переносить каждую строку из Leptos adapter
+в `core`. Для всех модулей действует единый decision gate: перенос в `core` разрешён, если
+выполнено хотя бы одно из условий ниже.
+
+**Переносить в `core`:**
+
+1. request/command construction, normalization и validation, которые влияют на transport payload
+   или доменную семантику;
+2. view-model mapping, где есть вычисляемые поля, fallback policy, CSS/status class policy,
+   route/query intent, pagination/filter/sort state или reusable display rules;
+3. transport-agnostic error/policy envelope, если его должны одинаково потреблять Leptos,
+   будущий Dioxus adapter, Next/mobile/headless host или tests;
+4. state transitions, busy/selected/empty/error policy и mutation outcomes, если они могут
+   разойтись между adapters или должны тестироваться без UI runtime;
+5. повторяющийся паттерн, который уже встречается минимум в двух surfaces или ожидаемо будет
+   вынесен в shared foundation.
+
+**Оставлять в `ui/leptos`:**
+
+1. простые i18n label bindings (`t(locale, key, fallback)`) и одноразовые success/error copy,
+   если они не меняют policy и не нужны другим host adapters;
+2. DOM layout, classes без state/policy ветвления, event binding, signals/resources/effects;
+3. reset/refresh side effects после mutation, если они завязаны на конкретный adapter state;
+4. механические wrappers над одной строкой форматирования, которые не дают reuse и увеличивают
+   количество DTO/enum/label structs;
+5. код, перенос которого увеличивает public surface сильнее, чем уменьшает coupling.
+
+**Правило размера:** маленький FFA-срез предпочтительнее большого, но он должен иметь
+архитектурный смысл. Если изменение добавляет больше boilerplate, чем удаляет coupling,
+срез отклоняется или откатывается.
+
+**Обязательный review после каждого среза:**
+
+- зафиксировать в local implementation plan, какую coupling-проблему решил срез;
+- проверить, что UI adapter стал тоньше именно по business/policy/transport ownership, а не просто
+  получил больше passthrough DTO;
+- если обнаружен over-extraction, откатить его в той же итерации и оставить reusable rule в этом плане;
+- при расхождении между модулями сначала искать общий паттерн, затем переносить его в shared crate,
+  а не копировать крупные module-local structs.
 
 ## Phase C — Shared platform abstractions (1–2 недели)
 
@@ -80,7 +125,8 @@
 Отдельно подготовить portability-порт для route/query plumbing:
 
 - текущий Leptos implementation остаётся;
-- добавляется transport/framework-agnostic контракт для будущего Dioxus routing adapter.
+- добавляется transport/framework-agnostic контракт для будущего Dioxus routing adapter;
+- shared foundation для первых wave вынесен в `rustok-api`: `normalize_ui_text`, `parse_ui_csv`, `UiRouteQueryUpdate`, а Leptos adapter применяет эти intents через `leptos-ui-routing`.
 
 ## Phase D — Wave rollout по остальным UI пакетам (3–6 недель)
 
@@ -94,10 +140,22 @@
 
 Для каждого пакета обязательный DoD:
 
-- core отделён от Leptos runtime;
-- native + GraphQL adapters работают и покрыты integration тестами;
-- Leptos UI слой стал thin adapter;
+- structural shape зафиксирован как минимум до `core_only`, а для phase-gate — до `core_transport_ui`;
+- core отделён от Leptos runtime (`core.rs` и `core/` не содержат `leptos*` imports);
+- native + GraphQL adapters работают и покрыты integration тестами либо temporary single-adapter state явно отмечен с next-step parity plan;
+- Leptos UI слой стал thin adapter и не вызывает raw GraphQL/native functions напрямую;
 - docs модуля и central docs обновлены при изменении контрактов.
+
+## Параллельный host-track для admin/storefront
+
+Админки и фронтенды переводятся **параллельно, но не как первый слой**:
+
+1. Сначала module-owned UI packages выделяют `core/transport/ui` и сохраняют Leptos UI как thin adapter.
+2. Одновременно host-приложения (`apps/admin`, `apps/storefront` и будущие Dioxus shells) получают только переносимые host contracts: route/query, locale, auth/session, tenant scope, mount registry и manifest wiring.
+3. Host-приложения не становятся владельцами доменной UI-логики; они монтируют module surfaces через adapters.
+4. Dioxus host подключается после готовности 1–2 пилотных module cores и проверяет reuse без удаления Leptos или GraphQL/headless paths.
+
+Это означает, что изменение host wiring требует отдельной parity-проверки, но перевод доменной логики остаётся в module UI packages.
 
 ## Phase E — Dioxus pilot (2–4 недели)
 

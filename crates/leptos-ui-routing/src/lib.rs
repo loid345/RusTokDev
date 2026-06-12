@@ -4,7 +4,7 @@ use std::sync::Arc;
 use leptos::prelude::*;
 use leptos_router::hooks::{use_location, use_navigate, use_query_map};
 use leptos_router::NavigateOptions;
-use rustok_api::UiRouteContext;
+use rustok_api::{UiRouteContext, UiRouteQueryUpdate};
 
 type RouteQuerySanitizeFn = dyn Fn(Option<&str>, Option<&str>, &BTreeMap<String, String>) -> BTreeMap<String, String>
     + Send
@@ -60,6 +60,10 @@ impl RouteQueryWriter {
 
     pub fn clear_key(&self, key: impl AsRef<str>) {
         self.update(vec![(key.as_ref().to_string(), None)], true);
+    }
+
+    pub fn replace_query_update(&self, key: impl Into<String>, update: UiRouteQueryUpdate) {
+        self.update(vec![(key.into(), update.into_query_value())], true);
     }
 }
 

@@ -6,7 +6,7 @@
 
 - inventory service logic;
 - stock-related migrations;
-- `InventoryModule` и `InventoryService`;
+- `InventoryModule`, `InventoryService`, backend `AdminInventoryReadService` и native admin stock write endpoints;
 - module-owned admin UI пакет `rustok-inventory/admin` для inventory visibility,
   low-stock triage и variant-level stock inspection.
 
@@ -15,16 +15,29 @@
 - runtime dependency: `product`;
 - модуль владеет inventory/stock boundary и операторской read-side UI-поверхностью
   для остатков;
-- GraphQL и REST transport пока остаются в фасаде `rustok-commerce`, а dedicated
-  inventory write transport ещё не вынесен в отдельный module-owned surface;
+- backend read-side для админки теперь имеет inventory-owned service/DTO в
+  `src/services/admin_read.rs`, который отдаёт tenant-scoped product/variant/price/translations
+  model для native server-function read transport;
+- admin UI read-side теперь проходит только через inventory-owned `admin/src/core.rs`, `admin/src/transport/mod.rs`, explicit `admin/src/transport/native_server_adapter.rs`, `admin/src/native.rs` native `#[server]` functions и explicit Leptos adapter `admin/src/ui/leptos.rs`; прежний commerce GraphQL transitional adapter удалён вместе с legacy `admin/src/transport.rs`, pre-FFA `admin/src/api.rs`, `leptos-graphql` и token/tenant-slug fallback параметрами;
+- dedicated native inventory write/validation endpoints `inventory/variant/set-quantity`,
+  `inventory/variant/adjust-quantity`, `inventory/variant/reserve-quantity`,
+  `inventory/variant/release-reservation` и `inventory/variant/check-availability` уже вынесены
+  в module-owned surface без GraphQL fallback и возвращают typed write/validation results;
+  set-quantity трактует requested quantity как целевую available quantity и сохраняет
+  существующий reserved stock, а backorder policy `continue` нормализуется case-insensitive
+  в service/read-side и commerce checkout/storefront compatibility semantics через exported
+  inventory-owned policy helper; дальнейший non-admin/channel-aware parity ведётся отдельно от admin UI scope;
+- public-channel inventory visibility/projection helpers (`normalize_public_channel_slug`, metadata allowlist parsing, channel-visible available quantity loaders, `PublicChannelInventoryProjection` / `PublicChannelInventoryVariantProjectionInput` и `load_inventory_projection_by_variant_for_public_channel`) принадлежат inventory crate-у и переиспользуются umbrella `rustok-commerce` для storefront/checkout compatibility без дублирования backorder policy branching в commerce DTO adapter-е;
 - общие DTO, entities и error surface приходят из `rustok-commerce-foundation`.
 
 ## Интеграция
 
 - модуль входит в ecommerce family и должен сохранять собственную storage/runtime-границу
   без возврата ответственности в umbrella `rustok-commerce`;
-- transport и GraphQL пока публикуются через `rustok-commerce`, а inventory-owned admin UX
-  уже публикуется через `rustok-inventory/admin`;
+- inventory-owned backend admin read service экспортируется root crate-ом и является source
+  для native server-function read transport;
+- inventory-owned admin UX и read facade публикуются через `rustok-inventory/admin`;
+  read-side и targeted set/adjust/reserve/release quantity plus check-availability flows идут через native inventory-owned server-function surface без commerce GraphQL fallback;
 - изменения cross-module контракта нужно синхронизировать с `rustok-commerce`
   и соседними split-модулями.
 

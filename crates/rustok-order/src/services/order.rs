@@ -7,7 +7,7 @@ use sea_orm::{
     PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, Set, Statement, TransactionTrait,
 };
 use serde_json::Value;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use tracing::instrument;
 use uuid::Uuid;
 use validator::Validate;
@@ -18,10 +18,12 @@ use rustok_events::DomainEvent;
 use rustok_outbox::TransactionalEventBus;
 
 use crate::dto::{
-    CancelOrderReturnInput, CompleteOrderReturnInput, CreateOrderAdjustmentInput, CreateOrderInput,
+    ApplyOrderChangeInput, CancelOrderChangeInput, CancelOrderReturnInput,
+    CompleteOrderReturnInput, CreateOrderAdjustmentInput, CreateOrderChangeInput, CreateOrderInput,
     CreateOrderLineItemInput, CreateOrderReturnInput, CreateOrderTaxLineInput,
-    ListOrderReturnsInput, ListOrdersInput, OrderAdjustmentResponse, OrderLineItemResponse,
-    OrderResponse, OrderReturnResponse, OrderTaxLineResponse,
+    ListOrderChangesInput, ListOrderReturnsInput, ListOrdersInput, OrderAdjustmentResponse,
+    OrderChangeResponse, OrderLineItemResponse, OrderResponse, OrderReturnItemResponse,
+    OrderReturnResponse, OrderTaxLineResponse,
 };
 use crate::entities;
 use crate::error::{OrderError, OrderResult};
@@ -35,6 +37,13 @@ const STATUS_CANCELLED: &str = "cancelled";
 const RETURN_STATUS_PENDING: &str = "pending";
 const RETURN_STATUS_COMPLETED: &str = "completed";
 const RETURN_STATUS_CANCELLED: &str = "cancelled";
+const RETURN_RESOLUTION_REFUND: &str = "refund";
+const RETURN_RESOLUTION_EXCHANGE: &str = "exchange";
+const RETURN_RESOLUTION_CLAIM: &str = "claim";
+const RETURN_RESOLUTION_STORE_CREDIT: &str = "store_credit";
+const ORDER_CHANGE_STATUS_PENDING: &str = "pending";
+const ORDER_CHANGE_STATUS_APPLIED: &str = "applied";
+const ORDER_CHANGE_STATUS_CANCELLED: &str = "cancelled";
 
 mod order_field_definitions_storage {
     rustok_core::define_field_definitions_entity!("order_field_definitions");
@@ -924,7 +933,28 @@ fn adjustment_total(adjustments: &[entities::order_adjustment::Model]) -> Decima
         .fold(Decimal::ZERO, |acc, adjustment| acc + adjustment.amount)
 }
 
-fn map_order_return_response(value: entities::order_return::Model) -> OrderReturnResponse {
+fn map_order_change_response(change: entities::order_change::Model) -> OrderChangeResponse {
+    OrderChangeResponse {
+        id: change.id,
+        tenant_id: change.tenant_id,
+        order_id: change.order_id,
+        created_by: change.created_by,
+        change_type: change.change_type,
+        status: change.status,
+        description: change.description,
+        preview: change.preview,
+        metadata: change.metadata,
+        created_at: change.created_at.into(),
+        updated_at: change.updated_at.into(),
+        applied_at: change.applied_at.map(Into::into),
+        cancelled_at: change.cancelled_at.map(Into::into),
+    }
+}
+
+fn map_order_return_response(
+    value: entities::order_return::Model,
+    items: Vec<entities::order_return_item::Model>,
+) -> OrderReturnResponse {
     OrderReturnResponse {
         id: value.id,
         tenant_id: value.tenant_id,
@@ -932,11 +962,109 @@ fn map_order_return_response(value: entities::order_return::Model) -> OrderRetur
         reason: value.reason,
         note: value.note,
         status: value.status,
+        resolution_type: value.resolution_type,
+        refund_id: value.refund_id,
+        order_change_id: value.order_change_id,
         metadata: value.metadata,
+        items: items
+            .into_iter()
+            .map(map_order_return_item_response)
+            .collect(),
         created_at: value.created_at.with_timezone(&Utc),
         updated_at: value.updated_at.with_timezone(&Utc),
         completed_at: value.completed_at.map(|ts| ts.with_timezone(&Utc)),
         cancelled_at: value.cancelled_at.map(|ts| ts.with_timezone(&Utc)),
+    }
+}
+
+fn normalize_return_resolution_type(value: Option<String>) -> OrderResult<Option<String>> {
+    let Some(value) = trim_optional_text(value) else {
+        return Ok(None);
+    };
+    let normalized = value.to_ascii_lowercase();
+    match normalized.as_str() {
+        RETURN_RESOLUTION_REFUND
+        | RETURN_RESOLUTION_EXCHANGE
+        | RETURN_RESOLUTION_CLAIM
+        | RETURN_RESOLUTION_STORE_CREDIT => Ok(Some(normalized)),
+        _ => Err(OrderError::Validation(format!(
+            "invalid return resolution_type `{value}`; expected refund, exchange, claim, or store_credit"
+        ))),
+    }
+}
+
+fn validate_return_resolution_links(
+    resolution_type: Option<&str>,
+    refund_id: Option<Uuid>,
+    order_change_id: Option<Uuid>,
+) -> OrderResult<()> {
+    match resolution_type {
+        None => {
+            if refund_id.is_some() || order_change_id.is_some() {
+                return Err(OrderError::Validation(
+                    "return resolution links require resolution_type".to_string(),
+                ));
+            }
+        }
+        Some(RETURN_RESOLUTION_REFUND) => {
+            if refund_id.is_none() {
+                return Err(OrderError::Validation(
+                    "refund return resolution requires refund_id".to_string(),
+                ));
+            }
+            if order_change_id.is_some() {
+                return Err(OrderError::Validation(
+                    "refund return resolution must not include order_change_id".to_string(),
+                ));
+            }
+        }
+        Some(RETURN_RESOLUTION_EXCHANGE) => {
+            if order_change_id.is_none() {
+                return Err(OrderError::Validation(
+                    "exchange return resolution requires order_change_id".to_string(),
+                ));
+            }
+        }
+        Some(RETURN_RESOLUTION_CLAIM) => {
+            if order_change_id.is_none() {
+                return Err(OrderError::Validation(
+                    "claim return resolution requires order_change_id".to_string(),
+                ));
+            }
+            if refund_id.is_some() {
+                return Err(OrderError::Validation(
+                    "claim return resolution must not include refund_id".to_string(),
+                ));
+            }
+        }
+        Some(RETURN_RESOLUTION_STORE_CREDIT) => {
+            if refund_id.is_some() || order_change_id.is_some() {
+                return Err(OrderError::Validation(
+                    "store_credit return resolution must not include refund_id or order_change_id"
+                        .to_string(),
+                ));
+            }
+        }
+        Some(_) => unreachable!("resolution_type is normalized before link validation"),
+    }
+    Ok(())
+}
+
+fn map_order_return_item_response(
+    value: entities::order_return_item::Model,
+) -> OrderReturnItemResponse {
+    OrderReturnItemResponse {
+        id: value.id,
+        tenant_id: value.tenant_id,
+        return_id: value.return_id,
+        order_id: value.order_id,
+        line_item_id: value.line_item_id,
+        quantity: value.quantity,
+        reason: value.reason,
+        note: value.note,
+        metadata: value.metadata,
+        created_at: value.created_at.with_timezone(&Utc),
+        updated_at: value.updated_at.with_timezone(&Utc),
     }
 }
 
@@ -1128,6 +1256,61 @@ fn normalize_tax_provider_id(value: &str) -> OrderResult<String> {
     Ok(normalized)
 }
 
+fn normalize_json_object(value: Value, field_name: &str) -> OrderResult<Value> {
+    match value {
+        Value::Null => Ok(serde_json::json!({})),
+        Value::Object(_) => Ok(value),
+        _ => Err(OrderError::Validation(format!(
+            "{field_name} must be a JSON object"
+        ))),
+    }
+}
+
+fn normalize_order_change_type(value: &str) -> OrderResult<String> {
+    let normalized = value.trim().to_ascii_lowercase().replace('-', "_");
+    if normalized.is_empty() {
+        return Err(OrderError::Validation(
+            "change_type must not be empty".to_string(),
+        ));
+    }
+    if normalized.len() > 64
+        || !normalized
+            .chars()
+            .all(|ch| ch.is_ascii_lowercase() || ch.is_ascii_digit() || ch == '_')
+    {
+        return Err(OrderError::Validation(
+            "change_type must use lowercase ASCII, digits, underscore, or hyphen".to_string(),
+        ));
+    }
+    Ok(normalized)
+}
+
+fn normalize_optional_order_change_type(value: &str) -> OrderResult<Option<String>> {
+    if value.trim().is_empty() {
+        return Ok(None);
+    }
+    normalize_order_change_type(value).map(Some)
+}
+
+fn normalize_order_change_status_filter(status: &str) -> OrderResult<String> {
+    let normalized = status.trim().to_ascii_lowercase();
+    if normalized.is_empty()
+        || matches!(
+            normalized.as_str(),
+            ORDER_CHANGE_STATUS_PENDING
+                | ORDER_CHANGE_STATUS_APPLIED
+                | ORDER_CHANGE_STATUS_CANCELLED
+        )
+    {
+        return Ok(normalized);
+    }
+
+    Err(OrderError::Validation(
+        "invalid order change status filter: expected one of pending, applied, cancelled"
+            .to_string(),
+    ))
+}
+
 fn trim_optional_text(value: Option<String>) -> Option<String> {
     value.and_then(|raw| {
         let trimmed = raw.trim();
@@ -1237,6 +1420,185 @@ where
     Ok(default_locale)
 }
 impl OrderService {
+    #[instrument(skip(self, input), fields(tenant_id = %tenant_id, order_id = %order_id, actor_id = %actor_id))]
+    pub async fn create_order_change(
+        &self,
+        tenant_id: Uuid,
+        actor_id: Uuid,
+        order_id: Uuid,
+        input: CreateOrderChangeInput,
+    ) -> OrderResult<OrderChangeResponse> {
+        input
+            .validate()
+            .map_err(|error| OrderError::Validation(error.to_string()))?;
+        self.load_order_model(tenant_id, order_id).await?;
+
+        let change_type = normalize_order_change_type(&input.change_type)?;
+        let now = Utc::now();
+        let row = entities::order_change::ActiveModel {
+            id: Set(generate_id()),
+            tenant_id: Set(tenant_id),
+            order_id: Set(order_id),
+            created_by: Set(actor_id),
+            change_type: Set(change_type),
+            status: Set(ORDER_CHANGE_STATUS_PENDING.to_string()),
+            description: Set(trim_optional_text(input.description)),
+            preview: Set(normalize_json_object(input.preview, "preview")?),
+            metadata: Set(normalize_json_object(input.metadata, "metadata")?),
+            created_at: Set(now.into()),
+            updated_at: Set(now.into()),
+            applied_at: Set(None),
+            cancelled_at: Set(None),
+        }
+        .insert(&self.db)
+        .await?;
+
+        Ok(map_order_change_response(row))
+    }
+
+    pub async fn get_order_change(
+        &self,
+        tenant_id: Uuid,
+        change_id: Uuid,
+    ) -> OrderResult<OrderChangeResponse> {
+        let row = self.load_order_change_model(tenant_id, change_id).await?;
+        Ok(map_order_change_response(row))
+    }
+
+    pub async fn list_order_changes(
+        &self,
+        tenant_id: Uuid,
+        input: ListOrderChangesInput,
+    ) -> OrderResult<(Vec<OrderChangeResponse>, u64)> {
+        let page = input.page.max(1);
+        let per_page = input.per_page.clamp(1, 100);
+        let mut query = entities::order_change::Entity::find()
+            .filter(entities::order_change::Column::TenantId.eq(tenant_id))
+            .order_by_desc(entities::order_change::Column::CreatedAt);
+
+        if let Some(order_id) = input.order_id {
+            query = query.filter(entities::order_change::Column::OrderId.eq(order_id));
+        }
+        if let Some(status) = input.status {
+            let normalized = normalize_order_change_status_filter(&status)?;
+            if !normalized.is_empty() {
+                query = query.filter(entities::order_change::Column::Status.eq(normalized));
+            }
+        }
+        if let Some(change_type) = input.change_type {
+            let normalized = normalize_optional_order_change_type(&change_type)?;
+            if let Some(normalized) = normalized {
+                query = query.filter(entities::order_change::Column::ChangeType.eq(normalized));
+            }
+        }
+
+        let paginator = query.paginate(&self.db, per_page);
+        let total = paginator.num_items().await?;
+        let rows = paginator.fetch_page(page.saturating_sub(1)).await?;
+        Ok((
+            rows.into_iter().map(map_order_change_response).collect(),
+            total,
+        ))
+    }
+
+    pub async fn apply_order_change(
+        &self,
+        tenant_id: Uuid,
+        change_id: Uuid,
+        input: ApplyOrderChangeInput,
+    ) -> OrderResult<OrderChangeResponse> {
+        input
+            .validate()
+            .map_err(|error| OrderError::Validation(error.to_string()))?;
+        self.transition_order_change(
+            tenant_id,
+            change_id,
+            ORDER_CHANGE_STATUS_PENDING,
+            ORDER_CHANGE_STATUS_APPLIED,
+            normalize_json_object(input.metadata, "metadata")?,
+            |active, now| {
+                active.applied_at = Set(Some(now.into()));
+            },
+        )
+        .await
+    }
+
+    pub async fn cancel_order_change(
+        &self,
+        tenant_id: Uuid,
+        change_id: Uuid,
+        input: CancelOrderChangeInput,
+    ) -> OrderResult<OrderChangeResponse> {
+        input
+            .validate()
+            .map_err(|error| OrderError::Validation(error.to_string()))?;
+        let reason = trim_optional_text(input.reason);
+        let mut metadata = normalize_json_object(input.metadata, "metadata")?;
+        if let Some(reason) = reason {
+            if let Value::Object(ref mut object) = metadata {
+                object.insert("cancellation_reason".to_string(), Value::String(reason));
+            }
+        }
+        self.transition_order_change(
+            tenant_id,
+            change_id,
+            ORDER_CHANGE_STATUS_PENDING,
+            ORDER_CHANGE_STATUS_CANCELLED,
+            metadata,
+            |active, now| {
+                active.cancelled_at = Set(Some(now.into()));
+            },
+        )
+        .await
+    }
+
+    async fn load_order_change_model(
+        &self,
+        tenant_id: Uuid,
+        change_id: Uuid,
+    ) -> OrderResult<entities::order_change::Model> {
+        entities::order_change::Entity::find_by_id(change_id)
+            .filter(entities::order_change::Column::TenantId.eq(tenant_id))
+            .one(&self.db)
+            .await?
+            .ok_or(OrderError::OrderChangeNotFound(change_id))
+    }
+
+    async fn transition_order_change<F>(
+        &self,
+        tenant_id: Uuid,
+        change_id: Uuid,
+        expected_from: &str,
+        next_status: &str,
+        metadata_patch: Value,
+        mutate: F,
+    ) -> OrderResult<OrderChangeResponse>
+    where
+        F: FnOnce(&mut entities::order_change::ActiveModel, chrono::DateTime<Utc>),
+    {
+        let existing = self.load_order_change_model(tenant_id, change_id).await?;
+        if existing.status != expected_from {
+            return Err(OrderError::InvalidTransition {
+                from: existing.status,
+                to: next_status.to_string(),
+            });
+        }
+
+        let mut active: entities::order_change::ActiveModel = existing.into();
+        let now = Utc::now();
+        active.status = Set(next_status.to_string());
+        active.metadata = Set(merge_metadata_patch(
+            active.metadata.clone().take(),
+            metadata_patch,
+        ));
+        active.updated_at = Set(now.into());
+        mutate(&mut active, now);
+        let updated = active.update(&self.db).await?;
+        Ok(map_order_change_response(updated))
+    }
+}
+
+impl OrderService {
     #[instrument(skip(self, input), fields(tenant_id = %tenant_id, order_id = %order_id))]
     pub async fn create_return(
         &self,
@@ -1248,23 +1610,119 @@ impl OrderService {
             .validate()
             .map_err(|error| OrderError::Validation(error.to_string()))?;
         self.load_order_model(tenant_id, order_id).await?;
+        let order_items = entities::order_line_item::Entity::find()
+            .filter(entities::order_line_item::Column::OrderId.eq(order_id))
+            .all(&self.db)
+            .await?;
+        let order_items_by_id: HashMap<Uuid, entities::order_line_item::Model> = order_items
+            .into_iter()
+            .map(|item| (item.id, item))
+            .collect();
+        let requested_line_item_ids: Vec<Uuid> =
+            input.items.iter().map(|item| item.line_item_id).collect();
+        let existing_return_quantities = if requested_line_item_ids.is_empty() {
+            HashMap::new()
+        } else {
+            let active_return_ids: Vec<Uuid> = entities::order_return::Entity::find()
+                .filter(entities::order_return::Column::TenantId.eq(tenant_id))
+                .filter(entities::order_return::Column::OrderId.eq(order_id))
+                .filter(entities::order_return::Column::Status.ne(RETURN_STATUS_CANCELLED))
+                .all(&self.db)
+                .await?
+                .into_iter()
+                .map(|row| row.id)
+                .collect();
+            let mut quantities = HashMap::<Uuid, i32>::new();
+            if !active_return_ids.is_empty() {
+                for existing_item in entities::order_return_item::Entity::find()
+                    .filter(entities::order_return_item::Column::TenantId.eq(tenant_id))
+                    .filter(entities::order_return_item::Column::ReturnId.is_in(active_return_ids))
+                    .filter(
+                        entities::order_return_item::Column::LineItemId
+                            .is_in(requested_line_item_ids),
+                    )
+                    .all(&self.db)
+                    .await?
+                {
+                    *quantities.entry(existing_item.line_item_id).or_default() +=
+                        existing_item.quantity;
+                }
+            }
+            quantities
+        };
+
+        let mut seen_line_item_ids = HashSet::new();
+        for item in &input.items {
+            let Some(order_item) = order_items_by_id.get(&item.line_item_id) else {
+                return Err(OrderError::Validation(format!(
+                    "return line item {} does not belong to order {}",
+                    item.line_item_id, order_id
+                )));
+            };
+            if !seen_line_item_ids.insert(item.line_item_id) {
+                return Err(OrderError::Validation(format!(
+                    "duplicate return line item {}",
+                    item.line_item_id
+                )));
+            }
+            let existing_quantity = existing_return_quantities
+                .get(&item.line_item_id)
+                .copied()
+                .unwrap_or_default();
+            let requested_total = existing_quantity + item.quantity;
+            if requested_total > order_item.quantity {
+                return Err(OrderError::Validation(format!(
+                    "return quantity {} exceeds remaining ordered quantity {} for line item {}",
+                    item.quantity,
+                    order_item.quantity - existing_quantity,
+                    item.line_item_id
+                )));
+            }
+        }
+
         let now = Utc::now();
+        let txn = self.db.begin().await?;
+        let return_id = generate_id();
         let created = entities::order_return::ActiveModel {
-            id: Set(generate_id()),
+            id: Set(return_id),
             tenant_id: Set(tenant_id),
             order_id: Set(order_id),
             reason: Set(trim_optional_text(input.reason)),
             note: Set(trim_optional_text(input.note)),
             status: Set(RETURN_STATUS_PENDING.to_string()),
+            resolution_type: Set(None),
+            refund_id: Set(None),
+            order_change_id: Set(None),
             metadata: Set(input.metadata),
             created_at: Set(now.into()),
             updated_at: Set(now.into()),
             completed_at: Set(None),
             cancelled_at: Set(None),
         }
-        .insert(&self.db)
+        .insert(&txn)
         .await?;
-        Ok(map_order_return_response(created))
+
+        let mut created_items = Vec::with_capacity(input.items.len());
+        for item in input.items {
+            let created_item = entities::order_return_item::ActiveModel {
+                id: Set(generate_id()),
+                tenant_id: Set(tenant_id),
+                return_id: Set(return_id),
+                order_id: Set(order_id),
+                line_item_id: Set(item.line_item_id),
+                quantity: Set(item.quantity),
+                reason: Set(trim_optional_text(item.reason)),
+                note: Set(trim_optional_text(item.note)),
+                metadata: Set(item.metadata),
+                created_at: Set(now.into()),
+                updated_at: Set(now.into()),
+            }
+            .insert(&txn)
+            .await?;
+            created_items.push(created_item);
+        }
+        txn.commit().await?;
+        Ok(map_order_return_response(created, created_items))
     }
 
     pub async fn get_return(
@@ -1273,7 +1731,8 @@ impl OrderService {
         return_id: Uuid,
     ) -> OrderResult<OrderReturnResponse> {
         let row = self.load_return_model(tenant_id, return_id).await?;
-        Ok(map_order_return_response(row))
+        let items = self.load_return_items(tenant_id, return_id).await?;
+        Ok(map_order_return_response(row, items))
     }
 
     pub async fn complete_return(
@@ -1285,6 +1744,12 @@ impl OrderService {
         input
             .validate()
             .map_err(|error| OrderError::Validation(error.to_string()))?;
+        let resolution_type = normalize_return_resolution_type(input.resolution_type)?;
+        validate_return_resolution_links(
+            resolution_type.as_deref(),
+            input.refund_id,
+            input.order_change_id,
+        )?;
         self.transition_return(
             tenant_id,
             return_id,
@@ -1293,6 +1758,9 @@ impl OrderService {
             input.metadata,
             |active, now| {
                 active.completed_at = Set(Some(now.into()));
+                active.resolution_type = Set(resolution_type.clone());
+                active.refund_id = Set(input.refund_id);
+                active.order_change_id = Set(input.order_change_id);
             },
         )
         .await
@@ -1346,8 +1814,30 @@ impl OrderService {
         let paginator = query.paginate(&self.db, per_page);
         let total = paginator.num_items().await?;
         let rows = paginator.fetch_page(page.saturating_sub(1)).await?;
+        let return_ids: Vec<Uuid> = rows.iter().map(|row| row.id).collect();
+        let mut items_by_return_id: HashMap<Uuid, Vec<entities::order_return_item::Model>> =
+            HashMap::new();
+        if !return_ids.is_empty() {
+            for item in entities::order_return_item::Entity::find()
+                .filter(entities::order_return_item::Column::TenantId.eq(tenant_id))
+                .filter(entities::order_return_item::Column::ReturnId.is_in(return_ids))
+                .order_by_asc(entities::order_return_item::Column::CreatedAt)
+                .all(&self.db)
+                .await?
+            {
+                items_by_return_id
+                    .entry(item.return_id)
+                    .or_default()
+                    .push(item);
+            }
+        }
         Ok((
-            rows.into_iter().map(map_order_return_response).collect(),
+            rows.into_iter()
+                .map(|row| {
+                    let items = items_by_return_id.remove(&row.id).unwrap_or_default();
+                    map_order_return_response(row, items)
+                })
+                .collect(),
             total,
         ))
     }
@@ -1362,6 +1852,19 @@ impl OrderService {
             .one(&self.db)
             .await?
             .ok_or(OrderError::OrderReturnNotFound(return_id))
+    }
+
+    async fn load_return_items(
+        &self,
+        tenant_id: Uuid,
+        return_id: Uuid,
+    ) -> OrderResult<Vec<entities::order_return_item::Model>> {
+        Ok(entities::order_return_item::Entity::find()
+            .filter(entities::order_return_item::Column::TenantId.eq(tenant_id))
+            .filter(entities::order_return_item::Column::ReturnId.eq(return_id))
+            .order_by_asc(entities::order_return_item::Column::CreatedAt)
+            .all(&self.db)
+            .await?)
     }
 
     async fn transition_return<F>(
@@ -1394,6 +1897,7 @@ impl OrderService {
         active.updated_at = Set(now.into());
         mutate(&mut active, now);
         let updated = active.update(&self.db).await?;
-        Ok(map_order_return_response(updated))
+        let items = self.load_return_items(tenant_id, return_id).await?;
+        Ok(map_order_return_response(updated, items))
     }
 }

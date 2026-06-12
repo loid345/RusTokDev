@@ -69,12 +69,27 @@ provider_module = "page-builder"
 contract = "grapesjs_v1"
 contract_version = "1.0"
 builder_contract_version = "1.0"
+consumer_min_version = "1.0"
 capabilities = ["preview", "tree", "properties", "publish"]
 
 [fba.builder_consumer.degraded_modes]
 builder_disabled = "admin_builder_readonly_fallback"
 preview_disabled = "preview_capability_hidden_keep_read_paths"
 publish_disabled = "typed_feature_disabled_error_keep_read_paths"
+
+[fba.builder_consumer.error_catalog]
+validation = "validation"
+sanitize = "sanitize"
+runtime = "runtime"
+feature_disabled = "feature-disabled"
+
+[fba.builder_consumer.error_codes]
+feature_disabled = "FEATURE_DISABLED"
+
+[fba.builder_consumer.degraded_mode_errors]
+builder_disabled = "FEATURE_DISABLED"
+preview_disabled = "FEATURE_DISABLED"
+publish_disabled = "FEATURE_DISABLED"
 
 [fba.builder_consumer.toggle_profiles]
 all_on = [

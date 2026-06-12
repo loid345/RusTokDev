@@ -25,7 +25,19 @@
 - module-owned `rustok-product/admin` и `rustok-product/storefront` теперь тоже
   синхронизированы с этим split: UI больше не показывает generic catalog
   `variants.prices` как resolved price, а держит отдельный pricing-module preview
-  hook для `adminPricingProduct` / `storefrontPricingProduct`;
+  hook для `adminPricingProduct` / `storefrontPricingProduct`; admin list/status/filter,
+  shipping-profile, pricing-preview и pricing deep-link helpers живут в
+  framework-agnostic `admin/src/core.rs` (включая `SelectedProductSummaryViewModel`),
+  admin GraphQL операции проходят через module-owned facade `admin/src/transport.rs`,
+  а Leptos render/effect adapter изолирован в `admin/src/ui/leptos.rs`;
+- storefront FFA slices вынесли route/query normalization, typed fetch request shape,
+  shell copy, selected-product view-model composition, selected-card labels/empty
+  state, catalog rail presentation, pricing/seller labels, pricing-context
+  sanitization/defaulting и pricing deep-link state в `storefront/src/core.rs`;
+  native/GraphQL storefront fetch paths оформлены как `storefront/src/transport/`
+  adapters, а Leptos `ProductView`/`SelectedProductCard`/`CatalogRail` живут в
+  `storefront/src/ui/leptos.rs` как тонкий host-context/render слой поверх
+  подготовленного core-состояния;
 - Общие DTO, entities и error surface приходят из `rustok-commerce-foundation`.
 - canonical vocabulary и attach semantics для product tags живут в
   `rustok-taxonomy` + `product_tags`, а public contract использует first-class
@@ -49,9 +61,9 @@
 
 ## Интеграция
 
-- модуль входит в ecommerce family и должен сохранять собственную storage/runtime-границу без возврата ответственности в umbrella ustok-commerce;
-- transport, GraphQL и UI-поверхности публикуются через ustok-commerce, пока для домена не зафиксирован отдельный module-owned surface;
-- изменения cross-module контракта нужно синхронизировать с ustok-commerce и соседними split-модулями.
+- модуль входит в ecommerce family и должен сохранять собственную storage/runtime-границу без возврата ответственности в umbrella `rustok-commerce`;
+- transport, GraphQL и UI-поверхности публикуются через `rustok-commerce`, пока для домена не зафиксирован отдельный module-owned surface;
+- изменения cross-module контракта нужно синхронизировать с `rustok-commerce` и соседними split-модулями.
 
 ## SEO ownership
 

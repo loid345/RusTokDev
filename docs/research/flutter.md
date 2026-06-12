@@ -1116,25 +1116,25 @@ _Легенда статусов: `⬜ Planned` — не начато, `🟡 In 
 | Статус | Фаза | Объём работ | На что опираемся в этом документе | Definition of Done |
 |---|---|---|---|---|
 | 🟡 In progress | **Phase 0 — Foundation** | Создать `host app`, app shell, тему, auth session store, GraphQL client factory, route contracts и сразу зафиксировать FFA-baseline для Flutter (единый product/capability contract без Flutter-specific API). | [Базовый каркас приложения](#базовый-каркас-приложения), [Маршрутизация](#маршрутизация), [Стандартное подключение GraphQL для RusTok](#стандартное-подключение-graphql-для-rustok), [Авторизация и refresh](#авторизация-и-refresh) | Работают login + `me` + `currentTenant`, есть базовый shell и deep-link вход в защищённый экран; FFA-baseline зафиксирован с начала разработки. |
-| ⬜ Planned | **Phase 1 — Pilot module** | Внедрить один module-owned пакет (рекомендовано: `modules` или `blog`) с реальным E2E флоу. | [Файловая структура и размещение UI-компонентов](#файловая-структура-и-размещение-ui-компонентов), [DI и registry-driven подключение модулей](#di-и-registry-driven-подключение-модулей), [Шаблоны экранов и виджетов](#шаблоны-экранов-и-виджетов) | Один бизнес-сценарий модуля проходит end-to-end в мобильном host без feature-local transport-клиентов. |
-| 🟡 In progress | **Phase 2 — Registry/codegen** | Подключить generated mobile registry из manifest/export и убрать ручное wiring в host. Заранее заложить расширяемость registry под сложные модульные поверхности (в т.ч. page builder: child pages/typed surface metadata), без отдельного «плана-повтора». | [Предлагаемый registry-driven поток подключения модулей](#предлагаемый-registry-driven-поток-подключения-модулей), [Предлагаемые самописные библиотеки и модули](#предлагаемые-самописные-библиотеки-и-модули) | Новый модуль подключается через manifest/codegen без правок в навигационном каркасе host; контракты registry готовы к page-builder сценариям (nested routes и surface metadata). |
+| 🟡 In progress | **Phase 1 — Pilot module** | Внедрить один module-owned пакет (рекомендовано: `modules` или `blog`) с реальным E2E флоу. | [Файловая структура и размещение UI-компонентов](#файловая-структура-и-размещение-ui-компонентов), [DI и registry-driven подключение модулей](#di-и-registry-driven-подключение-модулей), [Шаблоны экранов и виджетов](#шаблоны-экранов-и-виджетов) | Один бизнес-сценарий модуля проходит end-to-end в мобильном host без feature-local transport-клиентов. |
+| 🟡 In progress | **Phase 2 — Registry/codegen** | Подключить generated mobile registry из manifest/export и убрать ручное wiring в host. Заложить расширяемость только под mobile-safe host metadata: nested routes, nav, locale namespace и permission gates. | [Предлагаемый registry-driven поток подключения модулей](#предлагаемый-registry-driven-поток-подключения-модулей), [Предлагаемые самописные библиотеки и модули](#предлагаемые-самописные-библиотеки-и-модули) | Новый модуль подключается через manifest/codegen без правок в навигационном каркасе host; registry не содержит server-side FBA/provider metadata. |
 | ⬜ Planned | **Phase 3 — Parity expansion** | Перенести остальные high-value модули, закрепить route/i18n/permission parity и единые error/loading/empty паттерны. | [Где размещать UI-компоненты и как дублировать UI модулей платформы](#где-размещать-ui-компоненты-и-как-дублировать-ui-модулей-платформы), [Кэширование, обработка ошибок и subscriptions](#кэширование-обработка-ошибок-и-subscriptions) | Покрыты основные operator flows; контракты query keys/locale/permissions не расходятся с web-host правилами. |
 | ⬜ Planned | **Phase 4 — Hardening & release** | E2E, performance, observability, crash reporting, release pipeline (Android/iOS), rollout gates. | [Рекомендуемый pipeline для Flutter](#рекомендуемый-pipeline-для-flutter), [Шаблон GitHub Actions](#шаблон-github-actions), [Риски и митигации](#риски-и-митигации) | Готовы alpha/beta релизы, pipeline стабилен, критичные риски закрыты митигациями. |
 | ⬜ Planned | **Phase 5 — Offline/advanced sync (optional)** | Добавить офлайн-сценарии только после продуктового подтверждения требований. | [Open questions и ограничения](#open-questions-и-ограничения), [Риски и митигации](#риски-и-митигации) | Есть утверждённые offline requirements и реализована целевая стратегия sync/outbox. |
 
 
-#### Операционный статус плана (обновлено: 2026-05-28, FFA continuation)
+#### Операционный статус плана (обновлено: 2026-05-31, storefront catalog/cart package)
 
 - **FFA в плане отмечен:** ✅ Да. FFA-baseline явно зафиксирован в `Phase 0 — Foundation` и отдельно закреплён в anti-drift guardrail разделе.
-- **Текущий фокус выполнения:** `Phase 2 — Registry/codegen` (статус `🟡 In progress`) без изменения platform contract.
-- **Следующая точка контроля:** закрыть FFA-safe входные критерии `Phase 1` (registry freeze + codegen reproducibility + host adapter seam) и в этом же треке перевести `Phase 1 — Pilot module` в `🟡 In progress`.
+- **Текущий фокус выполнения:** `Phase 1 — Pilot module` (статус `🟡 In progress`) поверх закрытого host adapter seam; первый mutation-backed operator action для `modules` добавлен через canonical GraphQL `toggleModule`, permission gate берётся из GraphQL `me.permissions`, а retryable post-hook failures получают recovery feedback, retry/compensation actions и отдельный operation history/recovery screen через существующие lifecycle GraphQL contracts без feature-local transport-клиентов. `Phase 2 — Registry/codegen` остаётся в поддерживающем режиме без изменения platform contract. В отдельном host-треке добавлен `rustok_frontend_mobile` как customer storefront shell, чтобы не смешивать admin/operator и storefront UX.
+- **Следующая точка контроля:** закрепить E2E evidence operation history/recovery screen в CI-сигнале и довести storefront cart до canonical shared-transport implementation, не добавляя feature-local transport-клиентов.
 
-#### Ближайший execution backlog (Phase 2 → Phase 1)
+#### Ближайший execution backlog (Phase 1 pilot)
 
 1. **Registry schema freeze (FFA-safe):** зафиксировать минимальный mobile registry contract (`module_slug`, `surface_kind`, `route_segment`, `child_pages`, `permissions`, `locale_namespace`) без Flutter-only полей.
 2. **Codegen pipeline:** добавить reproducible генерацию `mobile_manifest.g.dart` из manifest snapshot + CI-проверку diff generated-файлов (в работе: локальная verify-команда уже фиксирует stale-state для manifest + snapshot).
 3. **Host integration seam:** подключить registry через единый adapter-слой (`module_entry_adapter`) и убрать ручное перечисление модулей в shell routing/nav.
-4. **Pilot gate:** после стабилизации registry перевести `Phase 1 — Pilot module` в `🟡 In progress` и взять один модульный E2E-флоу (`modules` или `blog`) как контроль parity.
+4. **Pilot gate:** `Phase 1 — Pilot module` переведён в `🟡 In progress`; первый mutation-backed operator action реализован через `toggleModule`, permission gate подключён к hydrated `me.permissions`, retryable post-hook failures показывают recovery feedback и retry/compensation actions; operation history/recovery screen добавлен как следующий audit-oriented слой pilot-флоу.
 
 
 
@@ -1166,7 +1166,178 @@ _Легенда статусов: `⬜ Planned` — не начато, `🟡 In 
 | Generated-file diff diagnostics | `rustok_mobile/tooling/scripts/verify_mobile_manifest.py` | stale manifest/snapshot failures print unified diff + regeneration command | ✅ Done |
 | Host adapter seam (`module_entry_adapter`) | `apps/rustok_admin_mobile` | registry подключается без ручного списка модулей в shell-router | ✅ Done |
 | Manifest-driven nav icon mapping | `apps/rustok_admin_mobile` | host nav использует `nav.icon` из generated manifest и fallback по module metadata без ручного списка routes | ✅ Done |
-| Pilot E2E evidence (modules/blog) | integration tests / manual evidence | login → module list/detail → shell back | ⬜ Planned |
+| Pilot E2E evidence (modules/blog) | `rustok_mobile/apps/rustok_admin_mobile/test/pilot_modules_flow_test.dart` + `rustok_mobile/packages/rustok_modules_mobile/test/modules_mobile_screen_test.dart` | authenticated shell → GraphQL-backed module list → module detail route → shell back; package widget test verifies `toggleModule` action refresh and operation history/recovery actions | 🟡 In progress |
+
+#### PR-D evidence pack (Flutter storefront mobile host)
+
+**Storefront mobile host:** `rustok_mobile/apps/rustok_frontend_mobile`.
+
+Добавлен отдельный customer-facing Flutter host, потому что web storefront уже существует как `apps/storefront` + `apps/next-frontend`, а мобильный storefront не должен смешиваться с admin/operator приложением:
+- host-owned runtime context — `StorefrontRuntimeContext` и `storefrontGraphQlConfigProvider` собирают `tenantSlug`, `locale` и `/api/graphql` endpoint централизованно;
+- route contract — shell содержит `home/catalog/cart/profile`, монтирует module-owned catalog/cart package и использует generated storefront registry для reserved `/modules/:routeSegment`;
+- FFA rule — новый host не вводит Flutter-only backend API и не копирует canonical routing/storage logic из web storefront;
+- evidence — `rustok_mobile/apps/rustok_frontend_mobile/test/storefront_router_test.dart` проверяет home runtime context, catalog/cart routes и generic module placeholder route.
+
+Следующий storefront mobile шаг: довести cart-часть до shared-transport backend implementation и подключить storefront packages через generated registry, синхронно с `docs/UI/storefront.md` и web storefront parity rules.
+
+#### PR-C evidence pack (Phase 1 pilot modules flow)
+
+**Pilot package:** `rustok_mobile/packages/rustok_modules_mobile`.
+
+Минимальный Phase 1 pilot теперь закреплён как module-owned mobile package для surface `modules`:
+- data boundary — `ModulesRepository`, где host обязан передать shared GraphQL client;
+- transport implementation — `GraphQlModulesRepository` использует существующий platform query `moduleRegistry`;
+- UI entry point — `ModulesMobileScreen` с loading/error/empty состояниями и переходом в generated host route;
+- host seam — `apps/rustok_admin_mobile` overrides `modulesRepositoryProvider` через `graphQlClientProvider`, сохраняя auth/tenant/locale context на host-слое;
+- evidence — widget E2E `pilot_modules_flow_test.dart` проверяет authenticated shell → module list → generated detail route → return to `/modules`.
+
+FFA-ограничение для этого шага: пакет `rustok_modules_mobile` не создаёт собственный GraphQL client, auth/session store, tenant resolver или locale fallback chain. Он только потребляет host-provided repository и existing GraphQL surface.
+
+#### PR-E evidence pack (Phase 1 modules mutation action)
+
+**Mutation-backed operator action:** `toggleModule` в `rustok_mobile/packages/rustok_modules_mobile`.
+
+Pilot-флоу `modules` расширен от read-only list/detail evidence к первому operator action:
+- data boundary — `ModulesRepository.toggleModule(...)` добавляет write-side контракт рядом с `listModules()`;
+- transport implementation — `GraphQlModulesRepository` использует существующую canonical GraphQL mutation `toggleModule(moduleSlug, enabled)` и возвращает typed `ModuleToggleResult`;
+- UI action — `ModulesMobileScreen` показывает enable/disable action только для optional modules и GraphQL-hydrated `modules:manage` capability context;
+- refresh evidence — после успешной mutation UI инвалидирует `modulesControllerProvider` и перечитывает `moduleRegistry`;
+- test evidence — `modules_mobile_screen_test.dart` проверяет mutation request, refresh state, recovery feedback и retry/compensation actions without feature-local GraphQL client.
+
+Permission source теперь hydrated через GraphQL `me.permissions` в host bootstrap probe; retryable lifecycle failures читаются через existing query `failedModuleOperationRecoveryPlans`, а recovery выполняется через existing mutations `retryFailedModuleOperationPostHook` и `compensateFailedModuleOperation`. Это не новый Flutter-specific backend API и не feature-local fallback chain.
+
+#### PR-F evidence pack (Phase 1 lifecycle recovery actions)
+
+**Recovery actions:** `retryFailedModuleOperationPostHook` и `compensateFailedModuleOperation` в `rustok_mobile/packages/rustok_modules_mobile`.
+
+Pilot-флоу `modules` теперь не только показывает recovery feedback, но и даёт оператору выполнить canonical recovery actions:
+- data boundary — `ModulesRepository.retryFailedPostHook(...)` и `ModulesRepository.compensateFailedOperation(...)` добавляют write-side recovery contract рядом с `toggleModule(...)`;
+- transport implementation — `GraphQlModulesRepository` использует существующие lifecycle GraphQL mutations без Flutter-only API;
+- UI action — `_RecoveryPlanNotice` показывает `Retry post-hook` и `Compensate`, блокирует retry для non-retryable plans и инвалидирует `modulesControllerProvider` после recovery;
+- test evidence — `modules_mobile_screen_test.dart` проверяет retry и compensation action requests, очистку recovery notice и отсутствие feature-local GraphQL client.
+
+Следующий шаг после PR-F был закрыт отдельным audit-oriented слоем: inline recovery notice теперь может вести в dedicated operation history/recovery screen без feature-local GraphQL client.
+
+#### PR-G evidence pack (Phase 1 operation history/recovery screen)
+
+**Operation history screen:** `ModulesRecoveryScreen` в `rustok_mobile/packages/rustok_modules_mobile`.
+
+Pilot-флоу `modules` расширен от inline recovery notice к отдельному экрану истории failed lifecycle operations:
+- UI boundary — `ModulesRecoveryScreen` показывает список `failedModuleOperationRecoveryPlans` с `operationId`, requested/previous state, `issue`, `recommendedAction`, `correlationId`, `requestedBy` и `errorMessage`;
+- host route — `apps/rustok_admin_mobile` монтирует `/modules/recovery/:moduleSlug` внутри существующего shell и передаёт тот же host-provided `ModulesRepository`;
+- action parity — экран выполняет те же canonical `retryFailedModuleOperationPostHook` и `compensateFailedModuleOperation`, инвалидирует `modulesControllerProvider` и перечитывает recovery history;
+- FFA guardrail — recovery screen не добавляет Flutter-only API, не создаёт feature-local GraphQL client и остаётся потребителем existing lifecycle GraphQL contracts;
+- test evidence — `modules_mobile_screen_test.dart` проверяет metadata/history rendering и recovery action requests, а `pilot_modules_flow_test.dart` проверяет переход из recovery feedback в shell-mounted recovery route.
+
+Следующий шаг после PR-G: закрепить operation history/recovery screen в CI/codegen evidence и продолжить storefront mobile track с первым module-owned catalog/cart package.
+
+
+#### PR-H evidence pack (storefront catalog/cart mobile package)
+
+**Storefront catalog/cart package:** `rustok_mobile/packages/rustok_catalog_mobile`.
+
+В storefront mobile-треке появился первый module-owned package вместо catalog/cart placeholder-экранов:
+- UI-boundary — `StorefrontCatalogScreen` и `StorefrontCartScreen` живут вне host-а и владеют customer-facing loading/error/empty состояниями;
+- data-boundary — `StorefrontCatalogRepository` передаётся host-ом через Riverpod, поэтому package не создаёт GraphQL client, tenant resolver, auth/session store или locale fallback chain;
+- shared-transport wiring — `apps/rustok_frontend_mobile` использует host-owned `GraphQlStorefrontCatalogRepository`, который читает каталог через существующий GraphQL `storefrontSearch`;
+- host route — `apps/rustok_frontend_mobile` монтирует package на `/catalog` и `/cart`, а shell navigation, runtime `tenantSlug`/`locale` и GraphQL-конфигурация остаются host-owned;
+- test evidence — `catalog_screens_test.dart` проверяет package UI states с host-provided repositories, а `storefront_router_test.dart` проверяет catalog/cart mounting внутри customer storefront shell.
+
+FFA guardrail для этого шага: это только mobile client/package boundary. Изменение не добавляет Flutter-specific backend API, feature-local transport client или дублирующую canonical routing/storage logic.
+
+Следующий storefront шаг: довести cart-часть до canonical shared-transport reads/writes, когда соответствующая GraphQL/REST surface будет готова.
+
+
+#### PR-I evidence pack (storefront mobile registry/codegen)
+
+**Storefront registry:** `rustok_mobile/apps/rustok_frontend_mobile/lib/registry/storefront_mobile_manifest.g.dart`.
+
+Storefront mobile получил generated registry рядом с admin mobile registry:
+- codegen surface — `generate_mobile_manifest.py --surface storefront` читает `provides.storefront_ui` из `rustok-module.toml` и выставляет `MobileSurfaceKind.storefront`;
+- snapshot evidence — `rustok_mobile/tooling/snapshots/storefront_mobile_manifest.snapshot.json` фиксирует `storefront_mobile` contract поля `module_slug`, `route_segment`, `permissions`, `locale_namespace` и `child_pages`;
+- host route — generic `/modules/:routeSegment` теперь показывает manifest-backed title для storefront modules вместо raw segment-only placeholder;
+- verification — `check_mobile_codegen.py` и `verify_mobile_manifest.py` принимают `--surface storefront`, поэтому admin и storefront generated outputs можно проверять одинаковым CI-friendly сигналом.
+
+FFA guardrail для этого шага: registry содержит только mobile-safe surface metadata и не переносит server-side FBA/provider details в Flutter host.
+
+Следующий storefront шаг: довести cart-часть до canonical shared-transport reads/writes и расширять manifest-to-package mapping по мере появления новых module-owned storefront packages.
+
+
+#### PR-J evidence pack (storefront registry package discovery)
+
+**Storefront package discovery:** `rustok_mobile/apps/rustok_frontend_mobile/lib/registry/storefront_surface_registry.dart`.
+
+Generated storefront registry теперь используется не только для placeholder-title metadata, но и для выбора mounted package surface:
+- registry adapter — `StorefrontSurfaceRegistry` нормализует `route_segment` из generated manifest и возвращает typed `catalog`, `cart` или `generic` surface match;
+- host route — `/modules/products` монтирует `StorefrontCatalogScreen`, а `/modules/cart` монтирует `StorefrontCartScreen` через тот же host-provided `StorefrontCatalogRepository`;
+- generic fallback — остальные storefront module routes продолжают показывать manifest-backed placeholder без feature-local transport clients;
+- test evidence — `storefront_router_test.dart` проверяет generic `blog`, package-backed `products` и package-backed `cart` routes внутри shell.
+
+FFA guardrail для этого шага: mapping остаётся host-side adapter logic поверх generated mobile-safe registry и не переносит server-side provider/FBA metadata в Flutter package.
+
+Следующий storefront шаг: добавить canonical cart write actions (create/add/update/remove) и расширять manifest-to-package mappings только при появлении соответствующих module-owned packages.
+
+
+#### PR-K evidence pack (storefront cart read transport)
+
+**Cart read path:** `rustok_mobile/apps/rustok_frontend_mobile/lib/data/storefront_catalog_repository.dart`.
+
+Storefront catalog/cart package теперь получает cart data через host-owned shared GraphQL transport:
+- runtime context — `StorefrontRuntimeContext.cartId` берётся из optional `RUSTOK_STOREFRONT_CART_ID` и не создаёт package-local storage contract;
+- data adapter — `GraphQlStorefrontCatalogRepository.cartLines()` вызывает existing GraphQL `storefrontCart(id)` и маппит `lineItems` в `StorefrontCartLine`;
+- empty fallback — если host не передал cart id, cart surface остаётся empty state без Flutter-only API или локального fallback resolver;
+- FFA guardrail — catalog/cart package по-прежнему потребляет только host-provided repository и не создаёт собственный GraphQL client, tenant resolver или locale fallback chain.
+
+#### PR-L evidence pack (storefront cart write transport)
+
+**Cart write path:** `rustok_mobile/apps/rustok_frontend_mobile/lib/data/storefront_catalog_repository.dart` + `rustok_mobile/packages/rustok_catalog_mobile/lib/src/catalog_repository.dart`.
+
+Storefront catalog/cart package теперь выполняет customer cart write actions через тот же host-owned repository seam:
+- repository contract — module-owned package объявляет create/add/update/remove intents, но не создаёт GraphQL client, tenant resolver, locale fallback или package-local cart storage;
+- data adapter — host repository вызывает canonical GraphQL mutations `createStorefrontCart`, `addStorefrontCartLineItem`, `updateStorefrontCartLineItem` и `removeStorefrontCartLineItem`, повторно используя shared GraphQL headers/context;
+- UX actions — catalog cards могут добавить товар только при наличии backend-provided `variantId`, empty cart может стартовать cart, line items могут увеличить/уменьшить quantity или удалить строку;
+- runtime guardrail — созданный cart id хранится в host-owned `StorefrontCartIdStore`; durable storage остаётся отдельным host-owned product decision, а не package-local contract;
+- contract tests — `rustok_mobile/tooling/tests/test_storefront_cart_contract.py` фиксирует, что package не fallback-ит product id в variant id и что host repository использует host cart id store.
+
+Следующий storefront шаг был закрыт host-owned persistence seam и schema-backed contract evidence: cart id больше не привязан к package-local или repository-local памяти, а Flutter cart operations проверяются против существующего commerce GraphQL surface.
+
+#### PR-M evidence pack (storefront cart durable host seam + schema contract)
+
+**Cart persistence and schema evidence:** `rustok_mobile/apps/rustok_frontend_mobile/lib/app_shell/storefront_context.dart` + `rustok_mobile/tooling/tests/test_storefront_cart_graphql_contract.py`.
+
+Storefront cart write path получил host-owned durable seam без расширения Flutter-specific API:
+- persistence boundary — `DurableStorefrontCartIdStore` работает через `StorefrontCartIdPersistence`, поэтому package `rustok_catalog_mobile` по-прежнему не создаёт cart storage contract;
+- host adapter — `FileStorefrontCartIdPersistence` может хранить cart id в host-provided JSON file через `RUSTOK_STOREFRONT_CART_ID_FILE`, а previews/tests сохраняют in-memory persistence;
+- runtime guardrail — storage key задаётся host-слоем (`RUSTOK_STOREFRONT_CART_STORAGE_KEY`), tenant/locale/auth context остаётся в shared GraphQL config;
+- schema-backed evidence — `test_storefront_cart_graphql_contract.py` сверяет Flutter cart operations и input types с существующими resolver/input declarations в `crates/rustok-commerce`;
+- FFA guardrail — durable seam не добавляет `/api/flutter`, `/api/mobile` или feature-local GraphQL client и не переносит storage ownership в module-owned catalog package.
+
+Следующий storefront шаг частично закрыт registry-driven home navigation: storefront host теперь показывает все generated manifest routes на главной поверхности, разделяя package-backed и manifest-only entries без ручного hard-code blog route. Более глубокий integration/e2e сигнал поверх реального schema snapshot или test server остаётся следующим CI-шагом, когда Flutter SDK будет доступен в окружении.
+
+#### PR-N evidence pack (storefront generated module navigation)
+
+**Generated storefront module links:** `rustok_mobile/apps/rustok_frontend_mobile/lib/routes/storefront_router.dart`.
+
+Storefront host начал использовать generated registry не только для direct `/modules/:routeSegment` resolution, но и для home navigation discovery:
+- navigation boundary — `StorefrontHomePage` рендерит список `storefrontSurfaceRegistry.entries`, поэтому новые storefront manifest entries становятся видимыми без hard-coded home links;
+- package/fallback signal — package-backed `products`/`cart` routes помечаются как `package`, остальные manifest-only surfaces остаются generic `manifest` entries;
+- route parity — tap по generated entry ведёт на тот же `/modules/<route_segment>` seam, который уже монтирует `StorefrontCatalogScreen`, `StorefrontCartScreen` или generic placeholder;
+- test evidence — `storefront_router_test.dart` проверяет generated home links и переход в manifest-backed `blog`, а `test_storefront_home_registry_contract.py` фиксирует отсутствие hard-coded `/modules/blog` home route.
+
+Следующий storefront шаг частично закрыт source-backed сигналом для catalog/cart GraphQL path: Flutter operation documents теперь сверяются с существующими storefront/search API и server runtime parity flow. Live schema/test-server CI остаётся следующим усилением, когда Flutter SDK и тестовый server harness будут доступны в целевом окружении. Package mappings по-прежнему расширяются только при появлении новых module-owned storefront packages.
+
+#### PR-O evidence pack (storefront catalog/cart GraphQL integration signal)
+
+**Source-backed integration signal:** `rustok_mobile/tooling/scripts/verify_storefront_graphql_contract.py` + `rustok_mobile/tooling/tests/test_storefront_cart_graphql_contract.py`.
+
+Storefront track получил первый детерминированный CI-friendly сигнал для catalog/cart GraphQL path без добавления Flutter-specific API:
+- catalog contract — переиспользуемая CLI-проверка извлекает mobile `StorefrontMobileCatalog` query из Dart raw-string const и сверяет её с существующей surface `storefrontSearch(input: $input)` и `SearchPreviewInput` в `crates/rustok-search/storefront/src/api.rs`;
+- cart contract — CLI-проверка извлекает mobile `StorefrontMobileCart` read и create/add/update/remove mutation documents, проверяет operation/root-field markers и сверяет их с canonical commerce operation names;
+- server-backed evidence — cart operation documents дополнительно привязаны к `crates/rustok-commerce/tests/graphql_runtime_parity_test.rs`, где те же create/add/query/update/remove steps выполняются через `schema.execute(Request::new(...))` и проверяют отсутствие GraphQL errors;
+- FFA guardrail — CLI-проверка не вводит `/api/flutter`, `/api/mobile`, feature-local transport client или package-local tenant/locale/cart ownership и запрещает `tenantId` в mobile operation documents, потому что tenant/locale остаются host-provided GraphQL context;
+- environment note — это source-backed contract/integration evidence для текущего окружения без Flutter SDK; CLI умеет печатать JSON evidence со списком server evidence paths через `--json`, а live schema/test-server job остаётся следующим CI-усилением, а не новым архитектурным контрактом.
+
+Следующий storefront шаг: поднять этот сигнал до live schema/test-server job в CI, когда будет доступен Flutter SDK/test server harness, и расширять package mappings только при появлении новых module-owned storefront packages.
 
 #### PR-A evidence pack (registry contract freeze)
 
@@ -1189,7 +1360,7 @@ _Легенда статусов: `⬜ Planned` — не начато, `🟡 In 
 | `surface_kind` | required | Допустимо расширение enum только backward-compatible значениями | Нормализует тип surface для host-клиентов |
 | `route_segment` | required | Изменение требует явного redirect/mapping в host routing | Поддерживает единый routing contract между host-ами |
 | `nav_icon` | required in snapshot / optional in source manifests | Отсутствие в manifest нормализуется в `module`; новые значения должны быть backward-compatible с host fallback mapping | Visual parity metadata без Flutter-specific API или transport contract |
-| `child_pages` | optional | Отсутствие трактуется как `[]`; новые элементы добавляются additive | Нужен для nested surfaces/page-builder сценариев |
+| `child_pages` | optional | Отсутствие трактуется как `[]`; новые элементы добавляются additive | Нужен для nested mobile/admin surfaces без server-side FBA metadata |
 | `permissions` | optional | Отсутствие трактуется как `[]`; новые permission strings additive | Capability-level gate, без mobile-only API |
 | `locale_namespace` | optional | Отсутствие означает fallback на module slug namespace | Сохраняет host-owned locale policy без feature-local fallback |
 
@@ -1204,9 +1375,9 @@ _Легенда статусов: `⬜ Planned` — не начато, `🟡 In 
 
 #### FFA-проверка для каждого PR в этом треке
 
-- [ ] Нет Flutter-specific API-контрактов поверх платформы (только consumption существующих platform contracts).
-- [ ] Route/query keys соответствуют canonical `snake_case` правилам RusTok.
-- [ ] Locale/tenant/auth context собирается host-слоем централизованно (без feature-local fallback chains).
+- [x] Нет Flutter-specific API-контрактов поверх платформы (только consumption существующих platform contracts).
+- [x] Route/query keys соответствуют canonical `snake_case` правилам RusTok.
+- [x] Locale/tenant/auth context собирается host-слоем централизованно (без feature-local fallback chains).
 - [x] Registry/codegen изменения не ломают возможность module-owned surfaces подключаться декларативно.
 
 #### Чек-лист anti-duplication для PR
@@ -1221,33 +1392,23 @@ _Легенда статусов: `⬜ Planned` — не начато, `🟡 In 
 ### Scope clarification: клиенты, а не третий web frontend
 
 Для текущего трека Flutter scope фиксируется так:
-- не создавать «третий web frontend» параллельно `apps/admin` / `apps/next-admin`;
+- не создавать «третий web frontend» параллельно `apps/admin` / `apps/next-admin` / `apps/storefront` / `apps/next-frontend`;
 - развивать **headless-клиенты** (mobile и desktop) как host-приложения поверх существующего backend-контракта;
+- держать admin/operator и customer storefront как отдельные Flutter host-приложения (`rustok_admin_mobile` и `rustok_frontend_mobile`), а не смешивать их навигацию и UX;
 - переиспользовать общий client-core (auth/session, tenant/locale context, GraphQL transport, route/query contracts) между mobile и desktop поверхностями.
 
 Это сохраняет platform parity и снижает стоимость сопровождения по сравнению с отдельным web-host fork.
 
 ### Зависимости между планами (anti-drift guardrail)
 
-- Flutter-план для registry/codegen и module surfaces **зависит** от выполнения backend/page-builder этапов в:
-  - `docs/modules/tiptap-page-builder-implementation-plan.md`;
-  - `crates/rustok-pages/docs/implementation-plan.md` (Dedicated page-builder track).
 - Flutter host, базовый app shell и module-owned mobile UI пакеты нужно развивать в логике FFA (один product contract при разных runtime/topology), но **без** Flutter-специфичных API-контрактов поверх платформы.
+- FBA/provider-consumer metadata относится к серверным модулям и backend governance. Flutter registry/codegen не должен читать или дублировать `fba.*` manifest sections, `builder_contract_version`, `consumer_min_version`, machine-readable builder registry, provider capabilities или toggle profiles.
 - Для практики это означает:
-  - Flutter держит минимальные contract-safe каркасы (`preview/tree/properties/publish`) и registry wiring;
+  - Flutter держит только mobile-safe host metadata: route segment, nav, child pages, locale namespace и permissions;
   - canonical правила builder/state/validation/RBAC остаются на backend и в общем page-builder плане;
-  - parity проверяется по capability и data-contract, а не по буквальному UI-клону Leptos/Next.
-- Синхронизация milestone (2026-05-23): в web-admin стэках закрыты Phase 1 capability surfaces (`apps/admin` + `apps/next-admin`) и parity-note зафиксирован в `docs/modules/tiptap-page-builder-implementation-plan.md`; Flutter может двигать registry/codegen дальше без изменения platform contract.
-- FFA-baseline для Flutter остаётся закреплённым в **Phase 0 — Foundation** (см. таблицу фаз выше), и это правило не переносится в поздние builder-фазы.
-- Если в мобильном host добавить routing/registry под page-builder раньше, чем зафиксированы backend contract + parity для admin-стеков, появится drift:
-  - расхождение surface metadata;
-  - нестабильные GraphQL payload/contracts;
-  - повторные переделки route/query wiring в клиентах.
-- Поэтому при каждом PR по Flutter registry/module contracts агент должен явно отмечать:
-  1) что уже закрыто в backend/page-builder плане;
-  2) какой следующий шаг **заблокирован** до закрытия пунктов в `tiptap-page-builder-implementation-plan.md` и `rustok-pages` плане.
-
-- Актуальный dependency checkpoint (2026-05-25): central plan перешёл к `Section 8.5 / PB-FBA-1A..1D`; Flutter delivery остаётся в режиме contract-safe scaffolding до закрытия минимум `PB-FBA-1A` (contract freeze + CI anti-drift) и `PB-FBA-1B` (fallback evidence `all_on/publish_off/preview_off/builder_off`).
+  - parity проверяется по UI-facing GraphQL/REST contracts и host navigation semantics, а не по server-side FBA manifest fields.
+- Если когда-нибудь появится отдельный UI-facing page-builder contract для мобильного host, его нужно вводить отдельным Flutter-планом и не смешивать с server-side FBA metadata.
+- Чекпойнт реализации (2026-05-31): сгенерированный Flutter-реестр переносит из `rustok-module.toml` только mobile-safe host metadata: маршруты, навигацию, дочерние страницы, `locale_namespace` и `permissions`. FBA/provider-consumer metadata и `crates/rustok-page-builder/contracts/page-builder-fba-registry.json` остаются server/module concern и не попадают во Flutter snapshot; мобильный host не вводит `builder_surface` или page-builder-specific route guards.
 
 
 Ниже — то, что в постановке **не указано**, поэтому в отчёте я дал только разумные варианты, а не жёсткие требования:
@@ -1257,7 +1418,7 @@ _Легенда статусов: `⬜ Planned` — не начато, `🟡 In 
 | Целевые платформы | **Уточнено** | Mobile-first (iOS + Android), затем desktop (macOS/Windows/Linux) на общем client-core; без запуска нового web-host |
 | Минимальные OS/SDK требования | **Не указано** | Брать актуальную stable-ветку Flutter и согласовать minima после freeze набора пакетов |
 | Offline support | **Не указано** | Стартовать без offline-first; только persisted cache + secure auth + drafts |
-| Тип мобильного приложения | **Не указано** | Судя по репозиторию, первичен **admin/operator mobile host**; storefront имеет смысл выносить отдельным приложением/пакетом позже |
+| Тип мобильного приложения | **Уточнено** | Admin/operator и customer storefront ведутся как отдельные host-приложения: `rustok_admin_mobile` и `rustok_frontend_mobile` |
 | Способ получения manifest/export для mobile registry | **Не указано** | На первом этапе — snapshot/codegen из RusTok repo; в долгую — backend/export endpoint |
 | Distribution model | **Не указано** | Internal/TestFlight/Play Internal на первых этапах |
 

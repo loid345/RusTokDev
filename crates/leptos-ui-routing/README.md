@@ -7,6 +7,7 @@
 ## Responsibilities
 
 - Provide reusable query read/write helpers for Leptos module-owned UI packages.
+- Apply shared `rustok-api::UiRouteQueryUpdate` intents from FFA module cores to the Leptos router.
 - Keep route-state plumbing reusable across admin and storefront Leptos packages.
 - Stay generic: no admin-specific query schema, no domain logic, no data fetching, no i18n policy.
 - Consume host-provided routing policy through context instead of owning route contracts itself.
@@ -14,7 +15,7 @@
 ## Interactions
 
 - Consumed by module-owned Leptos UI crates in both `crates/*/admin` and `crates/*/storefront`.
-- Works with `rustok-api`, which owns route/query schemas and host route context contracts.
+- Works with `rustok-api`, which owns route/query schemas, host route context contracts, and framework-agnostic route-query update intents.
 - Works with host apps such as `apps/admin` and `apps/storefront`, which provide the route sanitization/write policy.
 
 ## Entry points

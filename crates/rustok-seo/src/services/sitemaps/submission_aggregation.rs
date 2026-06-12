@@ -43,7 +43,7 @@ pub(super) struct SitemapSubmissionTelemetrySnapshot {
 pub(super) struct SitemapSubmissionSummary {
     pub(super) success_count: usize,
     pub(super) failure_count: usize,
-    endpoint_results: Vec<SitemapSubmissionEndpointStatus>,
+    pub(super) endpoint_results: Vec<SitemapSubmissionEndpointStatus>,
 }
 
 impl SitemapSubmissionSummary {
@@ -107,13 +107,7 @@ impl SitemapSubmissionSummary {
                 .endpoint_statuses
                 .iter()
                 .take(SITEMAP_SUBMIT_MAX_ENDPOINT_STATUS_SAMPLE)
-                .map(|status| {
-                    format!(
-                        "{}:{}",
-                        status.endpoint,
-                        status.state.as_str(),
-                    )
-                })
+                .map(|status| format!("{}:{}", status.endpoint, status.state.as_str(),))
                 .collect::<Vec<_>>()
                 .join(", ");
             parts.push(format!("endpoint statuses: [{statuses}]"));
@@ -126,13 +120,17 @@ impl SitemapSubmissionSummary {
         }
 
         let message = parts.join("; ");
-        Some(truncate_with_ellipsis(message, SITEMAP_SUBMIT_MAX_ERROR_LEN))
+        Some(truncate_with_ellipsis(
+            message,
+            SITEMAP_SUBMIT_MAX_ERROR_LEN,
+        ))
     }
 
     pub(super) fn telemetry_snapshot(&self) -> SitemapSubmissionTelemetrySnapshot {
         let mut statuses = sorted_endpoint_results(self.endpoint_results.as_slice());
-        let omitted_endpoint_status_count =
-            statuses.len().saturating_sub(SITEMAP_SUBMIT_MAX_ENDPOINT_STATUS_COUNT);
+        let omitted_endpoint_status_count = statuses
+            .len()
+            .saturating_sub(SITEMAP_SUBMIT_MAX_ENDPOINT_STATUS_COUNT);
         statuses.truncate(SITEMAP_SUBMIT_MAX_ENDPOINT_STATUS_COUNT);
 
         SitemapSubmissionTelemetrySnapshot {
@@ -144,23 +142,27 @@ impl SitemapSubmissionSummary {
 
 pub(super) fn record_submission_success(summary: &mut SitemapSubmissionSummary, endpoint: &str) {
     summary.success_count += 1;
-    summary.endpoint_results.push(SitemapSubmissionEndpointStatus {
-        endpoint: truncate_endpoint(endpoint),
-        state: SitemapSubmissionEndpointState::Success,
-        detail: None,
-    });
+    summary
+        .endpoint_results
+        .push(SitemapSubmissionEndpointStatus {
+            endpoint: truncate_endpoint(endpoint),
+            state: SitemapSubmissionEndpointState::Success,
+            detail: None,
+        });
 }
 
 pub(super) fn record_invalid_endpoint(summary: &mut SitemapSubmissionSummary, endpoint: &str) {
     summary.failure_count += 1;
-    summary.endpoint_results.push(SitemapSubmissionEndpointStatus {
-        endpoint: truncate_endpoint(endpoint),
-        state: SitemapSubmissionEndpointState::InvalidEndpoint,
-        detail: Some(truncate_error_detail(format!(
-            "invalid endpoint: {}",
-            endpoint.trim()
-        ))),
-    });
+    summary
+        .endpoint_results
+        .push(SitemapSubmissionEndpointStatus {
+            endpoint: truncate_endpoint(endpoint),
+            state: SitemapSubmissionEndpointState::InvalidEndpoint,
+            detail: Some(truncate_error_detail(format!(
+                "invalid endpoint: {}",
+                endpoint.trim()
+            ))),
+        });
 }
 
 pub(super) fn record_submission_failure(
@@ -175,11 +177,13 @@ pub(super) fn record_submission_failure(
         SitemapSubmissionEndpointState::Failure
     };
 
-    summary.endpoint_results.push(SitemapSubmissionEndpointStatus {
-        endpoint: truncate_endpoint(endpoint),
-        state,
-        detail: Some(truncate_error_detail(detail)),
-    });
+    summary
+        .endpoint_results
+        .push(SitemapSubmissionEndpointStatus {
+            endpoint: truncate_endpoint(endpoint),
+            state,
+            detail: Some(truncate_error_detail(detail)),
+        });
 }
 
 fn sorted_endpoint_results(
@@ -196,7 +200,10 @@ fn sorted_endpoint_results(
 }
 
 fn truncate_endpoint(value: &str) -> String {
-    truncate_with_ellipsis(value.trim().to_string(), SITEMAP_SUBMIT_MAX_ENDPOINT_VALUE_LEN)
+    truncate_with_ellipsis(
+        value.trim().to_string(),
+        SITEMAP_SUBMIT_MAX_ENDPOINT_VALUE_LEN,
+    )
 }
 
 fn truncate_error_detail(value: String) -> String {

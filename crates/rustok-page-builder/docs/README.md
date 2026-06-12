@@ -22,7 +22,8 @@
 ## Точки входа
 
 - `src/lib.rs` — runtime metadata и permission surface;
-- `rustok-module.toml` — декларация slug/entry type/ui-classification.
+- `rustok-module.toml` — декларация slug/entry type/ui-classification;
+- `contracts/page-builder-fba-registry.json` — machine-readable registry provider/consumer versions, minimum supported consumer version and fallback profile names for anti-drift gates.
 
 ## Интеграция
 
@@ -30,10 +31,22 @@
 - `rustok-pages` и другие layout/content модули используют builder как consumer по contract-first path;
 - host-реализации (Next/Leptos/Flutter) синхронизируются через capability contract, а не через UI 1:1.
 
+## Fallback matrix
+
+Runtime provider-а фиксирует baseline fallback-профили в `src/rollout.rs`; consumer-модули и host adapters обязаны держать те же имена outcome.
+
+| Профиль | Admin visual path | Preview | Properties/tree | Publish | Read/list/storefront paths | Disabled capabilities |
+|---|---|---|---|---|---|---|
+| `all_on` | `editable_builder` | `available` | `available` | `available` | `stable` | — |
+| `publish_off` | `editable_builder_publish_disabled` | `available` | `available` | `typed_feature_disabled_error` | `stable` | `publish` |
+| `preview_off` | `preview_hidden_properties_available` | `typed_feature_disabled_error` | `available` | `typed_feature_disabled_error` | `stable` | `preview`, `publish` |
+| `builder_off` | `readonly_fallback` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `typed_feature_disabled_error` | `stable` | `preview`, `tree`, `properties`, `publish` |
+
 ## Проверка
 
 - `cargo test -p rustok-page-builder --lib` — базовая проверка runtime metadata/contract surface;
-- `cargo xtask module validate page_builder` — проверка publish-readiness и manifest/docs contracts.
+- `cargo xtask module validate page_builder` — проверка publish-readiness и manifest/docs contracts;
+- `node crates/rustok-page-builder/scripts/verify/verify-page-builder-contract-registry.mjs pages` — anti-drift проверка machine-readable registry против provider/consumer manifests.
 
 ## Связанные документы
 

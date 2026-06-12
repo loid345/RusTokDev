@@ -5,6 +5,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use sea_orm::DatabaseConnection;
 use sea_orm_migration::MigrationTrait;
+
+use crate::migrations::MigrationDependencyDescriptor;
 use serde_json::Value;
 
 use crate::events::EventHandler;
@@ -18,6 +20,10 @@ pub struct ModuleContext<'a> {
 
 pub trait MigrationSource: Send + Sync {
     fn migrations(&self) -> Vec<Box<dyn MigrationTrait>>;
+
+    fn migration_dependencies(&self) -> Vec<MigrationDependencyDescriptor> {
+        Vec::new()
+    }
 }
 
 #[derive(Clone, Default)]

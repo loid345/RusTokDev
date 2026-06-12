@@ -7,11 +7,10 @@ use rustok_commerce_foundation::entities::product::ProductStatus;
 use rustok_media::MediaImageDescriptor;
 use rustok_seo_targets::{
     builtin_slug, populate_image_template_fields, schema, SeoBulkSummaryRecord,
-    SeoLoadedTargetRecord, SeoRouteMatchRecord, SeoSitemapCandidateRecord,
-    SeoTargetAlternateRoute, SeoTargetBulkListRequest, SeoTargetCapabilities,
-    SeoTargetLoadRequest, SeoTargetLoadScope, SeoTargetOpenGraphRecord, SeoTargetProvider,
-    SeoTargetRouteResolveRequest, SeoTargetRuntimeContext, SeoTargetSitemapRequest,
-    SeoTargetSlug, SeoTemplateFieldMap,
+    SeoLoadedTargetRecord, SeoRouteMatchRecord, SeoSitemapCandidateRecord, SeoTargetAlternateRoute,
+    SeoTargetBulkListRequest, SeoTargetCapabilities, SeoTargetLoadRequest, SeoTargetLoadScope,
+    SeoTargetOpenGraphRecord, SeoTargetProvider, SeoTargetRouteResolveRequest,
+    SeoTargetRuntimeContext, SeoTargetSitemapRequest, SeoTargetSlug, SeoTemplateFieldMap,
 };
 use url::Url;
 
@@ -262,7 +261,8 @@ fn map_product_response(
         .clone()
         .or_else(|| translation.description.clone())
         .or_else(|| summarize_text(translation.title.as_str()));
-    let primary_image = resolve_primary_product_image(product.images.as_slice(), effective_locale.as_str());
+    let primary_image =
+        resolve_primary_product_image(product.images.as_slice(), effective_locale.as_str());
     let open_graph_images = primary_image.clone().into_iter().collect::<Vec<_>>();
     let canonical_route = format!("/modules/product?handle={}", translation.handle);
     let mut template_fields = SeoTemplateFieldMap::default();

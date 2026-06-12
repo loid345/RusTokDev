@@ -4,6 +4,7 @@ use axum::{
     Json,
 };
 use loco_rs::{app::AppContext, controller::Routes, Error, Result};
+use rust_decimal::Decimal;
 use rustok_api::{loco::transactional_event_bus_from_context, AuthContext, TenantContext};
 use rustok_core::Permission;
 use serde::{Deserialize, Serialize};
@@ -12,21 +13,24 @@ use uuid::Uuid;
 
 use crate::{
     dto::{
-        AuthorizePaymentInput, CancelFulfillmentInput, CancelOrderInput, CancelOrderReturnInput,
-        CancelPaymentInput, CancelRefundInput, CapturePaymentInput, CompleteOrderReturnInput,
-        CompleteRefundInput, CreateFulfillmentInput, CreateOrderReturnInput, CreateProductInput,
-        CreateRefundInput, CreateShippingOptionInput, CreateShippingProfileInput,
-        DeliverFulfillmentInput, DeliverOrderInput, FulfillmentResponse, ListFulfillmentsInput,
+        ApplyOrderChangeInput, AuthorizePaymentInput, CancelFulfillmentInput,
+        CancelOrderChangeInput, CancelOrderInput, CancelOrderReturnInput, CancelPaymentInput,
+        CancelRefundInput, CapturePaymentInput, CompleteRefundInput, CreateFulfillmentInput,
+        CreateOrderChangeInput, CreateOrderReturnInput, CreateProductInput, CreateRefundInput,
+        CreateShippingOptionInput, CreateShippingProfileInput, DeliverFulfillmentInput,
+        DeliverOrderInput, FulfillmentResponse, ListFulfillmentsInput, ListOrderChangesInput,
         ListOrderReturnsInput, ListPaymentCollectionsInput, ListRefundsInput,
-        ListShippingProfilesInput, MarkPaidOrderInput, OrderResponse, OrderReturnResponse,
-        PaymentCollectionResponse, ProductResponse, RefundResponse, ReopenFulfillmentInput,
-        ReshipFulfillmentInput, ShipFulfillmentInput, ShipOrderInput, ShippingOptionResponse,
-        ShippingProfileResponse, UpdateProductInput, UpdateShippingOptionInput,
-        UpdateShippingProfileInput,
+        ListShippingProfilesInput, MarkPaidOrderInput, OrderChangeResponse, OrderResponse,
+        OrderReturnResponse, PaymentCollectionResponse, ProductResponse, RefundResponse,
+        ReopenFulfillmentInput, ReshipFulfillmentInput, ShipFulfillmentInput, ShipOrderInput,
+        ShippingOptionResponse, ShippingProfileResponse, UpdateProductInput,
+        UpdateShippingOptionInput, UpdateShippingProfileInput,
     },
     storefront_shipping::normalize_shipping_profile_slug,
-    CatalogService, FulfillmentOrchestrationError, FulfillmentOrchestrationService,
-    FulfillmentService, OrderService, PaymentService, ShippingProfileService,
+    CatalogService, CreateReturnDecisionInput, FulfillmentOrchestrationError,
+    FulfillmentOrchestrationService, FulfillmentService, OrderService, PaymentService,
+    PostOrderOrchestrationError, PostOrderOrchestrationService, ReturnDecisionResponse,
+    ShippingProfileService,
 };
 
 use super::{
@@ -66,6 +70,24 @@ pub fn routes() -> Routes {
         .add(
             "/orders/{id}/returns",
             axum::routing::post(create_order_return),
+        )
+        .add(
+            "/orders/{id}/returns/decision",
+            axum::routing::post(create_order_return_decision),
+        )
+        .add(
+            "/orders/{id}/changes",
+            axum::routing::post(create_order_change),
+        )
+        .add("/order-changes", axum::routing::get(list_order_changes))
+        .add("/order-changes/{id}", axum::routing::get(show_order_change))
+        .add(
+            "/order-changes/{id}/apply",
+            axum::routing::post(apply_order_change),
+        )
+        .add(
+            "/order-changes/{id}/cancel",
+            axum::routing::post(cancel_order_change),
         )
         .add("/returns", axum::routing::get(list_order_returns))
         .add("/returns/{id}", axum::routing::get(show_order_return))
@@ -174,6 +196,27 @@ pub struct AdminOrderDetailResponse {
     pub fulfillment: Option<FulfillmentResponse>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct CompleteOrderReturnRefundInput {
+    pub payment_collection_id: Option<Uuid>,
+    pub amount: Decimal,
+    pub reason: Option<String>,
+    #[serde(default)]
+    pub metadata: serde_json::Value,
+    #[serde(default)]
+    pub complete: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct AdminCompleteOrderReturnInput {
+    pub resolution_type: Option<String>,
+    pub refund_id: Option<Uuid>,
+    pub order_change_id: Option<Uuid>,
+    pub refund: Option<CompleteOrderReturnRefundInput>,
+    #[serde(default)]
+    pub metadata: serde_json::Value,
+}
+
 #[derive(Debug, Clone, Deserialize, ToSchema, utoipa::IntoParams)]
 pub struct ListOrdersParams {
     #[serde(flatten)]
@@ -216,6 +259,15 @@ pub struct ListOrderReturnsParams {
     pub pagination: Option<super::common::PaginationParams>,
     pub order_id: Option<Uuid>,
     pub status: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, ToSchema, utoipa::IntoParams)]
+pub struct ListOrderChangesParams {
+    #[serde(flatten)]
+    pub pagination: Option<super::common::PaginationParams>,
+    pub order_id: Option<Uuid>,
+    pub status: Option<String>,
+    pub change_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, ToSchema, utoipa::IntoParams)]
@@ -500,7 +552,8 @@ pub async fn show_order(
         .await
         .map_err(|err| match err {
             rustok_order::error::OrderError::OrderNotFound(_)
-            | rustok_order::error::OrderError::OrderReturnNotFound(_) => Error::NotFound,
+            | rustok_order::error::OrderError::OrderReturnNotFound(_)
+            | rustok_order::error::OrderError::OrderChangeNotFound(_) => Error::NotFound,
             other => Error::BadRequest(other.to_string()),
         })?;
     let payment_collection = PaymentService::new(ctx.db.clone())
@@ -778,6 +831,55 @@ pub async fn create_order_return(
     Ok((StatusCode::CREATED, Json(created)))
 }
 
+/// Create admin order return and apply decision tree orchestration
+#[utoipa::path(
+    post,
+    path = "/admin/orders/{id}/returns/decision",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Order ID")),
+    request_body = CreateReturnDecisionInput,
+    responses(
+        (status = 201, description = "Return decision created", body = ReturnDecisionResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Order not found")
+    )
+)]
+pub async fn create_order_return_decision(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    Path(id): Path<Uuid>,
+    Json(input): Json<CreateReturnDecisionInput>,
+) -> Result<(StatusCode, Json<ReturnDecisionResponse>)> {
+    ensure_permissions(
+        &auth,
+        &[Permission::ORDERS_UPDATE],
+        "Permission denied: orders:update required",
+    )?;
+
+    if decision_requires_payments_update(
+        input.decision.action.as_str(),
+        input.decision.refund.is_some(),
+    ) {
+        ensure_permissions(
+            &auth,
+            &[Permission::PAYMENTS_UPDATE],
+            "Permission denied: payments:update required",
+        )?;
+    }
+
+    let service = PostOrderOrchestrationService::new(
+        ctx.db.clone(),
+        transactional_event_bus_from_context(&ctx),
+    );
+    let decision = service
+        .create_return_decision(tenant.id, auth.user_id, id, input)
+        .await
+        .map_err(map_post_order_orchestration_error)?;
+
+    Ok((StatusCode::CREATED, Json(decision)))
+}
+
 /// List admin order returns
 #[utoipa::path(
     get,
@@ -860,7 +962,7 @@ pub async fn show_order_return(
     path = "/admin/returns/{id}/complete",
     tag = "admin",
     params(("id" = Uuid, Path, description = "Return ID")),
-    request_body = CompleteOrderReturnInput,
+    request_body = AdminCompleteOrderReturnInput,
     responses(
         (status = 200, description = "Return completed", body = OrderReturnResponse),
         (status = 401, description = "Unauthorized"),
@@ -872,7 +974,7 @@ pub async fn complete_order_return(
     tenant: TenantContext,
     auth: AuthContext,
     Path(id): Path<Uuid>,
-    Json(input): Json<CompleteOrderReturnInput>,
+    Json(input): Json<AdminCompleteOrderReturnInput>,
 ) -> Result<Json<OrderReturnResponse>> {
     ensure_permissions(
         &auth,
@@ -880,8 +982,89 @@ pub async fn complete_order_return(
         "Permission denied: orders:update required",
     )?;
 
-    let item = OrderService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx))
-        .complete_return(tenant.id, id, input)
+    if input.refund.is_some() {
+        ensure_permissions(
+            &auth,
+            &[Permission::PAYMENTS_UPDATE],
+            "Permission denied: payments:update required",
+        )?;
+    }
+
+    let event_bus = transactional_event_bus_from_context(&ctx);
+    let order_service = OrderService::new(ctx.db.clone(), event_bus);
+    let mut complete_input = rustok_order::dto::CompleteOrderReturnInput {
+        resolution_type: input.resolution_type,
+        refund_id: input.refund_id,
+        order_change_id: input.order_change_id,
+        metadata: input.metadata,
+    };
+
+    if let Some(refund_input) = input.refund {
+        if complete_input.refund_id.is_some() || complete_input.order_change_id.is_some() {
+            return Err(Error::BadRequest(
+                "refund helper cannot be combined with explicit refund_id or order_change_id"
+                    .to_string(),
+            ));
+        }
+        if complete_input
+            .resolution_type
+            .as_deref()
+            .map(|value| value.trim().eq_ignore_ascii_case("refund"))
+            == Some(false)
+        {
+            return Err(Error::BadRequest(
+                "refund helper requires resolution_type to be omitted or `refund`".to_string(),
+            ));
+        }
+
+        let existing_return = order_service
+            .get_return(tenant.id, id)
+            .await
+            .map_err(map_order_error)?;
+        let payment_service = PaymentService::new(ctx.db.clone());
+        let collection_id = resolve_return_refund_collection_id(
+            &payment_service,
+            tenant.id,
+            existing_return.order_id,
+            refund_input.payment_collection_id,
+        )
+        .await?;
+        let refund = payment_service
+            .create_refund(
+                tenant.id,
+                collection_id,
+                CreateRefundInput {
+                    amount: refund_input.amount,
+                    reason: refund_input.reason,
+                    metadata: refund_input.metadata,
+                },
+            )
+            .await
+            .map_err(map_payment_error)?;
+        let refund = if refund_input.complete {
+            payment_service
+                .complete_refund(
+                    tenant.id,
+                    refund.id,
+                    CompleteRefundInput {
+                        metadata: serde_json::json!({
+                            "source": "order_return_completion",
+                            "return_id": id,
+                        }),
+                    },
+                )
+                .await
+                .map_err(map_payment_error)?
+        } else {
+            refund
+        };
+
+        complete_input.resolution_type = Some("refund".to_string());
+        complete_input.refund_id = Some(refund.id);
+    }
+
+    let item = order_service
+        .complete_return(tenant.id, id, complete_input)
         .await
         .map_err(map_order_error)?;
 
@@ -916,6 +1099,186 @@ pub async fn cancel_order_return(
 
     let item = OrderService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx))
         .cancel_return(tenant.id, id, input)
+        .await
+        .map_err(map_order_error)?;
+
+    Ok(Json(item))
+}
+
+/// Create admin order change preview
+#[utoipa::path(
+    post,
+    path = "/admin/orders/{id}/changes",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Order ID")),
+    request_body = CreateOrderChangeInput,
+    responses(
+        (status = 201, description = "Order change created", body = OrderChangeResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Order not found")
+    )
+)]
+pub async fn create_order_change(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    Path(id): Path<Uuid>,
+    Json(input): Json<CreateOrderChangeInput>,
+) -> Result<(StatusCode, Json<OrderChangeResponse>)> {
+    ensure_permissions(
+        &auth,
+        &[Permission::ORDERS_UPDATE],
+        "Permission denied: orders:update required",
+    )?;
+
+    let actor_id = auth.user_id;
+    let created = OrderService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx))
+        .create_order_change(tenant.id, actor_id, id, input)
+        .await
+        .map_err(map_order_error)?;
+
+    Ok((StatusCode::CREATED, Json(created)))
+}
+
+/// List admin order changes
+#[utoipa::path(
+    get,
+    path = "/admin/order-changes",
+    tag = "admin",
+    params(ListOrderChangesParams),
+    responses(
+        (status = 200, description = "Order changes", body = PaginatedResponse<OrderChangeResponse>),
+        (status = 401, description = "Unauthorized")
+    )
+)]
+pub async fn list_order_changes(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    Query(params): Query<ListOrderChangesParams>,
+) -> Result<Json<PaginatedResponse<OrderChangeResponse>>> {
+    ensure_permissions(
+        &auth,
+        &[Permission::ORDERS_READ],
+        "Permission denied: orders:read required",
+    )?;
+
+    let pagination = params.pagination.unwrap_or_default();
+    let (items, total) =
+        OrderService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx))
+            .list_order_changes(
+                tenant.id,
+                ListOrderChangesInput {
+                    page: pagination.page,
+                    per_page: pagination.limit(),
+                    order_id: params.order_id,
+                    status: params.status,
+                    change_type: params.change_type,
+                },
+            )
+            .await
+            .map_err(map_order_error)?;
+
+    Ok(Json(PaginatedResponse {
+        data: items,
+        meta: super::common::PaginationMeta::new(pagination.page, pagination.limit(), total),
+    }))
+}
+
+/// Show admin order change
+#[utoipa::path(
+    get,
+    path = "/admin/order-changes/{id}",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Order change ID")),
+    responses(
+        (status = 200, description = "Order change details", body = OrderChangeResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Order change not found")
+    )
+)]
+pub async fn show_order_change(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    Path(id): Path<Uuid>,
+) -> Result<Json<OrderChangeResponse>> {
+    ensure_permissions(
+        &auth,
+        &[Permission::ORDERS_READ],
+        "Permission denied: orders:read required",
+    )?;
+
+    let item = OrderService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx))
+        .get_order_change(tenant.id, id)
+        .await
+        .map_err(map_order_error)?;
+
+    Ok(Json(item))
+}
+
+/// Apply admin order change
+#[utoipa::path(
+    post,
+    path = "/admin/order-changes/{id}/apply",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Order change ID")),
+    request_body = ApplyOrderChangeInput,
+    responses(
+        (status = 200, description = "Order change applied", body = OrderChangeResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Order change not found")
+    )
+)]
+pub async fn apply_order_change(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    Path(id): Path<Uuid>,
+    Json(input): Json<ApplyOrderChangeInput>,
+) -> Result<Json<OrderChangeResponse>> {
+    ensure_permissions(
+        &auth,
+        &[Permission::ORDERS_UPDATE],
+        "Permission denied: orders:update required",
+    )?;
+
+    let item = OrderService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx))
+        .apply_order_change(tenant.id, id, input)
+        .await
+        .map_err(map_order_error)?;
+
+    Ok(Json(item))
+}
+
+/// Cancel admin order change
+#[utoipa::path(
+    post,
+    path = "/admin/order-changes/{id}/cancel",
+    tag = "admin",
+    params(("id" = Uuid, Path, description = "Order change ID")),
+    request_body = CancelOrderChangeInput,
+    responses(
+        (status = 200, description = "Order change cancelled", body = OrderChangeResponse),
+        (status = 401, description = "Unauthorized"),
+        (status = 404, description = "Order change not found")
+    )
+)]
+pub async fn cancel_order_change(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    Path(id): Path<Uuid>,
+    Json(input): Json<CancelOrderChangeInput>,
+) -> Result<Json<OrderChangeResponse>> {
+    ensure_permissions(
+        &auth,
+        &[Permission::ORDERS_UPDATE],
+        "Permission denied: orders:update required",
+    )?;
+
+    let item = OrderService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx))
+        .cancel_order_change(tenant.id, id, input)
         .await
         .map_err(map_order_error)?;
 
@@ -1956,6 +2319,37 @@ pub async fn cancel_fulfillment(
     Ok(Json(fulfillment))
 }
 
+async fn resolve_return_refund_collection_id(
+    payment_service: &PaymentService,
+    tenant_id: Uuid,
+    order_id: Uuid,
+    explicit_collection_id: Option<Uuid>,
+) -> Result<Uuid> {
+    if let Some(collection_id) = explicit_collection_id {
+        let collection = payment_service
+            .get_collection(tenant_id, collection_id)
+            .await
+            .map_err(map_payment_error)?;
+        if collection.order_id != Some(order_id) {
+            return Err(Error::BadRequest(format!(
+                "payment collection {collection_id} is not attached to order {order_id}"
+            )));
+        }
+        return Ok(collection_id);
+    }
+
+    payment_service
+        .find_latest_collection_by_order(tenant_id, order_id)
+        .await
+        .map_err(map_payment_error)?
+        .map(|collection| collection.id)
+        .ok_or_else(|| {
+            Error::BadRequest(format!(
+                "order {order_id} has no payment collection for return refund"
+            ))
+        })
+}
+
 fn map_payment_error(error: rustok_payment::error::PaymentError) -> Error {
     match error {
         rustok_payment::error::PaymentError::PaymentCollectionNotFound(_)
@@ -1967,7 +2361,8 @@ fn map_payment_error(error: rustok_payment::error::PaymentError) -> Error {
 fn map_order_error(error: rustok_order::error::OrderError) -> Error {
     match error {
         rustok_order::error::OrderError::OrderNotFound(_)
-        | rustok_order::error::OrderError::OrderReturnNotFound(_) => Error::NotFound,
+        | rustok_order::error::OrderError::OrderReturnNotFound(_)
+        | rustok_order::error::OrderError::OrderChangeNotFound(_) => Error::NotFound,
         other => Error::BadRequest(other.to_string()),
     }
 }
@@ -1984,6 +2379,31 @@ fn map_fulfillment_orchestration_error(error: FulfillmentOrchestrationError) -> 
         FulfillmentOrchestrationError::OrderNotFound(_) => Error::NotFound,
         other => Error::BadRequest(other.to_string()),
     }
+}
+
+fn map_post_order_orchestration_error(error: PostOrderOrchestrationError) -> Error {
+    match error {
+        PostOrderOrchestrationError::Order(
+            rustok_order::error::OrderError::OrderNotFound(_)
+            | rustok_order::error::OrderError::OrderReturnNotFound(_)
+            | rustok_order::error::OrderError::OrderChangeNotFound(_),
+        )
+        | PostOrderOrchestrationError::Payment(
+            rustok_payment::error::PaymentError::PaymentCollectionNotFound(_)
+            | rustok_payment::error::PaymentError::RefundNotFound(_),
+        ) => Error::NotFound,
+        PostOrderOrchestrationError::Order(other) => Error::BadRequest(other.to_string()),
+        PostOrderOrchestrationError::Payment(other) => Error::BadRequest(other.to_string()),
+        PostOrderOrchestrationError::Validation(message) => Error::BadRequest(message),
+    }
+}
+
+fn decision_requires_payments_update(action: &str, has_refund_payload: bool) -> bool {
+    if has_refund_payload {
+        return true;
+    }
+
+    action.trim().to_ascii_lowercase().replace('-', "_") == "refund"
 }
 
 fn map_shipping_profile_error(error: crate::CommerceError) -> Error {
@@ -2197,10 +2617,11 @@ mod tests {
                     tax_lines: vec![
                         CreateOrderTaxLineInput {
                             line_item_index: Some(0),
-                            shipping_option_index: None,
+                            shipping_option_id: None,
                             rate: Decimal::from_str("19.00").expect("valid decimal"),
                             amount: Decimal::from_str("9.50").expect("valid decimal"),
-                            name: "VAT line item".to_string(),
+                            description: Some("VAT line item".to_string()),
+                            currency_code: "eur".to_string(),
                             provider_id: "region_default".to_string(),
                             metadata: json!({
                                 "tax_included": false,
@@ -2209,10 +2630,11 @@ mod tests {
                         },
                         CreateOrderTaxLineInput {
                             line_item_index: None,
-                            shipping_option_index: Some(0),
+                            shipping_option_id: None,
                             rate: Decimal::from_str("19.00").expect("valid decimal"),
                             amount: Decimal::from_str("1.00").expect("valid decimal"),
-                            name: "VAT shipping".to_string(),
+                            description: Some("VAT shipping".to_string()),
+                            currency_code: "eur".to_string(),
                             provider_id: "region_default".to_string(),
                             metadata: json!({
                                 "tax_included": false,
@@ -2221,10 +2643,11 @@ mod tests {
                         },
                         CreateOrderTaxLineInput {
                             line_item_index: None,
-                            shipping_option_index: None,
+                            shipping_option_id: None,
                             rate: Decimal::from_str("19.00").expect("valid decimal"),
                             amount: Decimal::from_str("0.50").expect("valid decimal"),
-                            name: "VAT order".to_string(),
+                            description: Some("VAT order".to_string()),
+                            currency_code: "eur".to_string(),
                             provider_id: "region_default".to_string(),
                             metadata: json!({
                                 "tax_included": false,
@@ -2607,10 +3030,11 @@ mod tests {
                     adjustments: Vec::new(),
                     tax_lines: vec![CreateOrderTaxLineInput {
                         line_item_index: Some(0),
-                        shipping_option_index: None,
+                        shipping_option_id: None,
                         rate: Decimal::from_str("10.00").expect("valid decimal"),
                         amount: Decimal::from_str("2.00").expect("valid decimal"),
-                        name: "VAT".to_string(),
+                        description: Some("VAT".to_string()),
+                        currency_code: "usd".to_string(),
                         provider_id: "region_default".to_string(),
                         metadata: json!({ "tax_included": false }),
                     }],
@@ -5631,5 +6055,334 @@ mod tests {
             reshipped["metadata"]["audit"]["events"][4]["type"],
             json!("reship")
         );
+    }
+
+    #[tokio::test]
+    async fn admin_return_decision_transport_creates_exchange_order_change() {
+        let db = setup_test_db().await;
+        support::ensure_commerce_schema(&db).await;
+        let tenant_id = Uuid::new_v4();
+        let actor_id = Uuid::new_v4();
+        seed_tenant_context(&db, tenant_id).await;
+        let tenant = TenantContext {
+            id: tenant_id,
+            name: "Admin Test Tenant".to_string(),
+            slug: format!("admin-test-{tenant_id}"),
+            domain: None,
+            settings: json!({}),
+            default_locale: "en".to_string(),
+            is_active: true,
+        };
+        let auth = AuthContext {
+            user_id: actor_id,
+            session_id: Uuid::new_v4(),
+            tenant_id,
+            permissions: vec![Permission::ORDERS_UPDATE],
+            client_id: None,
+            scopes: vec![],
+            grant_type: "direct".to_string(),
+        };
+
+        let order = OrderService::new(db.clone(), mock_transactional_event_bus())
+            .create_order(
+                tenant_id,
+                actor_id,
+                CreateOrderInput {
+                    customer_id: Some(Uuid::new_v4()),
+                    currency_code: "usd".to_string(),
+                    shipping_total: Decimal::ZERO,
+                    line_items: vec![CreateOrderLineItemInput {
+                        product_id: Some(Uuid::new_v4()),
+                        variant_id: Some(Uuid::new_v4()),
+                        shipping_profile_slug: "default".to_string(),
+                        seller_id: None,
+                        sku: Some("ADMIN-RETURN-DECISION-EXCHANGE".to_string()),
+                        title: "Admin Return Decision Exchange".to_string(),
+                        quantity: 1,
+                        unit_price: Decimal::from_str("42.00").expect("valid decimal"),
+                        metadata: json!({ "source": "admin-return-decision" }),
+                    }],
+                    adjustments: Vec::new(),
+                    tax_lines: Vec::new(),
+                    metadata: json!({ "source": "admin-return-decision" }),
+                },
+            )
+            .await
+            .expect("order should be created");
+
+        let app = admin_transport_router(test_app_context(db), tenant, auth);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/admin/orders/{}/returns/decision", order.id))
+                    .header("content-type", "application/json")
+                    .header("X-Tenant-ID", tenant_id.to_string())
+                    .body(Body::from(
+                        json!({
+                            "return_request": {
+                                "reason": "wrong-size",
+                                "note": "operator-reviewed",
+                                "items": [
+                                    {
+                                        "line_item_id": order.line_items[0].id,
+                                        "quantity": 1,
+                                        "reason": "wrong-size",
+                                        "metadata": { "source": "admin-return-decision" }
+                                    }
+                                ],
+                                "metadata": { "source": "admin-return-decision" }
+                            },
+                            "decision": {
+                                "action": "exchange",
+                                "exchange": {
+                                    "description": "Exchange for another size",
+                                    "preview": { "swap": "new-size" },
+                                    "metadata": { "operator": "returns-desk" }
+                                },
+                                "metadata": { "flow": "exchange" }
+                            }
+                        })
+                        .to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("request should succeed");
+
+        let status = response.status();
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should read");
+        assert_eq!(
+            status,
+            StatusCode::CREATED,
+            "unexpected decision body: {}",
+            String::from_utf8_lossy(&body)
+        );
+
+        let payload: serde_json::Value =
+            serde_json::from_slice(&body).expect("response should be JSON");
+        assert_eq!(payload["action"], json!("exchange"));
+        assert_eq!(payload["order_return"]["order_id"], json!(order.id));
+        assert_eq!(payload["order_change"]["change_type"], json!("exchange"));
+        assert_eq!(
+            payload["order_change"]["metadata"]["order_return_id"],
+            payload["order_return"]["id"]
+        );
+        assert_eq!(payload["refund"], serde_json::Value::Null);
+    }
+
+    #[tokio::test]
+    async fn admin_return_decision_transport_creates_claim_order_change() {
+        let db = setup_test_db().await;
+        support::ensure_commerce_schema(&db).await;
+        let tenant_id = Uuid::new_v4();
+        let actor_id = Uuid::new_v4();
+        seed_tenant_context(&db, tenant_id).await;
+        let tenant = TenantContext {
+            id: tenant_id,
+            name: "Admin Test Tenant".to_string(),
+            slug: format!("admin-test-{tenant_id}"),
+            domain: None,
+            settings: json!({}),
+            default_locale: "en".to_string(),
+            is_active: true,
+        };
+        let auth = AuthContext {
+            user_id: actor_id,
+            session_id: Uuid::new_v4(),
+            tenant_id,
+            permissions: vec![Permission::ORDERS_UPDATE],
+            client_id: None,
+            scopes: vec![],
+            grant_type: "direct".to_string(),
+        };
+
+        let order = OrderService::new(db.clone(), mock_transactional_event_bus())
+            .create_order(
+                tenant_id,
+                actor_id,
+                CreateOrderInput {
+                    customer_id: Some(Uuid::new_v4()),
+                    currency_code: "usd".to_string(),
+                    shipping_total: Decimal::ZERO,
+                    line_items: vec![CreateOrderLineItemInput {
+                        product_id: Some(Uuid::new_v4()),
+                        variant_id: Some(Uuid::new_v4()),
+                        shipping_profile_slug: "default".to_string(),
+                        seller_id: None,
+                        sku: Some("ADMIN-RETURN-DECISION-CLAIM".to_string()),
+                        title: "Admin Return Decision Claim".to_string(),
+                        quantity: 1,
+                        unit_price: Decimal::from_str("37.00").expect("valid decimal"),
+                        metadata: json!({ "source": "admin-return-claim-decision" }),
+                    }],
+                    adjustments: Vec::new(),
+                    tax_lines: Vec::new(),
+                    metadata: json!({ "source": "admin-return-claim-decision" }),
+                },
+            )
+            .await
+            .expect("order should be created");
+
+        let app = admin_transport_router(test_app_context(db), tenant, auth);
+        let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri(format!("/admin/orders/{}/returns/decision", order.id))
+                .header("content-type", "application/json")
+                .header("X-Tenant-ID", tenant_id.to_string())
+                .body(Body::from(
+                    json!({
+                        "return_request": {
+                            "reason": "damaged",
+                            "note": "claim reviewed by admin REST",
+                            "items": [
+                                {
+                                    "line_item_id": order.line_items[0].id,
+                                    "quantity": 1,
+                                    "reason": "damaged",
+                                    "metadata": { "source": "admin-return-claim-decision", "scope": "item" }
+                                }
+                            ],
+                            "metadata": { "source": "admin-return-claim-decision", "scope": "return" }
+                        },
+                        "decision": {
+                            "action": "claim",
+                            "claim": {
+                                "description": "Claim for damaged item",
+                                "preview": { "claim_type": "damaged_item", "resolution": "review" },
+                                "metadata": { "operator": "claims-desk" }
+                            },
+                            "metadata": { "flow": "claim" }
+                        }
+                    })
+                    .to_string(),
+                ))
+                .expect("request"),
+        )
+        .await
+        .expect("request should succeed");
+
+        let status = response.status();
+        let body = to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("response body should read");
+        assert_eq!(
+            status,
+            StatusCode::CREATED,
+            "unexpected decision body: {}",
+            String::from_utf8_lossy(&body)
+        );
+
+        let payload: serde_json::Value =
+            serde_json::from_slice(&body).expect("response should be JSON");
+        assert_eq!(payload["action"], json!("claim"));
+        assert_eq!(payload["metadata"]["flow"], json!("claim"));
+        assert_eq!(payload["order_return"]["order_id"], json!(order.id));
+        assert_eq!(payload["order_return"]["status"], json!("completed"));
+        assert_eq!(payload["order_return"]["resolution_type"], json!("claim"));
+        assert_eq!(payload["order_change"]["change_type"], json!("claim"));
+        assert_eq!(
+            payload["order_return"]["order_change_id"],
+            payload["order_change"]["id"]
+        );
+        assert_eq!(
+            payload["order_change"]["metadata"]["order_return_id"],
+            payload["order_return"]["id"]
+        );
+        assert_eq!(
+            payload["order_change"]["preview"]["order_return_id"],
+            payload["order_return"]["id"]
+        );
+        assert_eq!(
+            payload["order_change"]["preview"]["claim_type"],
+            json!("damaged_item")
+        );
+        assert_eq!(payload["refund"], serde_json::Value::Null);
+    }
+
+    #[tokio::test]
+    async fn admin_return_decision_transport_requires_payments_update_for_refund_action() {
+        let db = setup_test_db().await;
+        support::ensure_commerce_schema(&db).await;
+        let tenant_id = Uuid::new_v4();
+        let actor_id = Uuid::new_v4();
+        seed_tenant_context(&db, tenant_id).await;
+        let tenant = TenantContext {
+            id: tenant_id,
+            name: "Admin Test Tenant".to_string(),
+            slug: format!("admin-test-{tenant_id}"),
+            domain: None,
+            settings: json!({}),
+            default_locale: "en".to_string(),
+            is_active: true,
+        };
+        let auth = AuthContext {
+            user_id: actor_id,
+            session_id: Uuid::new_v4(),
+            tenant_id,
+            permissions: vec![Permission::ORDERS_UPDATE],
+            client_id: None,
+            scopes: vec![],
+            grant_type: "direct".to_string(),
+        };
+
+        let order = OrderService::new(db.clone(), mock_transactional_event_bus())
+            .create_order(
+                tenant_id,
+                actor_id,
+                CreateOrderInput {
+                    customer_id: Some(Uuid::new_v4()),
+                    currency_code: "usd".to_string(),
+                    shipping_total: Decimal::ZERO,
+                    line_items: vec![CreateOrderLineItemInput {
+                        product_id: Some(Uuid::new_v4()),
+                        variant_id: Some(Uuid::new_v4()),
+                        shipping_profile_slug: "default".to_string(),
+                        seller_id: None,
+                        sku: Some("ADMIN-RETURN-DECISION-REFUND".to_string()),
+                        title: "Admin Return Decision Refund".to_string(),
+                        quantity: 1,
+                        unit_price: Decimal::from_str("12.00").expect("valid decimal"),
+                        metadata: json!({ "source": "admin-return-decision-permission" }),
+                    }],
+                    adjustments: Vec::new(),
+                    tax_lines: Vec::new(),
+                    metadata: json!({ "source": "admin-return-decision-permission" }),
+                },
+            )
+            .await
+            .expect("order should be created");
+
+        let app = admin_transport_router(test_app_context(db), tenant, auth);
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri(format!("/admin/orders/{}/returns/decision", order.id))
+                    .header("content-type", "application/json")
+                    .header("X-Tenant-ID", tenant_id.to_string())
+                    .body(Body::from(
+                        json!({
+                            "return_request": {
+                                "reason": "damaged",
+                                "metadata": { "source": "admin-return-decision-permission" }
+                            },
+                            "decision": {
+                                "action": "refund",
+                                "metadata": { "flow": "refund" }
+                            }
+                        })
+                        .to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("request should complete");
+
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
     }
 }

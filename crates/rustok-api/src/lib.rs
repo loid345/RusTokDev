@@ -28,7 +28,8 @@ pub use route_selection::{
     AdminQueryDependency, AdminQueryKey, AdminRouteQuerySchema,
 };
 pub use ui::{
-    build_ui_message_catalog, resolve_ui_message, resolve_ui_message_or_fallback, UiMessageCatalog,
-    UiRouteContext,
+    build_ui_message_catalog, normalize_ui_text, parse_ui_csv, resolve_ui_message,
+    resolve_ui_message_or_fallback, route_query_update_for_text, UiMessageCatalog, UiRouteContext,
+    UiRouteQueryUpdate,
 };
 pub use write_path_feedback::{classify_write_path_issue, WritePathIssue, WritePathIssueKind};

@@ -107,3 +107,45 @@ pub struct CommerceAdminCartSnapshot {
     pub total_amount: String,
     pub adjustments: Vec<CommerceAdminCartAdjustment>,
 }
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct CommerceOrderChangeList {
+    pub items: Vec<CommerceOrderChange>,
+    pub total: u64,
+    pub page: u64,
+    #[serde(rename = "perPage")]
+    pub per_page: u64,
+    #[serde(rename = "hasNext")]
+    pub has_next: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct CommerceOrderChange {
+    pub id: String,
+    #[serde(rename = "tenantId")]
+    pub tenant_id: String,
+    #[serde(rename = "orderId")]
+    pub order_id: String,
+    #[serde(rename = "createdBy")]
+    pub created_by: String,
+    #[serde(rename = "changeType")]
+    pub change_type: String,
+    pub status: String,
+    pub description: Option<String>,
+    pub preview: String,
+    pub metadata: String,
+    #[serde(rename = "createdAt")]
+    pub created_at: String,
+    #[serde(rename = "updatedAt")]
+    pub updated_at: String,
+    #[serde(rename = "appliedAt")]
+    pub applied_at: Option<String>,
+    #[serde(rename = "cancelledAt")]
+    pub cancelled_at: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct CommerceOrderChangeActionDraft {
+    pub metadata_json: String,
+    pub reason: String,
+}

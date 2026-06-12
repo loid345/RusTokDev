@@ -14,6 +14,7 @@ use sea_orm::{
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
+use crate::middleware::locale::{tenant_locale_cache_stats, TenantLocaleCacheStats};
 use crate::middleware::rate_limit::{
     SharedApiRateLimiter, SharedAuthRateLimiter, SharedOAuthRateLimiter,
 };
@@ -50,6 +51,7 @@ pub async fn metrics(State(ctx): State<AppContext>) -> Result<Response> {
             payload.push('\n');
             payload.push_str(&render_tenant_cache_metrics(&ctx).await);
             payload.push_str(&render_tenant_activity_metrics(&ctx).await);
+            payload.push_str(&render_tenant_locale_cache_metrics(&ctx).await);
             payload.push_str(&render_outbox_metrics(&ctx).await);
             payload.push_str(&render_auth_lifecycle_metrics());
             payload.push_str(&render_rbac_metrics(&ctx).await);
@@ -119,6 +121,25 @@ rustok_tenant_invalidation_listener_status {invalidation_listener_status}\n",
         negative_inserts = stats.negative_inserts,
         coalesced_requests = stats.coalesced_requests,
         invalidation_listener_status = stats.invalidation_listener_status,
+    )
+}
+
+async fn render_tenant_locale_cache_metrics(ctx: &AppContext) -> String {
+    format_tenant_locale_cache_metrics(tenant_locale_cache_stats(ctx).await)
+}
+
+fn format_tenant_locale_cache_metrics(stats: TenantLocaleCacheStats) -> String {
+    format!(
+        "rustok_tenant_locale_cache_hits_total {hits}\n\
+rustok_tenant_locale_cache_misses_total {misses}\n\
+rustok_tenant_locale_db_queries_total {db_queries}\n\
+rustok_tenant_locale_cache_invalidations_total {invalidations}\n\
+rustok_tenant_locale_cache_entries {entries}\n",
+        hits = stats.hits,
+        misses = stats.misses,
+        db_queries = stats.db_queries,
+        invalidations = stats.invalidations,
+        entries = stats.entries,
     )
 }
 
@@ -521,8 +542,10 @@ fn format_rbac_metrics(
 mod tests {
     use super::{
         format_outbox_metrics, format_rbac_metrics, format_runtime_guardrail_metrics,
-        format_tenant_activity_metrics, format_tenant_cache_metrics, render_auth_lifecycle_metrics,
+        format_tenant_activity_metrics, format_tenant_cache_metrics,
+        format_tenant_locale_cache_metrics, render_auth_lifecycle_metrics,
     };
+    use crate::middleware::locale::TenantLocaleCacheStats;
     use crate::middleware::tenant::TenantCacheStats;
     use crate::services::auth_lifecycle::AuthLifecycleService;
     use crate::services::rbac_service::RbacService;
@@ -655,6 +678,26 @@ mod tests {
 
         assert_metric_line(&payload, "rustok_tenant_cache_coalesced_requests");
         assert!(payload.contains("rustok_tenant_cache_coalesced_requests 13"));
+    }
+
+    #[test]
+    fn tenant_locale_cache_metrics_include_hot_path_counters() {
+        let payload = format_tenant_locale_cache_metrics(TenantLocaleCacheStats {
+            hits: 8,
+            misses: 2,
+            db_queries: 2,
+            invalidations: 1,
+            entries: 3,
+        });
+
+        assert_metric_line(&payload, "rustok_tenant_locale_cache_hits_total");
+        assert_metric_line(&payload, "rustok_tenant_locale_cache_misses_total");
+        assert_metric_line(&payload, "rustok_tenant_locale_db_queries_total");
+        assert_metric_line(&payload, "rustok_tenant_locale_cache_invalidations_total");
+        assert_metric_line(&payload, "rustok_tenant_locale_cache_entries");
+        assert!(payload.contains("rustok_tenant_locale_cache_hits_total 8"));
+        assert!(payload.contains("rustok_tenant_locale_cache_misses_total 2"));
+        assert!(payload.contains("rustok_tenant_locale_db_queries_total 2"));
     }
 
     #[test]

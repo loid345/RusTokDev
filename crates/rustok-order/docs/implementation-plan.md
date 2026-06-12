@@ -6,21 +6,23 @@ outbox publication и module-owned admin UI, а post-order и transport parity
 
 ## Execution checkpoint
 
-- Current phase: post_order_returns_foundation
-- Last checkpoint: Slice 10.1 продвинут: `order_returns` получил tenant-scoped show/read contract, lifecycle `pending -> completed|cancelled`, validation/transition guards и admin REST/GraphQL transport parity через umbrella `rustok-commerce`.
-- Next step: Расширить returns foundation до item-level return lines и связать orchestration с refund/exchange decision tree без переноса payment logic в `rustok-order`.
-- Open blockers: серверный OpenAPI contract test под default features упирается в существующие compile errors вне order/commerce (`rustok-pages-admin`, server build service/module lifecycle/graphql mutations); targeted order lifecycle и `rustok-commerce` check проходят.
-- Hand-off notes for next agent: После item-level return lines обновить FFA/FBA evidence, README/admin docs и central registry в том же PR.
-- Last updated at (UTC): 2026-05-28T00:00:00Z
+- Current phase: ffa_admin_transport_ui_split
+- Last checkpoint: Admin order получил FFA slice: `admin/src/core.rs` list/filter defaults, `admin/src/transport.rs` facade над existing GraphQL order transport и явный Leptos render adapter `admin/src/ui/leptos.rs`; crate root стал wiring/re-export boundary без изменения order lifecycle behavior.
+- Next step: Продолжать сокращать `admin/src/api.rs` до transport adapter implementation и выносить remaining request/view policy в `core`, затем расширить umbrella `rustok-commerce` operator UX для refund/exchange/claim return decisions без host-owned logic.
+- Open blockers: серверный OpenAPI contract test под default features ранее упирался в существующие compile errors вне order/commerce (`rustok-pages-admin`, server build service/module lifecycle/graphql mutations); targeted order lifecycle и `rustok-commerce` check остаются основным gate для этого среза.
+- Hand-off notes for next agent: После каждого returns/refund/exchange/claim инкремента обновлять FFA evidence и FBA placeholder, README/admin docs и central registry в том же PR.
+- Last updated at (UTC): 2026-06-02T00:00:00Z
 
 ## FFA/FBA status
 
 - FFA status: `in_progress`
-- FBA status: `in_progress`
+- FBA status: `not_started`
+- Structural shape: `core_transport_ui`
 - Evidence:
-  - модуль ведётся в ускоренном FFA/FBA migration track как часть ecommerce family;
-  - любые изменения UI/transport boundary должны фиксироваться с parity/boundary evidence в этом же инкременте.
-- Last verified at (UTC): 2026-05-24T00:00:00Z
+  - модуль ведётся в ускоренном FFA migration track; FBA остаётся `not_started` до закрытия FFA phase-gate как часть ecommerce family;
+  - любые изменения UI/transport boundary должны фиксироваться с parity/boundary evidence в этом же инкременте;
+  - admin FFA slice добавил framework-agnostic `admin/src/core.rs` list/filter request policy, module-owned `admin/src/transport.rs` facade и явный Leptos render adapter `admin/src/ui/leptos.rs`; `admin/src/lib.rs` теперь только wires modules и re-export `OrderAdmin`, а Leptos adapter больше не вызывает raw `api::*` напрямую для covered order list/detail/lifecycle flows.
+- Last verified at (UTC): 2026-06-02T00:00:00Z
 - Owner: `rustok-order` module team
 
 ## Область работ
@@ -38,7 +40,7 @@ outbox publication и module-owned admin UI, а post-order и transport parity
 - write-side lifecycle и order events уже закреплены внутри модуля;
 - product/variant связи хранятся как snapshot references, без cross-module FK;
 - transport adapters по-прежнему публикуются фасадом `rustok-commerce`;
-- `rustok-order/admin` публикует module-owned route для order list/detail/lifecycle.
+- `rustok-order/admin` публикует module-owned route для order list/detail/lifecycle с `admin/src/core.rs` request defaults, `admin/src/transport.rs` facade и явным `admin/src/ui/leptos.rs` render adapter.
 
 ## Этапы
 
@@ -52,13 +54,13 @@ outbox publication и module-owned admin UI, а post-order и transport parity
 
 ### 2. Post-order expansion
 
-- [~] развивать returns, refunds, exchanges и order changes как отдельный следующий слой; (started: `order_returns` storage + `OrderService::{create_return,get_return,list_returns,complete_return,cancel_return}` foundation)
+- [~] развивать returns, refunds, exchanges, claims и order changes как отдельный следующий слой; (started: `order_returns` + `order_return_items` storage, item validation, `OrderService::{create_return,get_return,list_returns,complete_return,cancel_return}` foundation and resolution-ссылки завершённого возврата for refund/exchange/claim/order-change orchestration)
 - [x] покрывать lifecycle transitions и failure semantics targeted tests; (return lifecycle `pending -> completed|cancelled`, second-transition guard, tenant-scoped show)
-- [ ] удерживать compatibility с payment/fulfillment orchestration без размывания order ownership.
+- [~] удерживать compatibility с payment/fulfillment orchestration без размывания order ownership. (started: `order_changes` skeleton хранит preview/apply/cancel state без payment/fulfillment side effects)
 
 ### 3. Operability
 
-- [~] документировать новые order guarantees одновременно с изменением runtime surface; (returns lifecycle checkpoint зафиксирован; item-level return docs остаются next slice)
+- [~] документировать новые order guarantees одновременно с изменением runtime surface; (returns lifecycle, item-level lines, resolution-ссылки завершённого возврата и order-change skeleton checkpoint зафиксированы)
 - [ ] удерживать local docs и `README.md` синхронизированными;
 - [ ] обновлять umbrella commerce docs при изменении order/post-order scope.
 

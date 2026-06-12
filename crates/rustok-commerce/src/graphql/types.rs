@@ -592,6 +592,32 @@ pub struct GqlOrderList {
 }
 
 #[derive(SimpleObject)]
+pub struct GqlOrderChange {
+    pub id: Uuid,
+    pub tenant_id: Uuid,
+    pub order_id: Uuid,
+    pub created_by: Uuid,
+    pub change_type: String,
+    pub status: String,
+    pub description: Option<String>,
+    pub preview: String,
+    pub metadata: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub applied_at: Option<String>,
+    pub cancelled_at: Option<String>,
+}
+
+#[derive(SimpleObject)]
+pub struct GqlOrderChangeList {
+    pub items: Vec<GqlOrderChange>,
+    pub total: u64,
+    pub page: u64,
+    pub per_page: u64,
+    pub has_next: bool,
+}
+
+#[derive(SimpleObject)]
 pub struct GqlOrderReturn {
     pub id: Uuid,
     pub tenant_id: Uuid,
@@ -599,11 +625,30 @@ pub struct GqlOrderReturn {
     pub reason: Option<String>,
     pub note: Option<String>,
     pub status: String,
+    pub resolution_type: Option<String>,
+    pub refund_id: Option<Uuid>,
+    pub order_change_id: Option<Uuid>,
     pub metadata: String,
+    pub items: Vec<GqlOrderReturnItem>,
     pub created_at: String,
     pub updated_at: String,
     pub completed_at: Option<String>,
     pub cancelled_at: Option<String>,
+}
+
+#[derive(SimpleObject)]
+pub struct GqlOrderReturnItem {
+    pub id: Uuid,
+    pub tenant_id: Uuid,
+    pub return_id: Uuid,
+    pub order_id: Uuid,
+    pub line_item_id: Uuid,
+    pub quantity: i32,
+    pub reason: Option<String>,
+    pub note: Option<String>,
+    pub metadata: String,
+    pub created_at: String,
+    pub updated_at: String,
 }
 
 #[derive(SimpleObject)]
@@ -613,6 +658,15 @@ pub struct GqlOrderReturnList {
     pub page: u64,
     pub per_page: u64,
     pub has_next: bool,
+}
+
+#[derive(SimpleObject)]
+pub struct GqlReturnDecision {
+    pub action: String,
+    pub order_return: GqlOrderReturn,
+    pub refund: Option<GqlRefund>,
+    pub order_change: Option<GqlOrderChange>,
+    pub metadata: String,
 }
 
 #[derive(SimpleObject)]
@@ -850,6 +904,13 @@ pub struct PaymentCollectionsFilter {
 }
 
 #[derive(InputObject)]
+pub struct StorefrontReturnsFilter {
+    pub status: Option<String>,
+    pub page: Option<u64>,
+    pub per_page: Option<u64>,
+}
+
+#[derive(InputObject)]
 pub struct StorefrontRefundsFilter {
     pub status: Option<String>,
     pub page: Option<u64>,
@@ -861,6 +922,15 @@ pub struct RefundsFilter {
     pub payment_collection_id: Option<Uuid>,
     pub order_id: Option<Uuid>,
     pub status: Option<String>,
+    pub page: Option<u64>,
+    pub per_page: Option<u64>,
+}
+
+#[derive(InputObject)]
+pub struct OrderChangesFilter {
+    pub order_id: Option<Uuid>,
+    pub status: Option<String>,
+    pub change_type: Option<String>,
     pub page: Option<u64>,
     pub per_page: Option<u64>,
 }
@@ -923,7 +993,36 @@ pub struct CancelOrderInput {
 }
 
 #[derive(InputObject)]
+pub struct CreateOrderChangeInputObject {
+    pub change_type: String,
+    pub description: Option<String>,
+    pub preview: String,
+    pub metadata: Option<String>,
+}
+
+#[derive(InputObject)]
+pub struct ApplyOrderChangeInputObject {
+    pub metadata: Option<String>,
+}
+
+#[derive(InputObject)]
+pub struct CancelOrderChangeInputObject {
+    pub reason: Option<String>,
+    pub metadata: Option<String>,
+}
+
+#[derive(InputObject)]
 pub struct CreateOrderReturnInputObject {
+    pub reason: Option<String>,
+    pub note: Option<String>,
+    pub items: Option<Vec<CreateOrderReturnItemInputObject>>,
+    pub metadata: Option<String>,
+}
+
+#[derive(InputObject)]
+pub struct CreateOrderReturnItemInputObject {
+    pub line_item_id: Uuid,
+    pub quantity: i32,
     pub reason: Option<String>,
     pub note: Option<String>,
     pub metadata: Option<String>,
@@ -931,6 +1030,56 @@ pub struct CreateOrderReturnInputObject {
 
 #[derive(InputObject)]
 pub struct CompleteOrderReturnInputObject {
+    pub resolution_type: Option<String>,
+    pub refund_id: Option<Uuid>,
+    pub order_change_id: Option<Uuid>,
+    pub refund: Option<CompleteOrderReturnRefundInputObject>,
+    pub metadata: Option<String>,
+}
+
+#[derive(InputObject)]
+pub struct CompleteOrderReturnRefundInputObject {
+    pub payment_collection_id: Option<Uuid>,
+    pub amount: String,
+    pub reason: Option<String>,
+    pub metadata: Option<String>,
+    pub complete: Option<bool>,
+}
+
+#[derive(InputObject)]
+pub struct CreateReturnDecisionInputObject {
+    pub return_request: CreateOrderReturnInputObject,
+    pub decision: ReturnDecisionInputObject,
+}
+
+#[derive(InputObject)]
+pub struct ReturnDecisionInputObject {
+    pub action: String,
+    pub refund: Option<ReturnRefundDecisionInputObject>,
+    pub exchange: Option<ReturnExchangeDecisionInputObject>,
+    pub claim: Option<ReturnClaimDecisionInputObject>,
+    pub metadata: Option<String>,
+}
+
+#[derive(InputObject)]
+pub struct ReturnRefundDecisionInputObject {
+    pub payment_collection_id: Option<Uuid>,
+    pub amount: Option<String>,
+    pub reason: Option<String>,
+    pub metadata: Option<String>,
+}
+
+#[derive(InputObject)]
+pub struct ReturnExchangeDecisionInputObject {
+    pub description: Option<String>,
+    pub preview: Option<String>,
+    pub metadata: Option<String>,
+}
+
+#[derive(InputObject)]
+pub struct ReturnClaimDecisionInputObject {
+    pub description: Option<String>,
+    pub preview: Option<String>,
     pub metadata: Option<String>,
 }
 
@@ -1854,6 +2003,26 @@ impl From<dto::OrderTaxLineResponse> for GqlOrderTaxLine {
     }
 }
 
+impl From<dto::OrderChangeResponse> for GqlOrderChange {
+    fn from(value: dto::OrderChangeResponse) -> Self {
+        Self {
+            id: value.id,
+            tenant_id: value.tenant_id,
+            order_id: value.order_id,
+            created_by: value.created_by,
+            change_type: value.change_type,
+            status: value.status,
+            description: value.description,
+            preview: value.preview.to_string(),
+            metadata: value.metadata.to_string(),
+            created_at: value.created_at.to_rfc3339(),
+            updated_at: value.updated_at.to_rfc3339(),
+            applied_at: value.applied_at.map(|value| value.to_rfc3339()),
+            cancelled_at: value.cancelled_at.map(|value| value.to_rfc3339()),
+        }
+    }
+}
+
 impl From<dto::OrderReturnResponse> for GqlOrderReturn {
     fn from(value: dto::OrderReturnResponse) -> Self {
         Self {
@@ -1863,11 +2032,45 @@ impl From<dto::OrderReturnResponse> for GqlOrderReturn {
             reason: value.reason,
             note: value.note,
             status: value.status,
+            resolution_type: value.resolution_type,
+            refund_id: value.refund_id,
+            order_change_id: value.order_change_id,
             metadata: value.metadata.to_string(),
+            items: value.items.into_iter().map(Into::into).collect(),
             created_at: value.created_at.to_rfc3339(),
             updated_at: value.updated_at.to_rfc3339(),
             completed_at: value.completed_at.map(|value| value.to_rfc3339()),
             cancelled_at: value.cancelled_at.map(|value| value.to_rfc3339()),
+        }
+    }
+}
+
+impl From<crate::ReturnDecisionResponse> for GqlReturnDecision {
+    fn from(value: crate::ReturnDecisionResponse) -> Self {
+        Self {
+            action: value.action,
+            order_return: value.order_return.into(),
+            refund: value.refund.map(Into::into),
+            order_change: value.order_change.map(Into::into),
+            metadata: value.metadata.to_string(),
+        }
+    }
+}
+
+impl From<dto::OrderReturnItemResponse> for GqlOrderReturnItem {
+    fn from(value: dto::OrderReturnItemResponse) -> Self {
+        Self {
+            id: value.id,
+            tenant_id: value.tenant_id,
+            return_id: value.return_id,
+            order_id: value.order_id,
+            line_item_id: value.line_item_id,
+            quantity: value.quantity,
+            reason: value.reason,
+            note: value.note,
+            metadata: value.metadata.to_string(),
+            created_at: value.created_at.to_rfc3339(),
+            updated_at: value.updated_at.to_rfc3339(),
         }
     }
 }

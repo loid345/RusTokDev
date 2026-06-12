@@ -5,12 +5,23 @@
 
 ## Execution checkpoint
 
-- Current phase: contract_stability_c1
-- Last checkpoint: Зафиксирован typed image boundary `MediaImageDescriptor` (`url/alt/size/mime` + derived helpers) для cross-module SEO consumers; README/docs синхронизированы с новым контрактом.
-- Next step: Добавить targeted tests на descriptor normalization + интеграционные проверки owner-module SEO providers, которые используют descriptor contract.
-- Open blockers: Runtime verification gates не запущены локально в этой VM (отсутствует `cargo` в PATH).
-- Hand-off notes for next agent: держать `MediaImageDescriptor` единственным image payload для cross-module SEO/runtime интеграций, не добавляя blob-level coupling.
-- Last updated at (UTC): 2026-05-28T23:10:00Z
+- Current phase: FFA-разделение admin ui/core/transport
+- Last checkpoint: Transport facade углублён: `admin/src/transport/mod.rs` теперь только выбирает native-first path и fallback, а GraphQL, REST upload и native server functions вынесены в `graphql_adapter.rs`, `rest_adapter.rs` и `native_server_adapter.rs`; Leptos render adapter продолжает вызывать только facade.
+- Next step: Добрать targeted tests на descriptor normalization + интеграционные проверки owner-module SEO providers, которые используют descriptor contract, и расширить FFA core helpers для upload/detail state без изменения transport parity.
+- Open blockers: нет.
+- Hand-off notes for next agent: держать `MediaImageDescriptor` единственным image payload для cross-module SEO/runtime интеграций; admin UI должен идти через `core` + `transport`, Leptos-only код оставлять в `ui/leptos.rs`, а transport-specific код — в dedicated adapter files.
+- Last updated at (UTC): 2026-06-08T11:43:16Z
+
+## FFA/FBA status
+
+- FFA status: `in_progress`
+- FBA status: `not_started`
+- Structural shape: `core_transport_ui`
+- Evidence:
+  - module plan синхронизирован с central FFA/FBA readiness board; media admin surface уже опубликован и ведётся в migration/backlog ритме;
+  - FFA admin slice: `admin/src/core.rs` владеет Leptos-free form/presentation helpers (`non_empty_option`, dimensions label, pagination label, translation form state, usage stat cards) с unit tests;
+  - `admin/src/transport/` владеет текущим native-first + GraphQL fallback + REST upload transport facade без изменения внешних GraphQL/REST contracts; facade split зафиксирован через `graphql_adapter.rs`, `rest_adapter.rs` и `native_server_adapter.rs`;
+  - `admin/src/ui/leptos.rs` является явным Leptos render adapter, а crate root только связывает модули и реэкспортирует `MediaAdmin`.
 
 ## Область работ
 
@@ -33,7 +44,7 @@
 - [x] зафиксировать upload/list/delete/translation runtime contract;
 - [x] удерживать tenant isolation и MIME/size validation внутри модуля;
 - [x] держать media storage metadata и physical storage boundary явными;
-- [ ] удерживать sync между runtime contracts, admin UI и module metadata.
+- [~] удерживать sync между runtime contracts, admin UI и module metadata; текущий FFA admin slice вынес Leptos-free helpers в `admin/src/core.rs`, transport facade в `admin/src/transport/` и явный render adapter в `admin/src/ui/leptos.rs`.
 
 ### 2. Runtime hardening
 

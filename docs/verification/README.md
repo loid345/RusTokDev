@@ -106,6 +106,21 @@ powershell -ExecutionPolicy Bypass -File scripts/verify/verify-architecture.ps1
 
 - Python-dependent проверки запускаются через установленный Python.
 - Bash-only scripts допускаются как legacy/perimeter checks, но не как единственный способ подтвердить модульный контракт на этой машине.
+- Быстрые source-level проверки runtime-инвариантов, которые не требуют полной Rust-компиляции, могут жить в `scripts/verify/*.mjs`; текущий пример — `node scripts/verify/verify-runtime-context-invariants.mjs` для channel context/cache-key, locale-cache metrics и evidence `pages -> page_builder`.
+- Migration-safety gate закреплён в CI отдельным job `migration-smoke`: он использует PostgreSQL service и запускает `./scripts/verify/verify-migration-smoke.sh` в apply-from-zero и incremental режимах.
+
+## Runtime/backend regression runbook
+
+Краткая диагностика для постоянных backend/runtime guardrails:
+
+| Симптом | Быстрая проверка | Что смотреть при падении |
+|---|---|---|
+| Drift module graph / `pages` dependencies | `cargo xtask validate-manifest` + `node scripts/verify/verify-runtime-context-invariants.mjs` | `modules.toml`, `docs/modules/registry.md`, runtime `dependencies()` evidence и registry contract tests должны одинаково держать `pages -> [content, page_builder]`. |
+| Channel resolution без locale/OAuth dimensions | `node scripts/verify/verify-runtime-context-invariants.mjs` + targeted `cargo test -p rustok-server middleware::channel` | Source-order middleware chain должен исполняться как `locale -> auth_context -> channel`; `RequestFacts` должен брать `ResolvedRequestLocale.effective_locale` и `AuthContextExtension.client_id`, а `ChannelCacheKey` — включать оба поля. |
+| Locale DB amplification / cache regression | `cargo test -p rustok-server middleware::locale` и проверка `/metrics` на `rustok_tenant_locale_cache_hits_total`, `rustok_tenant_locale_cache_misses_total`, `rustok_tenant_locale_db_queries_total`, `rustok_tenant_locale_cache_invalidations_total` | Повторные tenant-bound requests внутри TTL должны давать cache hits, disabled locale должен оставаться ограниченным tenant policy, invalidation/TTL должны обновлять snapshot. |
+| Migration dependency failure | `./scripts/verify/verify-migration-smoke.sh` и `RUSTOK_MIGRATION_SMOKE_INCREMENTAL=1 ./scripts/verify/verify-migration-smoke.sh` | Проверить `migration_dependencies()` в module crate-ах, aggregation в server migrator, duplicate/cycle/missing dependency tests и порядок FK/cross-module migrations. |
+
+Для локальных коротких итераций сначала запускайте быстрые source-level проверки (`node ...` / `rg`), а PostgreSQL smoke оставляйте для migration changes или CI, если сборка начинает занимать слишком много времени.
 
 ## Роли `xtask` и `scripts/*` (актуализация 2026-05)
 

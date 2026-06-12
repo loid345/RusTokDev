@@ -23,7 +23,9 @@ impl SeoService {
             locale.unwrap_or(tenant.default_locale.as_str()),
             tenant.default_locale.as_str(),
         )?;
-        let summaries = self.bulk_summaries_for_locale(tenant, locale.as_str()).await?;
+        let summaries = self
+            .bulk_summaries_for_locale(tenant, locale.as_str())
+            .await?;
         Ok(build_cross_link_suggestions(
             summaries.as_slice(),
             normalize_per_target_limit(per_target_limit),
@@ -37,13 +39,16 @@ impl SeoService {
         per_target_limit: Option<usize>,
     ) -> SeoResult<BTreeMap<(rustok_seo_targets::SeoTargetSlug, uuid::Uuid), usize>> {
         let summaries = self.bulk_summaries_for_locale(tenant, locale).await?;
-        Ok(build_cross_link_suggestions(summaries.as_slice(), normalize_per_target_limit(per_target_limit))
-            .into_iter()
-            .fold(BTreeMap::new(), |mut acc, suggestion| {
-                *acc.entry((suggestion.target_kind, suggestion.target_id))
-                    .or_default() += 1;
-                acc
-            }))
+        Ok(build_cross_link_suggestions(
+            summaries.as_slice(),
+            normalize_per_target_limit(per_target_limit),
+        )
+        .into_iter()
+        .fold(BTreeMap::new(), |mut acc, suggestion| {
+            *acc.entry((suggestion.target_kind, suggestion.target_id))
+                .or_default() += 1;
+            acc
+        }))
     }
 
     pub(super) async fn bulk_summaries_for_locale(
@@ -137,14 +142,21 @@ fn build_cross_link_suggestions(
             candidates.push((destination_summary, confidence));
         }
 
-        candidates.sort_by(|(left_summary, left_confidence), (right_summary, right_confidence)| {
-            right_confidence
-                .cmp(left_confidence)
-                .then(left_summary.route.cmp(&right_summary.route))
-                .then(left_summary.label.cmp(&right_summary.label))
-                .then(left_summary.target_kind.as_str().cmp(right_summary.target_kind.as_str()))
-                .then(left_summary.target_id.cmp(&right_summary.target_id))
-        });
+        candidates.sort_by(
+            |(left_summary, left_confidence), (right_summary, right_confidence)| {
+                right_confidence
+                    .cmp(left_confidence)
+                    .then(left_summary.route.cmp(&right_summary.route))
+                    .then(left_summary.label.cmp(&right_summary.label))
+                    .then(
+                        left_summary
+                            .target_kind
+                            .as_str()
+                            .cmp(right_summary.target_kind.as_str()),
+                    )
+                    .then(left_summary.target_id.cmp(&right_summary.target_id))
+            },
+        );
 
         for (destination_summary, confidence) in candidates.into_iter().take(per_target_limit) {
             suggestions.push(SeoCrossLinkSuggestionRecord {
@@ -200,7 +212,12 @@ mod tests {
 
     use super::build_cross_link_suggestions;
 
-    fn summary(kind: &str, route: &str, label: &str, id_suffix: u128) -> rustok_seo_targets::SeoBulkSummaryRecord {
+    fn summary(
+        kind: &str,
+        route: &str,
+        label: &str,
+        id_suffix: u128,
+    ) -> rustok_seo_targets::SeoBulkSummaryRecord {
         rustok_seo_targets::SeoBulkSummaryRecord {
             target_kind: SeoTargetSlug::new(kind).expect("valid target slug"),
             target_id: uuid::Uuid::from_u128(id_suffix),
@@ -215,7 +232,12 @@ mod tests {
         let suggestions = build_cross_link_suggestions(
             &[
                 summary("page", "/guides/rust-seo", "Rust SEO Guide", 1),
-                summary("blog_post", "/blog/rust-seo-checklist", "Rust SEO Checklist", 2),
+                summary(
+                    "blog_post",
+                    "/blog/rust-seo-checklist",
+                    "Rust SEO Checklist",
+                    2,
+                ),
                 summary("product", "/products/coffee", "Coffee Beans", 3),
             ],
             2,

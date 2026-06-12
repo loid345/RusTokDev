@@ -280,7 +280,11 @@ pub mod schema {
         Value::Object(object)
     }
 
-    fn insert_image(object: &mut Map<String, Value>, key: &str, image: Option<&SeoTargetImageRecord>) {
+    fn insert_image(
+        object: &mut Map<String, Value>,
+        key: &str,
+        image: Option<&SeoTargetImageRecord>,
+    ) {
         if let Some(image) = image {
             object.insert(key.to_string(), schema_image_value(image));
         }
@@ -1004,8 +1008,14 @@ mod tests {
         .expect("image descriptor should be created");
         let schema_with_descriptor =
             schema::product_with_image("Demo", Some("Desc"), Some(&descriptor), "en-US");
-        assert_eq!(schema_with_descriptor["image"]["@type"], json!("ImageObject"));
-        assert_eq!(schema_with_descriptor["image"]["url"], json!("https://cdn.test/hero.webp"));
+        assert_eq!(
+            schema_with_descriptor["image"]["@type"],
+            json!("ImageObject")
+        );
+        assert_eq!(
+            schema_with_descriptor["image"]["url"],
+            json!("https://cdn.test/hero.webp")
+        );
         assert_eq!(schema_with_descriptor["image"]["caption"], json!("Hero"));
         assert_eq!(schema_with_descriptor["image"]["width"], json!(1200));
         assert_eq!(schema_with_descriptor["image"]["height"], json!(630));
@@ -1041,8 +1051,14 @@ mod tests {
             fields.values.get("image_pixel_count"),
             Some(&"756000".to_string())
         );
-        assert_eq!(fields.values.get("image_has_alt"), Some(&"true".to_string()));
-        assert_eq!(fields.values.get("image_has_size"), Some(&"true".to_string()));
+        assert_eq!(
+            fields.values.get("image_has_alt"),
+            Some(&"true".to_string())
+        );
+        assert_eq!(
+            fields.values.get("image_has_size"),
+            Some(&"true".to_string())
+        );
     }
 
     #[test]

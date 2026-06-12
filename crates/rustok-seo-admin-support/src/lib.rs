@@ -6,7 +6,13 @@ mod model;
 mod panel;
 
 pub use components::{
-    SeoRecommendationsCard, SeoSchemaPreviewCard, SeoSnippetPreviewCard, SeoSummaryTile,
+    SeoControlPlaneWidgetStateCard, SeoControlPlaneWidgets, SeoDeliveryStatusCards,
+    SeoRecommendationsCard, SeoRemediationHintCard, SeoSchemaPreviewCard, SeoSnippetPreviewCard,
+    SeoSummaryTile,
 };
-pub use model::{SeoCompletenessReport, SeoEntityForm, SeoMetaView, SeoRevisionView};
+pub use model::{
+    derive_control_plane_widget_state, remediation_hint_for_issue_code, SeoCompletenessReport,
+    SeoControlPlaneWidgetState, SeoControlPlaneWidgetStateKind, SeoEntityForm,
+    SeoEventDeliverySummary, SeoMetaView, SeoRevisionView,
+};
 pub use panel::{SeoCapabilityNotice, SeoEntityPanel};

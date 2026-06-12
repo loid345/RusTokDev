@@ -16,6 +16,7 @@ use crate::modules::{
 };
 use crate::services::build_service::BuildEvent;
 use crate::services::flex_attached_values::FlexAttachedValuesService;
+use crate::services::module_lifecycle::ModuleOperationRecoveryPlan as ServiceModuleOperationRecoveryPlan;
 use crate::services::rbac_service::RbacService;
 use crate::services::registry_principal::RegistryPrincipalRef;
 
@@ -175,6 +176,41 @@ pub struct TenantModule {
     pub module_slug: String,
     pub enabled: bool,
     pub settings: String,
+}
+
+#[derive(SimpleObject, Clone)]
+pub struct ModuleOperationRecoveryPlan {
+    pub operation_id: Uuid,
+    pub tenant_id: Uuid,
+    pub module_slug: String,
+    pub requested_enabled: bool,
+    pub previous_effective_enabled: bool,
+    pub status: String,
+    pub issue: String,
+    pub retryable: bool,
+    pub recommended_action: String,
+    pub correlation_id: Option<String>,
+    pub requested_by: Option<String>,
+    pub error_message: Option<String>,
+}
+
+impl From<&ServiceModuleOperationRecoveryPlan> for ModuleOperationRecoveryPlan {
+    fn from(plan: &ServiceModuleOperationRecoveryPlan) -> Self {
+        Self {
+            operation_id: plan.operation_id,
+            tenant_id: plan.tenant_id,
+            module_slug: plan.module_slug.clone(),
+            requested_enabled: plan.requested_enabled,
+            previous_effective_enabled: plan.previous_effective_enabled,
+            status: plan.status.as_str().to_string(),
+            issue: plan.issue.as_str().to_string(),
+            retryable: plan.retryable,
+            recommended_action: plan.recommended_action.as_str().to_string(),
+            correlation_id: plan.correlation_id.clone(),
+            requested_by: plan.requested_by.clone(),
+            error_message: plan.error_message.clone(),
+        }
+    }
 }
 
 #[derive(SimpleObject, Clone)]

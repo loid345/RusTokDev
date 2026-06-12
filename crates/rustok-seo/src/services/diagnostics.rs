@@ -16,8 +16,10 @@ use super::SeoService;
 
 const MAX_EXPOSED_ISSUES: usize = 50;
 const CROSS_LINK_GAP_REMEDIATION_MESSAGE: &str = "No cross-link suggestions were generated for this target. Use seoCrossLinkSuggestions or GET /api/seo/cross-link-suggestions to review remediation candidates.";
-const MISSING_IMAGE_ALT_REMEDIATION_MESSAGE: &str = "Open Graph/Twitter image descriptors are missing alt text in SEO-critical targets.";
-const MISSING_IMAGE_SIZE_REMEDIATION_MESSAGE: &str = "Open Graph/Twitter image descriptors are missing width/height in SEO-critical targets.";
+const MISSING_IMAGE_ALT_REMEDIATION_MESSAGE: &str =
+    "Open Graph/Twitter image descriptors are missing alt text in SEO-critical targets.";
+const MISSING_IMAGE_SIZE_REMEDIATION_MESSAGE: &str =
+    "Open Graph/Twitter image descriptors are missing width/height in SEO-critical targets.";
 
 type CanonicalUsageEntry = (
     rustok_seo_targets::SeoTargetSlug,
@@ -461,7 +463,8 @@ fn append_image_descriptor_diagnostics(
         return;
     };
 
-    let (missing_alt_count, missing_size_count) = collect_missing_image_descriptor_counts(page_context);
+    let (missing_alt_count, missing_size_count) =
+        collect_missing_image_descriptor_counts(page_context);
     if missing_alt_count > 0 {
         issues.push(issue(
             "missing_image_alt",
@@ -497,7 +500,10 @@ fn append_image_descriptor_diagnostics(
 fn is_image_seo_critical_target(target_kind: &str) -> bool {
     matches!(
         target_kind,
-        builtin_slug::PAGE | builtin_slug::PRODUCT | builtin_slug::BLOG_POST | builtin_slug::FORUM_TOPIC
+        builtin_slug::PAGE
+            | builtin_slug::PRODUCT
+            | builtin_slug::BLOG_POST
+            | builtin_slug::FORUM_TOPIC
     )
 }
 
@@ -644,8 +650,7 @@ fn count_by_key<'a>(keys: impl Iterator<Item = &'a str>) -> Vec<SeoDiagnosticCou
 mod tests {
     use super::{
         collect_missing_image_descriptor_counts, is_image_seo_critical_target,
-        redirect_lookup_route, trace_redirects, RedirectTrace,
-        CROSS_LINK_GAP_REMEDIATION_MESSAGE,
+        redirect_lookup_route, trace_redirects, RedirectTrace, CROSS_LINK_GAP_REMEDIATION_MESSAGE,
     };
     use crate::dto::{SeoDocument, SeoImageAsset, SeoOpenGraph, SeoPageContext, SeoTwitterCard};
     use std::collections::HashMap;
