@@ -5,11 +5,13 @@ use leptos_ui_routing::{use_route_query_value, use_route_query_writer};
 use rustok_api::{AdminQueryKey, UiRouteContext};
 
 use crate::core::{
-    build_customer_admin_submit_command, customer_list_request, CustomerAdminDraftInput,
-    CustomerAdminSubmitCommandError,
+    build_customer_admin_submit_command, customer_detail_form_snapshot, customer_detail_view_model,
+    customer_list_item_class, customer_list_item_view_model, customer_list_request,
+    empty_customer_admin_form_snapshot, CustomerAdminDisplayLabels, CustomerAdminDraftInput,
+    CustomerAdminFormSnapshot, CustomerAdminSubmitCommandError,
 };
 use crate::i18n::t;
-use crate::model::{CustomerAdminBootstrap, CustomerDetail, CustomerListItem};
+use crate::model::{CustomerAdminBootstrap, CustomerDetail};
 use crate::transport;
 
 fn local_resource<S, Fut, T>(
@@ -83,13 +85,16 @@ pub fn CustomerAdmin() -> impl IntoView {
     );
 
     let reset_form = move || {
-        set_editing_id.set(None);
-        set_selected.set(None);
-        set_user_id.set(String::new());
-        set_email.set(String::new());
-        set_first_name.set(String::new());
-        set_last_name.set(String::new());
-        set_phone.set(String::new());
+        apply_customer_form_snapshot(
+            empty_customer_admin_form_snapshot(),
+            set_editing_id,
+            set_selected,
+            set_user_id,
+            set_email,
+            set_first_name,
+            set_last_name,
+            set_phone,
+        );
         set_error.set(None);
     };
 
@@ -100,8 +105,8 @@ pub fn CustomerAdmin() -> impl IntoView {
         set_error.set(None);
         spawn_local(async move {
             match transport::fetch_customer_detail(customer_id).await {
-                Ok(detail) => apply_customer_detail(
-                    &detail,
+                Ok(detail) => apply_customer_form_snapshot(
+                    customer_detail_form_snapshot(detail),
                     set_editing_id,
                     set_selected,
                     set_user_id,
@@ -111,7 +116,8 @@ pub fn CustomerAdmin() -> impl IntoView {
                     set_phone,
                 ),
                 Err(err) => {
-                    clear_customer_form(
+                    apply_customer_form_snapshot(
+                        empty_customer_admin_form_snapshot(),
                         set_editing_id,
                         set_selected,
                         set_user_id,
@@ -132,7 +138,8 @@ pub fn CustomerAdmin() -> impl IntoView {
             initial_open_customer.run(customer_id);
         }
         _ => {
-            clear_customer_form(
+            apply_customer_form_snapshot(
+                empty_customer_admin_form_snapshot(),
                 set_editing_id,
                 set_selected,
                 set_user_id,
@@ -182,8 +189,8 @@ pub fn CustomerAdmin() -> impl IntoView {
             match result {
                 Ok(detail) => {
                     let detail_id = detail.customer.id.clone();
-                    apply_customer_detail(
-                        &detail,
+                    apply_customer_form_snapshot(
+                        customer_detail_form_snapshot(detail),
                         set_editing_id,
                         set_selected,
                         set_user_id,
@@ -212,6 +219,9 @@ pub fn CustomerAdmin() -> impl IntoView {
     let ui_locale_for_editor = ui_locale.clone();
     let list_query_writer = query_writer.clone();
     let reset_query_writer = query_writer.clone();
+    let display_labels = customer_admin_display_labels(ui_locale.as_deref());
+    let list_display_labels = display_labels.clone();
+    let detail_display_labels = display_labels;
 
     view! {
         <section class="space-y-6">
@@ -275,20 +285,21 @@ pub fn CustomerAdmin() -> impl IntoView {
                             Some(Ok(list)) => view! {
                                 <>
                                     {list.items.into_iter().map(|customer| {
-                                        let customer_id = customer.id.clone();
-                                        let customer_marker = customer.id.clone();
+                                        let row = customer_list_item_view_model(&customer, &list_display_labels);
+                                        let customer_id = row.id.clone();
+                                        let customer_marker = row.id.clone();
                                         let item_locale = ui_locale_for_list.clone();
                                         let item_query_writer = list_query_writer.clone();
                                         view! {
-                                            <article class=move || if editing_id.get().as_deref() == Some(customer_marker.as_str()) { "rounded-2xl border border-primary/40 bg-background p-5 shadow-sm" } else { "rounded-2xl border border-border bg-background p-5 transition hover:border-primary/40" }>
+                                            <article class=move || customer_list_item_class(editing_id.get().as_deref() == Some(customer_marker.as_str()))>
                                                 <div class="flex items-start justify-between gap-3">
                                                     <div class="space-y-2">
                                                         <div class="flex flex-wrap items-center gap-2">
-                                                            <h4 class="text-base font-semibold text-card-foreground">{customer.full_name.clone()}</h4>
-                                                            <span class="inline-flex rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">{linked_badge(item_locale.as_deref(), &customer)}</span>
+                                                            <h4 class="text-base font-semibold text-card-foreground">{row.full_name.clone()}</h4>
+                                                            <span class="inline-flex rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">{row.linked_badge.clone()}</span>
                                                         </div>
-                                                        <p class="text-sm text-muted-foreground">{customer.email.clone()}</p>
-                                                        <p class="text-xs text-muted-foreground">{list_meta(item_locale.as_deref(), &customer)}</p>
+                                                        <p class="text-sm text-muted-foreground">{row.email.clone()}</p>
+                                                        <p class="text-xs text-muted-foreground">{row.meta.clone()}</p>
                                                     </div>
                                                     <button
                                                         type="button"
@@ -349,6 +360,7 @@ pub fn CustomerAdmin() -> impl IntoView {
                     </section>
 
                     {move || selected.get().map(|detail| {
+                        let detail_view = customer_detail_view_model(&detail, &detail_display_labels);
                         view! {
                             <section class="space-y-6 rounded-3xl border border-border bg-card p-6 shadow-sm">
                                 <div class="space-y-2">
@@ -359,13 +371,13 @@ pub fn CustomerAdmin() -> impl IntoView {
                                 <div class="rounded-2xl border border-border bg-background p-5">
                                     <div class="flex flex-wrap items-start justify-between gap-3">
                                         <div class="space-y-2">
-                                            <h4 class="text-base font-semibold text-card-foreground">{detail.customer.full_name.clone()}</h4>
-                                            <p class="text-sm text-muted-foreground">{detail.customer.email.clone()}</p>
-                                            <p class="text-xs text-muted-foreground">{detail_meta(ui_locale_for_detail.as_deref(), &detail)}</p>
+                                            <h4 class="text-base font-semibold text-card-foreground">{detail_view.full_name.clone()}</h4>
+                                            <p class="text-sm text-muted-foreground">{detail_view.email.clone()}</p>
+                                            <p class="text-xs text-muted-foreground">{detail_view.meta.clone()}</p>
                                         </div>
                                         <div class="text-right text-xs text-muted-foreground">
-                                            <p>{format!("created {}", detail.customer.created_at)}</p>
-                                            <p>{format!("updated {}", detail.customer.updated_at)}</p>
+                                            <p>{format!("created {}", detail_view.created_at)}</p>
+                                            <p>{format!("updated {}", detail_view.updated_at)}</p>
                                         </div>
                                     </div>
                                 </div>
@@ -374,19 +386,19 @@ pub fn CustomerAdmin() -> impl IntoView {
                                     <div class="rounded-2xl border border-border bg-background p-5">
                                         <h4 class="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">{t(ui_locale_for_detail.as_deref(), "customer.section.customer", "Customer Record")}</h4>
                                         <div class="mt-4 space-y-2 text-sm text-muted-foreground">
-                                            <p>{detail.customer.user_id.clone().unwrap_or_else(|| t(ui_locale_for_detail.as_deref(), "customer.common.unlinked", "not linked to a platform user"))}</p>
-                                            <p>{detail.customer.phone.clone().unwrap_or_else(|| t(ui_locale_for_detail.as_deref(), "customer.common.noPhone", "no phone"))}</p>
-                                            <p>{detail.customer.locale.clone().unwrap_or_else(|| t(ui_locale_for_detail.as_deref(), "customer.common.noLocale", "no locale"))}</p>
+                                            <p>{detail_view.user_link.clone()}</p>
+                                            <p>{detail_view.phone.clone()}</p>
+                                            <p>{detail_view.locale.clone()}</p>
                                         </div>
                                     </div>
                                     <div class="rounded-2xl border border-border bg-background p-5">
                                         <h4 class="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">{t(ui_locale_for_profile.as_deref(), "customer.section.profile", "Profile Bridge")}</h4>
-                                        {detail.profile.clone().map(|profile| view! {
+                                        {detail_view.profile.clone().map(|profile| view! {
                                             <div class="mt-4 space-y-2 text-sm text-muted-foreground">
-                                                <p>{format!("{} @{}", profile.display_name, profile.handle)}</p>
-                                                <p>{format!("visibility: {}", profile.visibility)}</p>
-                                                <p>{profile.preferred_locale.unwrap_or_else(|| t(ui_locale_for_profile.as_deref(), "customer.common.noLocale", "no locale"))}</p>
-                                                <p>{if profile.tags.is_empty() { t(ui_locale_for_profile.as_deref(), "customer.profile.noTags", "no tags") } else { profile.tags.join(", ") }}</p>
+                                                <p>{profile.identity}</p>
+                                                <p>{profile.visibility}</p>
+                                                <p>{profile.preferred_locale}</p>
+                                                <p>{profile.tags}</p>
                                             </div>
                                         }.into_any()).unwrap_or_else(|| view! {
                                             <p class="mt-4 text-sm text-muted-foreground">{t(ui_locale_for_profile.as_deref(), "customer.profile.empty", "No public profile is linked to this customer yet.")}</p>
@@ -396,7 +408,7 @@ pub fn CustomerAdmin() -> impl IntoView {
 
                                 <div class="rounded-2xl border border-border bg-background p-5">
                                     <h4 class="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">{t(ui_locale_for_detail.as_deref(), "customer.section.metadata", "Metadata")}</h4>
-                                    <pre class="mt-4 overflow-x-auto whitespace-pre-wrap text-xs text-muted-foreground">{detail.customer.metadata_pretty.clone()}</pre>
+                                    <pre class="mt-4 overflow-x-auto whitespace-pre-wrap text-xs text-muted-foreground">{detail_view.metadata_pretty.clone()}</pre>
                                 </div>
                             </section>
                         }.into_any()
@@ -407,77 +419,37 @@ pub fn CustomerAdmin() -> impl IntoView {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn apply_customer_detail(
-    detail: &CustomerDetail,
-    set_editing_id: WriteSignal<Option<String>>,
-    set_selected: WriteSignal<Option<CustomerDetail>>,
-    set_user_id: WriteSignal<String>,
-    set_email: WriteSignal<String>,
-    set_first_name: WriteSignal<String>,
-    set_last_name: WriteSignal<String>,
-    set_phone: WriteSignal<String>,
-) {
-    set_editing_id.set(Some(detail.customer.id.clone()));
-    set_selected.set(Some(detail.clone()));
-    set_user_id.set(detail.customer.user_id.clone().unwrap_or_default());
-    set_email.set(detail.customer.email.clone());
-    set_first_name.set(detail.customer.first_name.clone().unwrap_or_default());
-    set_last_name.set(detail.customer.last_name.clone().unwrap_or_default());
-    set_phone.set(detail.customer.phone.clone().unwrap_or_default());
-}
-
-fn clear_customer_form(
-    set_editing_id: WriteSignal<Option<String>>,
-    set_selected: WriteSignal<Option<CustomerDetail>>,
-    set_user_id: WriteSignal<String>,
-    set_email: WriteSignal<String>,
-    set_first_name: WriteSignal<String>,
-    set_last_name: WriteSignal<String>,
-    set_phone: WriteSignal<String>,
-) {
-    set_editing_id.set(None);
-    set_selected.set(None);
-    set_user_id.set(String::new());
-    set_email.set(String::new());
-    set_first_name.set(String::new());
-    set_last_name.set(String::new());
-    set_phone.set(String::new());
-}
-
-fn linked_badge(locale: Option<&str>, customer: &CustomerListItem) -> String {
-    if customer.user_id.is_some() {
-        t(locale, "customer.common.linked", "linked user")
-    } else {
-        t(locale, "customer.common.unlinked", "standalone customer")
+fn customer_admin_display_labels(locale: Option<&str>) -> CustomerAdminDisplayLabels {
+    CustomerAdminDisplayLabels {
+        linked_user: t(locale, "customer.common.linked", "linked user"),
+        standalone_customer: t(locale, "customer.common.unlinked", "standalone customer"),
+        not_linked_to_platform_user: t(
+            locale,
+            "customer.common.unlinked",
+            "not linked to a platform user",
+        ),
+        no_phone: t(locale, "customer.common.noPhone", "no phone"),
+        no_locale: t(locale, "customer.common.noLocale", "no locale"),
+        no_tags: t(locale, "customer.profile.noTags", "no tags"),
     }
 }
 
-fn list_meta(locale: Option<&str>, customer: &CustomerListItem) -> String {
-    let phone = customer
-        .phone
-        .clone()
-        .unwrap_or_else(|| t(locale, "customer.common.noPhone", "no phone"));
-    let locale_value = customer
-        .locale
-        .clone()
-        .unwrap_or_else(|| t(locale, "customer.common.noLocale", "no locale"));
-    format!(
-        "phone: {phone} | locale: {locale_value} | updated {}",
-        customer.updated_at
-    )
-}
-
-fn detail_meta(locale: Option<&str>, detail: &CustomerDetail) -> String {
-    let linked = detail
-        .customer
-        .user_id
-        .clone()
-        .unwrap_or_else(|| t(locale, "customer.common.unlinked", "standalone customer"));
-    let locale_value = detail
-        .customer
-        .locale
-        .clone()
-        .unwrap_or_else(|| t(locale, "customer.common.noLocale", "no locale"));
-    format!("user: {linked} | locale: {locale_value}")
+#[allow(clippy::too_many_arguments)]
+fn apply_customer_form_snapshot(
+    snapshot: CustomerAdminFormSnapshot,
+    set_editing_id: WriteSignal<Option<String>>,
+    set_selected: WriteSignal<Option<CustomerDetail>>,
+    set_user_id: WriteSignal<String>,
+    set_email: WriteSignal<String>,
+    set_first_name: WriteSignal<String>,
+    set_last_name: WriteSignal<String>,
+    set_phone: WriteSignal<String>,
+) {
+    set_editing_id.set(snapshot.editing_customer_id);
+    set_selected.set(snapshot.selected_detail);
+    set_user_id.set(snapshot.user_id);
+    set_email.set(snapshot.email);
+    set_first_name.set(snapshot.first_name);
+    set_last_name.set(snapshot.last_name);
+    set_phone.set(snapshot.phone);
 }
