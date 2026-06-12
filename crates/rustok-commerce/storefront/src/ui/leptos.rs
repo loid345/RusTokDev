@@ -49,7 +49,10 @@ pub fn CommerceView() -> impl IntoView {
             )
         },
         move |(cart_id, locale, _)| async move {
-            transport::fetch_storefront_commerce(cart_id, locale).await
+            transport::fetch_storefront_commerce(core::build_fetch_commerce_request(
+                cart_id, locale,
+            ))
+            .await
         },
     );
 
@@ -61,7 +64,11 @@ pub fn CommerceView() -> impl IntoView {
             set_action_error.set(None);
             set_completion.set(None);
             spawn_local(async move {
-                match transport::create_storefront_payment_collection(cart_id).await {
+                match transport::create_storefront_payment_collection(
+                    core::build_cart_command_request(cart_id),
+                )
+                .await
+                {
                     Ok(_) => set_refresh_nonce.update(|value| *value += 1),
                     Err(err) => set_action_error.set(Some(core::error_with_context(
                         action_error_label.as_str(),
@@ -89,11 +96,13 @@ pub fn CommerceView() -> impl IntoView {
                 set_completion.set(None);
                 spawn_local(async move {
                     match transport::select_storefront_shipping_option(
-                        cart,
-                        shipping_profile_slug,
-                        seller_id,
-                        seller_scope,
-                        shipping_option_id,
+                        core::build_select_shipping_option_request(
+                            cart,
+                            shipping_profile_slug,
+                            seller_id,
+                            seller_scope,
+                            shipping_option_id,
+                        ),
                     )
                     .await
                     {
@@ -116,7 +125,11 @@ pub fn CommerceView() -> impl IntoView {
             set_action_busy.set(true);
             set_action_error.set(None);
             spawn_local(async move {
-                match transport::complete_storefront_checkout(cart_id).await {
+                match transport::complete_storefront_checkout(core::build_cart_command_request(
+                    cart_id,
+                ))
+                .await
+                {
                     Ok(result) => {
                         set_completion.set(Some(result));
                         set_refresh_nonce.update(|value| *value += 1);
