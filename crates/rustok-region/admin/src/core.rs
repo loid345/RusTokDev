@@ -1,6 +1,6 @@
 use rustok_api::normalize_ui_text;
 
-use crate::model::{RegionDetail, RegionDraft};
+use crate::model::{RegionAdminBootstrap, RegionDetail, RegionDraft};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RegionFormInput<'a> {
@@ -53,6 +53,66 @@ pub fn missing_required_region_field(input: &RegionDraft) -> Option<RegionRequir
         Some(RegionRequiredField::Countries)
     } else {
         None
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionAdminShellLabels {
+    pub badge: String,
+    pub title: String,
+    pub subtitle: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionAdminShellViewModel {
+    pub badge: String,
+    pub title: String,
+    pub subtitle: String,
+}
+
+pub fn build_region_admin_shell_view_model(
+    labels: &RegionAdminShellLabels,
+) -> RegionAdminShellViewModel {
+    RegionAdminShellViewModel {
+        badge: labels.badge.clone(),
+        title: labels.title.clone(),
+        subtitle: labels.subtitle.clone(),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionAdminListHeaderLabels {
+    pub title: String,
+    pub subtitle_template: String,
+    pub subtitle_fallback: String,
+    pub refresh_action: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionAdminListHeaderViewModel {
+    pub title: String,
+    pub subtitle: String,
+    pub refresh_action: String,
+}
+
+pub fn build_region_admin_list_header_view_model(
+    bootstrap: Option<&RegionAdminBootstrap>,
+    labels: &RegionAdminListHeaderLabels,
+) -> RegionAdminListHeaderViewModel {
+    let tenant_name =
+        bootstrap.and_then(|payload| optional_ui_text(payload.current_tenant.name.as_str()));
+    let subtitle = tenant_name
+        .map(|tenant| {
+            labels
+                .subtitle_template
+                .replace("{tenant}", tenant.as_str())
+        })
+        .unwrap_or_else(|| labels.subtitle_fallback.clone());
+
+    RegionAdminListHeaderViewModel {
+        title: labels.title.clone(),
+        subtitle,
+        refresh_action: labels.refresh_action.clone(),
     }
 }
 
@@ -434,6 +494,55 @@ mod tests {
         assert_eq!(
             missing_required_region_field(&draft),
             Some(RegionRequiredField::Name)
+        );
+    }
+
+    #[test]
+    fn admin_shell_view_model_keeps_header_copy_outside_ui_runtime() {
+        let labels = RegionAdminShellLabels {
+            badge: "region".to_string(),
+            title: "Region Operations".to_string(),
+            subtitle: "Module-owned region workspace".to_string(),
+        };
+
+        let view_model = build_region_admin_shell_view_model(&labels);
+
+        assert_eq!(view_model.badge, "region");
+        assert_eq!(view_model.title, "Region Operations");
+        assert_eq!(view_model.subtitle, "Module-owned region workspace");
+    }
+
+    #[test]
+    fn admin_list_header_view_model_formats_tenant_subtitle_without_ui_runtime() {
+        let labels = RegionAdminListHeaderLabels {
+            title: "Regions".to_string(),
+            subtitle_template: "Tenant {tenant} region policy owned by the region module."
+                .to_string(),
+            subtitle_fallback: "Tenant-scoped region policy owned by the region module."
+                .to_string(),
+            refresh_action: "Refresh".to_string(),
+        };
+        let bootstrap = RegionAdminBootstrap {
+            current_tenant: crate::model::CurrentTenant {
+                id: "tenant-1".to_string(),
+                slug: "tenant".to_string(),
+                name: "  Demo Tenant  ".to_string(),
+            },
+        };
+
+        let view_model = build_region_admin_list_header_view_model(Some(&bootstrap), &labels);
+
+        assert_eq!(view_model.title, "Regions");
+        assert_eq!(
+            view_model.subtitle,
+            "Tenant Demo Tenant region policy owned by the region module."
+        );
+        assert_eq!(view_model.refresh_action, "Refresh");
+
+        let fallback = build_region_admin_list_header_view_model(None, &labels);
+        assert_eq!(
+            fallback.subtitle,
+            "Tenant-scoped region policy owned by the region module."
         );
     }
 

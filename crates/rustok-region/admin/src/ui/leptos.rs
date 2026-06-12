@@ -6,11 +6,12 @@ use rustok_api::{AdminQueryKey, UiRouteContext};
 
 use crate::core::{
     RegionAdminDetailHeaderLabels, RegionAdminDetailLabels, RegionAdminEditorFieldLabels,
-    RegionAdminEditorFormState, RegionAdminEditorLabels, RegionAdminListLabels,
-    RegionAdminPolicyLabels, RegionAdminRawSectionLabels,
+    RegionAdminEditorFormState, RegionAdminEditorLabels, RegionAdminListHeaderLabels,
+    RegionAdminListLabels, RegionAdminPolicyLabels, RegionAdminRawSectionLabels,
+    RegionAdminShellLabels,
 };
 use crate::i18n::t;
-use crate::model::{RegionAdminBootstrap, RegionDetail};
+use crate::model::RegionDetail;
 
 fn local_resource<S, Fut, T>(
     source: impl Fn() -> S + 'static,
@@ -90,6 +91,31 @@ pub fn RegionAdmin() -> impl IntoView {
         "region.error.loadRegions",
         "Failed to load regions",
     );
+
+    let shell_view_model = crate::core::build_region_admin_shell_view_model(
+        &RegionAdminShellLabels {
+            badge: t(ui_locale.as_deref(), "region.badge", "region"),
+            title: t(ui_locale.as_deref(), "region.title", "Region Operations"),
+            subtitle: t(ui_locale.as_deref(), "region.subtitle", "Module-owned region workspace for tenant-scoped country, currency and tax baseline management without routing operator CRUD back through the commerce umbrella."),
+        },
+    );
+    let list_header_labels = RegionAdminListHeaderLabels {
+        title: t(ui_locale.as_deref(), "region.list.title", "Regions"),
+        subtitle_template: t(
+            ui_locale.as_deref(),
+            "region.list.subtitle",
+            "Tenant {tenant} region policy owned by the region module.",
+        ),
+        subtitle_fallback: t(
+            ui_locale.as_deref(),
+            "region.list.subtitleFallback",
+            "Tenant-scoped region policy owned by the region module.",
+        ),
+        refresh_action: t(ui_locale.as_deref(), "region.action.refresh", "Refresh"),
+    };
+    let list_header_title = list_header_labels.title.clone();
+    let list_header_refresh_action = list_header_labels.refresh_action.clone();
+    let list_header_labels_for_subtitle = list_header_labels.clone();
 
     let list_labels = RegionAdminListLabels {
         tax_included: t(
@@ -360,7 +386,6 @@ pub fn RegionAdmin() -> impl IntoView {
         });
     };
 
-    let ui_locale_for_list_heading = ui_locale.clone();
     let ui_locale_for_list = ui_locale.clone();
     let ui_locale_for_detail = ui_locale.clone();
     let ui_locale_for_empty = ui_locale.clone();
@@ -373,13 +398,13 @@ pub fn RegionAdmin() -> impl IntoView {
             <header class="rounded-3xl border border-border bg-card p-6 shadow-sm">
                 <div class="space-y-3">
                     <span class="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                        {t(ui_locale.as_deref(), "region.badge", "region")}
+                        {shell_view_model.badge.clone()}
                     </span>
                     <h2 class="text-2xl font-semibold text-card-foreground">
-                        {t(ui_locale.as_deref(), "region.title", "Region Operations")}
+                        {shell_view_model.title.clone()}
                     </h2>
                     <p class="max-w-3xl text-sm text-muted-foreground">
-                        {t(ui_locale.as_deref(), "region.subtitle", "Module-owned region workspace for tenant-scoped country, currency and tax baseline management without routing operator CRUD back through the commerce umbrella.")}
+                        {shell_view_model.subtitle.clone()}
                     </p>
                 </div>
             </header>
@@ -395,13 +420,16 @@ pub fn RegionAdmin() -> impl IntoView {
                     <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                         <div>
                             <h3 class="text-lg font-semibold text-card-foreground">
-                                {t(ui_locale.as_deref(), "region.list.title", "Regions")}
+                                {list_header_title.clone()}
                             </h3>
                             <p class="text-sm text-muted-foreground">
-                                {move || bootstrap.get().and_then(Result::ok).map(|payload: RegionAdminBootstrap| {
-                                    t(ui_locale_for_list_heading.as_deref(), "region.list.subtitle", "Tenant {tenant} region policy owned by the region module.")
-                                        .replace("{tenant}", payload.current_tenant.name.as_str())
-                                }).unwrap_or_else(|| t(ui_locale_for_list_heading.as_deref(), "region.list.subtitleFallback", "Tenant-scoped region policy owned by the region module."))}
+                                {move || {
+                                    let payload = bootstrap.get().and_then(Result::ok);
+                                    crate::core::build_region_admin_list_header_view_model(
+                                        payload.as_ref(),
+                                        &list_header_labels_for_subtitle,
+                                    ).subtitle
+                                }}
                             </p>
                         </div>
                         <button
@@ -410,7 +438,7 @@ pub fn RegionAdmin() -> impl IntoView {
                             disabled=move || busy.get()
                             on:click=move |_| set_refresh_nonce.update(|value| *value += 1)
                         >
-                            {t(ui_locale.as_deref(), "region.action.refresh", "Refresh")}
+                            {list_header_refresh_action.clone()}
                         </button>
                     </div>
 
