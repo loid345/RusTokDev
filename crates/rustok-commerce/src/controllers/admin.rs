@@ -208,11 +208,20 @@ pub struct CompleteOrderReturnRefundInput {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
+pub struct CompleteOrderReturnExchangeInput {
+    pub description: Option<String>,
+    pub preview: serde_json::Value,
+    #[serde(default)]
+    pub metadata: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AdminCompleteOrderReturnInput {
     pub resolution_type: Option<String>,
     pub refund_id: Option<Uuid>,
     pub order_change_id: Option<Uuid>,
     pub refund: Option<CompleteOrderReturnRefundInput>,
+    pub exchange: Option<CompleteOrderReturnExchangeInput>,
     #[serde(default)]
     pub metadata: serde_json::Value,
 }
@@ -991,7 +1000,7 @@ pub async fn complete_order_return(
     }
 
     let event_bus = transactional_event_bus_from_context(&ctx);
-    let order_service = OrderService::new(ctx.db.clone(), event_bus);
+    let order_service = OrderService::new(ctx.db.clone(), event_bus.clone());
     let mut complete_input = rustok_order::dto::CompleteOrderReturnInput {
         resolution_type: input.resolution_type,
         refund_id: input.refund_id,
@@ -1061,6 +1070,54 @@ pub async fn complete_order_return(
 
         complete_input.resolution_type = Some("refund".to_string());
         complete_input.refund_id = Some(refund.id);
+    }
+
+    if let Some(exchange_input) = input.exchange {
+        if complete_input.refund_id.is_some() || complete_input.order_change_id.is_some() {
+            return Err(Error::BadRequest(
+                "exchange helper cannot be combined with explicit refund_id or order_change_id"
+                    .to_string(),
+            ));
+        }
+        if complete_input
+            .resolution_type
+            .as_deref()
+            .map(|value| value.trim().eq_ignore_ascii_case("exchange"))
+            == Some(false)
+        {
+            return Err(Error::BadRequest(
+                "exchange helper requires resolution_type to be omitted or `exchange`".to_string(),
+            ));
+        }
+
+        let existing_return = order_service
+            .get_return(tenant.id, id)
+            .await
+            .map_err(map_order_error)?;
+
+        let actor_id = auth.user_id;
+        let post_order_service = crate::PostOrderOrchestrationService::new(ctx.db.clone(), event_bus.clone());
+        let order_change = post_order_service
+            .create_exchange_for_return(
+                tenant.id,
+                actor_id,
+                existing_return.order_id,
+                id,
+                &crate::ReturnExchangeDecisionInput {
+                    description: exchange_input.description,
+                    preview: exchange_input.preview,
+                    metadata: exchange_input.metadata,
+                },
+            )
+            .await
+            .map_err(|e| match e {
+                crate::PostOrderOrchestrationError::Order(err) => map_order_error(err),
+                crate::PostOrderOrchestrationError::Payment(err) => map_payment_error(err),
+                crate::PostOrderOrchestrationError::Validation(msg) => Error::BadRequest(msg),
+            })?;
+
+        complete_input.resolution_type = Some("exchange".to_string());
+        complete_input.order_change_id = Some(order_change.id);
     }
 
     let item = order_service

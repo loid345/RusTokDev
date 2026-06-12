@@ -1337,6 +1337,7 @@ impl CommerceMutation {
             )?;
         }
 
+        let auth = ctx.data::<AuthContext>()?;
         let db = ctx.data::<sea_orm::DatabaseConnection>()?;
         let event_bus = ctx.data::<rustok_outbox::TransactionalEventBus>()?;
         let order_service = OrderService::new(db.clone(), event_bus.clone());
@@ -1355,6 +1356,20 @@ impl CommerceMutation {
                 id,
                 complete_input,
                 refund_input,
+            )
+            .await?;
+        }
+
+        if let Some(exchange_input) = input.exchange {
+            complete_input = build_exchange_resolution_return_completion(
+                db,
+                &order_service,
+                tenant_id,
+                id,
+                complete_input,
+                exchange_input,
+                auth.user_id,
+                event_bus,
             )
             .await?;
         }
@@ -2449,6 +2464,54 @@ async fn build_refund_resolution_return_completion(
 
     complete_input.resolution_type = Some("refund".to_string());
     complete_input.refund_id = Some(refund.id);
+    Ok(complete_input)
+}
+
+async fn build_exchange_resolution_return_completion(
+    db: &sea_orm::DatabaseConnection,
+    order_service: &OrderService,
+    tenant_id: Uuid,
+    return_id: Uuid,
+    mut complete_input: crate::dto::CompleteOrderReturnInput,
+    exchange_input: CompleteOrderReturnExchangeInputObject,
+    actor_id: Uuid,
+    event_bus: &rustok_outbox::TransactionalEventBus,
+) -> Result<crate::dto::CompleteOrderReturnInput> {
+    if complete_input.refund_id.is_some() || complete_input.order_change_id.is_some() {
+        return Err(async_graphql::Error::new(
+            "exchange helper cannot be combined with explicit refund_id or order_change_id",
+        ));
+    }
+    if complete_input
+        .resolution_type
+        .as_deref()
+        .map(|value| value.trim().eq_ignore_ascii_case("exchange"))
+        == Some(false)
+    {
+        return Err(async_graphql::Error::new(
+            "exchange helper requires resolution_type to be omitted or `exchange`",
+        ));
+    }
+
+    let existing_return = order_service.get_return(tenant_id, return_id).await?;
+    let post_order_service = PostOrderOrchestrationService::new(db.clone(), event_bus.clone());
+    let order_change = post_order_service
+        .create_exchange_for_return(
+            tenant_id,
+            actor_id,
+            existing_return.order_id,
+            return_id,
+            &ReturnExchangeDecisionInput {
+                description: exchange_input.description,
+                preview: parse_json_payload(exchange_input.preview.as_str(), "Invalid JSON preview payload")?,
+                metadata: parse_optional_metadata(exchange_input.metadata.as_deref())?,
+            },
+        )
+        .await
+        .map_err(|e| async_graphql::Error::new(e.to_string()))?;
+
+    complete_input.resolution_type = Some("exchange".to_string());
+    complete_input.order_change_id = Some(order_change.id);
     Ok(complete_input)
 }
 

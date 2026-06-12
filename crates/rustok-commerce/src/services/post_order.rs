@@ -88,6 +88,58 @@ impl PostOrderOrchestrationService {
         Self { db, event_bus }
     }
 
+    pub async fn create_exchange_for_return(
+        &self,
+        tenant_id: Uuid,
+        actor_id: Uuid,
+        order_id: Uuid,
+        order_return_id: Uuid,
+        input: &ReturnExchangeDecisionInput,
+    ) -> PostOrderOrchestrationResult<OrderChangeResponse> {
+        let order_service = OrderService::new(self.db.clone(), self.event_bus.clone());
+        let order_change = order_service
+            .create_order_change(
+                tenant_id,
+                actor_id,
+                order_id,
+                build_return_order_change_input(
+                    "exchange",
+                    input.description.clone(),
+                    input.preview.clone(),
+                    input.metadata.clone(),
+                    order_return_id,
+                )?,
+            )
+            .await?;
+        Ok(order_change)
+    }
+
+    pub async fn create_claim_for_return(
+        &self,
+        tenant_id: Uuid,
+        actor_id: Uuid,
+        order_id: Uuid,
+        order_return_id: Uuid,
+        input: &ReturnClaimDecisionInput,
+    ) -> PostOrderOrchestrationResult<OrderChangeResponse> {
+        let order_service = OrderService::new(self.db.clone(), self.event_bus.clone());
+        let order_change = order_service
+            .create_order_change(
+                tenant_id,
+                actor_id,
+                order_id,
+                build_return_order_change_input(
+                    "claim",
+                    input.description.clone(),
+                    input.preview.clone(),
+                    input.metadata.clone(),
+                    order_return_id,
+                )?,
+            )
+            .await?;
+        Ok(order_change)
+    }
+
     pub async fn create_return_decision(
         &self,
         tenant_id: Uuid,
@@ -149,18 +201,13 @@ impl PostOrderOrchestrationService {
                         "exchange decision requires exchange details".to_string(),
                     )
                 })?;
-                let order_change = order_service
-                    .create_order_change(
+                let order_change = self
+                    .create_exchange_for_return(
                         tenant_id,
                         actor_id,
                         order_id,
-                        build_return_order_change_input(
-                            "exchange",
-                            exchange_input.description.clone(),
-                            exchange_input.preview.clone(),
-                            exchange_input.metadata.clone(),
-                            order_return.id,
-                        )?,
+                        order_return.id,
+                        exchange_input,
                     )
                     .await?;
                 let order_return = complete_return_decision(
@@ -181,18 +228,13 @@ impl PostOrderOrchestrationService {
                         "claim decision requires claim details".to_string(),
                     )
                 })?;
-                let order_change = order_service
-                    .create_order_change(
+                let order_change = self
+                    .create_claim_for_return(
                         tenant_id,
                         actor_id,
                         order_id,
-                        build_return_order_change_input(
-                            "claim",
-                            claim_input.description.clone(),
-                            claim_input.preview.clone(),
-                            claim_input.metadata.clone(),
-                            order_return.id,
-                        )?,
+                        order_return.id,
+                        claim_input,
                     )
                     .await?;
                 let order_return = complete_return_decision(
