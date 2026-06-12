@@ -6,11 +6,14 @@ use rustok_api::{AdminQueryKey, UiRouteContext};
 
 use crate::core::{
     build_customer_admin_submit_command, customer_admin_detail_empty_view_model,
-    customer_admin_editor_view_model, customer_admin_list_state_view_model,
-    customer_detail_form_snapshot, customer_detail_view_model, customer_list_item_class,
-    customer_list_item_view_model, customer_list_request, empty_customer_admin_form_snapshot,
-    CustomerAdminDisplayLabels, CustomerAdminDraftInput, CustomerAdminFormSnapshot,
-    CustomerAdminListStateKind, CustomerAdminPageLabels, CustomerAdminSubmitCommandError,
+    customer_admin_detail_header_view_model, customer_admin_editor_view_model,
+    customer_admin_list_header_view_model, customer_admin_list_state_view_model,
+    customer_admin_open_action_view_model, customer_admin_refresh_action_view_model,
+    customer_admin_shell_view_model, customer_detail_form_snapshot, customer_detail_view_model,
+    customer_list_item_class, customer_list_item_view_model, customer_list_request,
+    empty_customer_admin_form_snapshot, CustomerAdminDisplayLabels, CustomerAdminDraftInput,
+    CustomerAdminFormSnapshot, CustomerAdminListStateKind, CustomerAdminPageLabels,
+    CustomerAdminSubmitCommandError,
 };
 use crate::i18n::t;
 use crate::model::{CustomerAdminBootstrap, CustomerDetail};
@@ -212,23 +215,29 @@ pub fn CustomerAdmin() -> impl IntoView {
         });
     };
 
-    let ui_locale_for_list_heading = ui_locale.clone();
-    let ui_locale_for_list = ui_locale.clone();
     let ui_locale_for_detail = ui_locale.clone();
     let ui_locale_for_profile = ui_locale.clone();
-    let ui_locale_for_editor = ui_locale.clone();
     let list_query_writer = query_writer.clone();
     let reset_query_writer = query_writer.clone();
     let display_labels = customer_admin_display_labels(ui_locale.as_deref());
     let list_display_labels = display_labels.clone();
     let detail_display_labels = display_labels;
     let page_labels = customer_admin_page_labels(ui_locale.as_deref());
+    let shell_view = customer_admin_shell_view_model(&page_labels);
+    let list_header_title_labels = page_labels.clone();
+    let list_header_subtitle_labels = page_labels.clone();
     let list_state_labels = page_labels.clone();
+    let refresh_disabled_labels = page_labels.clone();
+    let refresh_label_labels = page_labels.clone();
+    let open_action_labels = page_labels.clone();
     let editor_title_labels = page_labels.clone();
+    let editor_subtitle_labels = page_labels.clone();
     let user_id_disabled_labels = page_labels.clone();
     let submit_disabled_labels = page_labels.clone();
     let submit_label_labels = page_labels.clone();
     let new_button_labels = page_labels.clone();
+    let new_label_labels = page_labels.clone();
+    let detail_header_labels = page_labels.clone();
     let detail_empty_labels = page_labels;
 
     view! {
@@ -236,13 +245,13 @@ pub fn CustomerAdmin() -> impl IntoView {
             <header class="rounded-3xl border border-border bg-card p-6 shadow-sm">
                 <div class="space-y-3">
                     <span class="inline-flex items-center rounded-full border border-border px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                        {t(ui_locale.as_deref(), "customer.badge", "customer")}
+                        {shell_view.badge.clone()}
                     </span>
                     <h2 class="text-2xl font-semibold text-card-foreground">
-                        {t(ui_locale.as_deref(), "customer.title", "Customer Operations")}
+                        {shell_view.title.clone()}
                     </h2>
                     <p class="max-w-3xl text-sm text-muted-foreground">
-                        {t(ui_locale.as_deref(), "customer.subtitle", "Module-owned customer workspace for tenant-scoped customer records, optional user linkage and profile bridge visibility without routing admin traffic back through the commerce umbrella.")}
+                        {shell_view.subtitle.clone()}
                     </p>
                 </div>
             </header>
@@ -258,13 +267,20 @@ pub fn CustomerAdmin() -> impl IntoView {
                     <div class="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
                         <div>
                             <h3 class="text-lg font-semibold text-card-foreground">
-                                {t(ui_locale.as_deref(), "customer.list.title", "Customers")}
+                                {customer_admin_list_header_view_model(
+                                    None,
+                                    &list_header_title_labels,
+                                ).title}
                             </h3>
                             <p class="text-sm text-muted-foreground">
-                                {move || bootstrap.get().and_then(Result::ok).map(|payload: CustomerAdminBootstrap| {
-                                    t(ui_locale_for_list_heading.as_deref(), "customer.list.subtitle", "Tenant {tenant} customer records owned by the customer module.")
-                                        .replace("{tenant}", payload.current_tenant.name.as_str())
-                                }).unwrap_or_else(|| t(ui_locale_for_list_heading.as_deref(), "customer.list.subtitleFallback", "Tenant-scoped customer records owned by the customer module."))}
+                                {move || customer_admin_list_header_view_model(
+                                    bootstrap
+                                        .get()
+                                        .and_then(Result::ok)
+                                        .map(|payload: CustomerAdminBootstrap| payload.current_tenant.name)
+                                        .as_deref(),
+                                    &list_header_subtitle_labels,
+                                ).subtitle}
                             </p>
                         </div>
                         <div class="flex flex-wrap items-center gap-3">
@@ -277,10 +293,16 @@ pub fn CustomerAdmin() -> impl IntoView {
                             <button
                                 type="button"
                                 class="inline-flex rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition hover:bg-accent disabled:opacity-50"
-                                disabled=move || busy.get()
+                                disabled=move || customer_admin_refresh_action_view_model(
+                                    busy.get(),
+                                    &refresh_disabled_labels,
+                                ).disabled
                                 on:click=move |_| set_refresh_nonce.update(|value| *value += 1)
                             >
-                                {t(ui_locale.as_deref(), "customer.action.refresh", "Refresh")}
+                                {move || customer_admin_refresh_action_view_model(
+                                    busy.get(),
+                                    &refresh_label_labels,
+                                ).label}
                             </button>
                         </div>
                     </div>
@@ -318,7 +340,8 @@ pub fn CustomerAdmin() -> impl IntoView {
                                         let row = customer_list_item_view_model(&customer, &list_display_labels);
                                         let customer_id = row.id.clone();
                                         let customer_marker = row.id.clone();
-                                        let item_locale = ui_locale_for_list.clone();
+                                        let item_action_disabled_labels = open_action_labels.clone();
+                                        let item_action_label_labels = open_action_labels.clone();
                                         let item_query_writer = list_query_writer.clone();
                                         view! {
                                             <article class=move || customer_list_item_class(editing_id.get().as_deref() == Some(customer_marker.as_str()))>
@@ -334,10 +357,16 @@ pub fn CustomerAdmin() -> impl IntoView {
                                                     <button
                                                         type="button"
                                                         class="inline-flex rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition hover:bg-accent disabled:opacity-50"
-                                                        disabled=move || busy.get()
+                                                        disabled=move || customer_admin_open_action_view_model(
+                                                            busy.get(),
+                                                            &item_action_disabled_labels,
+                                                        ).disabled
                                                         on:click=move |_| item_query_writer.push_value(AdminQueryKey::CustomerId.as_str(), customer_id.clone())
                                                     >
-                                                        {t(item_locale.as_deref(), "customer.action.open", "Open")}
+                                                        {move || customer_admin_open_action_view_model(
+                                                            busy.get(),
+                                                            &item_action_label_labels,
+                                                        ).label}
                                                     </button>
                                                 </div>
                                             </article>
@@ -361,7 +390,11 @@ pub fn CustomerAdmin() -> impl IntoView {
                                     ).title}
                                 </h3>
                                 <p class="text-sm text-muted-foreground">
-                                    {t(ui_locale_for_editor.as_deref(), "customer.editor.subtitle", "Native customer CRUD lives in the customer module package. User linkage is optional and can be set only during customer creation.")}
+                                    {move || customer_admin_editor_view_model(
+                                        editing_id.get().is_some(),
+                                        busy.get(),
+                                        &editor_subtitle_labels,
+                                    ).subtitle}
                                 </p>
                             </div>
                             <button
@@ -377,7 +410,11 @@ pub fn CustomerAdmin() -> impl IntoView {
                                     reset_form();
                                 }
                             >
-                                {t(ui_locale.as_deref(), "customer.action.new", "New")}
+                                {move || customer_admin_editor_view_model(
+                                    editing_id.get().is_some(),
+                                    busy.get(),
+                                    &new_label_labels,
+                                ).new_label}
                             </button>
                         </div>
 
@@ -411,11 +448,12 @@ pub fn CustomerAdmin() -> impl IntoView {
 
                     {move || selected.get().map(|detail| {
                         let detail_view = customer_detail_view_model(&detail, &detail_display_labels);
+                        let detail_header = customer_admin_detail_header_view_model(&detail_header_labels);
                         view! {
                             <section class="space-y-6 rounded-3xl border border-border bg-card p-6 shadow-sm">
                                 <div class="space-y-2">
-                                    <h3 class="text-lg font-semibold text-card-foreground">{t(ui_locale_for_detail.as_deref(), "customer.detail.title", "Customer Detail")}</h3>
-                                    <p class="text-sm text-muted-foreground">{t(ui_locale_for_detail.as_deref(), "customer.detail.subtitle", "Inspect customer identity, optional user linkage and profile bridge state from the customer-owned route.")}</p>
+                                    <h3 class="text-lg font-semibold text-card-foreground">{detail_header.title.clone()}</h3>
+                                    <p class="text-sm text-muted-foreground">{detail_header.subtitle.clone()}</p>
                                 </div>
 
                                 <div class="rounded-2xl border border-border bg-background p-5">
@@ -474,19 +512,31 @@ pub fn CustomerAdmin() -> impl IntoView {
 
 fn customer_admin_page_labels(locale: Option<&str>) -> CustomerAdminPageLabels {
     CustomerAdminPageLabels {
+        badge: t(locale, "customer.badge", "customer"),
+        title: t(locale, "customer.title", "Customer Operations"),
+        subtitle: t(locale, "customer.subtitle", "Module-owned customer workspace for tenant-scoped customer records, optional user linkage and profile bridge visibility without routing admin traffic back through the commerce umbrella."),
+        list_title: t(locale, "customer.list.title", "Customers"),
+        list_subtitle_template: t(locale, "customer.list.subtitle", "Tenant {tenant} customer records owned by the customer module."),
+        list_subtitle_fallback: t(locale, "customer.list.subtitleFallback", "Tenant-scoped customer records owned by the customer module."),
         list_loading: t(locale, "customer.loading", "Loading customers..."),
         list_empty: t(
             locale,
             "customer.list.empty",
             "No customers match the current filters.",
         ),
+        detail_title: t(locale, "customer.detail.title", "Customer Detail"),
+        detail_subtitle: t(locale, "customer.detail.subtitle", "Inspect customer identity, optional user linkage and profile bridge state from the customer-owned route."),
         detail_empty: t(
             locale,
             "customer.detail.empty",
             "Open a customer to inspect the record, linked user and profile bridge state.",
         ),
+        editor_subtitle: t(locale, "customer.editor.subtitle", "Native customer CRUD lives in the customer module package. User linkage is optional and can be set only during customer creation."),
         edit_title: t(locale, "customer.editor.editTitle", "Edit Customer"),
         create_title: t(locale, "customer.editor.createTitle", "Create Customer"),
+        refresh_action: t(locale, "customer.action.refresh", "Refresh"),
+        open_action: t(locale, "customer.action.open", "Open"),
+        new_action: t(locale, "customer.action.new", "New"),
         save_action: t(locale, "customer.action.save", "Save customer"),
         create_action: t(locale, "customer.action.create", "Create customer"),
     }

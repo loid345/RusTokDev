@@ -236,13 +236,103 @@ pub fn customer_detail_view_model(
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CustomerAdminPageLabels {
+    pub badge: String,
+    pub title: String,
+    pub subtitle: String,
+    pub list_title: String,
+    pub list_subtitle_template: String,
+    pub list_subtitle_fallback: String,
     pub list_loading: String,
     pub list_empty: String,
+    pub detail_title: String,
+    pub detail_subtitle: String,
     pub detail_empty: String,
+    pub editor_subtitle: String,
     pub edit_title: String,
     pub create_title: String,
+    pub refresh_action: String,
+    pub open_action: String,
+    pub new_action: String,
     pub save_action: String,
     pub create_action: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomerAdminShellViewModel {
+    pub badge: String,
+    pub title: String,
+    pub subtitle: String,
+}
+
+pub fn customer_admin_shell_view_model(
+    labels: &CustomerAdminPageLabels,
+) -> CustomerAdminShellViewModel {
+    CustomerAdminShellViewModel {
+        badge: labels.badge.clone(),
+        title: labels.title.clone(),
+        subtitle: labels.subtitle.clone(),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomerAdminListHeaderViewModel {
+    pub title: String,
+    pub subtitle: String,
+}
+
+pub fn customer_admin_list_header_view_model(
+    current_tenant_name: Option<&str>,
+    labels: &CustomerAdminPageLabels,
+) -> CustomerAdminListHeaderViewModel {
+    let subtitle = current_tenant_name
+        .map(|tenant| labels.list_subtitle_template.replace("{tenant}", tenant))
+        .unwrap_or_else(|| labels.list_subtitle_fallback.clone());
+
+    CustomerAdminListHeaderViewModel {
+        title: labels.list_title.clone(),
+        subtitle,
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomerAdminDetailHeaderViewModel {
+    pub title: String,
+    pub subtitle: String,
+}
+
+pub fn customer_admin_detail_header_view_model(
+    labels: &CustomerAdminPageLabels,
+) -> CustomerAdminDetailHeaderViewModel {
+    CustomerAdminDetailHeaderViewModel {
+        title: labels.detail_title.clone(),
+        subtitle: labels.detail_subtitle.clone(),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomerAdminActionViewModel {
+    pub label: String,
+    pub disabled: bool,
+}
+
+pub fn customer_admin_refresh_action_view_model(
+    is_busy: bool,
+    labels: &CustomerAdminPageLabels,
+) -> CustomerAdminActionViewModel {
+    CustomerAdminActionViewModel {
+        label: labels.refresh_action.clone(),
+        disabled: is_busy,
+    }
+}
+
+pub fn customer_admin_open_action_view_model(
+    is_busy: bool,
+    labels: &CustomerAdminPageLabels,
+) -> CustomerAdminActionViewModel {
+    CustomerAdminActionViewModel {
+        label: labels.open_action.clone(),
+        disabled: is_busy,
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -297,7 +387,9 @@ pub fn customer_admin_detail_empty_view_model(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CustomerAdminEditorViewModel {
     pub title: String,
+    pub subtitle: String,
     pub submit_label: String,
+    pub new_label: String,
     pub user_id_disabled: bool,
     pub submit_disabled: bool,
     pub new_disabled: bool,
@@ -314,11 +406,13 @@ pub fn customer_admin_editor_view_model(
         } else {
             labels.create_title.clone()
         },
+        subtitle: labels.editor_subtitle.clone(),
         submit_label: if is_editing {
             labels.save_action.clone()
         } else {
             labels.create_action.clone()
         },
+        new_label: labels.new_action.clone(),
         user_id_disabled: is_editing || is_busy,
         submit_disabled: is_busy,
         new_disabled: is_busy,
@@ -342,11 +436,24 @@ mod tests {
 
     fn page_labels() -> CustomerAdminPageLabels {
         CustomerAdminPageLabels {
+            badge: "customer".to_string(),
+            title: "Customer Operations".to_string(),
+            subtitle: "Module-owned customer workspace.".to_string(),
+            list_title: "Customers".to_string(),
+            list_subtitle_template: "Tenant {tenant} customer records.".to_string(),
+            list_subtitle_fallback: "Tenant-scoped customer records.".to_string(),
             list_loading: "Loading customers...".to_string(),
             list_empty: "No customers match the current filters.".to_string(),
+            detail_title: "Customer Detail".to_string(),
+            detail_subtitle: "Inspect customer identity.".to_string(),
             detail_empty: "Open a customer to inspect the record.".to_string(),
+            editor_subtitle: "Native customer CRUD lives in the customer module package."
+                .to_string(),
             edit_title: "Edit Customer".to_string(),
             create_title: "Create Customer".to_string(),
+            refresh_action: "Refresh".to_string(),
+            open_action: "Open".to_string(),
+            new_action: "New".to_string(),
             save_action: "Save customer".to_string(),
             create_action: "Create customer".to_string(),
         }
@@ -355,6 +462,31 @@ mod tests {
     #[test]
     fn page_state_view_models_own_empty_error_and_editor_policy() {
         let labels = page_labels();
+
+        let shell = customer_admin_shell_view_model(&labels);
+        assert_eq!(shell.badge, "customer");
+        assert_eq!(shell.title, "Customer Operations");
+        assert_eq!(shell.subtitle, "Module-owned customer workspace.");
+
+        let list_header = customer_admin_list_header_view_model(Some("Tenant A"), &labels);
+        assert_eq!(list_header.title, "Customers");
+        assert_eq!(list_header.subtitle, "Tenant Tenant A customer records.");
+        let list_header_fallback = customer_admin_list_header_view_model(None, &labels);
+        assert_eq!(
+            list_header_fallback.subtitle,
+            "Tenant-scoped customer records."
+        );
+
+        let detail_header = customer_admin_detail_header_view_model(&labels);
+        assert_eq!(detail_header.title, "Customer Detail");
+        assert_eq!(detail_header.subtitle, "Inspect customer identity.");
+
+        let refresh = customer_admin_refresh_action_view_model(true, &labels);
+        assert_eq!(refresh.label, "Refresh");
+        assert!(refresh.disabled);
+        let open = customer_admin_open_action_view_model(false, &labels);
+        assert_eq!(open.label, "Open");
+        assert!(!open.disabled);
 
         let loading = customer_admin_list_state_view_model(
             CustomerAdminListStateKind::Loading,
@@ -385,7 +517,12 @@ mod tests {
 
         let edit_busy = customer_admin_editor_view_model(true, true, &labels);
         assert_eq!(edit_busy.title, "Edit Customer");
+        assert_eq!(
+            edit_busy.subtitle,
+            "Native customer CRUD lives in the customer module package."
+        );
         assert_eq!(edit_busy.submit_label, "Save customer");
+        assert_eq!(edit_busy.new_label, "New");
         assert!(edit_busy.user_id_disabled);
         assert!(edit_busy.submit_disabled);
         assert!(edit_busy.new_disabled);
