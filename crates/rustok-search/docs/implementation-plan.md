@@ -5,17 +5,17 @@
 
 ## Execution checkpoint
 
-- Current phase: phase_b_in_progress
-- Last checkpoint: Phase B slice #37 остаётся последним принятым срезом; попытка slice #38 по переносу feedback envelope словарей признана избыточной и откатана, потому что простые i18n success/error тексты должны оставаться в Leptos adapter, если за ними нет reusable policy/state semantics.
-- Next step: Продолжить Phase B только по минимальному FFA decision gate из `docs/research/dioxus-ffa-ui-migration-plan.md`: выносить request/command/state/view-model policy, но оставлять простые i18n feedback labels и adapter-local reset/refresh effects в `ui/leptos`.
+- Current phase: phase_b_ready
+- Last checkpoint: Search FFA Phase B считается закрытой на slice #40: текущие admin/storefront surfaces уже имеют `core/transport/ui` split, Leptos adapters не вызывают raw `api::*`, а дополнительные переносы без нового search UX/transport функционала будут считаться over-extraction.
+- Next step: Не продолжать механический перевод `rustok-search`; следующий work item — parity/evidence hardening для существующих native/GraphQL storefront/admin paths либо новый FFA-срез только при появлении реального search UX/transport функционала.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок и central readiness board.
-- Last updated at (UTC): 2026-06-12T00:00:00Z
+- Last updated at (UTC): 2026-06-12T13:20:43Z
 
 
 ## FFA/FBA status
 
-- FFA status: `in_progress`
+- FFA status: `phase_b_ready`
 - FBA status: `not_started`
 - Structural shape: `core_transport_ui`
 - Evidence:
@@ -41,8 +41,12 @@
   - Phase B slice #35 добавил `SearchResultActionViewModel` и `build_search_result_action_view_model` в `storefront/src/core.rs`; Leptos result cards больше не решают no-target/open-link labels, href state или click-tracking position inline.
   - Phase B slice #36 добавил `SearchEmptyStateViewModel`, `SearchFeatureCardViewModel`, `build_search_empty_state_view_model` и `build_search_results_feature_cards` в `storefront/src/core.rs`; Leptos empty/feature cards больше не владеют title/body presentation objects.
   - Phase B slice #37 добавил `SearchResultsHeaderViewModel` в `storefront/src/core.rs`; Leptos results header больше не собирает query label, query string, summary, preset и locale presentation inline.
-  - Ревью избыточного переноса: предложенный slice #38 для dictionaries mutation feedback откатан; принятая граница — одноразовые i18n success/error тексты и adapter-local reset/refresh effects остаются в `ui/leptos`, а core-owned dictionary request construction и validation из slice #29 сохраняются.
-- Last verified at (UTC): 2026-06-12T00:00:00Z
+  - Ревью избыточного переноса: предложенные feedback-envelope и admin transport DTO pass-through slices отклонены; принятая граница — одноразовые i18n success/error тексты, adapter-local reset/refresh effects и механическое распаковывание transport параметров остаются в adapter/facade, если нет reusable policy semantics.
+  - Phase B slice #38 добавил `StorefrontSearchFetchRequest`, `search_preview_filters_from_route` и `build_storefront_search_fetch_request` в `storefront/src/core.rs`; storefront Leptos resource больше не решает inline blank-query skip, query trim, preset normalization или route-filter-to-transport mapping, при этом native/GraphQL transport facade signatures не менялись.
+  - Phase B slice #39 добавил `StorefrontSearchRouteIntent` и `build_storefront_search_route_intent` в `storefront/src/core.rs`; storefront Leptos navigation больше не решает inline set/delete policy для `q` и `preset`, а только применяет prepared route intent к browser URL.
+  - Phase B slice #40 добавил `DEFAULT_SUGGESTION_MIN_LEN`, `StorefrontSuggestionFetchRequest` и `build_storefront_suggestion_fetch_request` в `storefront/src/core.rs`; storefront Leptos suggestions resource больше не владеет inline autocomplete min-length gate или query trim policy.
+  - Phase B closure decision: search FFA больше не расширяется без нового функционального surface; текущий кодовый split достаточен для `phase_b_ready`, а дальнейшая работа переводится в parity/evidence hardening.
+- Last verified at (UTC): 2026-06-12T13:20:43Z
 - Owner: `rustok-search` module team
 
 ## Область работ
@@ -148,3 +152,6 @@
 - [x] Slice 35: storefront result actions перенесены в core (`SearchResultActionViewModel`, `build_search_result_action_view_model`), поэтому Leptos adapter рендерит prepared no-target/open-link states и только исполняет click tracking/navigation.
 - [x] Slice 36: storefront empty states and feature cards перенесены в core (`SearchEmptyStateViewModel`, `SearchFeatureCardViewModel`, `build_search_empty_state_view_model`, `build_search_results_feature_cards`), поэтому Leptos adapter рендерит готовые title/body models без локального presentation ownership.
 - [x] Slice 37: storefront results header перенесён в core (`SearchResultsHeaderViewModel`), поэтому Leptos adapter рендерит готовые query label/query/summary/preset/locale fields без локальной header presentation сборки.
+- [x] Slice 38: storefront search fetch request policy перенесён в core (`StorefrontSearchFetchRequest`, `search_preview_filters_from_route`, `build_storefront_search_fetch_request`), поэтому Leptos resource исполняет подготовленный request и не владеет blank-query skip/query trim/preset normalization/filter payload mapping.
+- [x] Slice 39: storefront search route-query policy перенесён в core (`StorefrontSearchRouteIntent`, `build_storefront_search_route_intent`), поэтому Leptos navigation adapter применяет готовый `q`/`preset` set/delete intent без inline normalization policy.
+- [x] Slice 40: storefront suggestions request policy перенесён в core (`DEFAULT_SUGGESTION_MIN_LEN`, `StorefrontSuggestionFetchRequest`, `build_storefront_suggestion_fetch_request`), поэтому Leptos suggestions resource исполняет prepared request и не владеет autocomplete threshold/query trim policy.

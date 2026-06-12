@@ -5,25 +5,26 @@ context snapshot, а orchestration над checkout живёт в umbrella `rusto
 
 ## Execution checkpoint
 
-- Current phase: phase_b_in_progress
-- Last checkpoint: Storefront cart UI получил следующий FFA slice: framework-agnostic `core/request.rs` теперь владеет typed fetch/decrement/remove request objects, Leptos adapter строит эти request objects из route/UI state, GraphQL fallback исполняет core-owned decrement command без повторного расчёта quantity policy в API layer, native/GraphQL transport adapters принимают core-owned requests вместо raw tuple аргументов, transport facade возвращает стабильный serializable evidence envelope (`failed_path` в snake_case, `fallback_attempted`, native/GraphQL причины ошибки) при падении fallback, а Leptos error adapter публикует эти поля как host-readable DOM evidence attributes.
-- Next step: Расширить parity evidence для SSR native path, GraphQL fallback и headless cart mutation contracts; следующий verification slice должен покрыть реальные native/GraphQL fallback integration paths, SSR-native authoritative quantity handling и DOM snapshot evidence, а не только typed request/error envelope unit coverage.
+- Current phase: phase_b_ready
+- Last checkpoint: Cart storefront FFA Phase B считается закрытой: cart-owned storefront UI остаётся внутри `rustok-cart/storefront`, имеет `core/transport/ui` split, Leptos adapter не вызывает raw `api::*`, а cart-owned UI не перетаскивается в umbrella `rustok-commerce` или host-приложения.
+- Next step: Не продолжать механические FFA-переносы cart UI; следующий work item — parity/evidence hardening для SSR native path, GraphQL fallback, headless cart mutation contracts и DOM evidence, либо новый FFA-срез только при появлении реального cart-owned storefront функционала.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок и central readiness board.
-- Last updated at (UTC): 2026-06-02T00:00:00Z
+- Last updated at (UTC): 2026-06-12T13:20:43Z
 
 
 ## FFA/FBA status
 
-- FFA status: `in_progress`
+- FFA status: `phase_b_ready`
 - FBA status: `not_started`
 - Structural shape: `core_transport_ui`
 - Evidence:
   - module plan синхронизирован с central FFA/FBA readiness board; UI surface уже опубликован и ведётся в migration/backlog ритме;
   - storefront slice выделяет `core/` helpers для route/input normalization, UUID validation, adjustment metadata mapping, channel-slug normalization, decrement policy, typed fetch/decrement/remove request objects, GraphQL decrement command dispatch, stable serializable transport fallback error evidence, DOM evidence adapter и display/view-model mapping;
   - `ui/leptos::CartView` теперь вызывает thin `transport` facade через core-owned request objects, получает prepared view-model values из `core/` и рендерит error evidence attributes `data-cart-transport-failed-path`, `data-cart-transport-fallback-attempted`, `data-cart-transport-native-error`, `data-cart-transport-graphql-error`; transport facade сохраняет validation errors без GraphQL retry и возвращает `CartTransportError` со stable `failed_path` (`native_server`/`graphql`), `fallback_attempted`, `native_error` и `graphql_error`, а native `#[server]` + GraphQL adapter calls остаются внутри API adapter layer, при этом API layer больше не пересчитывает GraphQL decrement policy;
-  - дальнейшее повышение статуса выполняется только вместе с full parity evidence и обновлением local+central docs.
-- Last verified at (UTC): 2026-06-02T00:00:00Z
+  - Phase B closure decision: cart storefront FFA больше не расширяется без нового cart-owned UI/transport surface; UI функционал cart подмодуля остаётся в `rustok-cart/storefront`, а umbrella `rustok-commerce` продолжает только checkout orchestration/handoff;
+  - дальнейшее повышение до `parity_verified` выполняется только вместе с full parity evidence и обновлением local+central docs.
+- Last verified at (UTC): 2026-06-12T13:20:43Z
 - Owner: `rustok-cart` module team
 
 ## Область работ

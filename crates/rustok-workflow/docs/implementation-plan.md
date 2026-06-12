@@ -6,17 +6,17 @@ capability integrations без дрейфа и битой документаци
 
 ## Execution checkpoint
 
-- Current phase: FFA admin native transport parity expansion
-- Last checkpoint: FFA-срез workflow admin дополнительно разделил framework-agnostic `admin/src/core/` на presentation/navigation/transport_context/error/command и добавил native server-function adapter для workflow list/templates/create-from-template за `admin/src/transport/mod.rs`; GraphQL adapter сохранён как fallback/headless path, а `admin/src/ui/leptos.rs` остался тонким binding/render adapter.
-- Next step: Собрать runtime parity evidence для native + GraphQL paths перед повышением статуса; при следующем инкременте добавить targeted tests/guardrail без full-workspace compile.
+- Current phase: phase_b_ready
+- Last checkpoint: Workflow admin FFA Phase B считается закрытой: module-owned admin UI остаётся внутри `rustok-workflow/admin`, имеет `core/transport/ui` split, Leptos adapter не вызывает raw transport adapters, а быстрый boundary guardrail закрепляет этот split без full-workspace compile.
+- Next step: Не продолжать механические FFA-переносы workflow admin UI; следующий work item — parity/evidence hardening для native + GraphQL paths или новый FFA-срез только при появлении реального workflow admin UX/transport функционала.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок; избегать долгих full-workspace компиляций, использовать targeted checks/timeouts.
-- Last updated at (UTC): 2026-06-08T00:00:00Z
+- Last updated at (UTC): 2026-06-12T13:20:43Z
 
 
 ## FFA/FBA status
 
-- FFA status: `in_progress`
+- FFA status: `phase_b_ready`
 - FBA status: `not_started`
 - Structural shape: `core_transport_ui`
 - Evidence:
@@ -24,8 +24,9 @@ capability integrations без дрейфа и битой документаци
   - FFA admin slice: status badge presentation, workflow table row mapping, template category styling, template-name normalization, module route toggle/legacy href policy, transport request context, transport error presentation и template create command/name policy теперь живут в framework-agnostic `admin/src/core/` с unit tests;
   - transport slice: текущий GraphQL adapter живёт в `admin/src/transport/graphql_adapter.rs`, native server-function adapter добавлен в `admin/src/transport/native_server_adapter.rs`, а `admin/src/transport/mod.rs` стал native-first facade с GraphQL fallback; Leptos UI больше не зависит от raw adapter modules напрямую;
   - UI adapter slice: Leptos-only render code перенесён в `admin/src/ui/leptos.rs`, а crate root оставлен composition/re-export layer для дальнейшего добавления других host adapters;
-  - дальнейшее повышение статуса требует runtime parity evidence для native/server-function + GraphQL fallback и обновления local+central docs в том же change.
-- Last verified at (UTC): 2026-06-08T00:00:00Z
+  - fast boundary guardrail: `scripts/verify/verify-workflow-admin-boundary.mjs` и fixture tests закрепляют отсутствие legacy `api.rs`/flat `transport.rs`, Leptos-free `core/`, raw-adapter-free UI и split native/GraphQL transport adapters;
+  - Phase B closure decision: workflow admin FFA больше не расширяется без нового workflow-owned UI/transport surface; дальнейшее повышение до `parity_verified` требует runtime parity evidence для native/server-function + GraphQL fallback и обновления local+central docs в том же change.
+- Last verified at (UTC): 2026-06-12T13:20:43Z
 - Owner: `rustok-workflow` module team
 
 ## Область работ
