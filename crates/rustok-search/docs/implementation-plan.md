@@ -6,11 +6,11 @@
 ## Execution checkpoint
 
 - Current phase: phase_b_in_progress
-- Last checkpoint: Phase B slice #37 перенёс storefront results header summary/query/locale presentation в `storefront/src/core.rs`; Leptos header теперь рендерит `SearchResultsHeaderViewModel`.
-- Next step: Продолжить Phase B: вынести оставшиеся storefront shell/form presentation или dictionaries mutation feedback envelope/status state в core view-model, сохраняя разделённые native/GraphQL adapters без изменения public contract.
+- Last checkpoint: Phase B slice #37 остаётся последним принятым срезом; попытка slice #38 по переносу feedback envelope словарей признана избыточной и откатана, потому что простые i18n success/error тексты должны оставаться в Leptos adapter, если за ними нет reusable policy/state semantics.
+- Next step: Продолжить Phase B только по минимальному FFA decision gate из `docs/research/dioxus-ffa-ui-migration-plan.md`: выносить request/command/state/view-model policy, но оставлять простые i18n feedback labels и adapter-local reset/refresh effects в `ui/leptos`.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок и central readiness board.
-- Last updated at (UTC): 2026-06-03T00:00:00Z
+- Last updated at (UTC): 2026-06-12T00:00:00Z
 
 
 ## FFA/FBA status
@@ -41,7 +41,8 @@
   - Phase B slice #35 добавил `SearchResultActionViewModel` и `build_search_result_action_view_model` в `storefront/src/core.rs`; Leptos result cards больше не решают no-target/open-link labels, href state или click-tracking position inline.
   - Phase B slice #36 добавил `SearchEmptyStateViewModel`, `SearchFeatureCardViewModel`, `build_search_empty_state_view_model` и `build_search_results_feature_cards` в `storefront/src/core.rs`; Leptos empty/feature cards больше не владеют title/body presentation objects.
   - Phase B slice #37 добавил `SearchResultsHeaderViewModel` в `storefront/src/core.rs`; Leptos results header больше не собирает query label, query string, summary, preset и locale presentation inline.
-- Last verified at (UTC): 2026-06-03T00:00:00Z
+  - Ревью избыточного переноса: предложенный slice #38 для dictionaries mutation feedback откатан; принятая граница — одноразовые i18n success/error тексты и adapter-local reset/refresh effects остаются в `ui/leptos`, а core-owned dictionary request construction и validation из slice #29 сохраняются.
+- Last verified at (UTC): 2026-06-12T00:00:00Z
 - Owner: `rustok-search` module team
 
 ## Область работ
