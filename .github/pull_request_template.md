@@ -1,20 +1,20 @@
 # Pull Request
 
-## 📋 Description
+## 📋 Summary
 
-<!-- Provide a brief description of the changes -->
+<!-- Кратко: что изменено и зачем. -->
 
-## 🎯 Related Issues
+## 🎯 Scope
 
-<!-- Link to related issues, e.g., Fixes #123 -->
+- DOC / code scope:
+- Affected modules/apps:
+- Out of scope:
 
 ## 🔍 Type of Change
 
-<!-- Mark the appropriate option with an 'x' -->
-
-- [ ] 🐛 Bug fix (non-breaking change which fixes an issue)
-- [ ] ✨ New feature (non-breaking change which adds functionality)
-- [ ] 💥 Breaking change (fix or feature that would cause existing functionality to not work as expected)
+- [ ] 🐛 Bug fix
+- [ ] ✨ New feature
+- [ ] 💥 Breaking change
 - [ ] 📝 Documentation update
 - [ ] 🔧 Configuration change
 - [ ] ♻️ Code refactoring
