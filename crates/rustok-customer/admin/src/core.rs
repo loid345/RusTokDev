@@ -65,6 +65,33 @@ pub fn build_customer_admin_submit_command(
     })
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CustomerAdminErrorLabels {
+    pub email_required: String,
+    pub locale_unavailable: String,
+    pub load_customer: String,
+    pub save_customer: String,
+    pub load_customers: String,
+}
+
+pub fn customer_admin_submit_error_message(
+    error: CustomerAdminSubmitCommandError,
+    labels: &CustomerAdminErrorLabels,
+) -> String {
+    match error {
+        CustomerAdminSubmitCommandError::EmailRequired => labels.email_required.clone(),
+        CustomerAdminSubmitCommandError::LocaleUnavailable => labels.locale_unavailable.clone(),
+    }
+}
+
+pub fn customer_admin_transport_error_message(prefix: &str, details: &str) -> String {
+    if details.trim().is_empty() {
+        prefix.to_string()
+    } else {
+        format!("{prefix}: {details}")
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CustomerAdminFormSnapshot {
     pub editing_customer_id: Option<String>,
@@ -482,6 +509,48 @@ pub fn customer_admin_editor_view_model(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn error_labels() -> CustomerAdminErrorLabels {
+        CustomerAdminErrorLabels {
+            email_required: "Email is required.".to_string(),
+            locale_unavailable: "Host locale is unavailable.".to_string(),
+            load_customer: "Failed to load customer".to_string(),
+            save_customer: "Failed to save customer".to_string(),
+            load_customers: "Failed to load customers".to_string(),
+        }
+    }
+
+    #[test]
+    fn error_messages_are_core_owned() {
+        let labels = error_labels();
+
+        assert_eq!(
+            customer_admin_submit_error_message(
+                CustomerAdminSubmitCommandError::EmailRequired,
+                &labels,
+            ),
+            "Email is required."
+        );
+        assert_eq!(
+            customer_admin_submit_error_message(
+                CustomerAdminSubmitCommandError::LocaleUnavailable,
+                &labels,
+            ),
+            "Host locale is unavailable."
+        );
+        assert_eq!(
+            customer_admin_transport_error_message(&labels.load_customer, "network"),
+            "Failed to load customer: network"
+        );
+        assert_eq!(
+            customer_admin_transport_error_message(&labels.save_customer, ""),
+            "Failed to save customer"
+        );
+        assert_eq!(
+            customer_admin_transport_error_message(&labels.load_customers, "timeout"),
+            "Failed to load customers: timeout"
+        );
+    }
 
     fn labels() -> CustomerAdminDisplayLabels {
         CustomerAdminDisplayLabels {

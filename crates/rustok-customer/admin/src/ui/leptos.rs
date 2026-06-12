@@ -10,11 +10,12 @@ use crate::core::{
     customer_admin_editor_view_model, customer_admin_field_labels,
     customer_admin_list_header_view_model, customer_admin_list_state_view_model,
     customer_admin_open_action_view_model, customer_admin_refresh_action_view_model,
-    customer_admin_shell_view_model, customer_detail_form_snapshot, customer_detail_view_model,
-    customer_list_item_class, customer_list_item_view_model, customer_list_request,
-    empty_customer_admin_form_snapshot, CustomerAdminDisplayLabels, CustomerAdminDraftInput,
-    CustomerAdminFormSnapshot, CustomerAdminListStateKind, CustomerAdminPageLabels,
-    CustomerAdminSubmitCommandError,
+    customer_admin_shell_view_model, customer_admin_submit_error_message,
+    customer_admin_transport_error_message, customer_detail_form_snapshot,
+    customer_detail_view_model, customer_list_item_class, customer_list_item_view_model,
+    customer_list_request, empty_customer_admin_form_snapshot, CustomerAdminDisplayLabels,
+    CustomerAdminDraftInput, CustomerAdminErrorLabels, CustomerAdminFormSnapshot,
+    CustomerAdminListStateKind, CustomerAdminPageLabels, CustomerAdminSubmitCommandError,
 };
 use crate::i18n::t;
 use crate::model::{CustomerAdminBootstrap, CustomerDetail};
@@ -64,31 +65,7 @@ pub fn CustomerAdmin() -> impl IntoView {
         },
     );
 
-    let email_required_label = t(
-        ui_locale.as_deref(),
-        "customer.error.emailRequired",
-        "Email is required.",
-    );
-    let load_customer_error_label = t(
-        ui_locale.as_deref(),
-        "customer.error.loadCustomer",
-        "Failed to load customer",
-    );
-    let save_customer_error_label = t(
-        ui_locale.as_deref(),
-        "customer.error.saveCustomer",
-        "Failed to save customer",
-    );
-    let locale_unavailable_label = t(
-        ui_locale.as_deref(),
-        "customer.error.localeUnavailable",
-        "Host locale is unavailable.",
-    );
-    let load_customers_error_label = t(
-        ui_locale.as_deref(),
-        "customer.error.loadCustomers",
-        "Failed to load customers",
-    );
+    let error_labels = customer_admin_error_labels(ui_locale.as_deref());
 
     let reset_form = move || {
         apply_customer_form_snapshot(
@@ -104,9 +81,9 @@ pub fn CustomerAdmin() -> impl IntoView {
         set_error.set(None);
     };
 
-    let open_load_customer_error_label = load_customer_error_label.clone();
+    let open_error_labels = error_labels.clone();
     let open_customer = Callback::new(move |customer_id: String| {
-        let load_customer_error_label = open_load_customer_error_label.clone();
+        let error_labels = open_error_labels.clone();
         set_busy.set(true);
         set_error.set(None);
         spawn_local(async move {
@@ -132,7 +109,10 @@ pub fn CustomerAdmin() -> impl IntoView {
                         set_last_name,
                         set_phone,
                     );
-                    set_error.set(Some(format!("{load_customer_error_label}: {err}")));
+                    set_error.set(Some(customer_admin_transport_error_message(
+                        &error_labels.load_customer,
+                        err.to_string().as_str(),
+                    )));
                 }
             }
             set_busy.set(false);
@@ -159,6 +139,7 @@ pub fn CustomerAdmin() -> impl IntoView {
 
     let submit_ui_locale = ui_locale.clone();
     let submit_query_writer = query_writer.clone();
+    let submit_validation_error_labels = error_labels.clone();
     let on_submit = move |ev: SubmitEvent| {
         ev.prevent_default();
         let submit_query_writer = submit_query_writer.clone();
@@ -175,15 +156,21 @@ pub fn CustomerAdmin() -> impl IntoView {
         ) {
             Ok(command) => command,
             Err(CustomerAdminSubmitCommandError::EmailRequired) => {
-                set_error.set(Some(email_required_label.clone()));
+                set_error.set(Some(customer_admin_submit_error_message(
+                    CustomerAdminSubmitCommandError::EmailRequired,
+                    &submit_validation_error_labels,
+                )));
                 return;
             }
             Err(CustomerAdminSubmitCommandError::LocaleUnavailable) => {
-                set_error.set(Some(locale_unavailable_label.clone()));
+                set_error.set(Some(customer_admin_submit_error_message(
+                    CustomerAdminSubmitCommandError::LocaleUnavailable,
+                    &submit_validation_error_labels,
+                )));
                 return;
             }
         };
-        let save_customer_error_label = save_customer_error_label.clone();
+        let submit_error_labels = submit_validation_error_labels.clone();
         set_busy.set(true);
         set_error.set(None);
         spawn_local(async move {
@@ -209,13 +196,17 @@ pub fn CustomerAdmin() -> impl IntoView {
                     submit_query_writer
                         .replace_value(AdminQueryKey::CustomerId.as_str(), detail_id);
                 }
-                Err(err) => set_error.set(Some(format!("{save_customer_error_label}: {err}"))),
+                Err(err) => set_error.set(Some(customer_admin_transport_error_message(
+                    &submit_error_labels.save_customer,
+                    err.to_string().as_str(),
+                ))),
             }
 
             set_busy.set(false);
         });
     };
 
+    let list_error_labels = error_labels.clone();
     let list_query_writer = query_writer.clone();
     let reset_query_writer = query_writer.clone();
     let display_labels = customer_admin_display_labels(ui_locale.as_deref());
@@ -319,7 +310,10 @@ pub fn CustomerAdmin() -> impl IntoView {
                                 view! { <div class=state.class>{state.message}</div> }.into_any()
                             },
                             Some(Err(err)) => {
-                                let message = format!("{load_customers_error_label}: {err}");
+                                let message = customer_admin_transport_error_message(
+                                    &list_error_labels.load_customers,
+                                    err.to_string().as_str(),
+                                );
                                 let state = customer_admin_list_state_view_model(
                                     CustomerAdminListStateKind::Error,
                                     &list_state_labels,
@@ -509,6 +503,32 @@ pub fn CustomerAdmin() -> impl IntoView {
                 </section>
             </div>
         </section>
+    }
+}
+
+fn customer_admin_error_labels(locale: Option<&str>) -> CustomerAdminErrorLabels {
+    CustomerAdminErrorLabels {
+        email_required: t(locale, "customer.error.emailRequired", "Email is required."),
+        locale_unavailable: t(
+            locale,
+            "customer.error.localeUnavailable",
+            "Host locale is unavailable.",
+        ),
+        load_customer: t(
+            locale,
+            "customer.error.loadCustomer",
+            "Failed to load customer",
+        ),
+        save_customer: t(
+            locale,
+            "customer.error.saveCustomer",
+            "Failed to save customer",
+        ),
+        load_customers: t(
+            locale,
+            "customer.error.loadCustomers",
+            "Failed to load customers",
+        ),
     }
 }
 
