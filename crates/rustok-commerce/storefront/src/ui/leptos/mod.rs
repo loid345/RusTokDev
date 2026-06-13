@@ -2,6 +2,8 @@ use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_ui_routing::read_route_query_value;
 use rustok_api::UiRouteContext;
+use rustok_cart_storefront::core::CartCheckoutHandoffLabels;
+use rustok_cart_storefront::CartCheckoutHandoffCard;
 use rustok_fulfillment_storefront::FulfillmentShippingHandoffNotice;
 use rustok_payment_storefront::core::{PaymentCollectionCardData, PaymentCollectionCardLabels};
 use rustok_payment_storefront::PaymentCollectionCard;
@@ -258,18 +260,11 @@ fn CheckoutWorkspace(
                                 view! { <CheckoutCompletionCard result /> }
                             })
                         }}
-                        <div class="mt-6 rounded-2xl border border-dashed border-border px-4 py-3 text-sm text-muted-foreground">
-                            {format!(
-                                "{}: {} · {}: {}",
-                                t(locale.as_deref(), "commerce.checkout.cart.id", "Cart"),
-                                cart_id,
-                                t(locale.as_deref(), "commerce.checkout.cart.status", "Cart status"),
-                                cart_status
-                            )}
-                            <span class="ml-2">
-                                {t(locale.as_deref(), "commerce.checkout.cart.moduleOwnership", "Cart totals, line items and adjustments stay in the cart module workspace.")}
-                            </span>
-                        </div>
+                        <CartCheckoutHandoffCard
+                            cart_id=cart_id
+                            status=cart_status
+                            labels=cart_checkout_handoff_labels(locale.as_deref())
+                        />
                         <FulfillmentShippingHandoffNotice
                             message=t(locale.as_deref(), "commerce.delivery.moduleOwnership", "Shipping options and fulfillment details stay in fulfillment-owned UI; commerce only triggers cross-module checkout orchestration.")
                         />
@@ -334,6 +329,18 @@ fn CheckoutWorkspace(
                 }.into_any(),
             }
         }
+    }
+}
+
+fn cart_checkout_handoff_labels(locale: Option<&str>) -> CartCheckoutHandoffLabels {
+    CartCheckoutHandoffLabels {
+        cart_label: t(locale, "commerce.checkout.cart.id", "Cart"),
+        status_label: t(locale, "commerce.checkout.cart.status", "Cart status"),
+        module_ownership: t(
+            locale,
+            "commerce.checkout.cart.moduleOwnership",
+            "Cart totals, line items and adjustments stay in the cart module workspace.",
+        ),
     }
 }
 

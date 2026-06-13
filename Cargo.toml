@@ -182,6 +182,7 @@ rustok-events = { path = "crates/rustok-events" }
 rustok-commerce-foundation = { path = "crates/rustok-commerce-foundation" }
 rustok-commerce = { path = "crates/rustok-commerce" }
 rustok-cart = { path = "crates/rustok-cart" }
+rustok-cart-storefront = { path = "crates/rustok-cart/storefront" }
 rustok-customer = { path = "crates/rustok-customer" }
 rustok-product = { path = "crates/rustok-product" }
 rustok-profiles = { path = "crates/rustok-profiles" }
