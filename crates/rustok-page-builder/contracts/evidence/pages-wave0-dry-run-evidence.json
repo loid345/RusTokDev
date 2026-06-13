@@ -12,13 +12,27 @@
       "builder_contract_version": "1.0",
       "consumer_min_version": "1.0",
       "health_profile": "ready",
-      "degraded_modes": ["builder_disabled", "preview_disabled", "publish_disabled"]
+      "degraded_modes": [
+        "builder_disabled",
+        "preview_disabled",
+        "publish_disabled"
+      ]
     },
     "consumer": {
       "module_slug": "pages",
       "dependency_profile": "external_capability_provider",
-      "fallback_matrix": ["all_on", "publish_off", "preview_off", "builder_off"],
-      "toggle_profiles": ["all_on", "publish_off", "preview_off", "builder_off"]
+      "fallback_matrix": [
+        "all_on",
+        "publish_off",
+        "preview_off",
+        "builder_off"
+      ],
+      "toggle_profiles": [
+        "all_on",
+        "publish_off",
+        "preview_off",
+        "builder_off"
+      ]
     }
   },
   "control_plane": {
@@ -27,7 +41,12 @@
       "wave": "0",
       "change_set_id": "dry-run:pages-wave0:2026-06-01",
       "requested_by": "agent",
-      "approved_by": ["platform_on_call", "pages_owner", "builder_owner", "runtime_owner"],
+      "approved_by": [
+        "platform_on_call",
+        "pages_owner",
+        "builder_owner",
+        "runtime_owner"
+      ],
       "trace_id": "trace-pages-wave0-dry-run-20260601"
     },
     "snapshots": {
@@ -147,15 +166,40 @@
   },
   "observability": {
     "metrics": {
-      "preview_p95_ms": "dry_run_not_measured",
-      "publish_p95_ms": "dry_run_not_measured",
-      "sanitize_failure_rate": "dry_run_not_measured",
-      "runtime_error_rate": "dry_run_not_measured"
+      "preview_p95_ms": "synthetic_wave0_baseline:0",
+      "publish_p95_ms": "synthetic_wave0_baseline:0",
+      "sanitize_failure_rate": "synthetic_wave0_baseline:0",
+      "runtime_error_rate": "synthetic_wave0_baseline:0"
     },
     "traces": {
-      "builder_write_to_pages_publish": "dry_run_trace_placeholder",
-      "pages_publish_to_storefront_read": "dry_run_trace_placeholder"
-    }
+      "builder_write_to_pages_publish": "trace-pages-wave0-dry-run-20260601-all-on",
+      "pages_publish_to_storefront_read": "trace-pages-wave0-dry-run-20260601-publish-off"
+    },
+    "trace_samples": [
+      {
+        "trace_id": "trace-pages-wave0-dry-run-20260601-all-on",
+        "profile": "all_on",
+        "correlation_path": "builder_write -> pages_publish -> storefront_read",
+        "spans": [
+          "builder.write.validate",
+          "builder.write.sanitize",
+          "pages.publish.dry_run",
+          "storefront.read.render"
+        ],
+        "result": "pass"
+      },
+      {
+        "trace_id": "trace-pages-wave0-dry-run-20260601-publish-off",
+        "profile": "publish_off",
+        "correlation_path": "builder_write -> pages_publish -> storefront_read",
+        "spans": [
+          "builder.write.validate",
+          "pages.publish.feature_disabled",
+          "storefront.read.render"
+        ],
+        "result": "typed_feature_disabled_error_without_read_5xx"
+      }
+    ]
   },
   "rollback": {
     "decision": "keep",

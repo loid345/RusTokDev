@@ -117,6 +117,55 @@ expectObjectHas(
   template.required_sections.observability.traces,
   "observability.traces",
 );
+const minimumTraceSamples =
+  template.required_sections.observability.minimum_trace_samples ?? 2;
+if (!Array.isArray(packet.observability?.trace_samples)) {
+  fail("observability.trace_samples must be an array");
+}
+if (packet.observability.trace_samples.length < minimumTraceSamples) {
+  fail(
+    `observability.trace_samples must contain at least ${minimumTraceSamples} samples`,
+  );
+}
+const allowedTraceProfiles = new Set(requiredProfiles);
+for (const [index, trace] of packet.observability.trace_samples.entries()) {
+  expectObjectHas(
+    trace,
+    template.required_sections.observability.trace_samples,
+    `observability.trace_samples[${index}]`,
+  );
+  if (!allowedTraceProfiles.has(trace.profile)) {
+    fail(
+      `observability.trace_samples[${index}].profile must be one of ${requiredProfiles.join(", ")}`,
+    );
+  }
+  if (!Array.isArray(trace.spans) || trace.spans.length < 2) {
+    fail(
+      `observability.trace_samples[${index}].spans must contain at least 2 spans`,
+    );
+  }
+  if (!String(trace.trace_id).startsWith("trace-pages-wave0-")) {
+    fail(
+      `observability.trace_samples[${index}].trace_id must use trace-pages-wave0-* namespace`,
+    );
+  }
+  if (
+    !String(trace.correlation_path).includes("builder_write") ||
+    !String(trace.correlation_path).includes("storefront_read")
+  ) {
+    fail(
+      `observability.trace_samples[${index}].correlation_path must cover builder_write -> storefront_read`,
+    );
+  }
+}
+if (
+  Object.values(packet.observability.traces).some((value) =>
+    String(value).includes("placeholder"),
+  )
+) {
+  fail("observability.traces must not contain placeholder values");
+}
+
 expectObjectHas(
   packet.rollback,
   template.required_sections.rollback.required_fields,

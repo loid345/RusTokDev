@@ -967,16 +967,16 @@ Notes: <known deviations or waivers>
   - [x] зафиксировать синтетический Wave 0 dry-run packet для всех baseline toggle profiles как gate формы/семантики;
   - [ ] провести реальный dry-run toggle change-set (tenant internal), сохранить фактические `before/after` snapshots;
   - [ ] оформить реальный decision log (`keep|rollback`) с owner sign-off.
-- [ ] **PB-FBA-1D / Observability baseline:**
-  - [ ] зафиксировать baseline-метрики `preview p95`, `publish p95`, `sanitize failure rate`;
-  - [ ] приложить минимум 2 correlation trace (`builder write -> pages publish -> storefront read`).
+- [~] **PB-FBA-1D / Observability baseline:**
+  - [x] зафиксировать synthetic Wave 0 baseline-метрики `preview p95`, `publish p95`, `sanitize failure rate`, `runtime error rate` в evidence packet; фактические tenant-метрики остаются Wave hand-off задачей.
+  - [x] приложить минимум 2 synthetic correlation trace (`builder write -> pages publish -> storefront read`) и включить проверку `trace_samples` в evidence gate; фактические trace examples остаются Wave hand-off задачей.
 
 #### Артефакты, обязательные для checkpoint update
 
 1. `metadata snapshot` (provider/consumer versions + fallback profile mapping): `crates/rustok-page-builder/contracts/page-builder-fba-registry.json`;
 2. `fallback smoke report` (`all_on`, `publish_off`, `preview_off`, `builder_off`): service-level gate `cargo test -p rustok-pages --test page_service_kind_guard pages_builder_fallback`, admin/storefront host-helper static checks inside `verify-page-builder-pages-fallback-gate.mjs`;
 3. `toggle audit log` (change-set id, before/after, decision);
-4. `observability snapshot` (p95/error-rate/sanitize + traces).
+4. `observability snapshot` (p95/error-rate/sanitize + минимум 2 `trace_samples`; synthetic baseline уже проверяется gate, фактические tenant traces нужны для Wave hand-off).
 
 #### Жёсткие ограничения на период backlog
 

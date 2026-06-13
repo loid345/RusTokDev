@@ -110,6 +110,15 @@ expectArrayIncludes(
   "observability.metrics",
 );
 expectArrayIncludes(
+  template.required_sections?.observability?.trace_samples,
+  ["trace_id", "profile", "spans", "result", "correlation_path"],
+  "observability.trace_samples",
+);
+if (template.required_sections?.observability?.minimum_trace_samples < 2) {
+  fail("observability.minimum_trace_samples must be at least 2");
+}
+
+expectArrayIncludes(
   template.required_sections?.rollback?.required_fields,
   ["decision", "reason", "rollback_reference", "timestamp"],
   "rollback.required_fields",
