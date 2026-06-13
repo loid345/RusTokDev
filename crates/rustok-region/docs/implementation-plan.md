@@ -6,9 +6,9 @@
 
 ## Execution checkpoint
 
-- Current phase: ffa_admin_save_success_outcome_slice
-- Last checkpoint: FFA slice #34 перенесла save-success outcome mapping в Leptos-free `RegionAdminSaveSuccessViewModel`, поэтому adapter применяет готовые selected/form/refresh/route-update values без владения post-save outcome policy; fast guardrail обновлён без долгой Cargo-компиляции.
-- Next step: Продолжить FFA-first sequencing к тонкому host-adapter smoke для route/query writer либо добрать следующий небольшой admin error-result slice без изменения native/GraphQL contracts.
+- Current phase: ffa_admin_boundary_aggregate_fixture_wiring_slice
+- Last checkpoint: FFA slice #39 подключила region boundary fixture suite к aggregate `test:verify:ffa:ui:migration` и усилила verifier self-check: package wiring теперь должен содержать не только `test:verify:region:admin-boundary`, но и aggregate test script с `npm run test:verify:region:admin-boundary`.
+- Next step: Перейти к parity/evidence hardening для region admin/storefront native/GraphQL paths либо брать только новый небольшой FFA-срез при появлении реальной UI/transport coupling-проблемы; region boundary fixture evidence теперь включено в aggregate FFA UI migration test path.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок; при изменении status code/locale key/DOM evidence сначала обновлять verify script и его test fixture.
 - Last updated at (UTC): 2026-06-13T00:00:00Z
@@ -55,7 +55,12 @@
   - FFA slice #31 добавила admin submit command preparation (`RegionAdminSubmitInput`, `RegionAdminSubmitCommand`, `RegionAdminSubmitError`, `prepare_region_admin_submit`), чтобы Leptos adapter передавал form snapshot в core и получал готовый payload+mode либо typed validation error;
   - FFA slice #32 добавила fast boundary guardrail `scripts/verify/verify-region-admin-boundary.mjs` и включила его в `verify:ffa:ui:migration`; guardrail проверяет Leptos-free admin core, запрет raw `api`/service calls из UI, transport facade exposure, native endpoints в temporary `api.rs`, local plan и central readiness board sync;
   - FFA slice #33 добавила `RegionAdminOpenDetailViewModel`, `region_admin_open_detail_success` и `region_admin_open_detail_error`, чтобы open-detail success/error state, empty-form reset и context error message composition жили в core, а Leptos adapter только применял prepared selected/form/error values;
-  - FFA slice #34 добавила `RegionAdminSaveSuccessViewModel` и `region_admin_save_success`, чтобы post-save selected detail, editor form state, refresh intent и selected-region route/query replace update готовились в core, а Leptos adapter применял prepared outcome.
+  - FFA slice #34 добавила `RegionAdminSaveSuccessViewModel` и `region_admin_save_success`, чтобы post-save selected detail, editor form state, refresh intent и selected-region route/query replace update готовились в core, а Leptos adapter применял prepared outcome;
+  - FFA slice #35 добавила `RegionAdminSubmitErrorLabels`, `RegionAdminTransportErrorLabels`, `region_admin_submit_error_message`, `region_admin_load_region_error_message` и `region_admin_save_region_error_message`, чтобы locale-unavailable/required-field/load/save error copy и context formatting жили в core, а Leptos adapter только передавал typed errors/transport failures в prepared helpers;
+  - FFA slice #36 добавила `RegionAdminRouteQueryWrite`, `region_admin_route_query_write` и `optional_region_admin_route_query_write`, чтобы selected-region route/query push/replace/clear и replace-vs-push host writer policy проверялись в core, а Leptos adapter применял prepared updates через generic `RouteQueryWriter::update`;
+  - FFA slice #37 добавила `scripts/verify/verify-region-admin-boundary.test.mjs` и npm script `test:verify:region:admin-boundary`, чтобы fast guardrail имел canonical fixture и negative fixtures для Leptos-specific core, raw UI api/service calls, отсутствующего route/query writer helper и stale central readiness board;
+  - FFA slice #38 усилила verifier self-check: `verify-region-admin-boundary.mjs` теперь проверяет `package.json` wiring для `test:verify:region:admin-boundary` и наличие canonical/docs-sync cases в fixture test file, а fixture suite отвергает отсутствующий package test script;
+  - FFA slice #39 подключила `npm run test:verify:region:admin-boundary` в aggregate `test:verify:ffa:ui:migration` и добавила self-check/negative fixture, чтобы region boundary fixture evidence не выпадало из общего FFA UI migration test path.
 - Last verified at (UTC): 2026-06-13T00:00:00Z
 - Owner: `rustok-region` module team
 

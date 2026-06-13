@@ -10,8 +10,9 @@ use crate::core::{
     RegionAdminEditorLabels, RegionAdminListHeaderLabels, RegionAdminListLabels,
     RegionAdminListStateLabels, RegionAdminListStateViewModel, RegionAdminPolicyLabels,
     RegionAdminRawSectionLabels, RegionAdminRouteQueryIntent, RegionAdminRouteQueryUpdate,
-    RegionAdminSaveMode, RegionAdminShellLabels, RegionAdminSubmitError, RegionAdminSubmitInput,
-    RegionRequiredFieldLabels, REGION_ADMIN_SELECTED_QUERY_KEY,
+    RegionAdminSaveMode, RegionAdminShellLabels, RegionAdminSubmitErrorLabels,
+    RegionAdminSubmitInput, RegionAdminTransportErrorLabels, RegionRequiredFieldLabels,
+    REGION_ADMIN_SELECTED_QUERY_KEY,
 };
 use crate::i18n::t;
 use crate::model::RegionDetail;
@@ -78,21 +79,26 @@ pub fn RegionAdmin() -> impl IntoView {
             "At least one country code is required.",
         ),
     };
-    let locale_unavailable_label = t(
-        ui_locale.as_deref(),
-        "region.error.localeUnavailable",
-        "Host locale is unavailable.",
-    );
-    let load_region_error_label = t(
-        ui_locale.as_deref(),
-        "region.error.loadRegion",
-        "Failed to load region",
-    );
-    let save_region_error_label = t(
-        ui_locale.as_deref(),
-        "region.error.saveRegion",
-        "Failed to save region",
-    );
+    let submit_error_labels = RegionAdminSubmitErrorLabels {
+        locale_unavailable: t(
+            ui_locale.as_deref(),
+            "region.error.localeUnavailable",
+            "Host locale is unavailable.",
+        ),
+        required_fields: required_field_labels,
+    };
+    let transport_error_labels = RegionAdminTransportErrorLabels {
+        load_region_context: t(
+            ui_locale.as_deref(),
+            "region.error.loadRegion",
+            "Failed to load region",
+        ),
+        save_region_context: t(
+            ui_locale.as_deref(),
+            "region.error.saveRegion",
+            "Failed to save region",
+        ),
+    };
     let load_regions_error_label = t(
         ui_locale.as_deref(),
         "region.error.loadRegions",
@@ -290,17 +296,17 @@ pub fn RegionAdmin() -> impl IntoView {
         set_error.set(None);
     };
 
-    let open_load_region_error_label = load_region_error_label.clone();
+    let open_transport_error_labels = transport_error_labels.clone();
     let open_region = Callback::new(move |region_id: String| {
-        let load_region_error_label = open_load_region_error_label.clone();
+        let transport_error_labels = open_transport_error_labels.clone();
         set_busy.set(true);
         set_error.set(None);
         spawn_local(async move {
             let view_model = match crate::transport::fetch_region_detail(region_id).await {
                 Ok(detail) => crate::core::region_admin_open_detail_success(detail),
                 Err(err) => crate::core::region_admin_open_detail_error(
-                    load_region_error_label.as_str(),
                     &err.to_string(),
+                    &transport_error_labels,
                 ),
             };
             apply_region_open_detail_view_model(
@@ -366,21 +372,17 @@ pub fn RegionAdmin() -> impl IntoView {
             metadata: &metadata_value,
         }) {
             Ok(command) => command,
-            Err(RegionAdminSubmitError::HostLocaleUnavailable) => {
-                set_error.set(Some(locale_unavailable_label.clone()));
-                return;
-            }
-            Err(RegionAdminSubmitError::MissingRequiredField(missing_field)) => {
-                set_error.set(Some(crate::core::region_required_field_message(
-                    missing_field,
-                    &required_field_labels,
+            Err(submit_error) => {
+                set_error.set(Some(crate::core::region_admin_submit_error_message(
+                    submit_error,
+                    &submit_error_labels,
                 )));
                 return;
             }
         };
         let mode = command.mode;
         let payload = command.payload;
-        let save_region_error_label = save_region_error_label.clone();
+        let transport_error_labels = transport_error_labels.clone();
         set_busy.set(true);
         set_error.set(None);
         spawn_local(async move {
@@ -409,10 +411,12 @@ pub fn RegionAdmin() -> impl IntoView {
                         &submit_query_writer,
                     );
                 }
-                Err(err) => set_error.set(Some(crate::core::error_with_context(
-                    save_region_error_label.as_str(),
-                    &err.to_string(),
-                ))),
+                Err(err) => {
+                    set_error.set(Some(crate::core::region_admin_save_region_error_message(
+                        &err.to_string(),
+                        &transport_error_labels,
+                    )))
+                }
             }
 
             set_busy.set(false);
@@ -657,17 +661,15 @@ fn apply_region_route_query_update(
     query_writer: &leptos_ui_routing::RouteQueryWriter,
     update: Option<RegionAdminRouteQueryUpdate>,
 ) {
-    match update {
-        Some(RegionAdminRouteQueryUpdate::PushSelected { key, region_id }) => {
-            query_writer.push_value(key, region_id);
-        }
-        Some(RegionAdminRouteQueryUpdate::ReplaceSelected { key, region_id }) => {
-            query_writer.replace_value(key, region_id);
-        }
-        Some(RegionAdminRouteQueryUpdate::ClearSelected { key }) => {
-            query_writer.clear_key(key);
-        }
-        None => {}
+    if let Some(write) = crate::core::optional_region_admin_route_query_write(update) {
+        query_writer.update(
+            write
+                .updates
+                .into_iter()
+                .map(|(key, value)| (key.to_string(), value))
+                .collect(),
+            write.replace,
+        );
     }
 }
 

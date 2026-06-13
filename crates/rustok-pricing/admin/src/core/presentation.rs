@@ -107,6 +107,41 @@ pub(crate) fn format_product_meta(
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct PricingProductListItemViewModel {
+    pub(crate) id: String,
+    pub(crate) title: String,
+    pub(crate) status_label: String,
+    pub(crate) status_badge_class: &'static str,
+    pub(crate) shipping_profile_label: String,
+    pub(crate) meta_line: String,
+}
+
+pub(crate) fn build_product_list_item_view_model(
+    locale: Option<&str>,
+    product: &PricingProductListItem,
+) -> PricingProductListItemViewModel {
+    PricingProductListItemViewModel {
+        id: product.id.clone(),
+        title: product.title.clone(),
+        status_label: localized_product_status(locale, product.status.as_str()),
+        status_badge_class: status_badge(product.status.as_str()),
+        shipping_profile_label: product
+            .shipping_profile_slug
+            .clone()
+            .unwrap_or_else(|| t(locale, "pricing.common.unassigned", "unassigned")),
+        meta_line: format_product_meta(locale, product),
+    }
+}
+
+pub(crate) fn pricing_product_list_item_class(is_selected: bool) -> &'static str {
+    if is_selected {
+        "rounded-2xl border border-primary/40 bg-background p-5 shadow-sm"
+    } else {
+        "rounded-2xl border border-border bg-background p-5 transition hover:border-primary/40"
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct PricingProductDetailHeaderViewModel {
     pub(crate) title: String,
     pub(crate) status_label: String,
@@ -529,6 +564,22 @@ mod tests {
         }
     }
 
+    fn product_list_item() -> PricingProductListItem {
+        PricingProductListItem {
+            id: "product-1".to_string(),
+            status: "ACTIVE".to_string(),
+            seller_id: None,
+            title: "Pricing Product".to_string(),
+            handle: "pricing-product".to_string(),
+            vendor: Some("Acme".to_string()),
+            product_type: None,
+            shipping_profile_slug: None,
+            tags: Vec::new(),
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            published_at: None,
+        }
+    }
+
     fn product_detail() -> PricingProductDetail {
         PricingProductDetail {
             id: "product-1".to_string(),
@@ -548,6 +599,29 @@ mod tests {
             }],
             variants: Vec::new(),
         }
+    }
+
+    #[test]
+    fn product_list_item_view_model_collects_status_profile_and_meta_policy() {
+        let view_model = build_product_list_item_view_model(Some("en-US"), &product_list_item());
+
+        assert_eq!(view_model.id, "product-1");
+        assert_eq!(view_model.title, "Pricing Product");
+        assert_eq!(view_model.status_label, "Active");
+        assert!(view_model.status_badge_class.contains("emerald"));
+        assert_eq!(view_model.shipping_profile_label, "unassigned");
+        assert_eq!(
+            view_model.meta_line,
+            "handle: pricing-product | vendor: Acme | type: not set | seller: not set"
+        );
+        assert_eq!(
+            pricing_product_list_item_class(true),
+            "rounded-2xl border border-primary/40 bg-background p-5 shadow-sm"
+        );
+        assert_eq!(
+            pricing_product_list_item_class(false),
+            "rounded-2xl border border-border bg-background p-5 transition hover:border-primary/40"
+        );
     }
 
     #[test]

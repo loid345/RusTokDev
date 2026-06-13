@@ -1,14 +1,14 @@
 use crate::core::{
     apply_selected_channel_option, build_discount_draft, build_price_draft,
     build_price_list_rule_draft, build_price_list_scope_draft, build_product_admin_href,
-    build_product_detail_header_view_model, build_resolution_context,
-    build_variant_card_view_model, clear_price_list_rule_draft, empty_price_draft,
-    format_adjustment_preview, format_channel_option_label, format_channel_scope_text,
-    format_effective_context, format_effective_price, format_price_list_option_label,
-    format_price_scope, format_product_meta, localized_product_status, normalize_channel_value,
+    build_product_detail_header_view_model, build_product_list_item_view_model,
+    build_resolution_context, build_variant_card_view_model, clear_price_list_rule_draft,
+    empty_price_draft, format_adjustment_preview, format_channel_option_label,
+    format_channel_scope_text, format_effective_context, format_effective_price,
+    format_price_list_option_label, format_price_scope, normalize_channel_value,
     normalized_currency_code, normalized_price_list_id, normalized_quantity, normalized_region_id,
-    price_draft_from_price, selected_channel_key, status_badge, summarize_pricing, text_or_none,
-    GLOBAL_CHANNEL_KEY, LEGACY_CHANNEL_KEY,
+    price_draft_from_price, pricing_product_list_item_class, selected_channel_key,
+    summarize_pricing, text_or_none, GLOBAL_CHANNEL_KEY, LEGACY_CHANNEL_KEY,
 };
 use crate::i18n::t;
 use crate::model::{
@@ -342,35 +342,32 @@ pub fn PricingAdmin() -> impl IntoView {
                             Some(Ok(list)) => view! {
                                 <>
                                     {list.items.into_iter().map(|product| {
-                                        let open_id = product.id.clone();
-                                        let selected_marker = product.id.clone();
+                                        let item_view_model = build_product_list_item_view_model(
+                                            ui_locale_for_list_status.as_deref(),
+                                            &product,
+                                        );
+                                        let open_id = item_view_model.id.clone();
+                                        let selected_marker = item_view_model.id.clone();
                                         let item_query_writer = list_query_writer.clone();
                                         let item_locale = ui_locale_for_list_status.clone();
-                                        let item_locale_for_meta = item_locale.clone();
-                                        let item_locale_for_profile = item_locale.clone();
-                                        let shipping_profile = product.shipping_profile_slug.clone();
-                                        let profile_label = shipping_profile
-                                            .unwrap_or_else(|| t(item_locale_for_profile.as_deref(), "pricing.common.unassigned", "unassigned"));
                                         view! {
                                             <article class=move || {
-                                                if selected_id.get().as_deref() == Some(selected_marker.as_str()) {
-                                                    "rounded-2xl border border-primary/40 bg-background p-5 shadow-sm"
-                                                } else {
-                                                    "rounded-2xl border border-border bg-background p-5 transition hover:border-primary/40"
-                                                }
+                                                pricing_product_list_item_class(
+                                                    selected_id.get().as_deref() == Some(selected_marker.as_str()),
+                                                )
                                             }>
                                                 <div class="flex items-start justify-between gap-3">
                                                     <div class="space-y-2">
                                                         <div class="flex flex-wrap items-center gap-2">
-                                                            <span class=format!("inline-flex rounded-full border px-3 py-1 text-xs font-semibold {}", status_badge(product.status.as_str()))>
-                                                                {localized_product_status(item_locale.as_deref(), product.status.as_str())}
+                                                            <span class=format!("inline-flex rounded-full border px-3 py-1 text-xs font-semibold {}", item_view_model.status_badge_class)>
+                                                                {item_view_model.status_label.clone()}
                                                             </span>
                                                             <span class="inline-flex rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
-                                                                {profile_label.clone()}
+                                                                {item_view_model.shipping_profile_label.clone()}
                                                             </span>
                                                         </div>
-                                                        <h4 class="text-base font-semibold text-card-foreground">{product.title.clone()}</h4>
-                                                        <p class="text-sm text-muted-foreground">{format_product_meta(item_locale_for_meta.as_deref(), &product)}</p>
+                                                        <h4 class="text-base font-semibold text-card-foreground">{item_view_model.title.clone()}</h4>
+                                                        <p class="text-sm text-muted-foreground">{item_view_model.meta_line.clone()}</p>
                                                     </div>
                                                     <button
                                                         type="button"
