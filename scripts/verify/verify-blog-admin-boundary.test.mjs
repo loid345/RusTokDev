@@ -35,8 +35,20 @@ ${includeLeptos ? "use leptos::prelude::*;" : ""}
 pub struct BlogPostFormInput;
 pub fn build_blog_post_draft() {}
 ${omitSaveCommand ? "" : "pub enum BlogPostSaveOperation { Create }\npub struct BlogPostSaveCommand;\npub fn prepare_blog_post_save_command() {}"}
+pub struct BlogPostEditorFormState;
+pub struct BlogPostAdminTableRowViewModel;
+pub fn blog_post_admin_table_row_view() {}
+pub struct BlogPostAdminTableViewModel;
+pub fn blog_post_admin_table_view() {}
+pub struct BlogPostAdminFormViewModel;
+pub fn blog_post_admin_form_view() {}
 pub fn selected_post_request() {}
 pub fn issue_banner_class_or_hidden() {}
+pub fn show_archive_action() {}
+pub fn archive_label() {}
+pub fn delete_label() {}
+pub struct BlogPostAdminIssueBannerViewModel;
+pub fn blog_post_admin_issue_banner_view() {}
 `;
 }
 

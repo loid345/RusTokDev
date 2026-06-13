@@ -7,7 +7,7 @@
 - Next step: Continue by moving owner transports behind the owner storefront packages before deleting commerce compatibility fields or transport paths.
 - Open blockers: None.
 - Hand-off notes for next agent: After each post-order operator UI/page addition, update this checkpoint block and central registry evidence; keep the Next host route as a thin auth/options adapter only.
-- Last updated at (UTC): 2026-06-13T21:30:00Z
+- Last updated at (UTC): 2026-06-13T23:20:00Z
 
 
 ## FFA/FBA status

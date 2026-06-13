@@ -6,40 +6,89 @@ const here = dirname(fileURLToPath(import.meta.url));
 const fixturePath = join(here, "..", "contracts", "seo", "runtime-parity-fixtures.json");
 const fixtures = JSON.parse(readFileSync(fixturePath, "utf8"));
 
-const requiredFallbackCases = new Set([
-  "module_disabled",
-  "not_found",
-  "permission_denied",
-  "transport_failure",
-]);
-const fallbackCases = new Set(fixtures.fallbackBehavior?.map((item) => item.case));
-for (const requiredCase of requiredFallbackCases) {
-  if (!fallbackCases.has(requiredCase)) {
-    throw new Error(`Missing fallback fixture case: ${requiredCase}`);
+function assert(condition, message) {
+  if (!condition) {
+    throw new Error(message);
   }
+}
+
+assert(fixtures.version === 1, "Expected SEO runtime fixture contract version 1");
+assert(typeof fixtures.updatedAt === "string", "Expected updatedAt timestamp");
+
+const requiredFallbackCases = new Map([
+  ["module_disabled", "NOT_FOUND"],
+  ["not_found", "NOT_FOUND"],
+  ["permission_denied", "PERMISSION_DENIED"],
+  ["transport_failure", "TRANSPORT_ERROR"],
+]);
+const fallbackRows = fixtures.fallbackBehavior ?? [];
+const fallbackCases = new Map(fallbackRows.map((item) => [item.case, item]));
+for (const [requiredCase, transportCode] of requiredFallbackCases) {
+  const row = fallbackCases.get(requiredCase);
+  assert(row, `Missing fallback fixture case: ${requiredCase}`);
+  assert(
+    row.transportCode === transportCode,
+    `Fallback case ${requiredCase} expected transportCode ${transportCode}`,
+  );
+  assert(
+    row.expectedSource === "fallback_static",
+    `Fallback case ${requiredCase} must preserve static fallback source`,
+  );
+  assert(
+    row.expectedReason === requiredCase,
+    `Fallback case ${requiredCase} must map to matching expectedReason`,
+  );
 }
 
 const routeRows = fixtures.routeOwnership ?? [];
-for (const targetKind of ["page", "product", "blog_post", "forum_topic"]) {
-  if (!routeRows.some((row) => row.targetKind === targetKind)) {
-    throw new Error(`Missing route ownership target kind: ${targetKind}`);
-  }
+const requiredRouteOwners = new Map([
+  ["page", "rustok-pages"],
+  ["product", "rustok-product"],
+  ["blog_post", "rustok-blog"],
+  ["forum_topic", "rustok-forum"],
+]);
+for (const [targetKind, ownerModule] of requiredRouteOwners) {
+  const row = routeRows.find((item) => item.targetKind === targetKind);
+  assert(row, `Missing route ownership target kind: ${targetKind}`);
+  assert(row.ownerModule === ownerModule, `Unexpected owner for ${targetKind}: ${row.ownerModule}`);
+  assert(row.nextSmokeRoute?.locale, `Missing Next locale smoke route for ${targetKind}`);
+  assert(row.nextSmokeRoute?.routeSegment, `Missing Next route segment for ${targetKind}`);
+  assert(row.rustStorefrontRoute?.startsWith("/"), `Missing Rust storefront route for ${targetKind}`);
+  assert(
+    Array.isArray(row.routePatterns) && row.routePatterns.length >= 1,
+    `Missing route patterns for ${targetKind}`,
+  );
 }
 
-const smokeRoutes = new Set((fixtures.smokeEvidence ?? []).map((item) => item.route));
-for (const route of [
-  "/modules/product?slug=demo-product",
-  "/modules/blog?slug=release-notes",
+const smokeRows = fixtures.smokeEvidence ?? [];
+const smokeRoutes = new Map(smokeRows.map((item) => [item.route, item]));
+for (const [route, requiredAssertions] of [
+  ["/modules/product?slug=demo-product", ["canonical", "robots", "openGraph", "twitter", "structuredDataBlocks"]],
+  ["/modules/blog?slug=release-notes", ["canonical", "hreflang", "robots", "openGraph", "structuredDataBlocks"]],
 ]) {
-  if (!smokeRoutes.has(route)) {
-    throw new Error(`Missing non-home metadata smoke route: ${route}`);
+  const row = smokeRoutes.get(route);
+  assert(row, `Missing non-home metadata smoke route: ${route}`);
+  for (const requiredAssertion of requiredAssertions) {
+    assert(row.assertions?.includes(requiredAssertion), `Smoke route ${route} misses ${requiredAssertion}`);
   }
 }
 
-if ((fixtures.longTailDiffAllowlist ?? []).length < 3) {
-  throw new Error("Expected explicit long-tail metadata diff allowlist entries");
+const allowlistFields = new Set((fixtures.longTailDiffAllowlist ?? []).map((item) => item.field));
+for (const field of ["metadataBase", "scriptNonce", "jsonLdWhitespace"]) {
+  assert(allowlistFields.has(field), `Missing long-tail metadata diff allowlist field: ${field}`);
 }
+
+const matrix = fixtures.verificationMatrix ?? [];
+assert(matrix.length >= 3, "Expected D8 compile-free verification matrix entries");
+for (const row of matrix) {
+  assert(row.compileFree === true, `D8 lightweight gate must be compile-free: ${row.gate}`);
+  assert(row.command, `D8 verification gate misses command: ${row.gate}`);
+}
+assert(
+  fixtures.d8EvidencePacket?.compilationPolicy === "not_run_by_request",
+  "D8 evidence packet must record no-compilation policy",
+);
 
 console.log(
-  `SEO runtime fixture evidence OK: ${fixtures.fallbackBehavior.length} fallback cases, ${routeRows.length} route rows, ${fixtures.smokeEvidence.length} smoke routes`,
+  `SEO runtime fixture evidence OK: ${fallbackRows.length} fallback cases, ${routeRows.length} route rows, ${smokeRows.length} smoke routes, ${matrix.length} D8 gates`,
 );
