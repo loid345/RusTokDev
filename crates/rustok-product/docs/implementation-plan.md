@@ -48,6 +48,7 @@
   - FFA slice: product admin inventory quantity input normalization is composed by `parse_product_admin_inventory_quantity_input` in `admin/src/core.rs`; Leptos forwards raw input text and no longer owns invalid-number fallback policy;
   - FFA slice: product admin open-product result policy is composed by `ProductAdminOpenProductViewModel` / `build_product_admin_open_product_view_model` in `admin/src/core.rs`; Leptos applies prepared selected-product/form-state/error outcomes without owning not-found/load-error reset policy;
   - FFA slice: product admin pricing preview async-resource state mapping is composed by `product_admin_pricing_preview_state_from_result` in `admin/src/core.rs`; Leptos selected-summary rendering no longer owns loading/error/unavailable/ready classification for pricing preview results;
+  - FFA guardrail: `scripts/verify/verify-product-admin-boundary.mjs` added to the aggregate `verify:ffa:ui:migration` pipeline with fixture coverage in `scripts/verify/verify-product-admin-boundary.test.mjs` and checks product admin core/transport/ui split without long Cargo compilation;
   - дальнейшее повышение статуса выполняется только вместе с verification evidence и обновлением local+central docs.
 - Last verified at (UTC): 2026-06-13T00:00:00Z
 - Owner: `rustok-product` module team
