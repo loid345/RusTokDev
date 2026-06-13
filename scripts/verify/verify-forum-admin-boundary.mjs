@@ -72,6 +72,9 @@ for (const marker of [
   "ForumAdminRouteQueryIntent",
   "forum_admin_busy_key",
   "ForumAdminBusySurface",
+  "ForumAdminFormErrorLabels",
+  "forum_admin_form_error_message",
+  "forum_admin_transport_error_message",
   "selected_category_filter_label",
   "forum_admin_collection_state",
   "category_card_view_model",
@@ -83,6 +86,8 @@ for (const marker of [
 assertContains(ui, "use crate::core::{", `${uiPath}: Leptos adapter must import core-owned helpers`);
 assertContains(ui, "use crate::transport;", `${uiPath}: Leptos adapter must call the module-owned transport facade`);
 assertContains(ui, "forum_admin_busy_key", `${uiPath}: UI must consume core-owned busy-key construction`);
+assertContains(ui, "forum_admin_form_error_message", `${uiPath}: UI must consume core-owned form error policy`);
+assertContains(ui, "forum_admin_transport_error_message", `${uiPath}: UI must consume core-owned transport error formatting`);
 assertContains(ui, "CategoryFormSnapshot", `${uiPath}: UI must consume core-owned category form snapshots`);
 assertContains(ui, "TopicFormSnapshot", `${uiPath}: UI must consume core-owned topic form snapshots`);
 for (const marker of ["crate::api", /(^|[^A-Za-z0-9_])api::/, "#[server", "ForumService"]) {
@@ -91,6 +96,7 @@ for (const marker of ["crate::api", /(^|[^A-Za-z0-9_])api::/, "#[server", "Forum
 for (const rawBusyMarker of ["category:edit", "category:save", "category:delete", "topic:edit", "topic:save", "topic:delete"]) {
   assertNotContains(ui, rawBusyMarker, `${uiPath}: busy-key strings must stay in core helper (${rawBusyMarker})`);
 }
+assertNotContains(ui, /format!\("\{\}: \{err\}"/, `${uiPath}: transport error message composition must stay in core helper`);
 
 for (const marker of ["fetch_categories", "fetch_category", "create_category", "update_category", "delete_category", "fetch_topics", "fetch_topic", "create_topic", "update_topic", "delete_topic", "fetch_replies"]) {
   assertContains(transport, marker, `${transportPath}: transport facade must expose ${marker}`);

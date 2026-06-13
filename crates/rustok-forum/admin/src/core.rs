@@ -287,6 +287,26 @@ pub enum ForumAdminFormError {
     TopicRequired,
 }
 
+#[derive(Clone, Debug)]
+pub struct ForumAdminFormErrorLabels {
+    pub category_required: String,
+    pub topic_required: String,
+}
+
+pub fn forum_admin_form_error_message(
+    error: ForumAdminFormError,
+    labels: &ForumAdminFormErrorLabels,
+) -> String {
+    match error {
+        ForumAdminFormError::CategoryRequired => labels.category_required.clone(),
+        ForumAdminFormError::TopicRequired => labels.topic_required.clone(),
+    }
+}
+
+pub fn forum_admin_transport_error_message(base: &str, err: impl std::fmt::Display) -> String {
+    format!("{}: {err}", base.trim_end_matches(':'))
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CategoryFormSnapshot {
     pub editing_id: Option<String>,
@@ -650,6 +670,31 @@ mod tests {
                 None,
             ),
             "category:save"
+        );
+    }
+
+    #[test]
+    fn maps_form_and_transport_error_messages() {
+        let labels = ForumAdminFormErrorLabels {
+            category_required: "Category required".to_string(),
+            topic_required: "Topic required".to_string(),
+        };
+
+        assert_eq!(
+            forum_admin_form_error_message(ForumAdminFormError::CategoryRequired, &labels),
+            "Category required"
+        );
+        assert_eq!(
+            forum_admin_form_error_message(ForumAdminFormError::TopicRequired, &labels),
+            "Topic required"
+        );
+        assert_eq!(
+            forum_admin_transport_error_message("Failed to save category", "boom"),
+            "Failed to save category: boom"
+        );
+        assert_eq!(
+            forum_admin_transport_error_message("Failed to save category:", "boom"),
+            "Failed to save category: boom"
         );
     }
 
