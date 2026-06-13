@@ -3,11 +3,10 @@ mod requests;
 mod routing;
 
 pub(crate) use presentation::{
-    build_product_detail_header_view_model, format_adjustment_preview, format_effective_context,
-    format_effective_price, format_price_list_option_label, format_price_scope,
-    format_product_meta, format_variant_identity, format_variant_prices, localized_product_status,
-    pricing_health_badge, pricing_health_label, pricing_translation_for_locale, status_badge,
-    summarize_pricing,
+    build_product_detail_header_view_model, build_variant_card_view_model,
+    format_adjustment_preview, format_effective_context, format_effective_price,
+    format_price_list_option_label, format_price_scope, format_product_meta,
+    localized_product_status, pricing_translation_for_locale, status_badge, summarize_pricing,
 };
 #[cfg(feature = "ssr")]
 pub(crate) use requests::parse_optional_currency_code;

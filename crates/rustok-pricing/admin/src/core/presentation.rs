@@ -240,6 +240,44 @@ pub(crate) fn pricing_health_badge(variant: &PricingVariant) -> &'static str {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct PricingVariantCardViewModel {
+    pub(crate) title: String,
+    pub(crate) health_label: String,
+    pub(crate) health_badge_class: &'static str,
+    pub(crate) identity_line: String,
+    pub(crate) profile_line: String,
+    pub(crate) effective_price_line: Option<String>,
+    pub(crate) price_table: String,
+}
+
+pub(crate) fn build_variant_card_view_model(
+    locale: Option<&str>,
+    variant: &PricingVariant,
+    price_list_options: &[PricingPriceListOption],
+) -> PricingVariantCardViewModel {
+    let profile_label = variant.shipping_profile_slug.clone().unwrap_or_else(|| {
+        t(
+            locale,
+            "pricing.common.inheritProductProfile",
+            "inherits product profile",
+        )
+    });
+
+    PricingVariantCardViewModel {
+        title: variant.title.clone(),
+        health_label: pricing_health_label(locale, variant),
+        health_badge_class: pricing_health_badge(variant),
+        identity_line: format_variant_identity(locale, variant),
+        profile_line: format!("profile: {profile_label}"),
+        effective_price_line: variant
+            .effective_price
+            .as_ref()
+            .map(|price| format_effective_price(locale, price)),
+        price_table: format_variant_prices(locale, variant.prices.as_slice(), price_list_options),
+    }
+}
+
 pub(crate) fn format_price_list_option_label(
     locale: Option<&str>,
     option: &PricingPriceListOption,
@@ -531,6 +569,23 @@ mod tests {
         );
         assert_eq!(header.created_line, "created 2026-01-01T00:00:00Z");
         assert_eq!(header.published_line, "published -");
+    }
+
+    #[test]
+    fn variant_card_view_model_collects_render_policy() {
+        let mut variant = variant(vec![price("USD", true)], None);
+        variant.sku = Some("sku-1".to_string());
+        variant.shipping_profile_slug = Some("fragile".to_string());
+
+        let card = build_variant_card_view_model(Some("en-US"), &variant, &[]);
+
+        assert_eq!(card.title, "Variant");
+        assert_eq!(card.health_label, "On sale");
+        assert!(card.health_badge_class.contains("amber"));
+        assert_eq!(card.identity_line, "sku: sku-1 | barcode: not set");
+        assert_eq!(card.profile_line, "profile: fragile");
+        assert_eq!(card.effective_price_line, None);
+        assert!(card.price_table.contains("USD 10.00"));
     }
 
     #[test]

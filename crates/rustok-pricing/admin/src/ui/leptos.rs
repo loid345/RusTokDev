@@ -1,14 +1,13 @@
 use crate::core::{
     apply_selected_channel_option, build_discount_draft, build_price_draft,
     build_price_list_rule_draft, build_price_list_scope_draft, build_product_admin_href,
-    build_product_detail_header_view_model, build_resolution_context, clear_price_list_rule_draft,
-    empty_price_draft, format_adjustment_preview, format_channel_option_label,
-    format_channel_scope_text, format_effective_context, format_effective_price,
-    format_price_list_option_label, format_price_scope, format_product_meta,
-    format_variant_identity, format_variant_prices, localized_product_status,
-    normalize_channel_value, normalized_currency_code, normalized_price_list_id,
-    normalized_quantity, normalized_region_id, price_draft_from_price, pricing_health_badge,
-    pricing_health_label, selected_channel_key, status_badge, summarize_pricing, text_or_none,
+    build_product_detail_header_view_model, build_resolution_context,
+    build_variant_card_view_model, clear_price_list_rule_draft, empty_price_draft,
+    format_adjustment_preview, format_channel_option_label, format_channel_scope_text,
+    format_effective_context, format_effective_price, format_price_list_option_label,
+    format_price_scope, format_product_meta, localized_product_status, normalize_channel_value,
+    normalized_currency_code, normalized_price_list_id, normalized_quantity, normalized_region_id,
+    price_draft_from_price, selected_channel_key, status_badge, summarize_pricing, text_or_none,
     GLOBAL_CHANNEL_KEY, LEGACY_CHANNEL_KEY,
 };
 use crate::i18n::t;
@@ -761,32 +760,26 @@ pub fn PricingAdmin() -> impl IntoView {
                                             let variant_locale = ui_locale_for_variants.clone();
                                             let variant_available_channels = available_channels.clone();
                                             let variant_price_list_options = price_list_options.clone();
-                                            let health_label = pricing_health_label(variant_locale.as_deref(), &variant);
-                                            let price_table = format_variant_prices(
+                                            let variant_card = build_variant_card_view_model(
                                                 variant_locale.as_deref(),
-                                                variant.prices.as_slice(),
+                                                &variant,
                                                 variant_price_list_options.as_slice(),
                                             );
-                                            let identity_label = format_variant_identity(variant_locale.as_deref(), &variant);
-                                            let profile_label = variant
-                                                .shipping_profile_slug
-                                                .clone()
-                                                .unwrap_or_else(|| t(variant_locale.as_deref(), "pricing.common.inheritProductProfile", "inherits product profile"));
                                             view! {
                                                 <article class="rounded-xl border border-border p-4">
                                                     <div class="flex flex-wrap items-start justify-between gap-3">
                                                         <div class="space-y-2">
                                                             <div class="flex flex-wrap items-center gap-2">
-                                                                <h5 class="font-medium text-card-foreground">{variant.title.clone()}</h5>
-                                                                <span class=format!("inline-flex rounded-full border px-3 py-1 text-xs font-semibold {}", pricing_health_badge(&variant))>
-                                                                    {health_label}
+                                                                <h5 class="font-medium text-card-foreground">{variant_card.title.clone()}</h5>
+                                                                <span class=format!("inline-flex rounded-full border px-3 py-1 text-xs font-semibold {}", variant_card.health_badge_class)>
+                                                                    {variant_card.health_label.clone()}
                                                                 </span>
                                                             </div>
-                                                            <p class="text-sm text-muted-foreground">{identity_label}</p>
-                                                            <p class="text-xs text-muted-foreground">{format!("profile: {profile_label}")}</p>
-                                                            {variant.effective_price.as_ref().map(|price| view! {
+                                                            <p class="text-sm text-muted-foreground">{variant_card.identity_line.clone()}</p>
+                                                            <p class="text-xs text-muted-foreground">{variant_card.profile_line.clone()}</p>
+                                                            {variant_card.effective_price_line.as_ref().map(|line| view! {
                                                                 <p class="text-sm font-medium text-foreground">
-                                                                    {format_effective_price(variant_locale.as_deref(), price)}
+                                                                    {line.clone()}
                                                                 </p>
                                                             })}
                                                             <div class="pt-2">
@@ -821,7 +814,7 @@ pub fn PricingAdmin() -> impl IntoView {
                                                             </div>
                                                         </div>
                                                         <div class="space-y-1 text-right text-sm text-muted-foreground">
-                                                            <p>{price_table}</p>
+                                                            <p>{variant_card.price_table.clone()}</p>
                                                         </div>
                                                     </div>
                                                 </article>

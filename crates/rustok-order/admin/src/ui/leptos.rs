@@ -6,14 +6,12 @@ use leptos_ui_routing::{use_route_query_value, use_route_query_writer};
 use rustok_api::{AdminQueryKey, UiRouteContext};
 
 use crate::core::{
-    order_list_request, prepare_cancel_order_command, prepare_deliver_order_command,
-    prepare_mark_paid_command, prepare_ship_order_command,
+    action_hint, format_order_caption, localized_order_status, order_list_request,
+    order_status_badge, prepare_cancel_order_command, prepare_deliver_order_command,
+    prepare_mark_paid_command, prepare_ship_order_command, short_order_id, summarize_order_header,
+    summarize_order_lines, summarize_order_timeline, text_or_dash,
 };
-use crate::helpers::{
-    action_hint, apply_order_detail, clear_order_detail, format_order_caption,
-    handle_action_result, localized_order_status, order_status_badge, short_order_id,
-    summarize_order_header, summarize_order_lines, summarize_order_timeline, text_or_dash,
-};
+use crate::helpers::{apply_order_detail, clear_order_detail, handle_action_result};
 use crate::i18n::t;
 use crate::model::{OrderAdminBootstrap, OrderDetailEnvelope};
 use crate::transport;
