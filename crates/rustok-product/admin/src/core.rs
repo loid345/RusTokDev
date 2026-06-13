@@ -186,6 +186,17 @@ pub(crate) enum ProductAdminPricingPreviewState<'a> {
     Ready(&'a ProductPricingDetail),
 }
 
+pub(crate) fn product_admin_pricing_preview_state_from_result<'a>(
+    pricing_state: Option<&'a Result<Option<ProductPricingDetail>, String>>,
+) -> ProductAdminPricingPreviewState<'a> {
+    match pricing_state {
+        None => ProductAdminPricingPreviewState::Loading,
+        Some(Err(err)) => ProductAdminPricingPreviewState::Error(err.as_str()),
+        Some(Ok(None)) => ProductAdminPricingPreviewState::Unavailable,
+        Some(Ok(Some(pricing))) => ProductAdminPricingPreviewState::Ready(pricing),
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum SelectedProductSummaryViewModel {
     Empty {
@@ -1803,6 +1814,26 @@ mod tests {
             format_product_shipping_profile(Some("en"), "standard"),
             "profile standard",
         );
+    }
+
+    #[test]
+    fn product_admin_pricing_preview_state_maps_async_resource_results() {
+        assert!(matches!(
+            product_admin_pricing_preview_state_from_result(None),
+            ProductAdminPricingPreviewState::Loading
+        ));
+
+        let unavailable = Ok(None);
+        assert!(matches!(
+            product_admin_pricing_preview_state_from_result(Some(&unavailable)),
+            ProductAdminPricingPreviewState::Unavailable
+        ));
+
+        let failed = Err("pricing timeout".to_string());
+        assert!(matches!(
+            product_admin_pricing_preview_state_from_result(Some(&failed)),
+            ProductAdminPricingPreviewState::Error("pricing timeout")
+        ));
     }
 
     #[test]

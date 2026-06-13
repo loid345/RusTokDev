@@ -24,10 +24,10 @@ use crate::core::{
     build_selected_product_summary_view_model, empty_product_admin_editor_form_state,
     parse_product_admin_inventory_quantity_input, primary_catalog_currency,
     product_admin_clear_product_query_intent, product_admin_list_actions_disabled,
-    product_admin_open_product_query_intent, product_admin_saved_product_query_intent,
-    shipping_profile_choice_label, text_or_none, ProductAdminDeleteOutcome, ProductAdminDraftForm,
-    ProductAdminEditorFormState, ProductAdminErrorCopy, ProductAdminListStateKind,
-    ProductAdminOpenProductViewModel, ProductAdminPricingPreviewState,
+    product_admin_open_product_query_intent, product_admin_pricing_preview_state_from_result,
+    product_admin_saved_product_query_intent, shipping_profile_choice_label, text_or_none,
+    ProductAdminDeleteOutcome, ProductAdminDraftForm, ProductAdminEditorFormState,
+    ProductAdminErrorCopy, ProductAdminListStateKind, ProductAdminOpenProductViewModel,
     ProductAdminRouteQueryIntent, ProductAdminSaveMode, ProductAdminStatusMutationOutcome,
     ProductAdminStatusTarget, SelectedProductSummaryViewModel,
 };
@@ -1139,12 +1139,7 @@ fn SelectedProductSummary(
     pricing_state: Option<Result<Option<ProductPricingDetail>, String>>,
     pricing_route_base: String,
 ) -> impl IntoView {
-    let pricing_state = match pricing_state.as_ref() {
-        None => ProductAdminPricingPreviewState::Loading,
-        Some(Err(err)) => ProductAdminPricingPreviewState::Error(err.as_str()),
-        Some(Ok(None)) => ProductAdminPricingPreviewState::Unavailable,
-        Some(Ok(Some(pricing))) => ProductAdminPricingPreviewState::Ready(pricing),
-    };
+    let pricing_state = product_admin_pricing_preview_state_from_result(pricing_state.as_ref());
 
     match build_selected_product_summary_view_model(
         locale.as_deref(),
