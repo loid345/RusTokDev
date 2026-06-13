@@ -827,82 +827,72 @@ fn BlogPostsTable(
                             .into_iter()
                             .map(|post| {
                                 let locale = locale.clone();
-                                let post_id = post.id.clone();
-                                let post_id_edit = post_id.clone();
-                                let post_id_publish = post_id.clone();
-                                let post_id_archive = post_id.clone();
-                                let post_id_delete = post_id.clone();
-                                let post_slug = core::fallback_post_slug(
-                                    post.slug.clone(),
-                                    &t(locale.as_deref(), "blog.table.draft", "draft"),
+                                let row = core::blog_post_admin_table_row_view(
+                                    post,
+                                    editing_post_id.as_deref(),
+                                    busy_key.as_deref(),
+                                    core::BlogPostAdminTableRowLabels {
+                                        draft_slug: &t(locale.as_deref(), "blog.table.draft", "draft"),
+                                        no_excerpt: &t(locale.as_deref(), "blog.table.noExcerpt", "No excerpt"),
+                                        editing: &t(locale.as_deref(), "blog.table.editing", "Editing"),
+                                        edit: &t(locale.as_deref(), "blog.table.edit", "Edit"),
+                                        unpublish: &t(locale.as_deref(), "blog.table.unpublish", "Unpublish"),
+                                        publish: &t(locale.as_deref(), "blog.table.publish", "Publish"),
+                                    },
                                 );
-                                let post_locale = post.effective_locale.clone();
-                                let post_locale_edit = post_locale.clone();
-                                let post_locale_publish = post_locale.clone();
-                                let post_locale_archive = post_locale.clone();
-                                let is_editing =
-                                    core::is_editing_post(editing_post_id.as_deref(), post_id.as_str());
-                                let row_busy =
-                                    core::row_is_busy_for_post(busy_key.as_deref(), post_id.as_str());
-                                let is_published = core::is_published_status(post.status.as_str());
-                                let is_archived = core::is_archived_status(post.status.as_str());
+                                let post_id_edit = row.post_id.clone();
+                                let post_id_publish = row.post_id.clone();
+                                let post_id_archive = row.post_id.clone();
+                                let post_id_delete = row.post_id.clone();
+                                let post_locale_edit = row.locale.clone();
+                                let post_locale_publish = row.locale.clone();
+                                let post_locale_archive = row.locale.clone();
 
                                 view! {
                                     <tr class="transition-colors hover:bg-muted/30">
                                         <td class="px-4 py-3 align-top">
-                                            <div class="font-medium text-foreground">{post.title}</div>
+                                            <div class="font-medium text-foreground">{row.title.clone()}</div>
                                             <div class="mt-1 text-xs text-muted-foreground">
-                                                {core::fallback_post_excerpt(
-                                                    post.excerpt,
-                                                    &t(locale.as_deref(), "blog.table.noExcerpt", "No excerpt"),
-                                                )}
+                                                {row.excerpt.clone()}
                                             </div>
                                         </td>
-                                        <td class="px-4 py-3 align-top text-xs text-muted-foreground">{post_slug}</td>
+                                        <td class="px-4 py-3 align-top text-xs text-muted-foreground">{row.slug.clone()}</td>
                                         <td class="px-4 py-3 align-top">
-                                            <StatusBadge status=post.status.clone() />
+                                            <StatusBadge status=row.status.clone() />
                                         </td>
-                                        <td class="px-4 py-3 align-top text-xs text-muted-foreground">{post_locale.clone()}</td>
+                                        <td class="px-4 py-3 align-top text-xs text-muted-foreground">{row.locale.clone()}</td>
                                         <td class="px-4 py-3 align-top text-right">
                                             <div class="flex flex-wrap justify-end gap-2">
                                                 <button
                                                     type="button"
                                                     class="text-xs font-medium text-primary hover:underline"
-                                                    disabled=row_busy
+                                                    disabled=row.is_busy
                                                     on:click={
                                                         move |_| on_edit.run((post_id_edit.clone(), post_locale_edit.clone()))
                                                     }
                                                 >
-                                                    {core::edit_action_label(
-                                                        is_editing,
-                                                        t(locale.as_deref(), "blog.table.editing", "Editing"),
-                                                        t(locale.as_deref(), "blog.table.edit", "Edit"),
-                                                    )}
+                                                    {row.edit_label.clone()}
                                                 </button>
                                                 <button
                                                     type="button"
                                                     class="text-xs font-medium text-primary hover:underline"
-                                                    disabled=row_busy
+                                                    disabled=row.is_busy
                                                     on:click={
                                                         move |_| on_toggle_publish.run((
                                                             post_id_publish.clone(),
-                                                            core::next_publish_state(is_published),
+                                                            core::next_publish_state(row.is_published),
                                                             post_locale_publish.clone(),
                                                         ))
                                                     }
                                                 >
-                                                    {core::publish_action_label(
-                                                        is_published,
-                                                        t(locale.as_deref(), "blog.table.unpublish", "Unpublish"),
-                                                        t(locale.as_deref(), "blog.table.publish", "Publish"),
-                                                    )}
+                                                    {row.publish_label.clone()}
                                                 </button>
-                                                {if core::should_show_archive_action(is_archived) {
+                                                {if core::should_show_archive_action(row.is_archived) {
                                                     view! {
                                                         <button
                                                             type="button"
                                                             class="text-xs font-medium text-primary hover:underline"
-                                                            disabled=row_busy
+                                                            disabled=row.is_busy
                                                             on:click={
                                                                 move |_| on_archive.run((post_id_archive.clone(), post_locale_archive.clone()))
                                                             }
@@ -917,7 +907,7 @@ fn BlogPostsTable(
                                                 <button
                                                     type="button"
                                                     class="text-xs font-medium text-destructive hover:underline"
-                                                    disabled=row_busy
+                                                    disabled=row.is_busy
                                                     on:click={
                                                         move |_| on_delete.run(post_id_delete.clone())
                                                     }
