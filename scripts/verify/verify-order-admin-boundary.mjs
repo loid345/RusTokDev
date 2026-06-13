@@ -1,0 +1,135 @@
+#!/usr/bin/env node
+// RusTok order admin FFA boundary guardrails.
+// Fast source-level checks for the module-owned core/transport/ui split.
+
+import { existsSync, readFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = process.env.RUSTOK_VERIFY_REPO_ROOT
+  ? path.resolve(process.env.RUSTOK_VERIFY_REPO_ROOT)
+  : path.resolve(scriptDir, "../..");
+const failures = [];
+
+function repoPath(relativePath) {
+  return path.join(repoRoot, relativePath);
+}
+
+function readRepo(relativePath) {
+  return readFileSync(repoPath(relativePath), "utf8");
+}
+
+function fail(message) {
+  failures.push(message);
+}
+
+function assertExists(relativePath, description) {
+  if (!existsSync(repoPath(relativePath))) fail(description);
+}
+
+function assertContains(text, pattern, description) {
+  const found = typeof pattern === "string" ? text.includes(pattern) : pattern.test(text);
+  if (!found) fail(description);
+}
+
+function assertNotContains(text, pattern, description) {
+  const found = typeof pattern === "string" ? text.includes(pattern) : pattern.test(text);
+  if (found) fail(description);
+}
+
+const libPath = "crates/rustok-order/admin/src/lib.rs";
+const corePath = "crates/rustok-order/admin/src/core.rs";
+const uiPath = "crates/rustok-order/admin/src/ui/leptos.rs";
+const transportPath = "crates/rustok-order/admin/src/transport.rs";
+const apiPath = "crates/rustok-order/admin/src/api.rs";
+const implementationPlanPath = "crates/rustok-order/docs/implementation-plan.md";
+const registryPath = "docs/modules/registry.md";
+
+for (const filePath of [
+  libPath,
+  corePath,
+  uiPath,
+  transportPath,
+  apiPath,
+  implementationPlanPath,
+  registryPath,
+]) {
+  assertExists(filePath, `${filePath}: expected order admin FFA boundary file`);
+}
+
+const lib = readRepo(libPath);
+const core = readRepo(corePath);
+const ui = readRepo(uiPath);
+const transport = readRepo(transportPath);
+const api = readRepo(apiPath);
+const implementationPlan = readRepo(implementationPlanPath);
+const registry = readRepo(registryPath);
+
+assertContains(lib, "mod api;", `${libPath}: crate root must wire current GraphQL/api adapter privately`);
+assertContains(lib, "mod core;", `${libPath}: crate root must wire core`);
+assertContains(lib, "mod transport;", `${libPath}: crate root must wire transport facade`);
+assertContains(lib, "mod ui;", `${libPath}: crate root must wire UI adapters`);
+assertContains(lib, "pub use ui::OrderAdmin;", `${libPath}: crate root must re-export OrderAdmin`);
+for (const marker of [/pub async fn fetch_/, /pub async fn mark_/, /pub async fn ship_/, /pub async fn deliver_/, /pub async fn cancel_/]) {
+  assertNotContains(lib, marker, `${libPath}: crate root must not expose public transport passthroughs (${marker})`);
+}
+
+for (const marker of ["leptos::", "leptos_", "#[component]", "#[server", "LocalResource", "WriteSignal", "web_sys::"]) {
+  assertNotContains(core, marker, `${corePath}: core must stay Leptos/server-function free (${marker})`);
+}
+for (const marker of [
+  "OrderListRequest",
+  "order_list_request",
+  "OrderMarkPaidCommand",
+  "OrderShipCommand",
+  "OrderDeliverCommand",
+  "OrderCancelCommand",
+  "prepare_mark_paid_command",
+  "prepare_ship_order_command",
+  "prepare_deliver_order_command",
+  "prepare_cancel_order_command",
+]) {
+  assertContains(core, marker, `${corePath}: expected core-owned FFA helper ${marker}`);
+}
+
+assertContains(ui, "use crate::core::{", `${uiPath}: Leptos adapter must import core-owned helpers`);
+assertContains(ui, "use crate::transport;", `${uiPath}: Leptos adapter must call the module-owned transport facade`);
+for (const marker of [
+  "order_list_request",
+  "prepare_mark_paid_command",
+  "prepare_ship_order_command",
+  "prepare_deliver_order_command",
+  "prepare_cancel_order_command",
+]) {
+  assertContains(ui, marker, `${uiPath}: UI must use core-owned order action helper ${marker}`);
+}
+for (const marker of ["crate::api", /(^|[^A-Za-z0-9_])api::/, "#[server", "OrderService", "PaymentService", "FulfillmentService"]) {
+  assertNotContains(ui, marker, `${uiPath}: UI adapter must not call raw transport or services (${marker})`);
+}
+
+for (const marker of [
+  "fetch_bootstrap",
+  "fetch_orders",
+  "fetch_order_detail",
+  "mark_order_paid",
+  "ship_order",
+  "deliver_order",
+  "cancel_order",
+]) {
+  assertContains(transport, marker, `${transportPath}: transport facade must expose ${marker}`);
+}
+assertContains(transport, "use crate::api", `${transportPath}: transport facade may delegate to the current GraphQL/api adapter`);
+assertNotContains(transport, "#[server", `${transportPath}: server/native endpoints must not live in the order admin transport facade`);
+assertContains(api, "GraphqlRequest", `${apiPath}: order admin api adapter must keep the GraphQL transport contract`);
+
+assertContains(implementationPlan, "verify-order-admin-boundary.mjs", `${implementationPlanPath}: local plan must mention the order fast boundary guardrail`);
+assertContains(registry, "verify-order-admin-boundary.mjs", `${registryPath}: central readiness board must mention the order fast boundary guardrail`);
+
+if (failures.length > 0) {
+  console.error("order admin boundary verification failed:");
+  for (const failure of failures) console.error(`- ${failure}`);
+  process.exit(1);
+}
+
+console.log("order admin boundary verification passed");
