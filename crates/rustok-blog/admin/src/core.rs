@@ -245,8 +245,39 @@ pub fn has_required_draft_fields(title: &str, body: &str) -> bool {
     !title.is_empty() && !body.is_empty()
 }
 
-pub fn required_fields_issue(message: String) -> WritePathIssue {
-    WritePathIssue::new(message)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BlogPostSaveOperation {
+    Create,
+    Update { post_id: String },
+}
+
+#[derive(Debug, Clone)]
+pub struct BlogPostSaveCommand {
+    pub operation: BlogPostSaveOperation,
+    pub draft: BlogPostDraft,
+    pub busy_key: String,
+}
+
+pub fn prepare_blog_post_save_command(
+    editing_post_id: Option<String>,
+    draft: BlogPostDraft,
+    required_fields_message: String,
+) -> Result<BlogPostSaveCommand, WritePathIssue> {
+    if !has_required_draft_fields(draft.title.as_str(), draft.body.as_str()) {
+        return Err(WritePathIssue::new(required_fields_message));
+    }
+
+    let busy_key = busy_key_for_save(editing_post_id.as_deref());
+    let operation = match editing_post_id_if_editing_mode(editing_post_id) {
+        Some(post_id) => BlogPostSaveOperation::Update { post_id },
+        None => BlogPostSaveOperation::Create,
+    };
+
+    Ok(BlogPostSaveCommand {
+        operation,
+        draft,
+        busy_key,
+    })
 }
 
 pub fn is_markdown_format(value: &str) -> bool {
@@ -374,10 +405,73 @@ mod tests {
     }
 
     #[test]
-    fn required_fields_issue_preserves_message() {
-        let issue = required_fields_issue("Title and body are required".to_string());
+    fn prepare_save_command_rejects_missing_required_fields() {
+        let draft = build_blog_post_draft(BlogPostFormInput {
+            locale: "en",
+            title: "   ",
+            slug: "draft",
+            excerpt: "summary",
+            body: "body",
+            body_format: "markdown",
+            publish: false,
+            tags: "",
+        });
+
+        let issue =
+            prepare_blog_post_save_command(None, draft, "Title and body are required".to_string())
+                .expect_err("missing title must fail before transport selection");
 
         assert_eq!(issue.message, "Title and body are required");
+    }
+
+    #[test]
+    fn prepare_save_command_selects_create_operation() {
+        let draft = build_blog_post_draft(BlogPostFormInput {
+            locale: "en",
+            title: "Launch",
+            slug: "launch",
+            excerpt: "summary",
+            body: "body",
+            body_format: "markdown",
+            publish: true,
+            tags: "news",
+        });
+
+        let command = prepare_blog_post_save_command(None, draft, "required".to_string())
+            .expect("valid create command");
+
+        assert_eq!(command.operation, BlogPostSaveOperation::Create);
+        assert_eq!(command.busy_key, "create");
+        assert_eq!(command.draft.title, "Launch");
+    }
+
+    #[test]
+    fn prepare_save_command_selects_update_operation() {
+        let draft = build_blog_post_draft(BlogPostFormInput {
+            locale: "en",
+            title: "Launch",
+            slug: "launch",
+            excerpt: "summary",
+            body: "body",
+            body_format: "markdown",
+            publish: false,
+            tags: "news",
+        });
+
+        let command = prepare_blog_post_save_command(
+            Some("post-1".to_string()),
+            draft,
+            "required".to_string(),
+        )
+        .expect("valid update command");
+
+        assert_eq!(
+            command.operation,
+            BlogPostSaveOperation::Update {
+                post_id: "post-1".to_string()
+            }
+        );
+        assert_eq!(command.busy_key, "save:post-1");
     }
 
     #[test]
