@@ -7,7 +7,7 @@
 ## Execution checkpoint
 
 - Current phase: ffa_admin_mutation_policy_slice
-- Last checkpoint: FFA slice #30 перенесла admin submit validation-copy mapping и create/update save-mode decision в Leptos-free core: `RegionRequiredFieldLabels`/`region_required_field_message` и `RegionAdminSaveMode` теперь задают mutation policy до render/transport слоя.
+- Last checkpoint: FFA slice #31 объединила admin submit preparation в Leptos-free core: `RegionAdminSubmitInput` -> `RegionAdminSubmitCommand` теперь строит normalized `RegionDraft`, проверяет host locale/required fields и выбирает create/update mode до render/transport слоя.
 - Next step: Продолжить FFA-first sequencing к тонкому host-adapter smoke для route/query writer либо добрать следующий небольшой admin mutation outcome/error state slice без изменения native/GraphQL contracts.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок; при изменении status code/locale key/DOM evidence сначала обновлять verify script и его test fixture.
@@ -51,7 +51,8 @@
   - FFA slice #27 добавила admin route/query intent (`RegionAdminRouteQueryIntent`) для selected-region query normalization и `Open`/`Clear` decision policy без Leptos runtime;
   - FFA slice #28 добавила admin route/query writer update contract (`RegionAdminRouteQueryUpdate`, `REGION_ADMIN_SELECTED_QUERY_KEY`) для open/save/new host query mutations без Leptos-owned key/action policy;
   - FFA slice #29 добавила admin detail panel view-model (`RegionAdminDetailPanelViewModel`) для empty/ready selected-region branches, detail labels, header, policy rows, countries summary и raw sections без Leptos runtime;
-  - FFA slice #30 добавила admin mutation policy helpers (`RegionRequiredFieldLabels`, `region_required_field_message`, `RegionAdminSaveMode`, `region_admin_save_mode`), чтобы required-field validation copy и create/update decision больше не жили в Leptos submit handler.
+  - FFA slice #30 добавила admin mutation policy helpers (`RegionRequiredFieldLabels`, `region_required_field_message`, `RegionAdminSaveMode`, `region_admin_save_mode`), чтобы required-field validation copy и create/update decision больше не жили в Leptos submit handler;
+  - FFA slice #31 добавила admin submit command preparation (`RegionAdminSubmitInput`, `RegionAdminSubmitCommand`, `RegionAdminSubmitError`, `prepare_region_admin_submit`), чтобы Leptos adapter передавал form snapshot в core и получал готовый payload+mode либо typed validation error.
 - Last verified at (UTC): 2026-06-13T00:00:00Z
 - Owner: `rustok-region` module team
 

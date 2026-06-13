@@ -137,6 +137,59 @@ pub fn region_admin_save_mode(editing_id: Option<&str>) -> RegionAdminSaveMode {
         .unwrap_or(RegionAdminSaveMode::Create)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RegionAdminSubmitInput<'a> {
+    pub editing_id: Option<&'a str>,
+    pub locale: Option<&'a str>,
+    pub name: &'a str,
+    pub currency_code: &'a str,
+    pub tax_provider_id: &'a str,
+    pub tax_rate: &'a str,
+    pub tax_included: bool,
+    pub country_tax_policies: &'a str,
+    pub countries: &'a str,
+    pub metadata: &'a str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionAdminSubmitCommand {
+    pub mode: RegionAdminSaveMode,
+    pub payload: RegionDraft,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RegionAdminSubmitError {
+    HostLocaleUnavailable,
+    MissingRequiredField(RegionRequiredField),
+}
+
+pub fn prepare_region_admin_submit(
+    input: RegionAdminSubmitInput<'_>,
+) -> Result<RegionAdminSubmitCommand, RegionAdminSubmitError> {
+    let locale = optional_ui_text(input.locale.unwrap_or_default())
+        .ok_or(RegionAdminSubmitError::HostLocaleUnavailable)?;
+    let payload = build_region_draft(RegionFormInput {
+        name: input.name,
+        locale: locale.as_str(),
+        currency_code: input.currency_code,
+        tax_provider_id: input.tax_provider_id,
+        tax_rate: input.tax_rate,
+        tax_included: input.tax_included,
+        country_tax_policies: input.country_tax_policies,
+        countries: input.countries,
+        metadata: input.metadata,
+    });
+
+    if let Some(field) = missing_required_region_field(&payload) {
+        return Err(RegionAdminSubmitError::MissingRequiredField(field));
+    }
+
+    Ok(RegionAdminSubmitCommand {
+        mode: region_admin_save_mode(input.editing_id),
+        payload,
+    })
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegionAdminShellLabels {
     pub badge: String,
@@ -718,6 +771,73 @@ mod tests {
             RegionAdminSaveMode::Update {
                 region_id: "region-eu".to_string(),
             }
+        );
+    }
+
+    #[test]
+    fn admin_submit_preparation_builds_update_command_without_ui_runtime() {
+        let command = prepare_region_admin_submit(RegionAdminSubmitInput {
+            editing_id: Some(" region-eu "),
+            locale: Some(" en "),
+            name: " Europe ",
+            currency_code: " EUR ",
+            tax_provider_id: " vat ",
+            tax_rate: " 20.0 ",
+            tax_included: true,
+            country_tax_policies: " [] ",
+            countries: " DE, FR ",
+            metadata: " {} ",
+        })
+        .expect("valid submit input should build a command");
+
+        assert_eq!(
+            command.mode,
+            RegionAdminSaveMode::Update {
+                region_id: "region-eu".to_string(),
+            }
+        );
+        assert_eq!(command.payload.locale, "en");
+        assert_eq!(command.payload.name, "Europe");
+        assert_eq!(command.payload.currency_code, "EUR");
+        assert_eq!(command.payload.countries, "DE, FR");
+    }
+
+    #[test]
+    fn admin_submit_preparation_rejects_missing_locale_and_required_fields() {
+        let missing_locale = prepare_region_admin_submit(RegionAdminSubmitInput {
+            editing_id: None,
+            locale: None,
+            name: "Europe",
+            currency_code: "EUR",
+            tax_provider_id: "",
+            tax_rate: "0",
+            tax_included: false,
+            country_tax_policies: "[]",
+            countries: "DE",
+            metadata: "{}",
+        });
+        assert_eq!(
+            missing_locale,
+            Err(RegionAdminSubmitError::HostLocaleUnavailable)
+        );
+
+        let missing_name = prepare_region_admin_submit(RegionAdminSubmitInput {
+            editing_id: None,
+            locale: Some("en"),
+            name: " ",
+            currency_code: "EUR",
+            tax_provider_id: "",
+            tax_rate: "0",
+            tax_included: false,
+            country_tax_policies: "[]",
+            countries: "DE",
+            metadata: "{}",
+        });
+        assert_eq!(
+            missing_name,
+            Err(RegionAdminSubmitError::MissingRequiredField(
+                RegionRequiredField::Name
+            ))
         );
     }
 
