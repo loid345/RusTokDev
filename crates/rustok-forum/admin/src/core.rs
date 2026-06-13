@@ -107,6 +107,43 @@ pub struct ForumAdminReplyCardViewModel {
     pub content_preview: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ForumAdminCategorySelectOption {
+    pub value: String,
+    pub label: String,
+    pub is_selected: bool,
+}
+
+pub fn category_select_options(
+    items: &[CategoryListItem],
+    selected_category_id: &str,
+) -> Vec<ForumAdminCategorySelectOption> {
+    items
+        .iter()
+        .map(|item| ForumAdminCategorySelectOption {
+            value: item.id.clone(),
+            label: item.name.clone(),
+            is_selected: item.id == selected_category_id,
+        })
+        .collect()
+}
+
+pub fn forum_admin_topic_tag_count_label(tags_raw: &str, ready_template: &str) -> String {
+    render_count_label(ready_template, parse_tags(tags_raw).len() as i32)
+}
+
+pub fn forum_admin_editing_thread_label(
+    editing_topic_id: Option<&str>,
+    open_inspector_label: &str,
+    nothing_selected_label: &str,
+) -> String {
+    if editing_topic_id.is_some() {
+        open_inspector_label.to_string()
+    } else {
+        nothing_selected_label.to_string()
+    }
+}
+
 pub fn category_sidebar_view_model(
     item: &CategoryListItem,
     active_category_id: &str,
@@ -452,6 +489,13 @@ pub struct ForumAdminRouteQueryIntent {
     pub value: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ForumAdminDeleteOutcome {
+    pub should_clear_form: bool,
+    pub should_refresh: bool,
+    pub route_query_intent: Option<ForumAdminRouteQueryIntent>,
+}
+
 pub fn forum_admin_open_query_intent(
     surface: ForumAdminQuerySurface,
     id: impl Into<String>,
@@ -493,6 +537,19 @@ pub fn selected_query_id(value: Option<String>) -> Option<String> {
 
 pub fn deleted_selection_matches(current_id: Option<&str>, deleted_id: &str) -> bool {
     current_id == Some(deleted_id)
+}
+
+pub fn forum_admin_delete_outcome(
+    surface: ForumAdminQuerySurface,
+    current_id: Option<&str>,
+    deleted_id: &str,
+) -> ForumAdminDeleteOutcome {
+    let should_clear_form = deleted_selection_matches(current_id, deleted_id);
+    ForumAdminDeleteOutcome {
+        should_clear_form,
+        should_refresh: true,
+        route_query_intent: should_clear_form.then(|| forum_admin_reset_query_intent(surface)),
+    }
 }
 
 pub fn topic_category_filter(category_id: String) -> Option<String> {
@@ -627,6 +684,32 @@ mod tests {
         assert!(deleted_selection_matches(Some("topic-1"), "topic-1"));
         assert!(!deleted_selection_matches(Some("topic-10"), "topic-1"));
         assert!(!deleted_selection_matches(None, "topic-1"));
+    }
+
+    #[test]
+    fn builds_delete_outcomes_for_selected_and_non_selected_items() {
+        assert_eq!(
+            forum_admin_delete_outcome(ForumAdminQuerySurface::Topic, Some("topic-1"), "topic-1"),
+            ForumAdminDeleteOutcome {
+                should_clear_form: true,
+                should_refresh: true,
+                route_query_intent: Some(forum_admin_reset_query_intent(
+                    ForumAdminQuerySurface::Topic
+                )),
+            }
+        );
+        assert_eq!(
+            forum_admin_delete_outcome(
+                ForumAdminQuerySurface::Category,
+                Some("category-2"),
+                "category-1"
+            ),
+            ForumAdminDeleteOutcome {
+                should_clear_form: false,
+                should_refresh: true,
+                route_query_intent: None,
+            }
+        );
     }
 
     #[test]
@@ -1002,6 +1085,42 @@ mod tests {
         assert_eq!(vm.slug, "support");
         assert_eq!(vm.topic_count, 2);
         assert!(vm.is_active);
+    }
+
+    #[test]
+    fn builds_category_select_options_and_topic_sidebar_labels() {
+        let options = category_select_options(&two_category_items(), "category-2");
+        assert_eq!(
+            options,
+            vec![
+                ForumAdminCategorySelectOption {
+                    value: "category-1".to_string(),
+                    label: "General".to_string(),
+                    is_selected: false,
+                },
+                ForumAdminCategorySelectOption {
+                    value: "category-2".to_string(),
+                    label: "Support".to_string(),
+                    is_selected: true,
+                },
+            ]
+        );
+        assert_eq!(
+            forum_admin_topic_tag_count_label(" rust, forum ,, ffa ", "{count} ready"),
+            "3 ready"
+        );
+        assert_eq!(
+            forum_admin_editing_thread_label(
+                Some("topic-1"),
+                "Open in inspector",
+                "Nothing selected",
+            ),
+            "Open in inspector"
+        );
+        assert_eq!(
+            forum_admin_editing_thread_label(None, "Open in inspector", "Nothing selected"),
+            "Nothing selected"
+        );
     }
 
     #[test]

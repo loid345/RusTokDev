@@ -8,10 +8,11 @@ use rustok_seo_admin_support::SeoEntityPanel;
 use rustok_seo_targets::{builtin_slug as seo_builtin_slug, SeoTargetSlug};
 
 use crate::core::{
-    category_card_view_model, category_sidebar_total_count, category_sidebar_view_model,
-    deleted_selection_matches, format_count, forum_admin_busy_key, forum_admin_collection_state,
-    forum_admin_form_error_message, forum_admin_header_view_model, forum_admin_open_query_intent,
-    forum_admin_reset_query_intent, forum_admin_saved_query_intent,
+    category_card_view_model, category_select_options, category_sidebar_total_count,
+    category_sidebar_view_model, format_count, forum_admin_busy_key, forum_admin_collection_state,
+    forum_admin_delete_outcome, forum_admin_editing_thread_label, forum_admin_form_error_message,
+    forum_admin_header_view_model, forum_admin_open_query_intent, forum_admin_reset_query_intent,
+    forum_admin_saved_query_intent, forum_admin_topic_tag_count_label,
     forum_admin_transport_error_message, parse_tags, reply_card_view_model, reply_count_label,
     result_item_count, selected_category_filter_label, selected_query_id, topic_card_view_model,
     topic_category_filter, CategoryFormSnapshot, ForumAdminBusyAction, ForumAdminBusySurface,
@@ -515,14 +516,15 @@ pub fn ForumAdmin() -> impl IntoView {
         spawn_local(async move {
             match transport::delete_category(token_value, tenant_value, category_id.clone()).await {
                 Ok(()) => {
-                    if deleted_selection_matches(
+                    let outcome = forum_admin_delete_outcome(
+                        ForumAdminQuerySurface::Category,
                         editing_category_id.get_untracked().as_deref(),
                         category_id.as_str(),
-                    ) {
-                        apply_forum_admin_route_query_intent(
-                            &delete_category_query_writer,
-                            forum_admin_reset_query_intent(ForumAdminQuerySurface::Category),
-                        );
+                    );
+                    if let Some(intent) = outcome.route_query_intent {
+                        apply_forum_admin_route_query_intent(&delete_category_query_writer, intent);
+                    }
+                    if outcome.should_clear_form {
                         clear_category_form(
                             set_editing_category_id,
                             set_category_name,
@@ -534,7 +536,9 @@ pub fn ForumAdmin() -> impl IntoView {
                             set_category_moderated,
                         );
                     }
-                    set_refresh_nonce.update(|value| *value += 1);
+                    if outcome.should_refresh {
+                        set_refresh_nonce.update(|value| *value += 1);
+                    }
                 }
                 Err(err) => set_error.set(Some(forum_admin_transport_error_message(
                     delete_category_error.as_str(),
@@ -560,14 +564,15 @@ pub fn ForumAdmin() -> impl IntoView {
         spawn_local(async move {
             match transport::delete_topic(token_value, tenant_value, topic_id.clone()).await {
                 Ok(()) => {
-                    if deleted_selection_matches(
+                    let outcome = forum_admin_delete_outcome(
+                        ForumAdminQuerySurface::Topic,
                         editing_topic_id.get_untracked().as_deref(),
                         topic_id.as_str(),
-                    ) {
-                        apply_forum_admin_route_query_intent(
-                            &delete_topic_query_writer,
-                            forum_admin_reset_query_intent(ForumAdminQuerySurface::Topic),
-                        );
+                    );
+                    if let Some(intent) = outcome.route_query_intent {
+                        apply_forum_admin_route_query_intent(&delete_topic_query_writer, intent);
+                    }
+                    if outcome.should_clear_form {
                         clear_topic_form(
                             set_editing_topic_id,
                             set_topic_category_id,
@@ -578,7 +583,9 @@ pub fn ForumAdmin() -> impl IntoView {
                             set_topic_tags,
                         );
                     }
-                    set_refresh_nonce.update(|value| *value += 1);
+                    if outcome.should_refresh {
+                        set_refresh_nonce.update(|value| *value += 1);
+                    }
                 }
                 Err(err) => set_error.set(Some(forum_admin_transport_error_message(
                     delete_topic_error.as_str(),
@@ -1335,12 +1342,8 @@ fn TopicsPage(
             filtered_category_label.as_str(),
         )
     });
-    let topic_form_tag_count = move || {
-        ready_template.replace(
-            "{count}",
-            parse_tags(tags.get().as_str()).len().to_string().as_str(),
-        )
-    };
+    let topic_form_tag_count =
+        move || forum_admin_topic_tag_count_label(tags.get().as_str(), ready_template.as_str());
     let sidebar_locale = ui_locale.clone();
     let topic_feed_locale = ui_locale.clone();
     let replies_locale = ui_locale.clone();
@@ -1386,10 +1389,11 @@ fn TopicsPage(
                     <SidebarStat
                         label=editing_thread_label.clone()
                         value=Signal::derive(move || {
-                            editing_id
-                                .get()
-                                .map(|_| open_inspector_label.clone())
-                                .unwrap_or_else(|| nothing_selected_label.clone())
+                            forum_admin_editing_thread_label(
+                                editing_id.get().as_deref(),
+                                open_inspector_label.as_str(),
+                                nothing_selected_label.as_str(),
+                            )
                         })
                     />
                 </div>
@@ -1460,7 +1464,10 @@ fn TopicsPage(
                                             on:change=move |ev| set_category_id.set(event_target_value(&ev))
                                         >
                                             <option value="">{choose_category_label.clone()}</option>
-                                            {items.into_iter().map(|item| view! { <option value=item.id>{item.name}</option> }).collect_view()}
+                                            {category_select_options(&items, category_id.get().as_str())
+                                                .into_iter()
+                                                .map(|option| view! { <option value=option.value selected=option.is_selected>{option.label}</option> })
+                                                .collect_view()}
                                         </select>
                                     }.into_any(),
                                     Err(err) => view! {
