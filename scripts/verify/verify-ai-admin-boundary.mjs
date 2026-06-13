@@ -39,23 +39,33 @@ function assertNotContains(text, pattern, description) {
 
 const libPath = "crates/rustok-ai/admin/src/lib.rs";
 const corePath = "crates/rustok-ai/admin/src/core.rs";
+const transportModPath = "crates/rustok-ai/admin/src/transport/mod.rs";
 
 assertExists(libPath, `${libPath}: expected AI admin Leptos adapter file`);
 assertExists(corePath, `${corePath}: expected AI admin core slice file`);
+assertExists(transportModPath, `${transportModPath}: expected AI admin transport facade file`);
 
 const lib = readRepo(libPath);
 const core = readRepo(corePath);
+const transportMod = readRepo(transportModPath);
 
 assertContains(lib, "mod core;", `${libPath}: crate root must wire core`);
+assertContains(lib, "mod transport;", `${libPath}: crate root must wire transport facade`);
 assertContains(lib, "use crate::core::{", `${libPath}: Leptos adapter must import core-owned helpers`);
 assertContains(lib, "product_attributes_task_payload", `${libPath}: Leptos adapter must call core-owned payload builder`);
 assertNotContains(lib, "fn product_attributes_task_payload", `${libPath}: payload builder must not live in the Leptos adapter`);
 assertNotContains(lib, "fn parse_csv(value: String)", `${libPath}: CSV request normalization must not live in the Leptos adapter`);
 assertNotContains(lib, /t\(\s*locale,\s*locale,/, `${libPath}: i18n helper calls must not pass locale twice`);
+assertContains(lib, "transport::fetch_bootstrap", `${libPath}: Leptos adapter must call the AI transport facade`);
+assertNotContains(lib, /(^|[^A-Za-z0-9_])api::/, `${libPath}: Leptos adapter must not call the raw pre-FFA api module`);
 
 for (const marker of ["leptos::", "leptos_", "#[component]", "#[server]", "RwSignal", "LocalResource", "web_sys::"]) {
   assertNotContains(core, marker, `${corePath}: core must stay UI/runtime free (${marker})`);
 }
+assertContains(transportMod, "pub use crate::api::{", `${transportModPath}: transport facade must wrap the existing native api module`);
+assertContains(transportMod, "fetch_bootstrap", `${transportModPath}: transport facade must expose bootstrap loading`);
+assertContains(transportMod, "run_task_job", `${transportModPath}: transport facade must expose direct job execution`);
+
 for (const marker of [
   "pub fn parse_csv",
   "pub fn optional_text",

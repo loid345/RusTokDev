@@ -6,6 +6,7 @@ mod api;
 mod core;
 mod i18n;
 mod model;
+mod transport;
 
 use leptos::ev::SubmitEvent;
 use leptos::prelude::*;
@@ -175,14 +176,14 @@ pub fn AiAdmin() -> impl IntoView {
 
     let bootstrap = local_resource(
         move || refresh_nonce.get(),
-        move |_| async move { api::fetch_bootstrap().await },
+        move |_| async move { transport::fetch_bootstrap().await },
     );
 
     let session_detail = local_resource(
         move || (selected_session.get(), refresh_nonce.get()),
         move |(session_id, _)| async move {
             match session_id {
-                Some(session_id) => api::fetch_session(session_id).await,
+                Some(session_id) => transport::fetch_session(session_id).await,
                 None => Ok(None),
             }
         },
@@ -802,7 +803,7 @@ pub fn AiAdmin() -> impl IntoView {
         let provider_created_template = provider_created_template.clone();
         let create_provider_query_writer = create_provider_query_writer.clone();
         spawn_local(async move {
-            let result = api::create_provider(
+            let result = transport::create_provider(
                 provider_slug.get_untracked(),
                 provider_name.get_untracked(),
                 provider_kind.get_untracked(),
@@ -871,7 +872,7 @@ pub fn AiAdmin() -> impl IntoView {
         let provider_updated_template = provider_updated_template.clone();
         let update_provider_query_writer = update_provider_query_writer.clone();
         spawn_local(async move {
-            let result = api::update_provider(
+            let result = transport::update_provider(
                 provider_id,
                 provider_name.get_untracked(),
                 provider_base_url.get_untracked(),
@@ -916,7 +917,7 @@ pub fn AiAdmin() -> impl IntoView {
         set_feedback.set(None);
         set_error.set(None);
         spawn_local(async move {
-            match api::test_provider(provider_id).await {
+            match transport::test_provider(provider_id).await {
                 Ok(result) => set_feedback.set(Some(result.message)),
                 Err(err) => set_error.set(Some(err.to_string())),
             }
@@ -934,7 +935,7 @@ pub fn AiAdmin() -> impl IntoView {
         let provider_deactivated_template = provider_deactivated_template.clone();
         let deactivate_provider_query_writer = deactivate_provider_query_writer.clone();
         spawn_local(async move {
-            match api::deactivate_provider(provider_id).await {
+            match transport::deactivate_provider(provider_id).await {
                 Ok(profile) => {
                     provider_active.set(false);
                     set_feedback.set(Some(
@@ -956,7 +957,7 @@ pub fn AiAdmin() -> impl IntoView {
         let tool_created_template = tool_created_template.clone();
         let create_tool_query_writer = create_tool_query_writer.clone();
         spawn_local(async move {
-            let result = api::create_tool_profile(
+            let result = transport::create_tool_profile(
                 tool_slug.get_untracked(),
                 tool_name.get_untracked(),
                 optional_text(tool_description.get_untracked()),
@@ -1007,7 +1008,7 @@ pub fn AiAdmin() -> impl IntoView {
         let tool_updated_template = tool_updated_template.clone();
         let update_tool_query_writer = update_tool_query_writer.clone();
         spawn_local(async move {
-            let result = api::update_tool_profile(
+            let result = transport::update_tool_profile(
                 tool_profile_id,
                 tool_name.get_untracked(),
                 optional_text(tool_description.get_untracked()),
@@ -1040,7 +1041,7 @@ pub fn AiAdmin() -> impl IntoView {
         let session_started_template = session_started_template.clone();
         let start_session_query_writer = start_session_query_writer.clone();
         spawn_local(async move {
-            let result = api::start_session(
+            let result = transport::start_session(
                 session_title.get_untracked(),
                 optional_text(selected_provider.get_untracked()),
                 optional_text(selected_task_profile.get_untracked()),
@@ -1092,7 +1093,7 @@ pub fn AiAdmin() -> impl IntoView {
         let alloy_completed_template = alloy_completed_template.clone();
         let alloy_session_query_writer = alloy_session_query_writer.clone();
         spawn_local(async move {
-            let result = api::run_task_job(
+            let result = transport::run_task_job(
                 alloy_title.get_untracked(),
                 optional_text(selected_provider.get_untracked()),
                 task_profile_id,
@@ -1146,7 +1147,7 @@ pub fn AiAdmin() -> impl IntoView {
         let image_completed_template = image_completed_template.clone();
         let image_session_query_writer = image_session_query_writer.clone();
         spawn_local(async move {
-            let result = api::run_task_job(
+            let result = transport::run_task_job(
                 image_title.get_untracked(),
                 optional_text(selected_provider.get_untracked()),
                 task_profile_id,
@@ -1200,7 +1201,7 @@ pub fn AiAdmin() -> impl IntoView {
         let product_completed_template = product_completed_template.clone();
         let product_session_query_writer = product_session_query_writer.clone();
         spawn_local(async move {
-            let result = api::run_task_job(
+            let result = transport::run_task_job(
                 product_title.get_untracked(),
                 optional_text(selected_provider.get_untracked()),
                 task_profile_id,
@@ -1288,7 +1289,7 @@ pub fn AiAdmin() -> impl IntoView {
         let product_attributes_session_query_writer =
             product_attributes_session_query_writer.clone();
         spawn_local(async move {
-            let result = api::run_task_job(
+            let result = transport::run_task_job(
                 product_attributes_title.get_untracked(),
                 optional_text(selected_provider.get_untracked()),
                 task_profile_id,
@@ -1346,7 +1347,7 @@ pub fn AiAdmin() -> impl IntoView {
         let blog_completed_template = blog_completed_template.clone();
         let blog_session_query_writer = blog_session_query_writer.clone();
         spawn_local(async move {
-            let result = api::run_task_job(
+            let result = transport::run_task_job(
                 blog_title.get_untracked(),
                 optional_text(selected_provider.get_untracked()),
                 task_profile_id,
@@ -1395,7 +1396,7 @@ pub fn AiAdmin() -> impl IntoView {
         let task_created_template = task_created_template.clone();
         let create_task_query_writer = create_task_query_writer.clone();
         spawn_local(async move {
-            let result = api::create_task_profile(
+            let result = transport::create_task_profile(
                 task_slug.get_untracked(),
                 task_name.get_untracked(),
                 optional_text(task_description.get_untracked()),
@@ -1435,7 +1436,7 @@ pub fn AiAdmin() -> impl IntoView {
         let task_updated_template = task_updated_template.clone();
         let update_task_query_writer = update_task_query_writer.clone();
         spawn_local(async move {
-            let result = api::update_task_profile(
+            let result = transport::update_task_profile(
                 task_profile_id,
                 task_name.get_untracked(),
                 optional_text(task_description.get_untracked()),
@@ -1477,7 +1478,7 @@ pub fn AiAdmin() -> impl IntoView {
         set_feedback.set(None);
         set_error.set(None);
         spawn_local(async move {
-            let result = api::send_message(session_id, content).await;
+            let result = transport::send_message(session_id, content).await;
             match result {
                 Ok(_) => {
                     reply_message.set(String::new());
@@ -2309,7 +2310,7 @@ pub fn AiAdmin() -> impl IntoView {
                                                                                     on:click=move |_| {
                                                                                         let approval_id = approve_id.clone();
                                                                                         spawn_local(async move {
-                                                                                            let _ = api::resume_approval(approval_id, true, None).await;
+                                                                                            let _ = transport::resume_approval(approval_id, true, None).await;
                                                                                             set_refresh_nonce.update(|value| *value += 1);
                                                                                         });
                                                                                     }
@@ -2322,7 +2323,7 @@ pub fn AiAdmin() -> impl IntoView {
                                                                                         let approval_id = reject_id.clone();
                                                                                         let reject_reason = reject_reason.clone();
                                                                                         spawn_local(async move {
-                                                                                            let _ = api::resume_approval(approval_id, false, Some(reject_reason)).await;
+                                                                                            let _ = transport::resume_approval(approval_id, false, Some(reject_reason)).await;
                                                                                             set_refresh_nonce.update(|value| *value += 1);
                                                                                         });
                                                                                     }
