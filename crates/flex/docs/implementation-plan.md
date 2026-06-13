@@ -7,12 +7,12 @@
 
 ## Execution checkpoint
 
-- Current phase: phase45_verification_followup
-- Last checkpoint: Plan sync завершён: flex подтверждён как capability-only ghost module с live standalone GraphQL/REST surfaces; открытым остаётся только full integration verification gate из-за внешнего compile-drift в rustok-product.
-- Next step: Закрыть Phase 4.5 verification debt: устранить compile-drift в `crates/rustok-product/src/services/catalog.rs`, затем прогнать `cargo test -p rustok-server --lib` + flex-targeted integration сценарии и зафиксировать evidence в этом плане.
+- Current phase: phase45_product_metadata_patch
+- Last checkpoint: Product-side Flex attached metadata update drift reduced without compilation: `catalog.rs` now preserves existing reserved product metadata while applying Flex custom-field patches, and product metadata split/merge helper tests were added.
+- Next step: When compilations are allowed, run `cargo test -p rustok-product --lib` first, then `cargo test -p rustok-server --lib` plus Flex-targeted integration scenarios and record evidence here.
 - Open blockers: None.
-- Hand-off notes for next agent: После каждого инкремента обновлять этот блок.
-- Last updated at (UTC): 2026-05-24T21:44:13Z
+- Hand-off notes for next agent: User explicitly requested no compilations for this iteration; only `cargo fmt --all` and the Node multilingual drift gate were run. Verify the new product metadata unit tests once compilation/test execution is allowed.
+- Last updated at (UTC): 2026-06-13T00:00:00Z
 
 ## Область работ
 
@@ -155,7 +155,7 @@ Flex в attached-mode уже умеет хранить field definitions и ма
   - Repo-side contract verification проходит: `node scripts/verify/verify-flex-multilingual-contract.mjs` = `OK`.
   - Targeted `apps/server` Flex GraphQL tests больше не завязаны на полный global migrator: локальный SQLite harness поднимает только `tenants`, `user_field_definitions`, `flex_schemas`, `flex_schema_translations`, `flex_entries` и `flex_entry_localized_values`.
   - Duplicate registration для `m20260316_000004_create_topic_field_definitions` убран из server migrator; canonical migration продолжает приезжать из `rustok_forum::migrations()`.
-  - Текущий blocker для полного `rustok-server` integration run теперь внешний по отношению к `flex`: isolated `cargo test -p rustok-server --lib ... -- --exact` доходит до compile graph и упирается в compile-drift в `crates/rustok-product/src/services/catalog.rs`, а не в `flex`-код и не в shared-target `LNK1318`.
+  - 2026-06-13 no-compile iteration: product-side metadata update path patched in `crates/rustok-product/src/services/catalog.rs` so existing reserved product metadata survives Flex custom-field PATCH-style updates; targeted helper tests were added, but not executed by request.
 - [x] Синхронизировать docs с реальным registry routing и migrator ownership
   - `crates/flex/docs/README.md` выровнен по live attached consumers (`user`, `product`, `order`, `topic`) без legacy `node`.
   - GraphQL contract и RBAC section в README теперь отражают фактические `pagination`, `DeleteFieldDefinitionPayload` и typed `flex_schemas:*` / `flex_entries:*` gates.
@@ -298,7 +298,7 @@ CREATE INDEX idx_flex_entry_localized_values_owner
   - `apps/server` теперь также держит standalone GraphQL roundtrip для schema/entry CRUD и explicit denial-path для `flex_entries:create`.
   - Flex GraphQL tests в `apps/server` теперь используют isolated SQLite bootstrap вместо полного workspace migrator, чтобы не тянуть посторонние migration slices в flex verification path.
   - Repo-side multilingual drift gate проходит: `node scripts/verify/verify-flex-multilingual-contract.mjs`.
-  - Полное закрытие пункта всё ещё упирается в стабильный `rustok-server` test run; после изоляции `CARGO_TARGET_DIR` Windows linker/PDB blocker снят, но compile graph всё ещё рвётся на внешнем `rustok-product` drift, не связанном с `flex`.
+  - Полное закрытие пункта всё ещё требует стабильный `rustok-server` test run; текущий инкремент подготовил product-side fix и тесты, но compile/test evidence отложен, потому что эта итерация выполнялась без компиляций.
 - [x] Документация
   - Контракты, data model и live GraphQL/REST surfaces описаны
   - Rollout / governance contract для standalone surface задокументирован как completed
