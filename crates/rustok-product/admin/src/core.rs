@@ -291,6 +291,57 @@ pub(crate) fn build_selected_product_summary_view_model(
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ProductAdminEditorCopy {
+    pub new_action_label: String,
+    pub handle_placeholder: String,
+    pub title_placeholder: String,
+    pub description_placeholder: String,
+    pub seller_id_placeholder: String,
+    pub vendor_placeholder: String,
+    pub product_type_placeholder: String,
+    pub primary_sku_placeholder: String,
+    pub barcode_placeholder: String,
+    pub currency_placeholder: String,
+    pub price_placeholder: String,
+    pub compare_at_price_placeholder: String,
+    pub no_shipping_profile_label: String,
+    pub inventory_quantity_placeholder: String,
+    pub keep_published_label: String,
+}
+
+pub(crate) fn build_product_admin_editor_copy(locale: Option<&str>) -> ProductAdminEditorCopy {
+    ProductAdminEditorCopy {
+        new_action_label: t(locale, "product.action.new", "New"),
+        handle_placeholder: t(locale, "product.field.handle", "Handle"),
+        title_placeholder: t(locale, "product.field.title", "Title"),
+        description_placeholder: t(locale, "product.field.description", "Description"),
+        seller_id_placeholder: t(locale, "product.field.sellerId", "Seller ID"),
+        vendor_placeholder: t(locale, "product.field.vendor", "Vendor"),
+        product_type_placeholder: t(locale, "product.field.productType", "Product type"),
+        primary_sku_placeholder: t(locale, "product.field.primarySku", "Primary SKU"),
+        barcode_placeholder: t(locale, "product.field.barcode", "Barcode"),
+        currency_placeholder: t(locale, "product.field.currency", "Currency"),
+        price_placeholder: t(locale, "product.field.price", "Price"),
+        compare_at_price_placeholder: t(locale, "product.field.compareAtPrice", "Compare-at price"),
+        no_shipping_profile_label: t(
+            locale,
+            "product.field.noShippingProfile",
+            "No shipping profile",
+        ),
+        inventory_quantity_placeholder: t(
+            locale,
+            "product.field.inventoryQuantity",
+            "Inventory quantity",
+        ),
+        keep_published_label: t(
+            locale,
+            "product.field.keepPublished",
+            "Keep published after save",
+        ),
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum ProductAdminEditorMode {
     Create,
     Edit,
@@ -1361,6 +1412,18 @@ mod tests {
             edit.subtitle,
             "Single-SKU catalog editor backed by the existing commerce GraphQL contract."
         );
+    }
+
+    #[test]
+    fn product_admin_editor_copy_is_core_owned() {
+        let copy = build_product_admin_editor_copy(Some("en"));
+
+        assert_eq!(copy.new_action_label, "New");
+        assert_eq!(copy.handle_placeholder, "Handle");
+        assert_eq!(copy.seller_id_placeholder, "Seller ID");
+        assert_eq!(copy.compare_at_price_placeholder, "Compare-at price");
+        assert_eq!(copy.no_shipping_profile_label, "No shipping profile");
+        assert_eq!(copy.keep_published_label, "Keep published after save");
     }
 
     #[test]
