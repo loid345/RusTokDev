@@ -99,6 +99,41 @@ pub fn region_admin_new_query_update() -> RegionAdminRouteQueryUpdate {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionAdminRouteQueryWrite {
+    pub updates: Vec<(&'static str, Option<String>)>,
+    pub replace: bool,
+}
+
+pub fn region_admin_route_query_write(
+    update: RegionAdminRouteQueryUpdate,
+) -> RegionAdminRouteQueryWrite {
+    match update {
+        RegionAdminRouteQueryUpdate::PushSelected { key, region_id } => {
+            RegionAdminRouteQueryWrite {
+                updates: vec![(key, Some(region_id))],
+                replace: false,
+            }
+        }
+        RegionAdminRouteQueryUpdate::ReplaceSelected { key, region_id } => {
+            RegionAdminRouteQueryWrite {
+                updates: vec![(key, Some(region_id))],
+                replace: true,
+            }
+        }
+        RegionAdminRouteQueryUpdate::ClearSelected { key } => RegionAdminRouteQueryWrite {
+            updates: vec![(key, None)],
+            replace: true,
+        },
+    }
+}
+
+pub fn optional_region_admin_route_query_write(
+    update: Option<RegionAdminRouteQueryUpdate>,
+) -> Option<RegionAdminRouteQueryWrite> {
+    update.map(region_admin_route_query_write)
+}
+
 pub fn build_region_draft(input: RegionFormInput<'_>) -> RegionDraft {
     RegionDraft {
         name: ui_text_or_default(input.name),
@@ -1565,6 +1600,24 @@ mod tests {
             region_admin_new_query_update(),
             RegionAdminRouteQueryUpdate::ClearSelected { key: "region_id" }
         );
+        assert_eq!(
+            region_admin_route_query_write(RegionAdminRouteQueryUpdate::PushSelected {
+                key: REGION_ADMIN_SELECTED_QUERY_KEY,
+                region_id: "region-eu".to_string(),
+            }),
+            RegionAdminRouteQueryWrite {
+                updates: vec![("region_id", Some("region-eu".to_string()))],
+                replace: false,
+            }
+        );
+        assert_eq!(
+            region_admin_route_query_write(region_admin_new_query_update()),
+            RegionAdminRouteQueryWrite {
+                updates: vec![("region_id", None)],
+                replace: true,
+            }
+        );
+        assert_eq!(optional_region_admin_route_query_write(None), None);
     }
 
     #[test]

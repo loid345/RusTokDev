@@ -661,17 +661,15 @@ fn apply_region_route_query_update(
     query_writer: &leptos_ui_routing::RouteQueryWriter,
     update: Option<RegionAdminRouteQueryUpdate>,
 ) {
-    match update {
-        Some(RegionAdminRouteQueryUpdate::PushSelected { key, region_id }) => {
-            query_writer.push_value(key, region_id);
-        }
-        Some(RegionAdminRouteQueryUpdate::ReplaceSelected { key, region_id }) => {
-            query_writer.replace_value(key, region_id);
-        }
-        Some(RegionAdminRouteQueryUpdate::ClearSelected { key }) => {
-            query_writer.clear_key(key);
-        }
-        None => {}
+    if let Some(write) = crate::core::optional_region_admin_route_query_write(update) {
+        query_writer.update(
+            write
+                .updates
+                .into_iter()
+                .map(|(key, value)| (key.to_string(), value))
+                .collect(),
+            write.replace,
+        );
     }
 }
 
