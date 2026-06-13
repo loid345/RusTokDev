@@ -7,6 +7,41 @@ const DEFAULT_CATEGORY_ACCENT_STYLE: &str =
     "background:linear-gradient(180deg,#0ea5e9 0%,#f59e0b 100%);";
 
 #[derive(Clone, Debug)]
+pub struct ForumAdminHeaderLabels {
+    pub badge: String,
+    pub categories_title: String,
+    pub topics_title: String,
+    pub categories_body: String,
+    pub topics_body: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ForumAdminHeaderViewModel {
+    pub badge: String,
+    pub title: String,
+    pub body: String,
+}
+
+pub fn forum_admin_header_view_model(
+    is_categories_page: bool,
+    labels: &ForumAdminHeaderLabels,
+) -> ForumAdminHeaderViewModel {
+    ForumAdminHeaderViewModel {
+        badge: labels.badge.clone(),
+        title: if is_categories_page {
+            labels.categories_title.clone()
+        } else {
+            labels.topics_title.clone()
+        },
+        body: if is_categories_page {
+            labels.categories_body.clone()
+        } else {
+            labels.topics_body.clone()
+        },
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct ForumAdminCategoryRenderLabels {
     pub no_description: String,
     pub topics_count_template: String,
@@ -322,11 +357,15 @@ pub fn topic_status_class(status: &str) -> &'static str {
     }
 }
 
-pub fn reply_count_label(replies: Option<Result<Vec<ReplyListItem>, String>>) -> usize {
-    match replies {
+pub fn result_item_count<T>(result: Option<Result<Vec<T>, String>>) -> usize {
+    match result {
         Some(Ok(items)) => items.len(),
         _ => 0,
     }
+}
+
+pub fn reply_count_label(replies: Option<Result<Vec<ReplyListItem>, String>>) -> usize {
+    result_item_count(replies)
 }
 
 #[cfg(test)]
@@ -356,6 +395,64 @@ mod tests {
         assert_eq!(topic_status_class("pending"), "warning");
         assert_eq!(topic_status_class("closed"), "muted");
         assert_eq!(topic_status_class("other"), "default");
+    }
+
+    #[test]
+    fn selects_header_copy_for_categories_and_topics() {
+        let labels = ForumAdminHeaderLabels {
+            badge: "forum control room".to_string(),
+            categories_title: "Category architecture".to_string(),
+            topics_title: "Moderation workspace".to_string(),
+            categories_body: "Shape navigation clusters".to_string(),
+            topics_body: "Review topic flow".to_string(),
+        };
+
+        let categories = forum_admin_header_view_model(true, &labels);
+        assert_eq!(categories.badge, "forum control room");
+        assert_eq!(categories.title, "Category architecture");
+        assert_eq!(categories.body, "Shape navigation clusters");
+
+        let topics = forum_admin_header_view_model(false, &labels);
+        assert_eq!(topics.title, "Moderation workspace");
+        assert_eq!(topics.body, "Review topic flow");
+    }
+
+    #[test]
+    fn counts_loaded_result_items_only() {
+        assert_eq!(result_item_count::<CategoryListItem>(None), 0);
+        assert_eq!(
+            result_item_count::<CategoryListItem>(Some(Err("boom".to_string()))),
+            0
+        );
+        assert_eq!(
+            result_item_count(Some(Ok(vec![
+                CategoryListItem {
+                    id: "category-1".to_string(),
+                    locale: "en".to_string(),
+                    effective_locale: "en".to_string(),
+                    name: "General".to_string(),
+                    slug: "general".to_string(),
+                    description: None,
+                    icon: None,
+                    color: None,
+                    topic_count: 1,
+                    reply_count: 2,
+                },
+                CategoryListItem {
+                    id: "category-2".to_string(),
+                    locale: "en".to_string(),
+                    effective_locale: "en".to_string(),
+                    name: "Support".to_string(),
+                    slug: "support".to_string(),
+                    description: None,
+                    icon: None,
+                    color: None,
+                    topic_count: 3,
+                    reply_count: 4,
+                },
+            ]))),
+            2
+        );
     }
 
     #[test]

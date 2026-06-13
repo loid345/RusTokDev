@@ -9,9 +9,10 @@ use rustok_seo_targets::{builtin_slug as seo_builtin_slug, SeoTargetSlug};
 
 use crate::core::{
     category_card_view_model, category_sidebar_total_count, category_sidebar_view_model,
-    format_count, parse_tags, reply_card_view_model, reply_count_label, topic_card_view_model,
-    topic_category_filter, CategoryFormSnapshot, ForumAdminCategoryRenderLabels,
-    ForumAdminFormError, ForumAdminTopicRenderLabels, TopicFormSnapshot,
+    format_count, forum_admin_header_view_model, parse_tags, reply_card_view_model,
+    reply_count_label, result_item_count, topic_card_view_model, topic_category_filter,
+    CategoryFormSnapshot, ForumAdminCategoryRenderLabels, ForumAdminFormError,
+    ForumAdminHeaderLabels, ForumAdminTopicRenderLabels, TopicFormSnapshot,
 };
 use crate::i18n::t;
 use crate::model::{CategoryListItem, ReplyListItem, TopicListItem};
@@ -40,27 +41,30 @@ pub fn ForumAdmin() -> impl IntoView {
     let tenant = use_tenant();
     let default_locale = route_context.locale.clone().unwrap_or_default();
     let is_categories_page = route_context.subpath_matches("categories");
-    let badge_label = t(ui_locale.as_deref(), "forum.badge", "forum control room");
-    let categories_title = t(
-        ui_locale.as_deref(),
-        "forum.header.categoriesTitle",
-        "Category architecture",
-    );
-    let topics_title = t(
-        ui_locale.as_deref(),
-        "forum.header.topicsTitle",
-        "NodeBB-style moderation workspace",
-    );
-    let categories_body = t(
-        ui_locale.as_deref(),
-        "forum.header.categoriesBody",
-        "Shape navigation clusters, assign moderation rules, and keep every forum area ready for new threads.",
-    );
-    let topics_body = t(
-        ui_locale.as_deref(),
-        "forum.header.topicsBody",
-        "Review topic flow, open a thread for reply preview, and keep publishing controls next to the live feed.",
-    );
+    let header_labels = ForumAdminHeaderLabels {
+        badge: t(ui_locale.as_deref(), "forum.badge", "forum control room"),
+        categories_title: t(
+            ui_locale.as_deref(),
+            "forum.header.categoriesTitle",
+            "Category architecture",
+        ),
+        topics_title: t(
+            ui_locale.as_deref(),
+            "forum.header.topicsTitle",
+            "NodeBB-style moderation workspace",
+        ),
+        categories_body: t(
+            ui_locale.as_deref(),
+            "forum.header.categoriesBody",
+            "Shape navigation clusters, assign moderation rules, and keep every forum area ready for new threads.",
+        ),
+        topics_body: t(
+            ui_locale.as_deref(),
+            "forum.header.topicsBody",
+            "Review topic flow, open a thread for reply preview, and keep publishing controls next to the live feed.",
+        ),
+    };
+    let header_view_model = forum_admin_header_view_model(is_categories_page, &header_labels);
     let metric_categories = t(
         ui_locale.as_deref(),
         "forum.metric.categories",
@@ -483,18 +487,9 @@ pub fn ForumAdmin() -> impl IntoView {
         });
     });
 
-    let topic_count = move || match topics.get() {
-        Some(Ok(items)) => items.len(),
-        _ => 0,
-    };
-    let category_count = move || match categories.get() {
-        Some(Ok(items)) => items.len(),
-        _ => 0,
-    };
-    let reply_preview_count = move || match replies.get() {
-        Some(Ok(items)) => items.len(),
-        _ => 0,
-    };
+    let topic_count = move || result_item_count(topics.get());
+    let category_count = move || result_item_count(categories.get());
+    let reply_preview_count = move || result_item_count(replies.get());
     let open_category_query_writer = query_writer.clone();
     let open_topic_query_writer = query_writer.clone();
     let reset_category_query_writer = query_writer.clone();
@@ -538,26 +533,14 @@ pub fn ForumAdmin() -> impl IntoView {
                     <div class="space-y-4">
                         <div class="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.26em] text-muted-foreground">
                             <span class="h-2 w-2 rounded-full bg-amber-500"></span>
-                            {badge_label.clone()}
+                            {header_view_model.badge.clone()}
                         </div>
                         <div class="space-y-2">
                             <h1 class="text-3xl font-semibold tracking-tight text-card-foreground">
-                                {move || {
-                                    if is_categories_page {
-                                        categories_title.clone()
-                                    } else {
-                                        topics_title.clone()
-                                    }
-                                }}
+                                {header_view_model.title.clone()}
                             </h1>
                             <p class="max-w-2xl text-sm leading-6 text-muted-foreground">
-                                {move || {
-                                    if is_categories_page {
-                                        categories_body.clone()
-                                    } else {
-                                        topics_body.clone()
-                                    }
-                                }}
+                                {header_view_model.body.clone()}
                             </p>
                         </div>
                     </div>
