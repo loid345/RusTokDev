@@ -2,20 +2,43 @@ use leptos::ev::SubmitEvent;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_auth::hooks::{use_tenant, use_token};
-use leptos_ui_routing::{use_route_query_value, use_route_query_writer};
-use rustok_api::{AdminQueryKey, UiRouteContext};
+use leptos_ui_routing::{use_route_query_value, use_route_query_writer, RouteQueryWriter};
+use rustok_api::UiRouteContext;
 use rustok_seo_admin_support::SeoEntityPanel;
 use rustok_seo_targets::{builtin_slug as seo_builtin_slug, SeoTargetSlug};
 
 use crate::core::{
     category_card_view_model, category_sidebar_total_count, category_sidebar_view_model,
-    format_count, parse_tags, reply_card_view_model, reply_count_label, topic_card_view_model,
-    topic_category_filter, CategoryFormSnapshot, ForumAdminCategoryRenderLabels,
-    ForumAdminFormError, ForumAdminTopicRenderLabels, TopicFormSnapshot,
+    deleted_selection_matches, format_count, forum_admin_header_view_model,
+    forum_admin_open_query_intent, forum_admin_reset_query_intent, forum_admin_saved_query_intent,
+    parse_tags, reply_card_view_model, reply_count_label, result_item_count, selected_query_id,
+    topic_card_view_model, topic_category_filter, CategoryFormSnapshot,
+    ForumAdminCategoryRenderLabels, ForumAdminFormError, ForumAdminHeaderLabels,
+    ForumAdminQuerySurface, ForumAdminRouteQueryIntent, ForumAdminRouteQueryOperation,
+    ForumAdminTopicRenderLabels, TopicFormSnapshot,
 };
 use crate::i18n::t;
 use crate::model::{CategoryListItem, ReplyListItem, TopicListItem};
 use crate::transport;
+
+fn apply_forum_admin_route_query_intent(
+    query_writer: &RouteQueryWriter,
+    intent: ForumAdminRouteQueryIntent,
+) {
+    match intent.operation {
+        ForumAdminRouteQueryOperation::Push => {
+            if let Some(value) = intent.value {
+                query_writer.push_value(intent.key, value);
+            }
+        }
+        ForumAdminRouteQueryOperation::Replace => {
+            if let Some(value) = intent.value {
+                query_writer.replace_value(intent.key, value);
+            }
+        }
+        ForumAdminRouteQueryOperation::Clear => query_writer.clear_key(intent.key),
+    }
+}
 
 fn local_resource<S, Fut, T>(
     source: impl Fn() -> S + 'static,
@@ -33,34 +56,38 @@ where
 pub fn ForumAdmin() -> impl IntoView {
     let route_context = use_context::<UiRouteContext>().unwrap_or_default();
     let ui_locale = route_context.locale.clone();
-    let selected_category_query = use_route_query_value(AdminQueryKey::CategoryId.as_str());
-    let selected_topic_query = use_route_query_value(AdminQueryKey::TopicId.as_str());
+    let selected_category_query =
+        use_route_query_value(ForumAdminQuerySurface::Category.query_key());
+    let selected_topic_query = use_route_query_value(ForumAdminQuerySurface::Topic.query_key());
     let query_writer = use_route_query_writer();
     let token = use_token();
     let tenant = use_tenant();
     let default_locale = route_context.locale.clone().unwrap_or_default();
     let is_categories_page = route_context.subpath_matches("categories");
-    let badge_label = t(ui_locale.as_deref(), "forum.badge", "forum control room");
-    let categories_title = t(
-        ui_locale.as_deref(),
-        "forum.header.categoriesTitle",
-        "Category architecture",
-    );
-    let topics_title = t(
-        ui_locale.as_deref(),
-        "forum.header.topicsTitle",
-        "NodeBB-style moderation workspace",
-    );
-    let categories_body = t(
-        ui_locale.as_deref(),
-        "forum.header.categoriesBody",
-        "Shape navigation clusters, assign moderation rules, and keep every forum area ready for new threads.",
-    );
-    let topics_body = t(
-        ui_locale.as_deref(),
-        "forum.header.topicsBody",
-        "Review topic flow, open a thread for reply preview, and keep publishing controls next to the live feed.",
-    );
+    let header_labels = ForumAdminHeaderLabels {
+        badge: t(ui_locale.as_deref(), "forum.badge", "forum control room"),
+        categories_title: t(
+            ui_locale.as_deref(),
+            "forum.header.categoriesTitle",
+            "Category architecture",
+        ),
+        topics_title: t(
+            ui_locale.as_deref(),
+            "forum.header.topicsTitle",
+            "NodeBB-style moderation workspace",
+        ),
+        categories_body: t(
+            ui_locale.as_deref(),
+            "forum.header.categoriesBody",
+            "Shape navigation clusters, assign moderation rules, and keep every forum area ready for new threads.",
+        ),
+        topics_body: t(
+            ui_locale.as_deref(),
+            "forum.header.topicsBody",
+            "Review topic flow, open a thread for reply preview, and keep publishing controls next to the live feed.",
+        ),
+    };
+    let header_view_model = forum_admin_header_view_model(is_categories_page, &header_labels);
     let metric_categories = t(
         ui_locale.as_deref(),
         "forum.metric.categories",
@@ -272,33 +299,35 @@ pub fn ForumAdmin() -> impl IntoView {
     });
     let initial_edit_category = edit_category;
     let initial_edit_topic = edit_topic;
-    Effect::new(move |_| match selected_category_query.get() {
-        Some(category_id) if !category_id.trim().is_empty() => {
-            initial_edit_category.run(category_id)
-        }
-        _ => clear_category_form(
-            set_editing_category_id,
-            set_category_name,
-            set_category_slug,
-            set_category_description,
-            set_category_icon,
-            set_category_color,
-            set_category_position,
-            set_category_moderated,
-        ),
-    });
-    Effect::new(move |_| match selected_topic_query.get() {
-        Some(topic_id) if !topic_id.trim().is_empty() => initial_edit_topic.run(topic_id),
-        _ => clear_topic_form(
-            set_editing_topic_id,
-            set_topic_category_id,
-            set_topic_title,
-            set_topic_slug,
-            set_topic_body,
-            set_topic_body_format,
-            set_topic_tags,
-        ),
-    });
+    Effect::new(
+        move |_| match selected_query_id(selected_category_query.get()) {
+            Some(category_id) => initial_edit_category.run(category_id),
+            None => clear_category_form(
+                set_editing_category_id,
+                set_category_name,
+                set_category_slug,
+                set_category_description,
+                set_category_icon,
+                set_category_color,
+                set_category_position,
+                set_category_moderated,
+            ),
+        },
+    );
+    Effect::new(
+        move |_| match selected_query_id(selected_topic_query.get()) {
+            Some(topic_id) => initial_edit_topic.run(topic_id),
+            None => clear_topic_form(
+                set_editing_topic_id,
+                set_topic_category_id,
+                set_topic_title,
+                set_topic_slug,
+                set_topic_body,
+                set_topic_body_format,
+                set_topic_tags,
+            ),
+        },
+    );
 
     let category_query_writer = query_writer.clone();
     let topic_query_writer = query_writer.clone();
@@ -353,8 +382,13 @@ pub fn ForumAdmin() -> impl IntoView {
                         CategoryFormSnapshot::from_detail(&category),
                     );
                     set_refresh_nonce.update(|value| *value += 1);
-                    category_query_writer
-                        .replace_value(AdminQueryKey::CategoryId.as_str(), category_id);
+                    apply_forum_admin_route_query_intent(
+                        &category_query_writer,
+                        forum_admin_saved_query_intent(
+                            ForumAdminQuerySurface::Category,
+                            category_id,
+                        ),
+                    );
                 }
                 Err(err) => set_error.set(Some(format!("{}: {err}", save_category_error))),
             }
@@ -411,7 +445,10 @@ pub fn ForumAdmin() -> impl IntoView {
                         TopicFormSnapshot::from_detail(&topic),
                     );
                     set_refresh_nonce.update(|value| *value += 1);
-                    topic_query_writer.replace_value(AdminQueryKey::TopicId.as_str(), topic_id);
+                    apply_forum_admin_route_query_intent(
+                        &topic_query_writer,
+                        forum_admin_saved_query_intent(ForumAdminQuerySurface::Topic, topic_id),
+                    );
                 }
                 Err(err) => set_error.set(Some(format!("{}: {err}", save_topic_error))),
             }
@@ -430,9 +467,14 @@ pub fn ForumAdmin() -> impl IntoView {
         spawn_local(async move {
             match transport::delete_category(token_value, tenant_value, category_id.clone()).await {
                 Ok(()) => {
-                    if editing_category_id.get_untracked().as_deref() == Some(category_id.as_str())
-                    {
-                        delete_category_query_writer.clear_key(AdminQueryKey::CategoryId.as_str());
+                    if deleted_selection_matches(
+                        editing_category_id.get_untracked().as_deref(),
+                        category_id.as_str(),
+                    ) {
+                        apply_forum_admin_route_query_intent(
+                            &delete_category_query_writer,
+                            forum_admin_reset_query_intent(ForumAdminQuerySurface::Category),
+                        );
                         clear_category_form(
                             set_editing_category_id,
                             set_category_name,
@@ -463,8 +505,14 @@ pub fn ForumAdmin() -> impl IntoView {
         spawn_local(async move {
             match transport::delete_topic(token_value, tenant_value, topic_id.clone()).await {
                 Ok(()) => {
-                    if editing_topic_id.get_untracked().as_deref() == Some(topic_id.as_str()) {
-                        delete_topic_query_writer.clear_key(AdminQueryKey::TopicId.as_str());
+                    if deleted_selection_matches(
+                        editing_topic_id.get_untracked().as_deref(),
+                        topic_id.as_str(),
+                    ) {
+                        apply_forum_admin_route_query_intent(
+                            &delete_topic_query_writer,
+                            forum_admin_reset_query_intent(ForumAdminQuerySurface::Topic),
+                        );
                         clear_topic_form(
                             set_editing_topic_id,
                             set_topic_category_id,
@@ -483,30 +531,30 @@ pub fn ForumAdmin() -> impl IntoView {
         });
     });
 
-    let topic_count = move || match topics.get() {
-        Some(Ok(items)) => items.len(),
-        _ => 0,
-    };
-    let category_count = move || match categories.get() {
-        Some(Ok(items)) => items.len(),
-        _ => 0,
-    };
-    let reply_preview_count = move || match replies.get() {
-        Some(Ok(items)) => items.len(),
-        _ => 0,
-    };
+    let topic_count = move || result_item_count(topics.get());
+    let category_count = move || result_item_count(categories.get());
+    let reply_preview_count = move || result_item_count(replies.get());
     let open_category_query_writer = query_writer.clone();
     let open_topic_query_writer = query_writer.clone();
     let reset_category_query_writer = query_writer.clone();
     let reset_topic_query_writer = query_writer.clone();
     let open_category = Callback::new(move |category_id: String| {
-        open_category_query_writer.push_value(AdminQueryKey::CategoryId.as_str(), category_id);
+        apply_forum_admin_route_query_intent(
+            &open_category_query_writer,
+            forum_admin_open_query_intent(ForumAdminQuerySurface::Category, category_id),
+        );
     });
     let open_topic = Callback::new(move |topic_id: String| {
-        open_topic_query_writer.push_value(AdminQueryKey::TopicId.as_str(), topic_id);
+        apply_forum_admin_route_query_intent(
+            &open_topic_query_writer,
+            forum_admin_open_query_intent(ForumAdminQuerySurface::Topic, topic_id),
+        );
     });
     let reset_category = Callback::new(move |_| {
-        reset_category_query_writer.clear_key(AdminQueryKey::CategoryId.as_str());
+        apply_forum_admin_route_query_intent(
+            &reset_category_query_writer,
+            forum_admin_reset_query_intent(ForumAdminQuerySurface::Category),
+        );
         clear_category_form(
             set_editing_category_id,
             set_category_name,
@@ -519,7 +567,10 @@ pub fn ForumAdmin() -> impl IntoView {
         );
     });
     let reset_topic = Callback::new(move |_| {
-        reset_topic_query_writer.clear_key(AdminQueryKey::TopicId.as_str());
+        apply_forum_admin_route_query_intent(
+            &reset_topic_query_writer,
+            forum_admin_reset_query_intent(ForumAdminQuerySurface::Topic),
+        );
         clear_topic_form(
             set_editing_topic_id,
             set_topic_category_id,
@@ -538,26 +589,14 @@ pub fn ForumAdmin() -> impl IntoView {
                     <div class="space-y-4">
                         <div class="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.26em] text-muted-foreground">
                             <span class="h-2 w-2 rounded-full bg-amber-500"></span>
-                            {badge_label.clone()}
+                            {header_view_model.badge.clone()}
                         </div>
                         <div class="space-y-2">
                             <h1 class="text-3xl font-semibold tracking-tight text-card-foreground">
-                                {move || {
-                                    if is_categories_page {
-                                        categories_title.clone()
-                                    } else {
-                                        topics_title.clone()
-                                    }
-                                }}
+                                {header_view_model.title.clone()}
                             </h1>
                             <p class="max-w-2xl text-sm leading-6 text-muted-foreground">
-                                {move || {
-                                    if is_categories_page {
-                                        categories_body.clone()
-                                    } else {
-                                        topics_body.clone()
-                                    }
-                                }}
+                                {header_view_model.body.clone()}
                             </p>
                         </div>
                     </div>
