@@ -41,16 +41,22 @@ const libPath = "crates/rustok-ai/admin/src/lib.rs";
 const uiPath = "crates/rustok-ai/admin/src/ui/leptos.rs";
 const corePath = "crates/rustok-ai/admin/src/core.rs";
 const transportModPath = "crates/rustok-ai/admin/src/transport/mod.rs";
+const nativeAdapterPath = "crates/rustok-ai/admin/src/transport/native_server_adapter.rs";
 
 assertExists(libPath, `${libPath}: expected AI admin crate root file`);
 assertExists(uiPath, `${uiPath}: expected AI admin Leptos adapter file`);
 assertExists(corePath, `${corePath}: expected AI admin core slice file`);
 assertExists(transportModPath, `${transportModPath}: expected AI admin transport facade file`);
+assertExists(nativeAdapterPath, `${nativeAdapterPath}: expected AI admin native server adapter file`);
+if (existsSync(repoPath("crates/rustok-ai/admin/src/api.rs"))) {
+  fail("crates/rustok-ai/admin/src/api.rs: pre-FFA api facade must stay removed");
+}
 
 const lib = readRepo(libPath);
 const ui = readRepo(uiPath);
 const core = readRepo(corePath);
 const transportMod = readRepo(transportModPath);
+const nativeAdapter = readRepo(nativeAdapterPath);
 
 assertContains(lib, "mod core;", `${libPath}: crate root must wire core`);
 assertContains(lib, "mod transport;", `${libPath}: crate root must wire transport facade`);
@@ -67,9 +73,12 @@ assertNotContains(ui, /(^|[^A-Za-z0-9_])api::/, `${uiPath}: Leptos adapter must 
 for (const marker of ["leptos::", "leptos_", "#[component]", "#[server]", "RwSignal", "LocalResource", "web_sys::"]) {
   assertNotContains(core, marker, `${corePath}: core must stay UI/runtime free (${marker})`);
 }
-assertContains(transportMod, "pub use crate::api::{", `${transportModPath}: transport facade must wrap the existing native api module`);
+assertContains(transportMod, "pub mod native_server_adapter;", `${transportModPath}: transport facade must wire the native adapter`);
+assertContains(transportMod, "pub use native_server_adapter::{", `${transportModPath}: transport facade must re-export native adapter operations`);
 assertContains(transportMod, "fetch_bootstrap", `${transportModPath}: transport facade must expose bootstrap loading`);
 assertContains(transportMod, "run_task_job", `${transportModPath}: transport facade must expose direct job execution`);
+assertContains(nativeAdapter, "#[server", `${nativeAdapterPath}: native adapter must contain server-function endpoints`);
+assertContains(nativeAdapter, "ai_bootstrap_native", `${nativeAdapterPath}: native adapter must own bootstrap endpoint`);
 
 for (const marker of [
   "pub fn parse_csv",
