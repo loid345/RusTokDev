@@ -393,6 +393,81 @@ pub fn blog_post_admin_table_row_view(
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlogPostAdminTableLabels {
+    pub empty_message: String,
+    pub total_label: String,
+    pub title_header: String,
+    pub slug_header: String,
+    pub status_header: String,
+    pub locale_header: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlogPostAdminTableViewModel {
+    pub is_empty: bool,
+    pub total_label: String,
+    pub empty_message: String,
+    pub title_header: String,
+    pub slug_header: String,
+    pub status_header: String,
+    pub locale_header: String,
+}
+
+pub fn blog_post_admin_table_view(
+    item_count: usize,
+    total: u64,
+    labels: BlogPostAdminTableLabels,
+) -> BlogPostAdminTableViewModel {
+    BlogPostAdminTableViewModel {
+        is_empty: item_count == 0,
+        total_label: count_label(labels.total_label.as_str(), total),
+        empty_message: labels.empty_message,
+        title_header: labels.title_header,
+        slug_header: labels.slug_header,
+        status_header: labels.status_header,
+        locale_header: labels.locale_header,
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlogPostAdminFormLabels {
+    pub edit_title: String,
+    pub create_title: String,
+    pub saving: String,
+    pub update: String,
+    pub create: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlogPostAdminFormViewModel {
+    pub title: String,
+    pub submit_label: String,
+    pub submit_disabled: bool,
+}
+
+pub fn blog_post_admin_form_view(
+    editing_post_id: Option<&str>,
+    busy_key: Option<&str>,
+    labels: BlogPostAdminFormLabels,
+) -> BlogPostAdminFormViewModel {
+    let save_busy = is_save_busy(busy_key);
+    BlogPostAdminFormViewModel {
+        title: edit_action_label(
+            is_editing_mode(editing_post_id),
+            labels.edit_title,
+            labels.create_title,
+        ),
+        submit_label: submit_action_label(
+            submit_button_state(save_busy, is_editing_mode(editing_post_id)),
+            labels.saving,
+            labels.update,
+            labels.create,
+        ),
+        submit_disabled: save_busy,
+    }
+}
+
 pub fn is_markdown_format(value: &str) -> bool {
     value.trim().eq_ignore_ascii_case("markdown")
 }
@@ -979,5 +1054,66 @@ mod tests {
             ),
             "Create post".to_string()
         );
+
+        let table = blog_post_admin_table_view(
+            3,
+            42,
+            BlogPostAdminTableLabels {
+                empty_message: "No posts".to_string(),
+                total_label: "{count} post(s)".to_string(),
+                title_header: "Title".to_string(),
+                slug_header: "Slug".to_string(),
+                status_header: "Status".to_string(),
+                locale_header: "Locale".to_string(),
+            },
+        );
+        assert!(!table.is_empty);
+        assert_eq!(table.total_label, "42 post(s)");
+        assert_eq!(table.title_header, "Title");
+
+        let empty_table = blog_post_admin_table_view(
+            0,
+            0,
+            BlogPostAdminTableLabels {
+                empty_message: "No posts".to_string(),
+                total_label: "{count} post(s)".to_string(),
+                title_header: "Title".to_string(),
+                slug_header: "Slug".to_string(),
+                status_header: "Status".to_string(),
+                locale_header: "Locale".to_string(),
+            },
+        );
+        assert!(empty_table.is_empty);
+        assert_eq!(empty_table.empty_message, "No posts");
+
+        let form = blog_post_admin_form_view(
+            Some("post-1"),
+            Some("save:post-1"),
+            BlogPostAdminFormLabels {
+                edit_title: "Edit post".to_string(),
+                create_title: "Create post".to_string(),
+                saving: "Saving...".to_string(),
+                update: "Update post".to_string(),
+                create: "Create post".to_string(),
+            },
+        );
+        assert_eq!(form.title, "Edit post");
+        assert_eq!(form.submit_label, "Saving...");
+        assert!(form.submit_disabled);
+
+        let create_form = blog_post_admin_form_view(
+            None,
+            None,
+            BlogPostAdminFormLabels {
+                edit_title: "Edit post".to_string(),
+                create_title: "Create post".to_string(),
+                saving: "Saving...".to_string(),
+                update: "Update post".to_string(),
+                create: "Create post".to_string(),
+            },
+        );
+        assert_eq!(create_form.title, "Create post");
+        assert_eq!(create_form.submit_label, "Create post");
+        assert!(!create_form.submit_disabled);
     }
 }

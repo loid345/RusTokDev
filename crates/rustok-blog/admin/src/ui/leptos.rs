@@ -39,8 +39,6 @@ pub fn BlogAdmin() -> impl IntoView {
         "blog.error.loadPosts",
         "Failed to load posts",
     );
-    let form_edit_title = t(ui_locale.as_deref(), "blog.form.editTitle", "Edit post");
-    let form_create_title = t(ui_locale.as_deref(), "blog.form.createTitle", "Create post");
     let form_subtitle = t(
         ui_locale.as_deref(),
         "blog.form.subtitle",
@@ -559,11 +557,12 @@ pub fn BlogAdmin() -> impl IntoView {
                     <div class="space-y-1">
                         <h2 class="text-lg font-semibold text-card-foreground">
                             {move || {
-                                core::edit_action_label(
-                                    core::is_editing_mode(editing_post_id.get().as_deref()),
-                                    form_edit_title.clone(),
-                                    form_create_title.clone(),
+                                blog_form_view_model(
+                                    ui_locale.as_deref(),
+                                    editing_post_id.get().as_deref(),
+                                    busy_key.get().as_deref(),
                                 )
+                                .title
                             }}
                         </h2>
                         <p class="text-sm text-muted-foreground">{form_subtitle.clone()}</p>
@@ -718,19 +717,21 @@ pub fn BlogAdmin() -> impl IntoView {
                             type="submit"
                             class="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
                             disabled=move || {
-                                core::is_save_busy(busy_key.get().as_deref())
+                                blog_form_view_model(
+                                    ui_locale.as_deref(),
+                                    editing_post_id.get().as_deref(),
+                                    busy_key.get().as_deref(),
+                                )
+                                .submit_disabled
                             }
                         >
                             {move || {
-                                core::submit_action_label(
-                                    core::submit_button_state(
-                                        core::is_save_busy(busy_key.get().as_deref()),
-                                        core::is_editing_mode(editing_post_id.get().as_deref()),
-                                    ),
-                                    t(ui_locale.as_deref(), "blog.form.saving", "Saving..."),
-                                    t(ui_locale.as_deref(), "blog.form.update", "Update post"),
-                                    t(ui_locale.as_deref(), "blog.form.create", "Create post"),
+                                blog_form_view_model(
+                                    ui_locale.as_deref(),
+                                    editing_post_id.get().as_deref(),
+                                    busy_key.get().as_deref(),
                                 )
+                                .submit_label
                             }}
                         </button>
                     </form>
@@ -760,6 +761,24 @@ pub fn BlogAdmin() -> impl IntoView {
             </section>
         </div>
     }
+}
+
+fn blog_form_view_model(
+    locale: Option<&str>,
+    editing_post_id: Option<&str>,
+    busy_key: Option<&str>,
+) -> core::BlogPostAdminFormViewModel {
+    core::blog_post_admin_form_view(
+        editing_post_id,
+        busy_key,
+        core::BlogPostAdminFormLabels {
+            edit_title: t(locale, "blog.form.editTitle", "Edit post"),
+            create_title: t(locale, "blog.form.createTitle", "Create post"),
+            saving: t(locale, "blog.form.saving", "Saving..."),
+            update: t(locale, "blog.form.update", "Update post"),
+            create: t(locale, "blog.form.create", "Create post"),
+        },
+    )
 }
 
 #[component]
@@ -796,15 +815,27 @@ fn BlogPostsTable(
     on_delete: Callback<String>,
 ) -> impl IntoView {
     let locale = use_context::<UiRouteContext>().unwrap_or_default().locale;
-    if !core::has_items(items.as_slice()) {
+    let table = core::blog_post_admin_table_view(
+        items.len(),
+        total,
+        core::BlogPostAdminTableLabels {
+            empty_message: t(
+                locale.as_deref(),
+                "blog.table.empty",
+                "No posts yet. Create the first one from the module package form.",
+            ),
+            total_label: t(locale.as_deref(), "blog.table.total", "{count} post(s)"),
+            title_header: t(locale.as_deref(), "blog.table.title", "Title"),
+            slug_header: t(locale.as_deref(), "blog.table.slug", "Slug"),
+            status_header: t(locale.as_deref(), "blog.table.status", "Status"),
+            locale_header: t(locale.as_deref(), "blog.table.locale", "Locale"),
+        },
+    );
+    if table.is_empty {
         return view! {
             <div class="rounded-xl border border-dashed border-border p-12 text-center">
                 <p class="text-sm text-muted-foreground">
-                    {t(
-                        locale.as_deref(),
-                        "blog.table.empty",
-                        "No posts yet. Create the first one from the module package form.",
-                    )}
+                    {table.empty_message}
                 </p>
             </div>
         }
@@ -814,16 +845,16 @@ fn BlogPostsTable(
     view! {
         <div class="space-y-4">
             <div class="text-sm text-muted-foreground">
-                {core::count_label(&t(locale.as_deref(), "blog.table.total", "{count} post(s)"), total)}
+                {table.total_label.clone()}
             </div>
             <div class="overflow-hidden rounded-xl border border-border">
                 <table class="w-full text-sm">
                     <thead class="border-b border-border bg-muted/50">
                         <tr>
-                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t(locale.as_deref(), "blog.table.title", "Title")}</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t(locale.as_deref(), "blog.table.slug", "Slug")}</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t(locale.as_deref(), "blog.table.status", "Status")}</th>
-                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t(locale.as_deref(), "blog.table.locale", "Locale")}</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">{table.title_header.clone()}</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">{table.slug_header.clone()}</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">{table.status_header.clone()}</th>
+                            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-muted-foreground">{table.locale_header.clone()}</th>
                             <th class="px-4 py-3"></th>
                         </tr>
                     </thead>

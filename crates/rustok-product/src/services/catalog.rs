@@ -1423,9 +1423,11 @@ impl CatalogService {
         C: ConnectionTrait,
     {
         let schema = load_product_custom_fields_schema(conn, tenant_id).await?;
-        let (reserved_payload, flex_payload) = split_product_metadata_payload(&schema, &payload);
-        let (_, existing_flex_metadata) =
+        let (reserved_patch, flex_payload) = split_product_metadata_payload(&schema, &payload);
+        let (existing_reserved_metadata, existing_flex_metadata) =
             split_product_metadata_payload(&schema, existing_metadata);
+        let reserved_payload =
+            merge_product_metadata_patch(existing_reserved_metadata, reserved_patch);
         prepare_attached_values_update(
             conn,
             flex::AttachedEntityRef {
@@ -2222,6 +2224,17 @@ fn split_product_metadata_payload(
     (reserved, custom_fields)
 }
 
+fn merge_product_metadata_patch(
+    mut existing: serde_json::Map<String, Value>,
+    patch: serde_json::Map<String, Value>,
+) -> serde_json::Map<String, Value> {
+    for (key, value) in patch {
+        existing.insert(key, value);
+    }
+
+    existing
+}
+
 fn merge_reserved_product_metadata(
     mut reserved: serde_json::Map<String, Value>,
     custom_fields: Option<Value>,
@@ -2287,6 +2300,103 @@ fn localize_product_response(
     }
 
     product
+}
+
+#[cfg(test)]
+mod product_metadata_tests {
+    use std::collections::HashMap;
+
+    use serde_json::json;
+
+    use rustok_core::field_schema::{CustomFieldsSchema, FieldDefinition, FieldType};
+
+    use super::{
+        merge_product_metadata_patch, merge_reserved_product_metadata,
+        split_product_metadata_payload,
+    };
+
+    fn definition(field_key: &str) -> FieldDefinition {
+        FieldDefinition {
+            field_key: field_key.to_string(),
+            field_type: FieldType::Text,
+            label: HashMap::from([("en".to_string(), field_key.to_string())]),
+            description: None,
+            is_localized: false,
+            is_required: false,
+            default_value: None,
+            validation: None,
+            position: 0,
+            is_active: true,
+        }
+    }
+
+    #[test]
+    fn split_product_metadata_payload_routes_only_known_flex_keys() {
+        let schema = CustomFieldsSchema::new(vec![definition("fit"), definition("material")]);
+
+        let (reserved, flex) = split_product_metadata_payload(
+            &schema,
+            &json!({
+                "fit": "regular",
+                "material": "linen",
+                "source": "erp",
+                "shipping_profile": { "slug": "standard" }
+            }),
+        );
+
+        assert_eq!(reserved.get("source"), Some(&json!("erp")));
+        assert_eq!(
+            reserved.get("shipping_profile"),
+            Some(&json!({ "slug": "standard" }))
+        );
+        assert_eq!(flex.get("fit"), Some(&json!("regular")));
+        assert_eq!(flex.get("material"), Some(&json!("linen")));
+    }
+
+    #[test]
+    fn merge_product_metadata_patch_preserves_reserved_existing_keys() {
+        let existing = json!({
+            "source": "erp",
+            "shipping_profile": { "slug": "standard" }
+        })
+        .as_object()
+        .cloned()
+        .expect("existing object");
+        let patch = json!({ "source": "manual" })
+            .as_object()
+            .cloned()
+            .expect("patch object");
+
+        let merged = merge_product_metadata_patch(existing, patch);
+
+        assert_eq!(merged.get("source"), Some(&json!("manual")));
+        assert_eq!(
+            merged.get("shipping_profile"),
+            Some(&json!({ "slug": "standard" }))
+        );
+    }
+
+    #[test]
+    fn merge_reserved_product_metadata_keeps_reserved_and_writes_shared_flex_values() {
+        let reserved = json!({ "source": "erp" })
+            .as_object()
+            .cloned()
+            .expect("reserved object");
+
+        let merged = merge_reserved_product_metadata(
+            reserved,
+            Some(json!({ "fit": "regular", "material": "linen" })),
+        );
+
+        assert_eq!(
+            merged,
+            json!({
+                "source": "erp",
+                "fit": "regular",
+                "material": "linen"
+            })
+        );
+    }
 }
 
 fn normalize_public_channel_slug(channel_slug: Option<&str>) -> Option<String> {
