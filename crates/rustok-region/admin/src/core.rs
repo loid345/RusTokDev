@@ -549,6 +549,61 @@ pub fn build_region_admin_detail_header_view_model(
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionAdminDetailPanelLabels {
+    pub title: String,
+    pub subtitle: String,
+    pub policy_title: String,
+    pub countries_title: String,
+    pub empty: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RegionAdminDetailPanelViewModel {
+    Empty {
+        message: String,
+    },
+    Ready {
+        title: String,
+        subtitle: String,
+        policy_title: String,
+        countries_title: String,
+        countries_summary: String,
+        header: RegionAdminDetailHeaderViewModel,
+        policy: RegionAdminPolicySectionViewModel,
+        raw_sections: RegionAdminRawSectionsViewModel,
+    },
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn build_region_admin_detail_panel_view_model(
+    detail: Option<&RegionDetail>,
+    panel_labels: &RegionAdminDetailPanelLabels,
+    detail_labels: &RegionAdminDetailLabels,
+    header_labels: &RegionAdminDetailHeaderLabels,
+    policy_labels: &RegionAdminPolicyLabels,
+    raw_section_labels: &RegionAdminRawSectionLabels,
+) -> RegionAdminDetailPanelViewModel {
+    detail
+        .map(|detail| RegionAdminDetailPanelViewModel::Ready {
+            title: panel_labels.title.clone(),
+            subtitle: panel_labels.subtitle.clone(),
+            policy_title: panel_labels.policy_title.clone(),
+            countries_title: panel_labels.countries_title.clone(),
+            countries_summary: region_admin_countries_summary(detail),
+            header: build_region_admin_detail_header_view_model(
+                detail,
+                detail_labels,
+                header_labels,
+            ),
+            policy: build_region_admin_policy_section_view_model(detail, policy_labels),
+            raw_sections: build_region_admin_raw_sections_view_model(detail, raw_section_labels),
+        })
+        .unwrap_or_else(|| RegionAdminDetailPanelViewModel::Empty {
+            message: panel_labels.empty.clone(),
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -952,6 +1007,102 @@ mod tests {
         );
         assert_eq!(view_model.created, "created 2026-06-11");
         assert_eq!(view_model.updated, "updated 2026-06-12");
+    }
+
+    #[test]
+    fn admin_detail_panel_view_model_maps_empty_and_ready_states() {
+        let detail = crate::model::RegionDetail {
+            region: crate::model::RegionRecord {
+                id: "region-eu".to_string(),
+                tenant_id: "tenant".to_string(),
+                name: "Europe".to_string(),
+                currency_code: "EUR".to_string(),
+                tax_provider_id: Some("vat".to_string()),
+                tax_rate: "20.0".to_string(),
+                tax_included: true,
+                country_tax_policies_pretty: "[]".to_string(),
+                countries: vec!["DE".to_string(), "FR".to_string()],
+                metadata_pretty: "{}".to_string(),
+                created_at: "2026-06-11".to_string(),
+                updated_at: "2026-06-12".to_string(),
+            },
+        };
+        let panel_labels = RegionAdminDetailPanelLabels {
+            title: "Region Detail".to_string(),
+            subtitle: "Inspect policy".to_string(),
+            policy_title: "Policy Baseline".to_string(),
+            countries_title: "Country Coverage".to_string(),
+            empty: "Open a region".to_string(),
+        };
+        let detail_labels = RegionAdminDetailLabels {
+            tax_included: "tax included".to_string(),
+            tax_excluded: "tax excluded".to_string(),
+            countries: "countries".to_string(),
+            tax_rate: "tax rate".to_string(),
+        };
+        let header_labels = RegionAdminDetailHeaderLabels {
+            created: "created".to_string(),
+            updated: "updated".to_string(),
+        };
+        let policy_labels = RegionAdminPolicyLabels {
+            currency: "currency".to_string(),
+            tax_provider: "tax provider".to_string(),
+            tax_rate: "tax rate".to_string(),
+            tax_included: "tax included".to_string(),
+            tax_excluded: "tax excluded".to_string(),
+        };
+        let raw_labels = RegionAdminRawSectionLabels {
+            country_tax_policies_title: "Country Tax Policies".to_string(),
+            metadata_title: "Metadata".to_string(),
+        };
+
+        assert_eq!(
+            build_region_admin_detail_panel_view_model(
+                None,
+                &panel_labels,
+                &detail_labels,
+                &header_labels,
+                &policy_labels,
+                &raw_labels,
+            ),
+            RegionAdminDetailPanelViewModel::Empty {
+                message: "Open a region".to_string(),
+            }
+        );
+
+        let ready = build_region_admin_detail_panel_view_model(
+            Some(&detail),
+            &panel_labels,
+            &detail_labels,
+            &header_labels,
+            &policy_labels,
+            &raw_labels,
+        );
+
+        match ready {
+            RegionAdminDetailPanelViewModel::Ready {
+                title,
+                subtitle,
+                policy_title,
+                countries_title,
+                countries_summary,
+                header,
+                policy,
+                raw_sections,
+            } => {
+                assert_eq!(title, "Region Detail");
+                assert_eq!(subtitle, "Inspect policy");
+                assert_eq!(policy_title, "Policy Baseline");
+                assert_eq!(countries_title, "Country Coverage");
+                assert_eq!(countries_summary, "DE, FR");
+                assert_eq!(header.name, "Europe");
+                assert_eq!(policy.rows.len(), 4);
+                assert_eq!(raw_sections.metadata.body, "{}");
+            }
+            RegionAdminDetailPanelViewModel::Empty { .. } => {
+                panic!("expected ready detail panel view-model")
+            }
+        }
     }
 
     #[test]

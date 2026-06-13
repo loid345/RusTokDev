@@ -5,11 +5,12 @@ use leptos_ui_routing::{use_route_query_value, use_route_query_writer};
 use rustok_api::UiRouteContext;
 
 use crate::core::{
-    RegionAdminDetailHeaderLabels, RegionAdminDetailLabels, RegionAdminEditorFieldLabels,
-    RegionAdminEditorFormState, RegionAdminEditorLabels, RegionAdminListHeaderLabels,
-    RegionAdminListLabels, RegionAdminListStateLabels, RegionAdminListStateViewModel,
-    RegionAdminPolicyLabels, RegionAdminRawSectionLabels, RegionAdminRouteQueryIntent,
-    RegionAdminRouteQueryUpdate, RegionAdminShellLabels, REGION_ADMIN_SELECTED_QUERY_KEY,
+    RegionAdminDetailHeaderLabels, RegionAdminDetailLabels, RegionAdminDetailPanelLabels,
+    RegionAdminDetailPanelViewModel, RegionAdminEditorFieldLabels, RegionAdminEditorFormState,
+    RegionAdminEditorLabels, RegionAdminListHeaderLabels, RegionAdminListLabels,
+    RegionAdminListStateLabels, RegionAdminListStateViewModel, RegionAdminPolicyLabels,
+    RegionAdminRawSectionLabels, RegionAdminRouteQueryIntent, RegionAdminRouteQueryUpdate,
+    RegionAdminShellLabels, REGION_ADMIN_SELECTED_QUERY_KEY,
 };
 use crate::i18n::t;
 use crate::model::RegionDetail;
@@ -246,6 +247,30 @@ pub fn RegionAdmin() -> impl IntoView {
         metadata_title: t(ui_locale.as_deref(), "region.section.metadata", "Metadata"),
     };
 
+    let detail_panel_labels = RegionAdminDetailPanelLabels {
+        title: t(ui_locale.as_deref(), "region.detail.title", "Region Detail"),
+        subtitle: t(
+            ui_locale.as_deref(),
+            "region.detail.subtitle",
+            "Inspect country coverage, currency baseline and tax flags from the region-owned route.",
+        ),
+        policy_title: t(
+            ui_locale.as_deref(),
+            "region.section.policy",
+            "Policy Baseline",
+        ),
+        countries_title: t(
+            ui_locale.as_deref(),
+            "region.section.countries",
+            "Country Coverage",
+        ),
+        empty: t(
+            ui_locale.as_deref(),
+            "region.detail.empty",
+            "Open a region to inspect policy details, country coverage and raw metadata.",
+        ),
+    };
+
     let reset_form = move || {
         clear_region_form(
             set_editing_id,
@@ -403,8 +428,6 @@ pub fn RegionAdmin() -> impl IntoView {
         });
     };
 
-    let ui_locale_for_detail = ui_locale.clone();
-    let ui_locale_for_empty = ui_locale.clone();
     let ui_locale_for_editor = ui_locale.clone();
     let list_query_writer = query_writer.clone();
     let reset_query_writer = query_writer.clone();
@@ -565,63 +588,74 @@ pub fn RegionAdmin() -> impl IntoView {
                         </form>
                     </section>
 
-                    {move || selected.get().map(|detail| {
-                        let countries_summary = crate::core::region_admin_countries_summary(&detail);
-                        let header_view_model = crate::core::build_region_admin_detail_header_view_model(
-                            &detail,
-                            &detail_labels,
-                            &detail_header_labels,
-                        );
-                        let policy_view_model = crate::core::build_region_admin_policy_section_view_model(&detail, &policy_labels);
-                        let raw_sections = crate::core::build_region_admin_raw_sections_view_model(&detail, &raw_section_labels);
-                        view! {
+                    {move || match crate::core::build_region_admin_detail_panel_view_model(
+                        selected.get().as_ref(),
+                        &detail_panel_labels,
+                        &detail_labels,
+                        &detail_header_labels,
+                        &policy_labels,
+                        &raw_section_labels,
+                    ) {
+                        RegionAdminDetailPanelViewModel::Ready {
+                            title,
+                            subtitle,
+                            policy_title,
+                            countries_title,
+                            countries_summary,
+                            header,
+                            policy,
+                            raw_sections,
+                        } => view! {
                             <section class="space-y-6 rounded-3xl border border-border bg-card p-6 shadow-sm">
                                 <div class="space-y-2">
-                                    <h3 class="text-lg font-semibold text-card-foreground">{t(ui_locale_for_detail.as_deref(), "region.detail.title", "Region Detail")}</h3>
-                                    <p class="text-sm text-muted-foreground">{t(ui_locale_for_detail.as_deref(), "region.detail.subtitle", "Inspect country coverage, currency baseline and tax flags from the region-owned route.")}</p>
+                                    <h3 class="text-lg font-semibold text-card-foreground">{title}</h3>
+                                    <p class="text-sm text-muted-foreground">{subtitle}</p>
                                 </div>
 
                                 <div class="rounded-2xl border border-border bg-background p-5">
                                     <div class="flex flex-wrap items-start justify-between gap-3">
                                         <div class="space-y-2">
-                                            <h4 class="text-base font-semibold text-card-foreground">{header_view_model.name}</h4>
-                                            <p class="text-sm text-muted-foreground">{header_view_model.summary}</p>
-                                            <p class="text-xs text-muted-foreground">{header_view_model.meta}</p>
+                                            <h4 class="text-base font-semibold text-card-foreground">{header.name}</h4>
+                                            <p class="text-sm text-muted-foreground">{header.summary}</p>
+                                            <p class="text-xs text-muted-foreground">{header.meta}</p>
                                         </div>
                                         <div class="text-right text-xs text-muted-foreground">
-                                            <p>{header_view_model.created}</p>
-                                            <p>{header_view_model.updated}</p>
+                                            <p>{header.created}</p>
+                                            <p>{header.updated}</p>
                                         </div>
                                     </div>
                                 </div>
 
                                 <div class="grid gap-4 md:grid-cols-2">
                                     <div class="rounded-2xl border border-border bg-background p-5">
-                                        <h4 class="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">{t(ui_locale_for_detail.as_deref(), "region.section.policy", "Policy Baseline")}</h4>
+                                        <h4 class="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">{policy_title}</h4>
                                         <div class="mt-4 space-y-2 text-sm text-muted-foreground">
-                                            {policy_view_model.rows.into_iter().map(|row| {
+                                            {policy.rows.into_iter().map(|row| {
                                                 view! { <p>{row.text}</p> }
                                             }).collect_view()}
                                         </div>
                                     </div>
                                     <div class="rounded-2xl border border-border bg-background p-5">
-                                        <h4 class="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">{t(ui_locale_for_detail.as_deref(), "region.section.countries", "Country Coverage")}</h4>
-                                        <p class="mt-4 text-sm text-muted-foreground">{countries_summary.clone()}</p>
+                                        <h4 class="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">{countries_title}</h4>
+                                        <p class="mt-4 text-sm text-muted-foreground">{countries_summary}</p>
                                     </div>
                                 </div>
 
                                 <div class="rounded-2xl border border-border bg-background p-5">
-                                    <h4 class="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">{raw_sections.country_tax_policies.title.clone()}</h4>
-                                    <pre class="mt-4 overflow-x-auto whitespace-pre-wrap text-xs text-muted-foreground">{raw_sections.country_tax_policies.body.clone()}</pre>
+                                    <h4 class="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">{raw_sections.country_tax_policies.title}</h4>
+                                    <pre class="mt-4 overflow-x-auto whitespace-pre-wrap text-xs text-muted-foreground">{raw_sections.country_tax_policies.body}</pre>
                                 </div>
 
                                 <div class="rounded-2xl border border-border bg-background p-5">
-                                    <h4 class="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">{raw_sections.metadata.title.clone()}</h4>
-                                    <pre class="mt-4 overflow-x-auto whitespace-pre-wrap text-xs text-muted-foreground">{raw_sections.metadata.body.clone()}</pre>
+                                    <h4 class="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">{raw_sections.metadata.title}</h4>
+                                    <pre class="mt-4 overflow-x-auto whitespace-pre-wrap text-xs text-muted-foreground">{raw_sections.metadata.body}</pre>
                                 </div>
                             </section>
-                        }.into_any()
-                    }).unwrap_or_else(|| view! { <section class="rounded-3xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">{t(ui_locale_for_empty.as_deref(), "region.detail.empty", "Open a region to inspect policy details, country coverage and raw metadata.")}</section> }.into_any())}
+                        }.into_any(),
+                        RegionAdminDetailPanelViewModel::Empty { message } => view! {
+                            <section class="rounded-3xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">{message}</section>
+                        }.into_any(),
+                    }}
                 </section>
             </div>
         </section>

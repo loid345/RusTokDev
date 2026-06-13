@@ -7,8 +7,8 @@
 ## Execution checkpoint
 
 - Current phase: ffa_ui_leptos_adapter_split_slice
-- Last checkpoint: FFA slice #28 перенесла admin route/query writer policy в Leptos-free core: `RegionAdminRouteQueryUpdate` теперь описывает `PushSelected`/`ReplaceSelected`/`ClearSelected` для open/save/new действий, а Leptos adapter только применяет готовые host query updates.
-- Next step: Продолжить FFA-first sequencing к thin host-adapter smoke для route/query writer либо добрать следующий небольшой admin detail empty/error state slice без изменения native/GraphQL contracts.
+- Last checkpoint: FFA slice #29 перенесла admin detail panel empty/ready state aggregation в Leptos-free core: `RegionAdminDetailPanelViewModel` теперь собирает selected-region detail labels, header, policy rows, countries summary и raw sections до render слоя.
+- Next step: Продолжить FFA-first sequencing к тонкому host-adapter smoke для route/query writer либо добрать следующий небольшой admin mutation outcome/error state slice без изменения native/GraphQL contracts.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок; при изменении status code/locale key/DOM evidence сначала обновлять verify script и его test fixture.
 - Last updated at (UTC): 2026-06-13T00:00:00Z
@@ -49,7 +49,8 @@
   - FFA slice #25 добавила admin shell/list header view-models (`RegionAdminShellViewModel`, `RegionAdminListHeaderViewModel`): tenant subtitle replacement и fallback policy выполняются в core, а Leptos adapter рендерит готовые header strings;
   - FFA slice #26 добавила admin list state view-model (`RegionAdminListStateViewModel`) для loading/error/empty/ready branches, error context formatting, ready item rows и open action copy без Leptos runtime;
   - FFA slice #27 добавила admin route/query intent (`RegionAdminRouteQueryIntent`) для selected-region query normalization и `Open`/`Clear` decision policy без Leptos runtime;
-  - FFA slice #28 добавила admin route/query writer update contract (`RegionAdminRouteQueryUpdate`, `REGION_ADMIN_SELECTED_QUERY_KEY`) для open/save/new host query mutations без Leptos-owned key/action policy.
+  - FFA slice #28 добавила admin route/query writer update contract (`RegionAdminRouteQueryUpdate`, `REGION_ADMIN_SELECTED_QUERY_KEY`) для open/save/new host query mutations без Leptos-owned key/action policy;
+  - FFA slice #29 добавила admin detail panel view-model (`RegionAdminDetailPanelViewModel`) для empty/ready selected-region branches, detail labels, header, policy rows, countries summary и raw sections без Leptos runtime.
 - Last verified at (UTC): 2026-06-13T00:00:00Z
 - Owner: `rustok-region` module team
 
