@@ -191,6 +191,44 @@ pub fn prepare_region_admin_submit(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionAdminSubmitErrorLabels {
+    pub locale_unavailable: String,
+    pub required_fields: RegionRequiredFieldLabels,
+}
+
+pub fn region_admin_submit_error_message(
+    error: RegionAdminSubmitError,
+    labels: &RegionAdminSubmitErrorLabels,
+) -> String {
+    match error {
+        RegionAdminSubmitError::HostLocaleUnavailable => labels.locale_unavailable.clone(),
+        RegionAdminSubmitError::MissingRequiredField(field) => {
+            region_required_field_message(field, &labels.required_fields)
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RegionAdminTransportErrorLabels {
+    pub load_region_context: String,
+    pub save_region_context: String,
+}
+
+pub fn region_admin_load_region_error_message(
+    error: &str,
+    labels: &RegionAdminTransportErrorLabels,
+) -> String {
+    error_with_context(labels.load_region_context.as_str(), error)
+}
+
+pub fn region_admin_save_region_error_message(
+    error: &str,
+    labels: &RegionAdminTransportErrorLabels,
+) -> String {
+    error_with_context(labels.save_region_context.as_str(), error)
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegionAdminShellLabels {
     pub badge: String,
     pub title: String,
@@ -336,13 +374,13 @@ pub fn region_admin_open_detail_success(detail: RegionDetail) -> RegionAdminOpen
 }
 
 pub fn region_admin_open_detail_error(
-    context: &str,
     error: &str,
+    labels: &RegionAdminTransportErrorLabels,
 ) -> RegionAdminOpenDetailViewModel {
     RegionAdminOpenDetailViewModel {
         selected: None,
         form_state: RegionAdminEditorFormState::empty(),
-        error: Some(error_with_context(context, error)),
+        error: Some(region_admin_load_region_error_message(error, labels)),
     }
 }
 
@@ -804,6 +842,45 @@ mod tests {
         assert_eq!(
             region_required_field_message(RegionRequiredField::Countries, &labels),
             "At least one country code is required."
+        );
+    }
+
+    #[test]
+    fn admin_submit_and_transport_errors_map_copy_without_ui_runtime() {
+        let submit_labels = RegionAdminSubmitErrorLabels {
+            locale_unavailable: "Host locale is unavailable.".to_string(),
+            required_fields: RegionRequiredFieldLabels {
+                name: "Name is required.".to_string(),
+                currency_code: "Currency code is required.".to_string(),
+                countries: "At least one country code is required.".to_string(),
+            },
+        };
+        let transport_labels = RegionAdminTransportErrorLabels {
+            load_region_context: "Failed to load region".to_string(),
+            save_region_context: "Failed to save region".to_string(),
+        };
+
+        assert_eq!(
+            region_admin_submit_error_message(
+                RegionAdminSubmitError::HostLocaleUnavailable,
+                &submit_labels,
+            ),
+            "Host locale is unavailable."
+        );
+        assert_eq!(
+            region_admin_submit_error_message(
+                RegionAdminSubmitError::MissingRequiredField(RegionRequiredField::Countries),
+                &submit_labels,
+            ),
+            "At least one country code is required."
+        );
+        assert_eq!(
+            region_admin_load_region_error_message("timeout", &transport_labels),
+            "Failed to load region: timeout"
+        );
+        assert_eq!(
+            region_admin_save_region_error_message("validation failed", &transport_labels),
+            "Failed to save region: validation failed"
         );
     }
 
@@ -1434,7 +1511,11 @@ mod tests {
         assert_eq!(success.form_state.countries, "DE, FR");
         assert!(success.selected.is_some());
 
-        let error = region_admin_open_detail_error("Failed to load region", "timeout");
+        let transport_error_labels = RegionAdminTransportErrorLabels {
+            load_region_context: "Failed to load region".to_string(),
+            save_region_context: "Failed to save region".to_string(),
+        };
+        let error = region_admin_open_detail_error("timeout", &transport_error_labels);
 
         assert_eq!(error.selected, None);
         assert_eq!(error.form_state, RegionAdminEditorFormState::empty());
