@@ -124,6 +124,26 @@ pub fn category_sidebar_total_count(items: &[CategoryListItem]) -> usize {
     items.len()
 }
 
+pub fn selected_category_filter_label(
+    categories: Option<Result<Vec<CategoryListItem>, String>>,
+    selected_id: &str,
+    all_categories_label: &str,
+    filtered_category_label: &str,
+) -> String {
+    if selected_id.trim().is_empty() {
+        return all_categories_label.to_string();
+    }
+
+    match categories {
+        Some(Ok(items)) => items
+            .into_iter()
+            .find(|item| item.id == selected_id)
+            .map(|item| item.name)
+            .unwrap_or_else(|| filtered_category_label.to_string()),
+        _ => all_categories_label.to_string(),
+    }
+}
+
 pub fn reply_card_view_model(item: &ReplyListItem) -> ForumAdminReplyCardViewModel {
     ForumAdminReplyCardViewModel {
         status: item.status.clone(),
@@ -573,6 +593,46 @@ mod tests {
         let topics = forum_admin_header_view_model(false, &labels);
         assert_eq!(topics.title, "Moderation workspace");
         assert_eq!(topics.body, "Review topic flow");
+    }
+
+    #[test]
+    fn resolves_selected_category_filter_label() {
+        assert_eq!(
+            selected_category_filter_label(
+                some_category_items(),
+                "category-2",
+                "All categories",
+                "Filtered category",
+            ),
+            "Support"
+        );
+        assert_eq!(
+            selected_category_filter_label(
+                some_category_items(),
+                "missing",
+                "All categories",
+                "Filtered category",
+            ),
+            "Filtered category"
+        );
+        assert_eq!(
+            selected_category_filter_label(
+                some_category_items(),
+                "  ",
+                "All categories",
+                "Filtered category",
+            ),
+            "All categories"
+        );
+        assert_eq!(
+            selected_category_filter_label(
+                Some(Err("boom".to_string())),
+                "category-2",
+                "All categories",
+                "Filtered category",
+            ),
+            "All categories"
+        );
     }
 
     #[test]

@@ -12,9 +12,9 @@ use crate::core::{
     deleted_selection_matches, format_count, forum_admin_collection_state,
     forum_admin_header_view_model, forum_admin_open_query_intent, forum_admin_reset_query_intent,
     forum_admin_saved_query_intent, parse_tags, reply_card_view_model, reply_count_label,
-    result_item_count, selected_query_id, topic_card_view_model, topic_category_filter,
-    CategoryFormSnapshot, ForumAdminCategoryRenderLabels, ForumAdminCollectionState,
-    ForumAdminFormError, ForumAdminHeaderLabels, ForumAdminQuerySurface,
+    result_item_count, selected_category_filter_label, selected_query_id, topic_card_view_model,
+    topic_category_filter, CategoryFormSnapshot, ForumAdminCategoryRenderLabels,
+    ForumAdminCollectionState, ForumAdminFormError, ForumAdminHeaderLabels, ForumAdminQuerySurface,
     ForumAdminRouteQueryIntent, ForumAdminRouteQueryOperation, ForumAdminTopicRenderLabels,
     TopicFormSnapshot,
 };
@@ -1270,20 +1270,13 @@ fn TopicsPage(
     );
     let preview_title = t(ui_locale.as_deref(), "forum.topics.previewTitle", "Replies");
     let shown_template = t(ui_locale.as_deref(), "forum.topics.shown", "{count} shown");
-    let selected_category_name = Memo::new(move |_| match categories.get() {
-        Some(Ok(items)) => {
-            let selected_id = filter_category_id.get();
-            if selected_id.is_empty() {
-                all_categories_label.clone()
-            } else {
-                items
-                    .into_iter()
-                    .find(|item| item.id == selected_id)
-                    .map(|item| item.name)
-                    .unwrap_or_else(|| filtered_category_label.clone())
-            }
-        }
-        _ => all_categories_label.clone(),
+    let selected_category_name = Memo::new(move |_| {
+        selected_category_filter_label(
+            categories.get(),
+            filter_category_id.get().as_str(),
+            all_categories_label.as_str(),
+            filtered_category_label.as_str(),
+        )
     });
     let topic_form_tag_count = move || {
         ready_template.replace(
