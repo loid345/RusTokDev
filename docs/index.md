@@ -53,6 +53,7 @@
 - [Flutter mobile package catalog/cart](../rustok_mobile/packages/rustok_catalog_mobile/README.md)
 - [Быстрый старт для Admin ↔ Server](./UI/admin-server-connection-quickstart.md)
 - [SEO runtime/control-plane contracts (`rustok-seo`)](../crates/rustok-seo/docs/README.md)
+- [SEO operations runbook](../crates/rustok-seo/docs/operations-runbook.md)
 - [Каталог Rust UI-компонентов](./UI/rust-ui-component-catalog.md)
 - [Трек rich-text и визуального page builder](./modules/tiptap-page-builder-implementation-plan.md)
 - [Архитектура i18n](./architecture/i18n.md)

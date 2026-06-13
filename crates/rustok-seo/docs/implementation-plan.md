@@ -4,19 +4,19 @@
 
 ## Execution checkpoint
 
-- Current phase: `phase_d7c_route_ownership_fixture_parity`
-- Last checkpoint: D7 Milestones A–C закрыты как fixture/evidence baseline: добавлен `apps/next-frontend/contracts/seo/runtime-parity-fixtures.json` с fallback behavior cases, route ownership matrix, двумя non-home metadata smoke routes и allowlist допустимых long-tail differences; добавлен быстрый verifier без компиляции.
-- Next step: перейти к D8 lightweight verification matrix без долгих компиляций: прогнать fixture verifier, Next lint/typecheck по возможности и точечные SEO unit checks.
+- Current phase: `phase_d8_lightweight_verification_matrix`
+- Last checkpoint: D8 lightweight baseline начат без компиляций: fixture verifier расширен до проверки schema/version, fallback reason/source, route owner invariants, smoke assertions, allowlist и compile-free verification matrix; добавлен seed evidence packet в `apps/next-frontend/contracts/seo/runtime-parity-fixtures.json` и D9 operations runbook.
+- Next step: продолжить D8 живым CI/runtime evidence packet против поднятого backend и затем закрыть оставшиеся D9 sign-off документы.
 - Open blockers:
   - Для D8 остаётся получить живой CI/runtime evidence packet против поднятого backend.
-  - Для D9 остаётся финализировать runbooks backlog/index/replay.
+  - Для D9 остаётся дополнить runbooks live incident evidence и закрыть owner sign-off checklist.
 - Hand-off notes for next agent:
   - Не обходить boundary `MediaImageDescriptor` и existing `SeoPageContext` contract.
   - REST/GraphQL расширять только additive-изменениями в стабильном `v1`.
   - Для delivery tracker держать invariant: один idempotency key = один фактический state transition.
   - Для replay mode сохранять forward-only semantics (`not_started -> repair_only -> replay_requested -> replaying -> replay_completed`) без backward transitions.
   - Для Next runtime adapter сохранять semantic error mapping (`BAD_USER_INPUT` / `PERMISSION_DENIED` / `NOT_FOUND` / transport failures) и не возвращаться к blanket `catch {}`.
-- Last updated at (UTC): 2026-06-13T00:00:00Z
+- Last updated at (UTC): 2026-06-13T12:00:00Z
 
 ## FFA/FBA status block
 
@@ -236,11 +236,13 @@
   - [ ] D.1 Прогнать unit coverage для normalization/validation/idempotency/replay transitions.
   - [ ] D.2 Прогнать `rustok-seo` integration matrix (GraphQL/REST parity + outbox/index pipeline + tenant/module gating).
   - [ ] D.3 Прогнать host integration matrix (`apps/storefront`, `apps/next-frontend`, `apps/next-admin`) с RBAC/module gating parity.
-  - [ ] D.4 Собрать evidence packet (команды, логи, snapshots), закрыть high-severity parity defects.
+  - [x] D.4 Собрать lightweight evidence packet seed (без компиляции): fixture verifier + static matrix + stop criteria.
+  - [ ] D.4b Собрать live CI/runtime evidence packet (backend + hosts), закрыть high-severity parity defects.
 
 - [ ] **Batch D9 — Docs / runbooks / readiness closeout (Milestone E, operational batch)**
   - [ ] E.1 Обновить docs в `rustok-seo`, `rustok-seo-admin-support`, `rustok-seo-render`, `apps/storefront`, `apps/next-frontend`, `apps/next-admin`, central docs registry/index.
-  - [ ] E.2 Финализировать runbooks: `SEO event backlog stuck`, `Partial indexing failures`, `Replay/Reindex procedures` с rollback/stop criteria.
+  - [x] E.2 Финализировать baseline runbooks: `SEO event backlog stuck`, `Partial indexing failures`, `Replay/Reindex procedures` с rollback/stop criteria.
+  - [ ] E.2b Дополнить runbooks live incident evidence после D8 backend/host прогонов.
   - [ ] E.3 Зафиксировать owner sign-off checklist и DoD/DoR для следующего execution wave.
 
 ## Осталось сделать (оценка на 2026-06-08)
@@ -279,15 +281,18 @@
 
 ### Milestone D — Verification matrix execution
 
-- [ ] D.1 Unit/integration/host matrix прогон.
+- [x] D.1 Lightweight fixture/static matrix seed без компиляции.
+  - [ ] D.1b Unit/integration/host matrix прогон в CI/runtime окружении.
 - [ ] D.2 RBAC/module gating parity checks.
 - [ ] D.3 Replay/index pipeline regression checks.
-- [ ] D.4 Evidence packet + high-severity defect closure.
+- [x] D.4 Lightweight evidence packet seed + stop criteria.
+  - [ ] D.4b Live evidence packet + high-severity defect closure.
 
 ### Milestone E — Docs / runbooks / readiness closeout
 
-- [ ] E.1 Docs sync (`rustok-seo*`, host docs, central docs).
-- [ ] E.2 Operational runbooks (backlog stuck / partial indexing / replay-reindex).
+- [ ] E.1 Docs sync (`rustok-seo*`, host docs, central docs) — частично обновлены `rustok-seo` docs и central index для operations runbook.
+- [x] E.2 Baseline operational runbooks (backlog stuck / partial indexing / replay-reindex).
+  - [ ] E.2b Live incident examples после D8 runtime прогонов.
 - [ ] E.3 Owner sign-off checklist + DoD/DoR finalization.
 
 ## Проверка
