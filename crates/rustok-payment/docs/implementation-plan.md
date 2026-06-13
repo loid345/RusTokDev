@@ -6,7 +6,7 @@ provider SPI и richer payment lifecycle остаются в backlog umbrella `r
 ## Execution checkpoint
 
 - Current phase: storefront_ffa_slice
-- Last checkpoint: Payment storefront FFA slice introduced `rustok-payment/storefront`: payment-owned Leptos card presentation and Leptos-free view-model/fallback policy for checkout payment collection handoff, consumed by `rustok-commerce-storefront` instead of rendering payment copy inline.
+- Last checkpoint: Payment storefront FFA slice introduced `rustok-payment/storefront`: payment-owned Leptos card/action presentation and Leptos-free view-model/fallback/action-label policy for checkout payment collection handoff, consumed by `rustok-commerce-storefront` instead of rendering payment copy inline.
 - Next step: Continue by moving payment collection transport/read actions behind payment-owned storefront transport when the host route is ready; keep commerce only as checkout orchestration until that cutover.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок.
@@ -19,7 +19,7 @@ provider SPI и richer payment lifecycle остаются в backlog umbrella `r
 - Structural shape: `core_only`
 - Evidence:
   - модуль ведётся в ускоренном FFA migration track; FBA остаётся `not_started` до закрытия FFA phase-gate как часть ecommerce family;
-  - storefront UI slice now lives in `storefront/src/core.rs` + `storefront/src/ui/leptos.rs` and owns payment-collection card presentation/fallback policy;
+  - storefront UI slice now lives in `storefront/src/core.rs` + `storefront/src/ui/leptos.rs` and owns payment-collection card presentation/fallback policy plus create/reuse action button labels;
   - любые изменения UI/transport boundary должны фиксироваться с parity/boundary evidence в этом же инкременте.
 - Last verified at (UTC): 2026-05-24T00:00:00Z
 - Owner: `rustok-payment` module team

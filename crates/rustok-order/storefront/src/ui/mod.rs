@@ -1,3 +1,3 @@
 pub mod leptos;
 
-pub use leptos::OrderCheckoutResultCard;
+pub use leptos::{OrderCheckoutCompleteButton, OrderCheckoutResultCard};

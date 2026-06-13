@@ -5,10 +5,14 @@ use rustok_api::UiRouteContext;
 use rustok_cart_storefront::core::CartCheckoutHandoffLabels;
 use rustok_cart_storefront::CartCheckoutHandoffCard;
 use rustok_fulfillment_storefront::FulfillmentShippingHandoffNotice;
-use rustok_order_storefront::core::{OrderCheckoutResultData, OrderCheckoutResultLabels};
-use rustok_order_storefront::OrderCheckoutResultCard;
-use rustok_payment_storefront::core::{PaymentCollectionCardData, PaymentCollectionCardLabels};
-use rustok_payment_storefront::PaymentCollectionCard;
+use rustok_order_storefront::core::{
+    OrderCheckoutActionLabels, OrderCheckoutResultData, OrderCheckoutResultLabels,
+};
+use rustok_order_storefront::{OrderCheckoutCompleteButton, OrderCheckoutResultCard};
+use rustok_payment_storefront::core::{
+    PaymentCollectionActionLabels, PaymentCollectionCardData, PaymentCollectionCardLabels,
+};
+use rustok_payment_storefront::{PaymentCollectionActionButton, PaymentCollectionCard};
 
 use crate::i18n::t;
 use crate::model::{
@@ -240,10 +244,6 @@ fn CheckoutWorkspace(
                 Some((cart, payment_collection)) => {
                     let cart_id = cart.id.clone();
                     let cart_status = cart.status.clone();
-                    let create_pending_locale = locale.clone();
-                    let create_action_locale = locale.clone();
-                    let complete_pending_locale = locale.clone();
-                    let complete_action_locale = locale.clone();
                     view! {
                     <article class="rounded-3xl border border-border bg-background p-8">
                         <div class="space-y-3">
@@ -274,40 +274,18 @@ fn CheckoutWorkspace(
                             <a class="inline-flex items-center justify-center rounded-full border border-border px-4 py-2 text-sm font-medium text-card-foreground transition hover:bg-muted" href=cart_href>
                                 {t(locale.as_deref(), "commerce.checkout.openCart", "Open cart workspace")}
                             </a>
-                            <button
-                                type="button"
-                                class="inline-flex items-center justify-center rounded-full border border-border px-4 py-2 text-sm font-medium text-card-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-                                disabled=move || busy.get()
-                                on:click={
-                                    let cart_id = cart.id.clone();
-                                    move |_| on_create_payment_collection.run(cart_id.clone())
-                                }
-                            >
-                                {move || {
-                                    if busy.get() {
-                                        t(create_pending_locale.as_deref(), "commerce.checkout.pending", "Processing...")
-                                    } else {
-                                        t(create_action_locale.as_deref(), "commerce.checkout.createCollection", "Create or reuse payment collection")
-                                    }
-                                }}
-                            </button>
-                            <button
-                                type="button"
-                                class="inline-flex items-center justify-center rounded-full border border-primary bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 md:col-span-2"
-                                disabled=move || busy.get()
-                                on:click={
-                                    let cart_id = cart.id.clone();
-                                    move |_| on_complete_checkout.run(cart_id.clone())
-                                }
-                            >
-                                {move || {
-                                    if busy.get() {
-                                        t(complete_pending_locale.as_deref(), "commerce.checkout.pending", "Processing...")
-                                    } else {
-                                        t(complete_action_locale.as_deref(), "commerce.checkout.complete", "Complete checkout")
-                                    }
-                                }}
-                            </button>
+                            <PaymentCollectionActionButton
+                                cart_id=cart.id.clone()
+                                busy
+                                labels=payment_collection_action_labels(locale.as_deref())
+                                on_create_payment_collection
+                            />
+                            <OrderCheckoutCompleteButton
+                                cart_id=cart.id.clone()
+                                busy
+                                labels=order_checkout_action_labels(locale.as_deref())
+                                on_complete_checkout
+                            />
                         </div>
                         <div class="mt-6">
                             <PaymentCollectionCard
@@ -343,6 +321,24 @@ fn cart_checkout_handoff_labels(locale: Option<&str>) -> CartCheckoutHandoffLabe
             "commerce.checkout.cart.moduleOwnership",
             "Cart totals, line items and adjustments stay in the cart module workspace.",
         ),
+    }
+}
+
+fn payment_collection_action_labels(locale: Option<&str>) -> PaymentCollectionActionLabels {
+    PaymentCollectionActionLabels {
+        pending: t(locale, "commerce.checkout.pending", "Processing..."),
+        create_or_reuse: t(
+            locale,
+            "commerce.checkout.createCollection",
+            "Create or reuse payment collection",
+        ),
+    }
+}
+
+fn order_checkout_action_labels(locale: Option<&str>) -> OrderCheckoutActionLabels {
+    OrderCheckoutActionLabels {
+        pending: t(locale, "commerce.checkout.pending", "Processing..."),
+        complete: t(locale, "commerce.checkout.complete", "Complete checkout"),
     }
 }
 

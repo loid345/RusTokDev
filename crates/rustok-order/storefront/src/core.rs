@@ -54,3 +54,17 @@ mod tests {
         assert_eq!(view_model.order_status_label, "Order status");
     }
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct OrderCheckoutActionLabels {
+    pub pending: String,
+    pub complete: String,
+}
+
+pub fn order_checkout_action_label(busy: bool, labels: &OrderCheckoutActionLabels) -> String {
+    if busy {
+        labels.pending.clone()
+    } else {
+        labels.complete.clone()
+    }
+}

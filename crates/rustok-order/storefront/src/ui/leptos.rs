@@ -1,7 +1,8 @@
 use leptos::prelude::*;
 
 use crate::core::{
-    build_order_checkout_result_view_model, OrderCheckoutResultData, OrderCheckoutResultLabels,
+    build_order_checkout_result_view_model, order_checkout_action_label, OrderCheckoutActionLabels,
+    OrderCheckoutResultData, OrderCheckoutResultLabels,
 };
 
 #[component]
@@ -31,5 +32,27 @@ pub fn OrderCheckoutResultCard(
                 </article>
             </div>
         </article>
+    }
+}
+
+#[component]
+pub fn OrderCheckoutCompleteButton(
+    cart_id: String,
+    busy: ReadSignal<bool>,
+    labels: OrderCheckoutActionLabels,
+    on_complete_checkout: Callback<String>,
+) -> impl IntoView {
+    view! {
+        <button
+            type="button"
+            class="inline-flex items-center justify-center rounded-full border border-primary bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60 md:col-span-2"
+            disabled=move || busy.get()
+            on:click={
+                let cart_id = cart_id.clone();
+                move |_| on_complete_checkout.run(cart_id.clone())
+            }
+        >
+            {move || order_checkout_action_label(busy.get(), &labels)}
+        </button>
     }
 }

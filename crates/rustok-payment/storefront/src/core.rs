@@ -67,3 +67,20 @@ mod tests {
         assert_eq!(view_model.status, "pending");
     }
 }
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PaymentCollectionActionLabels {
+    pub pending: String,
+    pub create_or_reuse: String,
+}
+
+pub fn payment_collection_action_label(
+    busy: bool,
+    labels: &PaymentCollectionActionLabels,
+) -> String {
+    if busy {
+        labels.pending.clone()
+    } else {
+        labels.create_or_reuse.clone()
+    }
+}

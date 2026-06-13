@@ -1,8 +1,8 @@
 use leptos::prelude::*;
 
 use crate::core::{
-    build_payment_collection_card_view_model, PaymentCollectionCardData,
-    PaymentCollectionCardLabels,
+    build_payment_collection_card_view_model, payment_collection_action_label,
+    PaymentCollectionActionLabels, PaymentCollectionCardData, PaymentCollectionCardLabels,
 };
 
 #[component]
@@ -24,5 +24,27 @@ pub fn PaymentCollectionCard(
                 {format!("{} · {}", view_model.collection_id, view_model.status)}
             </div>
         </article>
+    }
+}
+
+#[component]
+pub fn PaymentCollectionActionButton(
+    cart_id: String,
+    busy: ReadSignal<bool>,
+    labels: PaymentCollectionActionLabels,
+    on_create_payment_collection: Callback<String>,
+) -> impl IntoView {
+    view! {
+        <button
+            type="button"
+            class="inline-flex items-center justify-center rounded-full border border-border px-4 py-2 text-sm font-medium text-card-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
+            disabled=move || busy.get()
+            on:click={
+                let cart_id = cart_id.clone();
+                move |_| on_create_payment_collection.run(cart_id.clone())
+            }
+        >
+            {move || payment_collection_action_label(busy.get(), &labels)}
+        </button>
     }
 }
