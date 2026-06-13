@@ -653,6 +653,37 @@ pub(crate) fn build_product_admin_status_mutation_command(
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) enum ProductAdminStatusMutationOutcome {
+    Changed,
+    TransportError(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ProductAdminStatusMutationResultViewModel {
+    pub refresh: bool,
+    pub error_message: Option<String>,
+}
+
+pub(crate) fn build_product_admin_status_mutation_result_view_model(
+    locale: Option<&str>,
+    outcome: ProductAdminStatusMutationOutcome,
+) -> ProductAdminStatusMutationResultViewModel {
+    match outcome {
+        ProductAdminStatusMutationOutcome::Changed => ProductAdminStatusMutationResultViewModel {
+            refresh: true,
+            error_message: None,
+        },
+        ProductAdminStatusMutationOutcome::TransportError(err) => {
+            let error_copy = build_product_admin_error_copy(locale);
+            ProductAdminStatusMutationResultViewModel {
+                refresh: false,
+                error_message: Some(error_copy.change_status_failure(err)),
+            }
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct ProductAdminDeleteCommand {
     pub tenant_id: String,
     pub actor_id: String,
@@ -1291,6 +1322,30 @@ mod tests {
         assert_eq!(
             build_product_admin_delete_command(None, "product-1".to_string()).unwrap_err(),
             ProductAdminDeleteValidationError::BootstrapUnavailable
+        );
+    }
+
+    #[test]
+    fn product_admin_status_mutation_result_view_model_maps_outcomes() {
+        assert_eq!(
+            build_product_admin_status_mutation_result_view_model(
+                Some("en"),
+                ProductAdminStatusMutationOutcome::Changed,
+            ),
+            ProductAdminStatusMutationResultViewModel {
+                refresh: true,
+                error_message: None,
+            },
+        );
+        assert_eq!(
+            build_product_admin_status_mutation_result_view_model(
+                Some("en"),
+                ProductAdminStatusMutationOutcome::TransportError("network".to_string()),
+            ),
+            ProductAdminStatusMutationResultViewModel {
+                refresh: false,
+                error_message: Some("Failed to change status: network".to_string()),
+            },
         );
     }
 

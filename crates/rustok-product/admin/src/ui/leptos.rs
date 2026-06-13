@@ -18,14 +18,15 @@ use crate::core::{
     build_product_admin_profile_panel_loading_view_model,
     build_product_admin_profile_panel_ready_view_model, build_product_admin_save_command,
     build_product_admin_shell_view_model, build_product_admin_status_mutation_command,
+    build_product_admin_status_mutation_result_view_model,
     build_selected_product_summary_view_model, empty_product_admin_editor_form_state,
     primary_catalog_currency, product_admin_clear_product_query_intent,
     product_admin_list_actions_disabled, product_admin_open_product_query_intent,
     product_admin_saved_product_query_intent, shipping_profile_choice_label, text_or_none,
     ProductAdminDeleteOutcome, ProductAdminDraftForm, ProductAdminEditorFormState,
     ProductAdminErrorCopy, ProductAdminListStateKind, ProductAdminPricingPreviewState,
-    ProductAdminRouteQueryIntent, ProductAdminSaveMode, ProductAdminStatusTarget,
-    SelectedProductSummaryViewModel,
+    ProductAdminRouteQueryIntent, ProductAdminSaveMode, ProductAdminStatusMutationOutcome,
+    ProductAdminStatusTarget, SelectedProductSummaryViewModel,
 };
 use crate::i18n::t;
 use crate::model::{ProductAdminBootstrap, ProductDetail, ProductPricingDetail};
@@ -519,9 +520,6 @@ pub fn ProductAdmin() -> impl IntoView {
                                         let item_locale_for_draft = item_locale_for_buttons.clone();
                                         let item_locale_for_archive = item_locale_for_buttons.clone();
                                         let item_locale_for_delete = item_locale_for_buttons.clone();
-                                        let error_copy_for_publish = error_copy.clone();
-                                        let error_copy_for_draft = error_copy.clone();
-                                        let error_copy_for_archive = error_copy.clone();
                                         view! {
                                             <article class="rounded-2xl border border-border bg-background p-5 transition hover:border-primary/40">
                                                 <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -559,7 +557,6 @@ pub fn ProductAdmin() -> impl IntoView {
                                                             publish_id.clone(),
                                                             ProductAdminStatusTarget::Active,
                                                             item_locale_for_publish.clone(),
-                                                            error_copy_for_publish.clone(),
                                                             set_busy,
                                                             set_error,
                                                             set_refresh_nonce,
@@ -573,7 +570,6 @@ pub fn ProductAdmin() -> impl IntoView {
                                                             draft_id.clone(),
                                                             ProductAdminStatusTarget::Draft,
                                                             item_locale_for_draft.clone(),
-                                                            error_copy_for_draft.clone(),
                                                             set_busy,
                                                             set_error,
                                                             set_refresh_nonce,
@@ -587,7 +583,6 @@ pub fn ProductAdmin() -> impl IntoView {
                                                             archive_id.clone(),
                                                             ProductAdminStatusTarget::Archived,
                                                             item_locale_for_archive.clone(),
-                                                            error_copy_for_archive.clone(),
                                                             set_busy,
                                                             set_error,
                                                             set_refresh_nonce,
@@ -1004,7 +999,6 @@ fn mutate_status(
     product_id: String,
     status: ProductAdminStatusTarget,
     locale: Option<String>,
-    error_copy: ProductAdminErrorCopy,
     set_busy: WriteSignal<bool>,
     set_error: WriteSignal<Option<String>>,
     set_refresh_nonce: WriteSignal<u64>,
@@ -1021,7 +1015,7 @@ fn mutate_status(
     set_busy.set(true);
     set_error.set(None);
     spawn_local(async move {
-        match transport::change_product_status(
+        let outcome = match transport::change_product_status(
             token,
             tenant,
             command.tenant_id,
@@ -1031,8 +1025,18 @@ fn mutate_status(
         )
         .await
         {
-            Ok(_) => set_refresh_nonce.update(|value| *value += 1),
-            Err(err) => set_error.set(Some(error_copy.change_status_failure(err))),
+            Ok(_) => ProductAdminStatusMutationOutcome::Changed,
+            Err(err) => ProductAdminStatusMutationOutcome::TransportError(err.to_string()),
+        };
+        let view_model =
+            build_product_admin_status_mutation_result_view_model(locale.as_deref(), outcome);
+
+        if view_model.refresh {
+            set_refresh_nonce.update(|value| *value += 1);
+        }
+        match view_model.error_message {
+            Some(message) => set_error.set(Some(message)),
+            None => set_error.set(None),
         }
         set_busy.set(false);
     });
