@@ -835,6 +835,29 @@ pub(crate) fn build_product_admin_shell_view_model(
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct ProductAdminSeoPanelCopy {
+    pub title: String,
+    pub subtitle: String,
+    pub empty_message: String,
+}
+
+pub(crate) fn build_product_admin_seo_panel_copy(locale: Option<&str>) -> ProductAdminSeoPanelCopy {
+    ProductAdminSeoPanelCopy {
+        title: t(locale, "product.seo.title", "Product SEO"),
+        subtitle: t(
+            locale,
+            "product.seo.subtitle",
+            "Explicit metadata, social tags and diagnostics for the selected product.",
+        ),
+        empty_message: t(
+            locale,
+            "product.seo.empty",
+            "Create or open a product first. The SEO panel stays attached to the product editor.",
+        ),
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum ProductAdminProfilePanelViewModel {
     Loading { message: String },
     Error { message: String },
@@ -1612,6 +1635,21 @@ mod tests {
         assert_eq!(
             view_model.subtitle,
             "Product ownership now lives in the product module package. Commerce keeps delivery orchestration while catalog CRUD moves to the product route."
+        );
+    }
+
+    #[test]
+    fn product_admin_seo_panel_copy_is_core_owned() {
+        let copy = build_product_admin_seo_panel_copy(Some("en"));
+
+        assert_eq!(copy.title, "Product SEO");
+        assert_eq!(
+            copy.subtitle,
+            "Explicit metadata, social tags and diagnostics for the selected product."
+        );
+        assert_eq!(
+            copy.empty_message,
+            "Create or open a product first. The SEO panel stays attached to the product editor."
         );
     }
 

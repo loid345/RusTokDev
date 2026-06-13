@@ -17,7 +17,8 @@ use crate::core::{
     build_product_admin_profile_panel_error_view_model,
     build_product_admin_profile_panel_loading_view_model,
     build_product_admin_profile_panel_ready_view_model, build_product_admin_save_command,
-    build_product_admin_shell_view_model, build_product_admin_status_mutation_command,
+    build_product_admin_seo_panel_copy, build_product_admin_shell_view_model,
+    build_product_admin_status_mutation_command,
     build_product_admin_status_mutation_result_view_model,
     build_selected_product_summary_view_model, empty_product_admin_editor_form_state,
     primary_catalog_currency, product_admin_clear_product_query_intent,
@@ -746,26 +747,23 @@ pub fn ProductAdmin() -> impl IntoView {
                         </div>
                     </section>
 
-                    <SeoEntityPanel
-                        target_kind=SeoTargetSlug::new(seo_builtin_slug::PRODUCT).expect("builtin SEO target slug")
-                        target_id=Signal::derive(move || editing_id.get())
-                        locale=Signal::derive({
-                            let effective_locale = effective_locale.clone();
-                            move || effective_locale.clone().unwrap_or_default()
-                        })
-                        show_control_plane_widgets=true
-                        panel_title=t(effective_locale.as_deref(), "product.seo.title", "Product SEO")
-                        panel_subtitle=t(
-                            effective_locale.as_deref(),
-                            "product.seo.subtitle",
-                            "Explicit metadata, social tags and diagnostics for the selected product.",
-                        )
-                        empty_message=t(
-                            effective_locale.as_deref(),
-                            "product.seo.empty",
-                            "Create or open a product first. The SEO panel stays attached to the product editor.",
-                        )
-                    />
+                    {
+                        let seo_copy = build_product_admin_seo_panel_copy(effective_locale.as_deref());
+                        view! {
+                            <SeoEntityPanel
+                                target_kind=SeoTargetSlug::new(seo_builtin_slug::PRODUCT).expect("builtin SEO target slug")
+                                target_id=Signal::derive(move || editing_id.get())
+                                locale=Signal::derive({
+                                    let effective_locale = effective_locale.clone();
+                                    move || effective_locale.clone().unwrap_or_default()
+                                })
+                                show_control_plane_widgets=true
+                                panel_title=seo_copy.title
+                                panel_subtitle=seo_copy.subtitle
+                                empty_message=seo_copy.empty_message
+                            />
+                        }
+                    }
                 </section>
             </div>
         </section>
