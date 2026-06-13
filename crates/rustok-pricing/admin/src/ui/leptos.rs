@@ -1,15 +1,15 @@
 use crate::core::{
     apply_selected_channel_option, build_discount_draft, build_price_draft,
     build_price_list_rule_draft, build_price_list_scope_draft, build_product_admin_href,
-    build_resolution_context, clear_price_list_rule_draft, empty_price_draft,
-    format_adjustment_preview, format_channel_option_label, format_channel_scope_text,
-    format_effective_context, format_effective_price, format_price_list_option_label,
-    format_price_scope, format_product_meta, format_variant_identity, format_variant_prices,
-    localized_product_status, normalize_channel_value, normalized_currency_code,
-    normalized_price_list_id, normalized_quantity, normalized_region_id, price_draft_from_price,
-    pricing_health_badge, pricing_health_label, pricing_translation_for_locale,
-    selected_channel_key, status_badge, summarize_pricing, text_or_none, GLOBAL_CHANNEL_KEY,
-    LEGACY_CHANNEL_KEY,
+    build_product_detail_header_view_model, build_resolution_context, clear_price_list_rule_draft,
+    empty_price_draft, format_adjustment_preview, format_channel_option_label,
+    format_channel_scope_text, format_effective_context, format_effective_price,
+    format_price_list_option_label, format_price_scope, format_product_meta,
+    format_variant_identity, format_variant_prices, localized_product_status,
+    normalize_channel_value, normalized_currency_code, normalized_price_list_id,
+    normalized_quantity, normalized_region_id, price_draft_from_price, pricing_health_badge,
+    pricing_health_label, selected_channel_key, status_badge, summarize_pricing, text_or_none,
+    GLOBAL_CHANNEL_KEY, LEGACY_CHANNEL_KEY,
 };
 use crate::i18n::t;
 use crate::model::{
@@ -678,34 +678,12 @@ pub fn PricingAdmin() -> impl IntoView {
                     </Show>
 
                     {move || selected.get().map(|detail| {
-                        let resolved_translation = pricing_translation_for_locale(
-                            detail.translations.as_slice(),
+                        let detail_header = build_product_detail_header_view_model(
+                            ui_locale_for_detail.as_deref(),
                             effective_locale_for_detail.as_deref(),
+                            &detail,
                         );
-                        let product_title = resolved_translation
-                            .map(|item| item.title.clone())
-                            .unwrap_or_else(|| t(ui_locale_for_detail.as_deref(), "pricing.detail.untitled", "Untitled"));
-                        let product_handle = resolved_translation
-                            .map(|item| item.handle.clone())
-                            .unwrap_or_else(|| "-".to_string());
                         let summary = summarize_pricing(detail.variants.as_slice());
-                        let shipping_profile = detail
-                            .shipping_profile_slug
-                            .clone()
-                            .unwrap_or_else(|| t(ui_locale_for_detail.as_deref(), "pricing.common.unassigned", "unassigned"));
-                        let vendor = detail
-                            .vendor
-                            .clone()
-                            .unwrap_or_else(|| t(ui_locale_for_detail.as_deref(), "pricing.common.notSet", "not set"));
-                        let seller_id = detail
-                            .seller_id
-                            .clone()
-                            .unwrap_or_else(|| t(ui_locale_for_detail.as_deref(), "pricing.common.notSet", "not set"));
-                        let product_type = detail
-                            .product_type
-                            .clone()
-                            .unwrap_or_else(|| t(ui_locale_for_detail.as_deref(), "pricing.common.notSet", "not set"));
-                        let status_label = localized_product_status(ui_locale_for_detail.as_deref(), detail.status.as_str());
                         let available_channels = bootstrap
                             .get()
                             .and_then(Result::ok)
@@ -725,16 +703,16 @@ pub fn PricingAdmin() -> impl IntoView {
                                     <div class="flex flex-wrap items-start justify-between gap-3">
                                         <div class="space-y-2">
                                             <div class="flex flex-wrap items-center gap-2">
-                                                <h4 class="text-base font-semibold text-card-foreground">{product_title}</h4>
-                                                <span class=format!("inline-flex rounded-full border px-3 py-1 text-xs font-semibold {}", status_badge(detail.status.as_str()))>{status_label}</span>
+                                                <h4 class="text-base font-semibold text-card-foreground">{detail_header.title.clone()}</h4>
+                                                <span class=format!("inline-flex rounded-full border px-3 py-1 text-xs font-semibold {}", detail_header.status_badge_class)>{detail_header.status_label.clone()}</span>
                                             </div>
-                                            <p class="text-sm text-muted-foreground">{format!("handle: {product_handle} | vendor: {vendor} | type: {product_type}")}</p>
-                                            <p class="text-sm text-muted-foreground">{format!("{}: {}", t(ui_locale_for_detail.as_deref(), "pricing.detail.seller", "seller"), seller_id)}</p>
-                                            <p class="text-xs text-muted-foreground">{format!("shipping profile: {shipping_profile} | updated {}", detail.updated_at)}</p>
+                                            <p class="text-sm text-muted-foreground">{detail_header.meta_line.clone()}</p>
+                                            <p class="text-sm text-muted-foreground">{detail_header.seller_line.clone()}</p>
+                                            <p class="text-xs text-muted-foreground">{detail_header.shipping_line.clone()}</p>
                                         </div>
                                         <div class="text-right text-xs text-muted-foreground">
-                                            <p>{format!("created {}", detail.created_at)}</p>
-                                            <p>{format!("published {}", detail.published_at.unwrap_or_else(|| "-".to_string()))}</p>
+                                            <p>{detail_header.created_line.clone()}</p>
+                                            <p>{detail_header.published_line.clone()}</p>
                                             <a class="mt-2 inline-flex rounded-lg border border-border px-3 py-2 text-sm font-medium text-foreground transition hover:bg-accent" href=product_href>
                                                 {t(ui_locale_for_detail.as_deref(), "pricing.detail.openProduct", "Open product module")}
                                             </a>

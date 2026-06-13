@@ -4,7 +4,8 @@ use crate::core::routing::format_channel_scope_text;
 use crate::i18n::t;
 use crate::model::{
     PricingAdjustmentPreview, PricingEffectivePrice, PricingPrice, PricingPriceListOption,
-    PricingProductListItem, PricingProductTranslation, PricingResolutionContext, PricingVariant,
+    PricingProductDetail, PricingProductListItem, PricingProductTranslation,
+    PricingResolutionContext, PricingVariant,
 };
 
 pub(crate) fn locale_tags_match(left: &str, right: &str) -> bool {
@@ -103,6 +104,73 @@ pub(crate) fn format_product_meta(
         "handle: {} | vendor: {} | type: {} | seller: {}",
         product.handle, vendor, product_type, seller_id
     )
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct PricingProductDetailHeaderViewModel {
+    pub(crate) title: String,
+    pub(crate) status_label: String,
+    pub(crate) status_badge_class: &'static str,
+    pub(crate) meta_line: String,
+    pub(crate) seller_line: String,
+    pub(crate) shipping_line: String,
+    pub(crate) created_line: String,
+    pub(crate) published_line: String,
+}
+
+pub(crate) fn build_product_detail_header_view_model(
+    locale: Option<&str>,
+    effective_locale: Option<&str>,
+    detail: &PricingProductDetail,
+) -> PricingProductDetailHeaderViewModel {
+    let resolved_translation =
+        pricing_translation_for_locale(detail.translations.as_slice(), effective_locale);
+    let title = resolved_translation
+        .map(|item| item.title.clone())
+        .unwrap_or_else(|| t(locale, "pricing.detail.untitled", "Untitled"));
+    let handle = resolved_translation
+        .map(|item| item.handle.clone())
+        .unwrap_or_else(|| "-".to_string());
+    let shipping_profile = detail
+        .shipping_profile_slug
+        .clone()
+        .unwrap_or_else(|| t(locale, "pricing.common.unassigned", "unassigned"));
+    let vendor = detail
+        .vendor
+        .clone()
+        .unwrap_or_else(|| t(locale, "pricing.common.notSet", "not set"));
+    let seller_id = detail
+        .seller_id
+        .clone()
+        .unwrap_or_else(|| t(locale, "pricing.common.notSet", "not set"));
+    let product_type = detail
+        .product_type
+        .clone()
+        .unwrap_or_else(|| t(locale, "pricing.common.notSet", "not set"));
+
+    PricingProductDetailHeaderViewModel {
+        title,
+        status_label: localized_product_status(locale, detail.status.as_str()),
+        status_badge_class: status_badge(detail.status.as_str()),
+        meta_line: format!("handle: {handle} | vendor: {vendor} | type: {product_type}"),
+        seller_line: format!(
+            "{}: {}",
+            t(locale, "pricing.detail.seller", "seller"),
+            seller_id
+        ),
+        shipping_line: format!(
+            "shipping profile: {shipping_profile} | updated {}",
+            detail.updated_at
+        ),
+        created_line: format!("created {}", detail.created_at),
+        published_line: format!(
+            "published {}",
+            detail
+                .published_at
+                .clone()
+                .unwrap_or_else(|| "-".to_string())
+        ),
+    }
 }
 
 pub(crate) fn format_variant_identity(locale: Option<&str>, variant: &PricingVariant) -> String {
@@ -421,6 +489,48 @@ mod tests {
             prices,
             effective_price,
         }
+    }
+
+    fn product_detail() -> PricingProductDetail {
+        PricingProductDetail {
+            id: "product-1".to_string(),
+            status: "ACTIVE".to_string(),
+            seller_id: None,
+            vendor: Some("Acme".to_string()),
+            product_type: None,
+            shipping_profile_slug: None,
+            created_at: "2026-01-01T00:00:00Z".to_string(),
+            updated_at: "2026-01-02T00:00:00Z".to_string(),
+            published_at: None,
+            translations: vec![PricingProductTranslation {
+                locale: "en-US".to_string(),
+                title: "Translated product".to_string(),
+                handle: "translated-product".to_string(),
+                description: None,
+            }],
+            variants: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn product_detail_header_view_model_resolves_copy_and_fallbacks() {
+        let header =
+            build_product_detail_header_view_model(Some("en-US"), Some("en_US"), &product_detail());
+
+        assert_eq!(header.title, "Translated product");
+        assert_eq!(header.status_label, "Active");
+        assert!(header.status_badge_class.contains("emerald"));
+        assert_eq!(
+            header.meta_line,
+            "handle: translated-product | vendor: Acme | type: not set"
+        );
+        assert_eq!(header.seller_line, "seller: not set");
+        assert_eq!(
+            header.shipping_line,
+            "shipping profile: unassigned | updated 2026-01-02T00:00:00Z"
+        );
+        assert_eq!(header.created_line, "created 2026-01-01T00:00:00Z");
+        assert_eq!(header.published_line, "published -");
     }
 
     #[test]

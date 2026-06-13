@@ -7,12 +7,12 @@ rule и scope write paths, а полный promotions engine и остально
 
 ## Execution checkpoint
 
-- Current phase: ffa_admin_transport_ui_split
-- Last checkpoint: Admin pricing request sanitization продолжила FFA split: GraphQL/native input sanitizers (`currency_code`, UUID strings, channel slug, resolution context quantity) перенесены из `admin/src/api.rs` в Leptos-free `admin/src/core/requests.rs`, а `api.rs` теперь мапит core errors в existing transport error envelope.
-- Next step: Продолжать сокращать admin/storefront `api.rs` до transport adapter implementation: вынести remaining GraphQL/native mapping policy в typed adapter helpers без изменения native-first + GraphQL fallback contract.
+- Current phase: ffa_admin_presentation_core_slice
+- Last checkpoint: Admin pricing detail header presentation вынесен из Leptos adapter в Leptos-free `admin/src/core/presentation.rs`: title/translation fallback, status badge/label, product meta, seller, shipping и timestamp lines теперь собираются core-owned view-model с unit-test evidence.
+- Next step: Продолжать маленькие FFA-срезы только там, где они сокращают Leptos-owned presentation/state policy: следующий кандидат — variant row view-model или list item view-model; transport/native-first + GraphQL fallback contract не менять.
 - Open blockers: None.
 - Hand-off notes for next agent: После каждого инкремента обновлять этот блок.
-- Last updated at (UTC): 2026-06-07T00:00:00Z
+- Last updated at (UTC): 2026-06-13T00:00:00Z
 
 ## FFA/FBA status
 
@@ -30,8 +30,9 @@ rule и scope write paths, а полный promotions engine и остально
   - admin FFA slice добавил module-owned `admin/src/transport.rs` facade и явный Leptos render adapter `admin/src/ui/leptos.rs`; `admin/src/lib.rs` теперь только wires modules и re-export `PricingAdmin`, а Leptos adapter больше не вызывает raw `api::*` напрямую для covered flows;
   - admin pricing presentation/request policy продолжает FFA-декомпозицию в `admin/src/core/`: `presentation.rs` владеет summary/labels/formatters, `routing.rs` — channel scope/query helpers, `requests.rs` — resolution context normalization и write draft builders; targeted pure-core tests покрывают pricing summary, resolution context normalization, channel-key policy и DTO builders;
   - admin write request construction для variant price, percentage discount и price-list rule/scope остаётся в core-owned draft builders; Leptos adapter использует explicit core imports вместо wildcard и не конструирует covered write DTO inline;
-  - admin GraphQL/native input sanitization для active price-list/product context (`currency_code`, UUID strings, channel slug, resolution quantity/context) перенесена из `admin/src/api.rs` в `core/requests.rs`; API layer сохраняет existing `ApiError`/`ServerFnError` envelope через adapter mapping.
-- Last verified at (UTC): 2026-06-07T00:00:00Z
+  - admin GraphQL/native input sanitization для active price-list/product context (`currency_code`, UUID strings, channel slug, resolution quantity/context) перенесена из `admin/src/api.rs` в `core/requests.rs`; API layer сохраняет existing `ApiError`/`ServerFnError` envelope через adapter mapping;
+  - admin detail header presentation теперь собирается `PricingProductDetailHeaderViewModel` в `admin/src/core/presentation.rs`: translation fallback, status badge/label, meta/seller/shipping/timestamp строки больше не форматируются inline в Leptos render path, а pure-core unit test фиксирует fallback policy.
+- Last verified at (UTC): 2026-06-13T00:00:00Z
 - Owner: `rustok-pricing` module team
 
 ## Область работ
@@ -63,7 +64,7 @@ rule и scope write paths, а полный promotions engine и остально
   base-row writes, active `price_list` overrides, typed percentage adjustments и
   `price_list` rule/scope editing, оставляя product GraphQL контракт как fallback
   для чтения; admin presentation/request policy для summary, status/price/channel
-  labels, route href, resolution context normalization и write draft builders вынесена в Leptos-free
+  labels, route href, detail-header view-model, resolution context normalization и write draft builders вынесена в Leptos-free
   `admin/src/core/` (`presentation`, `routing`, `requests`), поэтому `admin/src/ui/leptos.rs` остаётся render/bind adapter.
 
 ## Этапы
