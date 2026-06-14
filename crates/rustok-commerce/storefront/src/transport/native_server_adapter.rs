@@ -23,14 +23,7 @@ pub async fn create_storefront_payment_collection(
 pub async fn select_storefront_shipping_option(
     request: SelectShippingOptionRequest,
 ) -> Result<(), ApiError> {
-    api::select_storefront_shipping_option_server(
-        request.cart.id,
-        request.shipping_profile_slug,
-        request.seller_id,
-        request.seller_scope,
-        request.shipping_option_id,
-    )
-    .await
+    api::select_storefront_shipping_option_server(request.owner_request).await
 }
 
 pub async fn complete_storefront_checkout(

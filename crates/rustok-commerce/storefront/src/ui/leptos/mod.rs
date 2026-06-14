@@ -15,10 +15,12 @@ use rustok_fulfillment_storefront::{
 use rustok_order_storefront::core::{
     OrderCheckoutActionLabels, OrderCheckoutResultData, OrderCheckoutResultLabels,
 };
+use rustok_order_storefront::transport::CompleteCheckoutRequest;
 use rustok_order_storefront::{OrderCheckoutCompleteButton, OrderCheckoutResultCard};
 use rustok_payment_storefront::core::{
     PaymentCollectionActionLabels, PaymentCollectionCardData, PaymentCollectionCardLabels,
 };
+use rustok_payment_storefront::transport::PaymentCollectionCreateRequest;
 use rustok_payment_storefront::{PaymentCollectionActionButton, PaymentCollectionCard};
 
 use crate::i18n::t;
@@ -67,17 +69,13 @@ pub fn CommerceView() -> impl IntoView {
 
     let on_create_payment_collection = {
         let action_error_label = action_error_label.clone();
-        Callback::new(move |cart_id: String| {
+        Callback::new(move |request: PaymentCollectionCreateRequest| {
             let action_error_label = action_error_label.clone();
             set_action_busy.set(true);
             set_action_error.set(None);
             set_completion.set(None);
             spawn_local(async move {
-                match transport::create_storefront_payment_collection(
-                    core::build_payment_collection_command_request(cart_id),
-                )
-                .await
-                {
+                match transport::create_storefront_payment_collection(request).await {
                     Ok(_) => set_refresh_nonce.update(|value| *value += 1),
                     Err(err) => set_action_error.set(Some(core::error_with_context(
                         action_error_label.as_str(),
@@ -126,16 +124,12 @@ pub fn CommerceView() -> impl IntoView {
 
     let on_complete_checkout = {
         let action_error_label = action_error_label.clone();
-        Callback::new(move |cart_id: String| {
+        Callback::new(move |request: CompleteCheckoutRequest| {
             let action_error_label = action_error_label.clone();
             set_action_busy.set(true);
             set_action_error.set(None);
             spawn_local(async move {
-                match transport::complete_storefront_checkout(
-                    core::build_checkout_completion_command_request(cart_id),
-                )
-                .await
-                {
+                match transport::complete_storefront_checkout(request).await {
                     Ok(result) => {
                         set_completion.set(Some(result));
                         set_refresh_nonce.update(|value| *value += 1);
@@ -200,12 +194,12 @@ fn CommerceShowcase(
     data: StorefrontCommerceData,
     busy: ReadSignal<bool>,
     completion: ReadSignal<Option<StorefrontCheckoutCompletion>>,
-    on_create_payment_collection: Callback<String>,
+    on_create_payment_collection: Callback<PaymentCollectionCreateRequest>,
     on_select_shipping_option: Callback<(
         crate::model::StorefrontCheckoutCart,
         FulfillmentSelectShippingOptionRequest,
     )>,
-    on_complete_checkout: Callback<String>,
+    on_complete_checkout: Callback<CompleteCheckoutRequest>,
 ) -> impl IntoView {
     view! {
         <div class="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
@@ -263,12 +257,12 @@ fn CheckoutWorkspace(
     checkout: Option<StorefrontCheckoutWorkspace>,
     busy: ReadSignal<bool>,
     completion: ReadSignal<Option<StorefrontCheckoutCompletion>>,
-    on_create_payment_collection: Callback<String>,
+    on_create_payment_collection: Callback<PaymentCollectionCreateRequest>,
     on_select_shipping_option: Callback<(
         crate::model::StorefrontCheckoutCart,
         FulfillmentSelectShippingOptionRequest,
     )>,
-    on_complete_checkout: Callback<String>,
+    on_complete_checkout: Callback<CompleteCheckoutRequest>,
 ) -> impl IntoView {
     let route_context = use_context::<UiRouteContext>().unwrap_or_default();
     let locale = route_context.locale.clone();

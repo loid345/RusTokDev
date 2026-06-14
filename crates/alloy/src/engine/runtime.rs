@@ -27,6 +27,11 @@ impl ScriptEngine {
         engine.set_allow_looping(true);
         engine.set_allow_shadowing(true);
         engine.set_strict_variables(true);
+        engine.set_max_operations(config.max_operations);
+        engine.set_max_call_levels(config.max_call_depth);
+        engine.set_max_string_size(config.max_string_size);
+        engine.set_max_array_size(config.max_array_size);
+        engine.set_max_map_size(config.max_map_depth);
 
         Self {
             engine,
@@ -139,10 +144,13 @@ impl ScriptEngine {
         let elapsed = start.elapsed();
         if elapsed > timeout {
             tracing::warn!(
-                "Script execution took {}ms, exceeding timeout of {}ms",
-                elapsed.as_millis(),
-                timeout.as_millis()
+                elapsed_ms = elapsed.as_millis(),
+                timeout_ms = timeout.as_millis(),
+                "Script execution exceeded timeout"
             );
+            return Err(ScriptError::Timeout {
+                limit_ms: timeout.as_millis().try_into().unwrap_or(u64::MAX),
+            });
         }
 
         result.map_err(|e| Self::convert_error(*e, max_ops))
@@ -153,6 +161,9 @@ impl ScriptEngine {
             EvalAltResult::ErrorTerminated(reason, _) => ScriptError::Aborted(reason.to_string()),
             EvalAltResult::ErrorTooManyOperations(_) => {
                 ScriptError::OperationLimit { limit: op_limit }
+            }
+            EvalAltResult::ErrorDataTooLarge(kind, _) => {
+                ScriptError::ResourceLimit { resource: kind }
             }
             EvalAltResult::ErrorRuntime(msg, _) => {
                 let msg_str = msg.to_string();

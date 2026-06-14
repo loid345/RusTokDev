@@ -23,7 +23,7 @@ pub mod storage;
 pub mod utils;
 
 pub use api::{create_router, AppState};
-pub use bridge::Bridge;
+pub use bridge::{Bridge, PhaseCapabilities};
 pub use context::{ExecutionContext, ExecutionPhase};
 pub use controllers::routes;
 pub use engine::{EngineConfig, ScriptEngine};
@@ -212,10 +212,32 @@ mod tests {
             &ctx,
         );
 
-        assert!(
-            matches!(result, Err(ScriptError::OperationLimit { .. }))
-                || matches!(result, Ok(ref value) if value.as_int().ok() == Some(1_000_000))
-        );
+        assert!(matches!(result, Err(ScriptError::OperationLimit { .. })));
+    }
+
+    #[test]
+    fn test_string_resource_limit() {
+        let config = EngineConfig {
+            max_string_size: 8,
+            ..Default::default()
+        };
+        let mut engine = ScriptEngine::new(config);
+        bridge::register_utils(engine.engine_mut());
+
+        let ctx = ExecutionContext::new(ExecutionPhase::Manual);
+        let result = engine.execute("test_string_limit", r#""123456789""#, &ctx);
+
+        assert!(matches!(result, Err(ScriptError::ResourceLimit { .. })));
+    }
+
+    #[test]
+    fn test_engine_limits_snapshot() {
+        let config = EngineConfig::strict();
+        let limits = config.limits();
+
+        assert_eq!(limits.max_operations, 10_000);
+        assert_eq!(limits.timeout_ms, 50);
+        assert_eq!(limits.max_call_depth, 8);
     }
 
     #[test]

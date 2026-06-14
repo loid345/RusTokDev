@@ -1,15 +1,11 @@
 use crate::model::StorefrontCheckoutCart;
 use rustok_fulfillment_storefront::transport::{
-    build_select_shipping_option_request as build_fulfillment_select_shipping_option_request,
     SelectShippingOptionRequest as FulfillmentSelectShippingOptionRequest,
     ShippingSelectionDeliveryGroup,
+    build_select_shipping_option_request as build_fulfillment_select_shipping_option_request,
 };
-use rustok_order_storefront::transport::{
-    build_complete_checkout_request, CompleteCheckoutRequest,
-};
-use rustok_payment_storefront::transport::{
-    build_payment_collection_create_request, PaymentCollectionCreateRequest,
-};
+use rustok_order_storefront::transport::CompleteCheckoutRequest;
+use rustok_payment_storefront::transport::PaymentCollectionCreateRequest;
 
 pub const SELECTED_CART_QUERY_KEY: &str = "cart_id";
 
@@ -28,15 +24,9 @@ pub struct FetchCommerceRequest {
 pub type PaymentCollectionCommandRequest = PaymentCollectionCreateRequest;
 pub type CheckoutCompletionCommandRequest = CompleteCheckoutRequest;
 
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct SelectShippingOptionRequest {
     pub owner_request: FulfillmentSelectShippingOptionRequest,
-    pub cart: StorefrontCheckoutCart,
-    pub shipping_profile_slug: String,
-    pub seller_id: Option<String>,
-    pub seller_scope: Option<String>,
-    pub shipping_option_id: Option<String>,
 }
 
 pub fn build_storefront_route_state(
@@ -56,18 +46,6 @@ pub fn build_fetch_commerce_request(
         selected_cart_id: normalize_optional(selected_cart_id),
         locale: normalize_optional(locale),
     }
-}
-
-pub fn build_payment_collection_command_request(
-    cart_id: String,
-) -> PaymentCollectionCommandRequest {
-    build_payment_collection_create_request(cart_id)
-}
-
-pub fn build_checkout_completion_command_request(
-    cart_id: String,
-) -> CheckoutCompletionCommandRequest {
-    build_complete_checkout_request(cart_id)
 }
 
 #[allow(dead_code)]
@@ -104,14 +82,8 @@ pub fn build_select_shipping_option_request(
         shipping_option_id.clone(),
     );
 
-    SelectShippingOptionRequest {
-        owner_request,
-        cart,
-        shipping_profile_slug,
-        seller_id,
-        seller_scope,
-        shipping_option_id,
-    }
+    let _ = cart;
+    SelectShippingOptionRequest { owner_request }
 }
 
 fn normalize_optional(value: Option<String>) -> Option<String> {
@@ -147,17 +119,5 @@ mod tests {
         let request = build_fetch_commerce_request(Some(" cart-1 ".into()), Some(" ru ".into()));
         assert_eq!(request.selected_cart_id.as_deref(), Some("cart-1"));
         assert_eq!(request.locale.as_deref(), Some("ru"));
-    }
-
-    #[test]
-    fn payment_collection_command_request_is_owner_built() {
-        let request = build_payment_collection_command_request(" cart-1 ".into());
-        assert_eq!(request.cart_id, "cart-1");
-    }
-
-    #[test]
-    fn checkout_completion_command_request_is_owner_built() {
-        let request = build_checkout_completion_command_request(" cart-1 ".into());
-        assert_eq!(request.cart_id, "cart-1");
     }
 }

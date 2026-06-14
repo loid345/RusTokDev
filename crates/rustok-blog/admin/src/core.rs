@@ -335,6 +335,7 @@ pub struct BlogPostAdminTableRowViewModel {
     pub is_busy: bool,
     pub is_published: bool,
     pub is_archived: bool,
+    pub next_publish_state: bool,
     pub show_archive_action: bool,
     pub edit_label: String,
     pub publish_label: String,
@@ -377,6 +378,7 @@ pub fn blog_post_admin_table_row_view(
         is_busy,
         is_published,
         is_archived,
+        next_publish_state: next_publish_state(is_published),
         show_archive_action,
         edit_label: edit_action_label(
             is_editing,
@@ -583,6 +585,37 @@ pub fn prepare_blog_post_archive_command(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlogPostSaveResultViewModel {
+    pub refresh_posts: bool,
+    pub apply_returned_post_to_form: bool,
+    pub selected_post_query_value: Option<String>,
+}
+
+pub fn blog_post_save_result_view(returned_post_id: &str) -> BlogPostSaveResultViewModel {
+    BlogPostSaveResultViewModel {
+        refresh_posts: true,
+        apply_returned_post_to_form: true,
+        selected_post_query_value: Some(returned_post_id.to_string()),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlogPostMutationResultViewModel {
+    pub refresh_posts: bool,
+    pub apply_returned_post_to_form: bool,
+}
+
+pub fn blog_post_mutation_result_view(
+    editing_post_id: Option<&str>,
+    returned_post_id: &str,
+) -> BlogPostMutationResultViewModel {
+    BlogPostMutationResultViewModel {
+        refresh_posts: true,
+        apply_returned_post_to_form: is_editing_post(editing_post_id, returned_post_id),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlogPostDeleteCommand {
     pub post_id: String,
     pub busy_key: String,
@@ -593,6 +626,32 @@ pub fn prepare_blog_post_delete_command(post_id: String) -> BlogPostDeleteComman
         busy_key: busy_key_for_delete(post_id.as_str()),
         post_id,
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlogPostDeleteResultViewModel {
+    pub refresh_posts: bool,
+    pub reset_form: bool,
+    pub clear_selected_post_query: bool,
+}
+
+pub fn blog_post_delete_result_view(
+    deleted: bool,
+    editing_post_id: Option<&str>,
+    deleted_post_id: &str,
+    delete_returned_false_message: String,
+) -> Result<BlogPostDeleteResultViewModel, WritePathIssue> {
+    if !deleted {
+        return Err(WritePathIssue::new(delete_returned_false_message));
+    }
+
+    let reset_form = should_reset_form_after_delete(editing_post_id, deleted_post_id);
+
+    Ok(BlogPostDeleteResultViewModel {
+        refresh_posts: true,
+        reset_form,
+        clear_selected_post_query: reset_form,
+    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -815,6 +874,70 @@ mod tests {
     }
 
     #[test]
+    fn save_result_view_model_maps_apply_refresh_and_query_policy() {
+        let view = blog_post_save_result_view("post-1");
+
+        assert!(view.refresh_posts);
+        assert!(view.apply_returned_post_to_form);
+        assert_eq!(view.selected_post_query_value, Some("post-1".to_string()));
+    }
+
+    #[test]
+    fn mutation_result_view_model_maps_apply_and_refresh_policy() {
+        let matching = blog_post_mutation_result_view(Some("post-1"), "post-1");
+
+        assert!(matching.refresh_posts);
+        assert!(matching.apply_returned_post_to_form);
+
+        let different = blog_post_mutation_result_view(Some("post-2"), "post-1");
+
+        assert!(different.refresh_posts);
+        assert!(!different.apply_returned_post_to_form);
+
+        let not_editing = blog_post_mutation_result_view(None, "post-1");
+
+        assert!(not_editing.refresh_posts);
+        assert!(!not_editing.apply_returned_post_to_form);
+    }
+
+    #[test]
+    fn delete_result_view_model_maps_reset_and_false_outcomes() {
+        let reset = blog_post_delete_result_view(
+            true,
+            Some("post-1"),
+            "post-1",
+            "Delete post returned false".to_string(),
+        )
+        .expect("successful delete should produce apply instructions");
+
+        assert!(reset.refresh_posts);
+        assert!(reset.reset_form);
+        assert!(reset.clear_selected_post_query);
+
+        let keep_form = blog_post_delete_result_view(
+            true,
+            Some("post-2"),
+            "post-1",
+            "Delete post returned false".to_string(),
+        )
+        .expect("deleting a non-edited row should not reset the current form");
+
+        assert!(keep_form.refresh_posts);
+        assert!(!keep_form.reset_form);
+        assert!(!keep_form.clear_selected_post_query);
+
+        let issue = blog_post_delete_result_view(
+            false,
+            Some("post-1"),
+            "post-1",
+            "Delete post returned false".to_string(),
+        )
+        .expect_err("false delete result must become a typed write-path issue");
+
+        assert_eq!(issue.message, "Delete post returned false");
+    }
+
+    #[test]
     fn table_row_view_model_composes_row_policy_without_ui_runtime() {
         let row = blog_post_admin_table_row_view(
             BlogPostListItem {
@@ -848,6 +971,7 @@ mod tests {
         assert!(row.is_busy);
         assert!(row.is_published);
         assert!(!row.is_archived);
+        assert!(!row.next_publish_state);
         assert!(row.show_archive_action);
         assert_eq!(row.edit_label, "Editing");
         assert_eq!(row.publish_label, "Unpublish");

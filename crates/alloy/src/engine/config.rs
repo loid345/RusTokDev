@@ -17,7 +17,7 @@ pub struct EngineConfig {
     /// Максимум размера массива
     pub max_array_size: usize,
 
-    /// Максимум глубины вложенных объектов
+    /// Максимум размера object map. Имя сохранено для совместимости с ранним contract.
     pub max_map_depth: usize,
 }
 
@@ -49,6 +49,29 @@ impl EngineConfig {
             timeout: Duration::from_millis(50),
             max_call_depth: 8,
             ..Default::default()
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct EngineLimits {
+    pub max_operations: u64,
+    pub timeout_ms: u64,
+    pub max_call_depth: usize,
+    pub max_string_size: usize,
+    pub max_array_size: usize,
+    pub max_map_size: usize,
+}
+
+impl EngineConfig {
+    pub fn limits(&self) -> EngineLimits {
+        EngineLimits {
+            max_operations: self.max_operations,
+            timeout_ms: self.timeout.as_millis().try_into().unwrap_or(u64::MAX),
+            max_call_depth: self.max_call_depth,
+            max_string_size: self.max_string_size,
+            max_array_size: self.max_array_size,
+            max_map_size: self.max_map_depth,
         }
     }
 }

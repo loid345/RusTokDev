@@ -5,12 +5,12 @@ contract приведены к единому формату.
 
 ## Execution checkpoint
 
-- Current phase: plan_sync
-- Last checkpoint: Initial bootstrap by registry workflow.
-- Next step: Синхронизировать план с текущим кодом и выбрать первый незавершённый пункт.
+- Current phase: runtime_hardening
+- Last checkpoint: Enforced Rhai operation/call/data limits, converted wall-clock timeout into `ScriptError::Timeout`, documented runtime guarantees and scheduler/hook debugging runbook.
+- Next step: Wire execution log persistence into every executor/scheduler path and add targeted integration coverage.
 - Open blockers: None.
-- Hand-off notes for next agent: После каждого инкремента обновлять этот блок.
-- Last updated at (UTC): 2026-05-20T00:00:00Z
+- Hand-off notes for next agent: Компиляция не запускалась по запросу; перед следующим runtime change проверить `cargo xtask module validate alloy` и targeted tests.
+- Last updated at (UTC): 2026-06-14T00:00:00Z
 
 ## Область работ
 
@@ -36,13 +36,13 @@ contract приведены к единому формату.
 
 ### 2. Runtime hardening
 
-- [ ] довести resource limits, timeout semantics и sandbox guarantees до стабильного production contract;
+- [x] довести resource limits, timeout semantics и sandbox guarantees до стабильного production contract;
 - [ ] удерживать audit log и execution history как каноническую операторскую поверхность;
-- [ ] расширять integration helpers только через явные phase-aware contracts.
+- [x] расширять integration helpers только через явные phase-aware contracts.
 
 ### 3. Operability
 
-- [ ] развить runbook для scheduler/runtime failures и hook debugging;
+- [x] развить runbook для scheduler/runtime failures и hook debugging;
 - [ ] покрыть execution, scheduler и bridge invariants точечными integration tests;
 - [ ] документировать новые runtime guarantees одновременно с изменением capability surface.
 
@@ -62,5 +62,5 @@ contract приведены к единому формату.
 ## Quality backlog
 
 - [ ] Актуализировать покрытие тестами по ключевым сценариям модуля.
-- [ ] Проверить полноту и актуальность `README.md` и локальных docs.
-- [ ] Зафиксировать/обновить verification gates для текущего состояния модуля.
+- [x] Проверить полноту и актуальность `README.md` и локальных docs.
+- [x] Зафиксировать/обновить verification gates для текущего состояния модуля.

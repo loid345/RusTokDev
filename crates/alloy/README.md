@@ -28,6 +28,15 @@
 - `graphql::AlloyQuery`
 - `graphql::AlloyMutation`
 - `controllers::routes`
+- `PhaseCapabilities`
+
+## Runtime guarantees
+
+`ScriptEngine` enforces the configured Rhai operation, call-depth, string, array,
+and map-size limits. Runs that exceed the wall-clock budget return
+`ScriptError::Timeout`; Rhai operation pressure returns `ScriptError::OperationLimit`;
+data-size pressure returns `ScriptError::ResourceLimit`. Use
+`EngineConfig::limits()` to expose the effective sandbox profile to operators. `PhaseCapabilities` exposes the helper families enabled for each execution phase so integrations do not infer bridge availability from registration side effects.
 
 ## Docs
 
