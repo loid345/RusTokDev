@@ -9,18 +9,21 @@ use rustok_seo_targets::{builtin_slug as seo_builtin_slug, SeoTargetSlug};
 
 use crate::core::{
     category_card_view_model, category_select_options, category_sidebar_total_count,
-    category_sidebar_view_model, format_count, forum_admin_busy_key, forum_admin_collection_state,
-    forum_admin_delete_outcome, forum_admin_editing_thread_label, forum_admin_form_error_message,
-    forum_admin_header_view_model, forum_admin_open_query_intent, forum_admin_placeholder_policy,
-    forum_admin_position_value, forum_admin_reset_query_intent, forum_admin_saved_query_intent,
-    forum_admin_seo_copy_labels, forum_admin_sidebar_category_class,
-    forum_admin_status_badge_class, forum_admin_tag_chips, forum_admin_title_envelope_view_model,
-    forum_admin_topic_tag_count_label, forum_admin_transport_error_message, reply_card_view_model,
-    reply_count_label, result_item_count, selected_category_filter_label, selected_query_id,
-    topic_card_view_model, topic_category_filter, CategoryFormSnapshot, ForumAdminBusyAction,
+    category_sidebar_view_model, format_count, forum_admin_action_button_class, forum_admin_busy_key,
+    forum_admin_collection_state, forum_admin_delete_outcome, forum_admin_editing_thread_label,
+    forum_admin_form_error_message, forum_admin_header_view_model, forum_admin_metric_accent_class,
+    forum_admin_moderator_notes_copy_labels, forum_admin_open_query_intent,
+    forum_admin_placeholder_policy, forum_admin_position_value, forum_admin_reset_query_intent,
+    forum_admin_saved_query_intent, forum_admin_seo_copy_labels, forum_admin_sidebar_category_class,
+    forum_admin_sidebar_copy_labels, forum_admin_status_badge_class, forum_admin_tag_chips,
+    forum_admin_title_envelope_view_model, forum_admin_topic_tag_count_label,
+    forum_admin_transport_error_message, reply_card_view_model, reply_count_label,
+    result_item_count, selected_category_filter_label, selected_query_id, topic_card_view_model,
+    topic_category_filter, CategoryFormSnapshot, ForumAdminActionButtonKind, ForumAdminBusyAction,
     ForumAdminBusySurface, ForumAdminCategoryRenderLabels, ForumAdminCollectionState,
-    ForumAdminFormError, ForumAdminFormErrorLabels, ForumAdminHeaderLabels, ForumAdminQuerySurface,
-    ForumAdminRouteQueryIntent, ForumAdminRouteQueryOperation, ForumAdminSeoSurface,
+    ForumAdminFormError, ForumAdminFormErrorLabels, ForumAdminHeaderLabels, ForumAdminMetricSurface,
+    ForumAdminModeratorNotesLabels, ForumAdminQuerySurface, ForumAdminRouteQueryIntent,
+    ForumAdminRouteQueryOperation, ForumAdminSeoSurface, ForumAdminSidebarLabels,
     ForumAdminTitleEnvelopeLabels, ForumAdminTopicRenderLabels, TopicFormSnapshot,
 };
 use crate::i18n::t;
@@ -671,17 +674,17 @@ pub fn ForumAdmin() -> impl IntoView {
                         <MetricCard
                             label=metric_categories.clone()
                             value=Signal::derive(move || format_count(category_count()))
-                            accent_class="bg-sky-500"
+                            accent_class=forum_admin_metric_accent_class(ForumAdminMetricSurface::Categories)
                         />
                         <MetricCard
                             label=metric_topics.clone()
                             value=Signal::derive(move || format_count(topic_count()))
-                            accent_class="bg-amber-500"
+                            accent_class=forum_admin_metric_accent_class(ForumAdminMetricSurface::Topics)
                         />
                         <MetricCard
                             label=metric_reply_preview.clone()
                             value=Signal::derive(move || format_count(reply_preview_count()))
-                            accent_class="bg-emerald-500"
+                            accent_class=forum_admin_metric_accent_class(ForumAdminMetricSurface::ReplyPreview)
                         />
                     </div>
                 </div>
@@ -856,40 +859,42 @@ fn CategoriesPage(
         "forum.categories.matrixBody",
         "This view keeps category hierarchy, counts, and moderation switches close together so moderators can shape the forum like a community map instead of a plain CRUD table.",
     );
-    let notes_label = t(
-        ui_locale.as_deref(),
-        "forum.categories.notesLabel",
-        "Moderator notes",
-    );
-    let note_icon_title = t(
-        ui_locale.as_deref(),
-        "forum.categories.noteIconTitle",
-        "Icon + color",
-    );
-    let note_icon_body = t(
-        ui_locale.as_deref(),
-        "forum.categories.noteIconBody",
-        "Use both so each category reads like a quick visual stop in the sidebar.",
-    );
-    let note_position_title = t(
-        ui_locale.as_deref(),
-        "forum.categories.notePositionTitle",
-        "Position",
-    );
-    let note_position_body = t(
-        ui_locale.as_deref(),
-        "forum.categories.notePositionBody",
-        "Lower numbers bubble important sections to the top of the community map.",
-    );
-    let note_moderated_title = t(
-        ui_locale.as_deref(),
-        "forum.categories.noteModeratedTitle",
-        "Moderated",
-    );
-    let note_moderated_body = t(
-        ui_locale.as_deref(),
-        "forum.categories.noteModeratedBody",
-        "Turn this on for queues that need stricter review before topics go live.",
+    let notes_copy = forum_admin_moderator_notes_copy_labels(
+        t(
+            ui_locale.as_deref(),
+            "forum.categories.notesLabel",
+            "Moderator notes",
+        ),
+        t(
+            ui_locale.as_deref(),
+            "forum.categories.noteIconTitle",
+            "Icon + color",
+        ),
+        t(
+            ui_locale.as_deref(),
+            "forum.categories.noteIconBody",
+            "Use both so each category reads like a quick visual stop in the sidebar.",
+        ),
+        t(
+            ui_locale.as_deref(),
+            "forum.categories.notePositionTitle",
+            "Position",
+        ),
+        t(
+            ui_locale.as_deref(),
+            "forum.categories.notePositionBody",
+            "Lower numbers bubble important sections to the top of the community map.",
+        ),
+        t(
+            ui_locale.as_deref(),
+            "forum.categories.noteModeratedTitle",
+            "Moderated",
+        ),
+        t(
+            ui_locale.as_deref(),
+            "forum.categories.noteModeratedBody",
+            "Turn this on for queues that need stricter review before topics go live.",
+        ),
     );
     let composer_label = t(
         ui_locale.as_deref(),
@@ -1034,20 +1039,20 @@ fn CategoriesPage(
 
                 <section class="rounded-[1.75rem] border border-border bg-gradient-to-br from-card via-card to-muted/30 p-6 shadow-sm">
                     <p class="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                        {notes_label.clone()}
+                        {notes_copy.notes_label.clone()}
                     </p>
                     <div class="mt-4 grid gap-4 md:grid-cols-3">
                         <InsightTile
-                            title=note_icon_title
-                            body=note_icon_body
+                            title=notes_copy.note_icon_title.clone()
+                            body=notes_copy.note_icon_body.clone()
                         />
                         <InsightTile
-                            title=note_position_title
-                            body=note_position_body
+                            title=notes_copy.note_position_title.clone()
+                            body=notes_copy.note_position_body.clone()
                         />
                         <InsightTile
-                            title=note_moderated_title
-                            body=note_moderated_body
+                            title=notes_copy.note_moderated_title.clone()
+                            body=notes_copy.note_moderated_body.clone()
                         />
                     </div>
                 </section>
@@ -1229,37 +1234,39 @@ fn TopicsPage(
         "Filtered category",
     );
     let ready_template = t(ui_locale.as_deref(), "forum.topics.ready", "{count} ready");
-    let navigation_label = t(
-        ui_locale.as_deref(),
-        "forum.topics.navigationLabel",
-        "Navigation",
-    );
-    let navigation_title = t(
-        ui_locale.as_deref(),
-        "forum.topics.navigationTitle",
-        "Forum feed",
-    );
-    let navigation_body = t(
-        ui_locale.as_deref(),
-        "forum.topics.navigationBody",
-        "A left rail similar to NodeBB: jump between categories, keep counts visible, and open a thread into the editor on the right.",
-    );
-    let filter_title = t(
-        ui_locale.as_deref(),
-        "forum.topics.filterTitle",
-        "Filter topics",
-    );
-    let clear_label = t(ui_locale.as_deref(), "forum.topics.clear", "Clear");
-    let active_filter_label = t(
-        ui_locale.as_deref(),
-        "forum.topics.activeFilter",
-        "Active filter",
-    );
-    let draft_tags_label = t(ui_locale.as_deref(), "forum.topics.draftTags", "Draft tags");
-    let editing_thread_label = t(
-        ui_locale.as_deref(),
-        "forum.topics.editingThread",
-        "Editing thread",
+    let sidebar_copy = forum_admin_sidebar_copy_labels(
+        t(
+            ui_locale.as_deref(),
+            "forum.topics.navigationLabel",
+            "Navigation",
+        ),
+        t(
+            ui_locale.as_deref(),
+            "forum.topics.navigationTitle",
+            "Forum feed",
+        ),
+        t(
+            ui_locale.as_deref(),
+            "forum.topics.navigationBody",
+            "A left rail similar to NodeBB: jump between categories, keep counts visible, and open a thread into the editor on the right.",
+        ),
+        t(
+            ui_locale.as_deref(),
+            "forum.topics.filterTitle",
+            "Filter topics",
+        ),
+        t(ui_locale.as_deref(), "forum.topics.clear", "Clear"),
+        t(
+            ui_locale.as_deref(),
+            "forum.topics.activeFilter",
+            "Active filter",
+        ),
+        t(ui_locale.as_deref(), "forum.topics.draftTags", "Draft tags"),
+        t(
+            ui_locale.as_deref(),
+            "forum.topics.editingThread",
+            "Editing thread",
+        ),
     );
     let open_inspector_label = t(
         ui_locale.as_deref(),
@@ -1403,23 +1410,23 @@ fn TopicsPage(
             <aside class="space-y-6 rounded-[1.75rem] border border-border bg-card p-5 shadow-sm xl:sticky xl:top-6 xl:self-start">
                 <div>
                     <p class="text-xs font-semibold uppercase tracking-[0.24em] text-muted-foreground">
-                        {navigation_label.clone()}
+                        {sidebar_copy.navigation_label.clone()}
                     </p>
-                    <h2 class="mt-2 text-xl font-semibold text-card-foreground">{navigation_title.clone()}</h2>
+                    <h2 class="mt-2 text-xl font-semibold text-card-foreground">{sidebar_copy.navigation_title.clone()}</h2>
                     <p class="mt-2 text-sm leading-6 text-muted-foreground">
-                        {navigation_body.clone()}
+                        {sidebar_copy.navigation_body.clone()}
                     </p>
                 </div>
 
                 <div class="rounded-[1.5rem] border border-border bg-background/80 p-4">
                     <div class="flex items-center justify-between gap-3">
-                        <p class="text-sm font-medium text-foreground">{filter_title.clone()}</p>
+                        <p class="text-sm font-medium text-foreground">{sidebar_copy.filter_title.clone()}</p>
                         <button
                             type="button"
                             class="text-xs font-medium text-muted-foreground transition hover:text-foreground"
                             on:click=move |_| set_filter_category_id.set(String::new())
                         >
-                            {clear_label.clone()}
+                            {sidebar_copy.clear_label.clone()}
                         </button>
                     </div>
                     <Suspense fallback=move || view! { <div class="mt-4 h-24 animate-pulse rounded-2xl bg-muted"></div> }>
@@ -1429,15 +1436,15 @@ fn TopicsPage(
 
                 <div class="space-y-3 rounded-[1.5rem] border border-border bg-gradient-to-br from-background to-muted/40 p-4">
                     <SidebarStat
-                        label=active_filter_label.clone()
+                        label=sidebar_copy.active_filter_label.clone()
                         value=Signal::derive(move || selected_category_name.get())
                     />
                     <SidebarStat
-                        label=draft_tags_label.clone()
+                        label=sidebar_copy.draft_tags_label.clone()
                         value=Signal::derive(topic_form_tag_count)
                     />
                     <SidebarStat
-                        label=editing_thread_label.clone()
+                        label=sidebar_copy.editing_thread_label.clone()
                         value=Signal::derive(move || {
                             forum_admin_editing_thread_label(
                                 editing_id.get().as_deref(),
@@ -1720,8 +1727,8 @@ fn render_category_grid(
                                     })}
                                 </div>
                                 <div class="mt-5 flex flex-wrap gap-2">
-                                    <button type="button" class="rounded-full border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted" on:click={ let item_id = item_id.clone(); move |_| on_edit.run(item_id.clone()) } disabled=vm.is_busy>{vm.action_label.clone()}</button>
-                                    <button type="button" class="rounded-full border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm font-medium text-destructive transition hover:bg-destructive/15" on:click={ let item_id = item_id.clone(); move |_| on_delete.run(item_id.clone()) } disabled=vm.is_busy>{delete_label.clone()}</button>
+                                    <button type="button" class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action) on:click={ let item_id = item_id.clone(); move |_| on_edit.run(item_id.clone()) } disabled=vm.is_busy>{vm.action_label.clone()}</button>
+                                    <button type="button" class=forum_admin_action_button_class(ForumAdminActionButtonKind::Delete) on:click={ let item_id = item_id.clone(); move |_| on_delete.run(item_id.clone()) } disabled=vm.is_busy>{delete_label.clone()}</button>
                                 </div>
                             </div>
                         </article>
@@ -1834,8 +1841,8 @@ fn render_topic_feed(
                                 </div>
                             </div>
                             <div class="mt-5 flex flex-wrap gap-2">
-                                <button type="button" class="rounded-full border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted" on:click={ let item_id = item_id.clone(); move |_| on_edit.run(item_id.clone()) } disabled=vm.is_busy>{vm.action_label.clone()}</button>
-                                <button type="button" class="rounded-full border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm font-medium text-destructive transition hover:bg-destructive/15" on:click={ let item_id = item_id.clone(); move |_| on_delete.run(item_id.clone()) } disabled=vm.is_busy>{delete_label.clone()}</button>
+                                <button type="button" class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action) on:click={ let item_id = item_id.clone(); move |_| on_edit.run(item_id.clone()) } disabled=vm.is_busy>{vm.action_label.clone()}</button>
+                                <button type="button" class=forum_admin_action_button_class(ForumAdminActionButtonKind::Delete) on:click={ let item_id = item_id.clone(); move |_| on_delete.run(item_id.clone()) } disabled=vm.is_busy>{delete_label.clone()}</button>
                             </div>
                         </article>
                     }

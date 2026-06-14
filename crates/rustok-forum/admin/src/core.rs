@@ -8,6 +8,103 @@ use crate::model::{
 const DEFAULT_CATEGORY_ACCENT_STYLE: &str =
     "background:linear-gradient(180deg,#0ea5e9 0%,#f59e0b 100%);";
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ForumAdminModeratorNotesLabels {
+    pub notes_label: String,
+    pub note_icon_title: String,
+    pub note_icon_body: String,
+    pub note_position_title: String,
+    pub note_position_body: String,
+    pub note_moderated_title: String,
+    pub note_moderated_body: String,
+}
+
+pub fn forum_admin_moderator_notes_copy_labels(
+    notes_label: String,
+    note_icon_title: String,
+    note_icon_body: String,
+    note_position_title: String,
+    note_position_body: String,
+    note_moderated_title: String,
+    note_moderated_body: String,
+) -> ForumAdminModeratorNotesLabels {
+    ForumAdminModeratorNotesLabels {
+        notes_label,
+        note_icon_title,
+        note_icon_body,
+        note_position_title,
+        note_position_body,
+        note_moderated_title,
+        note_moderated_body,
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ForumAdminSidebarLabels {
+    pub navigation_label: String,
+    pub navigation_title: String,
+    pub navigation_body: String,
+    pub filter_title: String,
+    pub clear_label: String,
+    pub active_filter_label: String,
+    pub draft_tags_label: String,
+    pub editing_thread_label: String,
+}
+
+pub fn forum_admin_sidebar_copy_labels(
+    navigation_label: String,
+    navigation_title: String,
+    navigation_body: String,
+    filter_title: String,
+    clear_label: String,
+    active_filter_label: String,
+    draft_tags_label: String,
+    editing_thread_label: String,
+) -> ForumAdminSidebarLabels {
+    ForumAdminSidebarLabels {
+        navigation_label,
+        navigation_title,
+        navigation_body,
+        filter_title,
+        clear_label,
+        active_filter_label,
+        draft_tags_label,
+        editing_thread_label,
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ForumAdminMetricSurface {
+    Categories,
+    Topics,
+    ReplyPreview,
+}
+
+pub fn forum_admin_metric_accent_class(surface: ForumAdminMetricSurface) -> &'static str {
+    match surface {
+        ForumAdminMetricSurface::Categories => "bg-sky-500",
+        ForumAdminMetricSurface::Topics => "bg-amber-500",
+        ForumAdminMetricSurface::ReplyPreview => "bg-emerald-500",
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ForumAdminActionButtonKind {
+    Action,
+    Delete,
+}
+
+pub fn forum_admin_action_button_class(kind: ForumAdminActionButtonKind) -> &'static str {
+    match kind {
+        ForumAdminActionButtonKind::Action => {
+            "rounded-full border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted"
+        }
+        ForumAdminActionButtonKind::Delete => {
+            "rounded-full border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm font-medium text-destructive transition hover:bg-destructive/15"
+        }
+    }
+}
+
 #[derive(Clone, Debug)]
 pub struct ForumAdminHeaderLabels {
     pub badge: String,
@@ -1326,5 +1423,75 @@ mod tests {
         assert_eq!(vm.status_class, "warning");
         assert_eq!(vm.effective_locale, "en");
         assert_eq!(vm.content_preview, "Thanks for the update");
+    }
+
+    #[test]
+    fn maps_moderator_notes_copy_labels() {
+        let labels = forum_admin_moderator_notes_copy_labels(
+            "Notes".to_string(),
+            "Icon".to_string(),
+            "Icon body".to_string(),
+            "Position".to_string(),
+            "Position body".to_string(),
+            "Moderated".to_string(),
+            "Moderated body".to_string(),
+        );
+        assert_eq!(labels.notes_label, "Notes");
+        assert_eq!(labels.note_icon_title, "Icon");
+        assert_eq!(labels.note_icon_body, "Icon body");
+        assert_eq!(labels.note_position_title, "Position");
+        assert_eq!(labels.note_position_body, "Position body");
+        assert_eq!(labels.note_moderated_title, "Moderated");
+        assert_eq!(labels.note_moderated_body, "Moderated body");
+    }
+
+    #[test]
+    fn maps_sidebar_copy_labels() {
+        let labels = forum_admin_sidebar_copy_labels(
+            "Nav".to_string(),
+            "Feed".to_string(),
+            "Body".to_string(),
+            "Filter".to_string(),
+            "Clear".to_string(),
+            "Active".to_string(),
+            "Draft".to_string(),
+            "Editing".to_string(),
+        );
+        assert_eq!(labels.navigation_label, "Nav");
+        assert_eq!(labels.navigation_title, "Feed");
+        assert_eq!(labels.navigation_body, "Body");
+        assert_eq!(labels.filter_title, "Filter");
+        assert_eq!(labels.clear_label, "Clear");
+        assert_eq!(labels.active_filter_label, "Active");
+        assert_eq!(labels.draft_tags_label, "Draft");
+        assert_eq!(labels.editing_thread_label, "Editing");
+    }
+
+    #[test]
+    fn evaluates_metric_accent_policy() {
+        assert_eq!(
+            forum_admin_metric_accent_class(ForumAdminMetricSurface::Categories),
+            "bg-sky-500"
+        );
+        assert_eq!(
+            forum_admin_metric_accent_class(ForumAdminMetricSurface::Topics),
+            "bg-amber-500"
+        );
+        assert_eq!(
+            forum_admin_metric_accent_class(ForumAdminMetricSurface::ReplyPreview),
+            "bg-emerald-500"
+        );
+    }
+
+    #[test]
+    fn evaluates_action_button_style_policy() {
+        assert_eq!(
+            forum_admin_action_button_class(ForumAdminActionButtonKind::Action),
+            "rounded-full border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted"
+        );
+        assert_eq!(
+            forum_admin_action_button_class(ForumAdminActionButtonKind::Delete),
+            "rounded-full border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm font-medium text-destructive transition hover:bg-destructive/15"
+        );
     }
 }

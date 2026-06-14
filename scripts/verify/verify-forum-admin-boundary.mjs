@@ -92,6 +92,14 @@ for (const marker of [
   "forum_admin_collection_state",
   "category_card_view_model",
   "topic_card_view_model",
+  "ForumAdminModeratorNotesLabels",
+  "forum_admin_moderator_notes_copy_labels",
+  "ForumAdminSidebarLabels",
+  "forum_admin_sidebar_copy_labels",
+  "ForumAdminMetricSurface",
+  "forum_admin_metric_accent_class",
+  "ForumAdminActionButtonKind",
+  "forum_admin_action_button_class",
 ]) {
   assertContains(core, marker, `${corePath}: expected core-owned FFA helper ${marker}`);
 }
@@ -114,11 +122,24 @@ assertContains(ui, "forum_admin_seo_copy_labels", `${uiPath}: UI must consume co
 assertContains(ui, "forum_admin_delete_outcome", `${uiPath}: UI must consume core-owned delete outcome policy`);
 assertContains(ui, "CategoryFormSnapshot", `${uiPath}: UI must consume core-owned category form snapshots`);
 assertContains(ui, "TopicFormSnapshot", `${uiPath}: UI must consume core-owned topic form snapshots`);
+assertContains(ui, "forum_admin_moderator_notes_copy_labels", `${uiPath}: UI must consume core-owned moderator notes copy policy`);
+assertContains(ui, "forum_admin_sidebar_copy_labels", `${uiPath}: UI must consume core-owned sidebar copy policy`);
+assertContains(ui, "forum_admin_metric_accent_class", `${uiPath}: UI must consume core-owned metric accent policy`);
+assertContains(ui, "forum_admin_action_button_class", `${uiPath}: UI must consume core-owned action button style policy`);
 for (const marker of ["crate::api", /(^|[^A-Za-z0-9_])api::/, "#[server", "ForumService"]) {
   assertNotContains(ui, marker, `${uiPath}: UI adapter must not call raw transport or services (${marker})`);
 }
 for (const rawBusyMarker of ["category:edit", "category:save", "category:delete", "topic:edit", "topic:save", "topic:delete"]) {
   assertNotContains(ui, rawBusyMarker, `${uiPath}: busy-key strings must stay in core helper (${rawBusyMarker})`);
+}
+for (const rawMetricColor of ["bg-sky-500", "bg-amber-500", "bg-emerald-500"]) {
+  assertNotContains(ui, `accent_class="${rawMetricColor}"`, `${uiPath}: metric accent colors must stay in core policy (${rawMetricColor})`);
+}
+for (const rawActionButtonClass of [
+  "rounded-full border border-border px-4 py-2 text-sm font-medium transition hover:bg-muted",
+  "rounded-full border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm font-medium text-destructive transition hover:bg-destructive/15"
+]) {
+  assertNotContains(ui, rawActionButtonClass, `${uiPath}: action button styles must stay in core policy (${rawActionButtonClass})`);
 }
 assertNotContains(ui, /format!\("\{\}: \{err\}"/, `${uiPath}: transport error message composition must stay in core helper`);
 
