@@ -1,8 +1,8 @@
 use crate::model::StorefrontCheckoutCart;
 use rustok_fulfillment_storefront::transport::{
-    build_select_shipping_option_request as build_fulfillment_select_shipping_option_request,
     SelectShippingOptionRequest as FulfillmentSelectShippingOptionRequest,
     ShippingSelectionDeliveryGroup,
+    build_select_shipping_option_request as build_fulfillment_select_shipping_option_request,
 };
 use rustok_order_storefront::transport::CompleteCheckoutRequest;
 use rustok_payment_storefront::transport::PaymentCollectionCreateRequest;
@@ -24,15 +24,9 @@ pub struct FetchCommerceRequest {
 pub type PaymentCollectionCommandRequest = PaymentCollectionCreateRequest;
 pub type CheckoutCompletionCommandRequest = CompleteCheckoutRequest;
 
-#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub struct SelectShippingOptionRequest {
     pub owner_request: FulfillmentSelectShippingOptionRequest,
-    pub cart: StorefrontCheckoutCart,
-    pub shipping_profile_slug: String,
-    pub seller_id: Option<String>,
-    pub seller_scope: Option<String>,
-    pub shipping_option_id: Option<String>,
 }
 
 pub fn build_storefront_route_state(
@@ -88,14 +82,8 @@ pub fn build_select_shipping_option_request(
         shipping_option_id.clone(),
     );
 
-    SelectShippingOptionRequest {
-        owner_request,
-        cart,
-        shipping_profile_slug,
-        seller_id,
-        seller_scope,
-        shipping_option_id,
-    }
+    let _ = cart;
+    SelectShippingOptionRequest { owner_request }
 }
 
 fn normalize_optional(value: Option<String>) -> Option<String> {
