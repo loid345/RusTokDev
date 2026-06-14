@@ -17,6 +17,9 @@ pub enum ScriptError {
     #[error("Operation limit exceeded: {limit} operations")]
     OperationLimit { limit: u64 },
 
+    #[error("Resource limit exceeded: {resource}")]
+    ResourceLimit { resource: String },
+
     #[error("Script not found: {name}")]
     NotFound { name: String },
 

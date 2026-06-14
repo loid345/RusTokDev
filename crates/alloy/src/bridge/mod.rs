@@ -11,27 +11,59 @@ fn validate_email_address(email: &str) -> bool {
     EmailAddress::is_valid(email)
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PhaseCapabilities {
+    pub validation_helpers: bool,
+    pub db_services: bool,
+    pub external_services: bool,
+}
+
+impl PhaseCapabilities {
+    pub const fn for_phase(phase: ExecutionPhase) -> Self {
+        match phase {
+            ExecutionPhase::Before => Self {
+                validation_helpers: true,
+                db_services: false,
+                external_services: false,
+            },
+            ExecutionPhase::After => Self {
+                validation_helpers: false,
+                db_services: true,
+                external_services: false,
+            },
+            ExecutionPhase::OnCommit => Self {
+                validation_helpers: false,
+                db_services: false,
+                external_services: true,
+            },
+            ExecutionPhase::Manual | ExecutionPhase::Scheduled => Self {
+                validation_helpers: true,
+                db_services: true,
+                external_services: true,
+            },
+        }
+    }
+}
+
 pub struct Bridge;
 
 impl Bridge {
+    pub fn capabilities_for_phase(phase: ExecutionPhase) -> PhaseCapabilities {
+        PhaseCapabilities::for_phase(phase)
+    }
+
     pub fn register_for_phase(engine: &mut Engine, phase: ExecutionPhase) {
         register_utils(engine);
+        let capabilities = Self::capabilities_for_phase(phase);
 
-        match phase {
-            ExecutionPhase::Before => {
-                Self::register_validation_helpers(engine);
-            }
-            ExecutionPhase::After => {
-                Self::register_db_services(engine);
-            }
-            ExecutionPhase::OnCommit => {
-                Self::register_external_services(engine);
-            }
-            ExecutionPhase::Manual | ExecutionPhase::Scheduled => {
-                Self::register_db_services(engine);
-                Self::register_external_services(engine);
-                Self::register_validation_helpers(engine);
-            }
+        if capabilities.validation_helpers {
+            Self::register_validation_helpers(engine);
+        }
+        if capabilities.db_services {
+            Self::register_db_services(engine);
+        }
+        if capabilities.external_services {
+            Self::register_external_services(engine);
         }
     }
 
@@ -81,6 +113,26 @@ mod tests {
         assert!(validate_email_address("user+tag@example.com"));
         assert!(validate_email_address("user.name@sub.example.org"));
         assert!(validate_email_address("user_name@example.co.uk"));
+    }
+
+    #[test]
+    fn test_phase_capabilities_are_explicit() {
+        assert_eq!(
+            Bridge::capabilities_for_phase(ExecutionPhase::Before),
+            PhaseCapabilities {
+                validation_helpers: true,
+                db_services: false,
+                external_services: false,
+            }
+        );
+        assert_eq!(
+            Bridge::capabilities_for_phase(ExecutionPhase::OnCommit),
+            PhaseCapabilities {
+                validation_helpers: false,
+                db_services: false,
+                external_services: true,
+            }
+        );
     }
 
     #[test]
