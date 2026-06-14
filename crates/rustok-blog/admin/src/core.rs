@@ -585,6 +585,22 @@ pub fn prepare_blog_post_archive_command(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BlogPostMutationResultViewModel {
+    pub refresh_posts: bool,
+    pub apply_returned_post_to_form: bool,
+}
+
+pub fn blog_post_mutation_result_view(
+    editing_post_id: Option<&str>,
+    returned_post_id: &str,
+) -> BlogPostMutationResultViewModel {
+    BlogPostMutationResultViewModel {
+        refresh_posts: true,
+        apply_returned_post_to_form: is_editing_post(editing_post_id, returned_post_id),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlogPostDeleteCommand {
     pub post_id: String,
     pub busy_key: String,
@@ -840,6 +856,24 @@ mod tests {
         let delete = prepare_blog_post_delete_command("post-4".to_string());
         assert_eq!(delete.post_id, "post-4");
         assert_eq!(delete.busy_key, "delete:post-4");
+    }
+
+    #[test]
+    fn mutation_result_view_model_maps_apply_and_refresh_policy() {
+        let matching = blog_post_mutation_result_view(Some("post-1"), "post-1");
+
+        assert!(matching.refresh_posts);
+        assert!(matching.apply_returned_post_to_form);
+
+        let different = blog_post_mutation_result_view(Some("post-2"), "post-1");
+
+        assert!(different.refresh_posts);
+        assert!(!different.apply_returned_post_to_form);
+
+        let not_editing = blog_post_mutation_result_view(None, "post-1");
+
+        assert!(not_editing.refresh_posts);
+        assert!(!not_editing.apply_returned_post_to_form);
     }
 
     #[test]

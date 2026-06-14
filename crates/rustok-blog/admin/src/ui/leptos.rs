@@ -315,10 +315,11 @@ pub fn BlogAdmin() -> impl IntoView {
 
                 match result {
                     Ok(post) => {
-                        if core::is_editing_post(
+                        let result_view = core::blog_post_mutation_result_view(
                             editing_post_id.get_untracked().as_deref(),
                             post.id.as_str(),
-                        ) {
+                        );
+                        if result_view.apply_returned_post_to_form {
                             apply_post_to_form(
                                 set_editing_post_id,
                                 set_title,
@@ -332,7 +333,9 @@ pub fn BlogAdmin() -> impl IntoView {
                                 &post,
                             );
                         }
-                        set_refresh_nonce.update(|value| *value += 1);
+                        if result_view.refresh_posts {
+                            set_refresh_nonce.update(|value| *value += 1);
+                        }
                     }
                     Err(err) => {
                         set_submit_error.set(Some(WritePathIssue::with_context(
@@ -370,10 +373,11 @@ pub fn BlogAdmin() -> impl IntoView {
             .await
             {
                 Ok(post) => {
-                    if core::is_editing_post(
+                    let result_view = core::blog_post_mutation_result_view(
                         editing_post_id.get_untracked().as_deref(),
                         post.id.as_str(),
-                    ) {
+                    );
+                    if result_view.apply_returned_post_to_form {
                         apply_post_to_form(
                             set_editing_post_id,
                             set_title,
@@ -387,7 +391,9 @@ pub fn BlogAdmin() -> impl IntoView {
                             &post,
                         );
                     }
-                    set_refresh_nonce.update(|value| *value += 1);
+                    if result_view.refresh_posts {
+                        set_refresh_nonce.update(|value| *value += 1);
+                    }
                 }
                 Err(err) => {
                     set_submit_error.set(Some(WritePathIssue::with_context(
