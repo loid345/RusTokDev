@@ -1,4 +1,5 @@
 pub mod context;
+pub mod fba;
 #[cfg(feature = "server")]
 pub mod graphql;
 #[cfg(feature = "loco-adapter")]
@@ -21,6 +22,7 @@ pub use context::{
     ChannelContext, ChannelResolutionOutcome, ChannelResolutionSource, ChannelResolutionStage,
     ChannelResolutionTraceStep,
 };
+pub use fba::{FbaActor, FbaActorKind, FbaContext, FbaError, FbaErrorKind};
 #[cfg(feature = "server")]
 pub use request::RequestContext;
 pub use route_selection::{
