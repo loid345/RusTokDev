@@ -1,7 +1,11 @@
 use leptos::prelude::*;
-use leptos_graphql::{execute as execute_graphql, GraphqlHttpError, GraphqlRequest};
+use leptos_graphql::{GraphqlHttpError, GraphqlRequest, execute as execute_graphql};
+use rustok_fulfillment_storefront::transport::{
+    SelectShippingOptionRequest as FulfillmentSelectShippingOptionRequest, ShippingSelectionError,
+    build_shipping_selection_plan,
+};
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 use uuid::Uuid;
@@ -397,17 +401,6 @@ fn parse_adjustment_scope(metadata: &str) -> Option<String> {
                 .and_then(Value::as_str)
                 .map(str::to_string)
         })
-}
-
-fn normalize_shipping_profile_slug(value: String) -> Result<String, ApiError> {
-    let normalized = value.trim().to_string();
-    if normalized.is_empty() {
-        return Err(ApiError::Validation(
-            "shipping_profile_slug must not be empty".to_string(),
-        ));
-    }
-
-    Ok(normalized)
 }
 
 fn parse_cart_id(value: Option<String>) -> Result<Option<(String, Uuid)>, ApiError> {
@@ -832,153 +825,67 @@ fn map_native_checkout_completion(
     }
 }
 
-#[allow(dead_code)]
-fn build_graphql_shipping_selections(
-    cart: &StorefrontCheckoutCart,
-    shipping_profile_slug: &str,
-    seller_id: Option<&str>,
-    seller_scope: Option<&str>,
-    shipping_option_id: Option<Uuid>,
-) -> Result<Vec<StorefrontShippingSelectionInput>, ApiError> {
-    build_graphql_shipping_selection_plan(
-        cart,
-        shipping_profile_slug,
-        seller_id,
-        seller_scope,
-        shipping_option_id,
-    )
+fn shipping_selection_error_message(error: ShippingSelectionError) -> String {
+    match error {
+        ShippingSelectionError::MissingDeliveryGroup {
+            shipping_profile_slug,
+            seller_id,
+            seller_scope,
+        } => format!(
+            "delivery group `{shipping_profile_slug}`/{:?}/{:?} is not present in the checkout cart",
+            seller_id, seller_scope
+        ),
+        ShippingSelectionError::UnavailableShippingOption {
+            shipping_profile_slug,
+            shipping_option_id,
+        } => format!(
+            "shipping option {shipping_option_id} is not available for shipping profile {shipping_profile_slug}"
+        ),
+    }
 }
 
 #[allow(dead_code)]
-fn build_graphql_shipping_selection_plan(
-    cart: &StorefrontCheckoutCart,
-    shipping_profile_slug: &str,
-    seller_id: Option<&str>,
-    seller_scope: Option<&str>,
-    shipping_option_id: Option<Uuid>,
+fn build_graphql_shipping_selections(
+    request: &FulfillmentSelectShippingOptionRequest,
 ) -> Result<Vec<StorefrontShippingSelectionInput>, ApiError> {
-    let mut matched_target = false;
-    let mut selections = Vec::with_capacity(cart.delivery_groups.len());
-
-    for group in &cart.delivery_groups {
-        let group_matches = group.shipping_profile_slug == shipping_profile_slug
-            && if let Some(seller_id) = seller_id {
-                group.seller_id.as_deref() == Some(seller_id)
-            } else {
-                group.seller_id.is_none() && group.seller_scope.as_deref() == seller_scope
-            };
-        let selected_shipping_option_id = if group_matches {
-            matched_target = true;
-            if let Some(shipping_option_id) = shipping_option_id {
-                let is_available = group
-                    .available_shipping_options
-                    .iter()
-                    .any(|option| option.id == shipping_option_id.to_string());
-                if !is_available {
-                    return Err(ApiError::Validation(format!(
-                        "shipping option {shipping_option_id} is not available for shipping profile {}",
-                        group.shipping_profile_slug
-                    )));
-                }
-            }
-            shipping_option_id
-        } else {
-            parse_optional_uuid(
-                group.selected_shipping_option_id.clone(),
-                "selected_shipping_option_id",
-            )?
-        };
-
-        selections.push(StorefrontShippingSelectionInput {
-            shipping_profile_slug: group.shipping_profile_slug.clone(),
-            seller_id: group.seller_id.clone(),
-            seller_scope: group.seller_scope.clone(),
-            selected_shipping_option_id,
-        });
-    }
-
-    if !matched_target {
-        return Err(ApiError::Validation(format!(
-            "delivery group `{shipping_profile_slug}`/{:?}/{:?} is not present in the checkout cart",
-            seller_id,
-            seller_scope
-        )));
-    }
-
-    Ok(selections)
+    build_shipping_selection_plan(request)
+        .map_err(|err| ApiError::Validation(shipping_selection_error_message(err)))?
+        .into_iter()
+        .map(|selection| {
+            Ok(StorefrontShippingSelectionInput {
+                shipping_profile_slug: selection.shipping_profile_slug,
+                seller_id: selection.seller_id,
+                seller_scope: selection.seller_scope,
+                selected_shipping_option_id: parse_optional_uuid(
+                    selection.selected_shipping_option_id,
+                    "selected_shipping_option_id",
+                )?,
+            })
+        })
+        .collect()
 }
 
 #[cfg(feature = "ssr")]
 fn build_native_shipping_selections(
-    cart: &rustok_commerce::CartResponse,
-    shipping_profile_slug: &str,
-    seller_id: Option<&str>,
-    seller_scope: Option<&str>,
-    shipping_option_id: Option<Uuid>,
+    request: &FulfillmentSelectShippingOptionRequest,
 ) -> Result<Vec<rustok_commerce::CartShippingSelectionInput>, ServerFnError> {
-    build_native_shipping_selection_plan(
-        cart,
-        shipping_profile_slug,
-        seller_id,
-        seller_scope,
-        shipping_option_id,
-    )
-}
-
-#[cfg(feature = "ssr")]
-fn build_native_shipping_selection_plan(
-    cart: &rustok_commerce::CartResponse,
-    shipping_profile_slug: &str,
-    seller_id: Option<&str>,
-    seller_scope: Option<&str>,
-    shipping_option_id: Option<Uuid>,
-) -> Result<Vec<rustok_commerce::CartShippingSelectionInput>, ServerFnError> {
-    let mut matched_target = false;
-    let mut selections = Vec::with_capacity(cart.delivery_groups.len());
-
-    for group in &cart.delivery_groups {
-        let group_matches = group.shipping_profile_slug == shipping_profile_slug
-            && if let Some(seller_id) = seller_id {
-                group.seller_id.as_deref() == Some(seller_id)
-            } else {
-                group.seller_id.is_none() && group.seller_scope.as_deref() == seller_scope
-            };
-        let selected_shipping_option_id = if group_matches {
-            matched_target = true;
-            if let Some(shipping_option_id) = shipping_option_id {
-                let is_available = group
-                    .available_shipping_options
-                    .iter()
-                    .any(|option| option.id == shipping_option_id);
-                if !is_available {
-                    return Err(ServerFnError::new(format!(
-                        "shipping option {shipping_option_id} is not available for shipping profile {}",
-                        group.shipping_profile_slug
-                    )));
-                }
-            }
-            shipping_option_id
-        } else {
-            group.selected_shipping_option_id
-        };
-
-        selections.push(rustok_commerce::CartShippingSelectionInput {
-            shipping_profile_slug: group.shipping_profile_slug.clone(),
-            seller_id: group.seller_id.clone(),
-            seller_scope: group.seller_scope.clone(),
-            selected_shipping_option_id,
-        });
-    }
-
-    if !matched_target {
-        return Err(ServerFnError::new(format!(
-            "delivery group `{shipping_profile_slug}`/{:?}/{:?} is not present in the checkout cart",
-            seller_id,
-            seller_scope
-        )));
-    }
-
-    Ok(selections)
+    build_shipping_selection_plan(request)
+        .map_err(|err| ServerFnError::new(shipping_selection_error_message(err)))?
+        .into_iter()
+        .map(|selection| {
+            let selected_shipping_option_id = parse_optional_uuid(
+                selection.selected_shipping_option_id,
+                "selected_shipping_option_id",
+            )
+            .map_err(|err| ServerFnError::new(err.to_string()))?;
+            Ok(rustok_commerce::CartShippingSelectionInput {
+                shipping_profile_slug: selection.shipping_profile_slug,
+                seller_id: selection.seller_id,
+                seller_scope: selection.seller_scope,
+                selected_shipping_option_id,
+            })
+        })
+        .collect()
 }
 
 pub async fn fetch_storefront_commerce_server(
@@ -1015,45 +922,23 @@ pub async fn fetch_storefront_commerce_graphql(
 
 #[allow(dead_code)]
 pub async fn select_storefront_shipping_option_server(
-    cart_id: String,
-    shipping_profile_slug: String,
-    seller_id: Option<String>,
-    seller_scope: Option<String>,
-    shipping_option_id: Option<String>,
+    request: FulfillmentSelectShippingOptionRequest,
 ) -> Result<(), ApiError> {
-    storefront_select_shipping_option(
-        cart_id,
-        shipping_profile_slug,
-        seller_id,
-        seller_scope,
-        shipping_option_id,
-    )
-    .await
-    .map_err(ApiError::from)
+    storefront_select_shipping_option(request)
+        .await
+        .map_err(ApiError::from)
 }
 
 #[allow(dead_code)]
 pub async fn select_storefront_shipping_option_graphql(
-    cart: StorefrontCheckoutCart,
-    shipping_profile_slug: String,
-    seller_id: Option<String>,
-    seller_scope: Option<String>,
-    shipping_option_id: Option<String>,
+    request: FulfillmentSelectShippingOptionRequest,
 ) -> Result<(), ApiError> {
-    let Some((_, parsed_cart_id)) = parse_cart_id(Some(cart.id.clone()))? else {
+    let Some((_, parsed_cart_id)) = parse_cart_id(Some(request.cart_id.clone()))? else {
         return Err(ApiError::Validation(
             "cart_id must not be empty".to_string(),
         ));
     };
-    let normalized_shipping_profile_slug = normalize_shipping_profile_slug(shipping_profile_slug)?;
-    let parsed_shipping_option_id = parse_optional_uuid(shipping_option_id, "shipping_option_id")?;
-    let shipping_selections = build_graphql_shipping_selections(
-        &cart,
-        normalized_shipping_profile_slug.as_str(),
-        seller_id.as_deref(),
-        seller_scope.as_deref(),
-        parsed_shipping_option_id,
-    )?;
+    let shipping_selections = build_graphql_shipping_selections(&request)?;
 
     let response: SelectStorefrontShippingOptionResponse = request(
         SELECT_STOREFRONT_SHIPPING_OPTION_MUTATION,
@@ -1318,11 +1203,7 @@ async fn storefront_create_payment_collection(
 
 #[server(prefix = "/api/fn", endpoint = "commerce/select-shipping-option")]
 async fn storefront_select_shipping_option(
-    cart_id: String,
-    shipping_profile_slug: String,
-    seller_id: Option<String>,
-    seller_scope: Option<String>,
-    shipping_option_id: Option<String>,
+    request: FulfillmentSelectShippingOptionRequest,
 ) -> Result<(), ServerFnError> {
     #[cfg(feature = "ssr")]
     {
@@ -1339,17 +1220,11 @@ async fn storefront_select_shipping_option(
         let request_context = leptos_axum::extract::<rustok_api::RequestContext>()
             .await
             .ok();
-        let Some((_, parsed_cart_id)) =
-            parse_cart_id(Some(cart_id)).map_err(|err| ServerFnError::new(err.to_string()))?
+        let Some((_, parsed_cart_id)) = parse_cart_id(Some(request.cart_id.clone()))
+            .map_err(|err| ServerFnError::new(err.to_string()))?
         else {
             return Err(ServerFnError::new("cart_id must not be empty"));
         };
-        let normalized_shipping_profile_slug =
-            normalize_shipping_profile_slug(shipping_profile_slug)
-                .map_err(|err| ServerFnError::new(err.to_string()))?;
-        let parsed_shipping_option_id =
-            parse_optional_uuid(shipping_option_id, "shipping_option_id")
-                .map_err(|err| ServerFnError::new(err.to_string()))?;
 
         let cart_service = rustok_commerce::CartService::new(app_ctx.db.clone());
         let cart = cart_service
@@ -1360,13 +1235,7 @@ async fn storefront_select_shipping_option(
             resolve_storefront_customer_id(app_ctx.db.clone(), tenant.id, auth.0).await?;
         ensure_storefront_cart_access(&cart, storefront_customer_id)?;
 
-        let shipping_selections = build_native_shipping_selections(
-            &cart,
-            normalized_shipping_profile_slug.as_str(),
-            seller_id.as_deref(),
-            seller_scope.as_deref(),
-            parsed_shipping_option_id,
-        )?;
+        let shipping_selections = build_native_shipping_selections(&request)?;
 
         let updated_cart = cart_service
             .update_context(
@@ -1396,7 +1265,7 @@ async fn storefront_select_shipping_option(
     }
     #[cfg(not(feature = "ssr"))]
     {
-        let _ = (cart_id, shipping_profile_slug, shipping_option_id);
+        let _ = request;
         Err(ServerFnError::new(
             "commerce/select-shipping-option requires the `ssr` feature",
         ))
