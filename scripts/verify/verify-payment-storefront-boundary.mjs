@@ -46,8 +46,9 @@ const commerceUiPath = "crates/rustok-commerce/storefront/src/ui/leptos/mod.rs";
 const commerceRequestsPath = "crates/rustok-commerce/storefront/src/core/requests.rs";
 const planPath = "crates/rustok-payment/docs/implementation-plan.md";
 const registryPath = "docs/modules/registry.md";
+const packagePath = "package.json";
 
-for (const filePath of [libPath, corePath, transportPath, uiPath, commerceUiPath, commerceRequestsPath, planPath, registryPath]) {
+for (const filePath of [libPath, corePath, transportPath, uiPath, commerceUiPath, commerceRequestsPath, planPath, registryPath, packagePath]) {
   assertExists(filePath, `${filePath}: expected payment storefront FFA file`);
 }
 
@@ -59,6 +60,7 @@ const commerceUi = readRepo(commerceUiPath);
 const commerceRequests = readRepo(commerceRequestsPath);
 const plan = readRepo(planPath);
 const registry = readRepo(registryPath);
+const packageJson = readRepo(packagePath);
 
 for (const marker of ["pub mod core;", "pub mod transport;", "PaymentCollectionActionButton", "PaymentCollectionCard"]) {
   assertContains(lib, marker, `${libPath}: expected storefront public surface marker ${marker}`);
@@ -109,6 +111,8 @@ assertNotContains(commerceRequests, "build_payment_collection_create_request", `
 assertNotContains(commerceRequests, "build_payment_collection_command_request", `${commerceRequestsPath}: commerce core must not expose a payment request builder after owner UI handoff`);
 assertContains(plan, "verify-payment-storefront-boundary.mjs", `${planPath}: local plan must mention payment storefront boundary guardrail`);
 assertContains(registry, "verify-payment-storefront-boundary.mjs", `${registryPath}: central registry must mention payment storefront boundary guardrail`);
+assertContains(packageJson, "verify:payment:storefront-boundary", `${packagePath}: expected payment storefront boundary script`);
+assertContains(packageJson, "npm run verify:payment:storefront-boundary", `${packagePath}: aggregate FFA migration verification must include storefront payment boundary`);
 
 if (failures.length > 0) {
   console.error("payment storefront boundary verification failed:");
