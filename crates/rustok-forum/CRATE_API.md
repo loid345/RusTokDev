@@ -15,6 +15,11 @@
 - `pub enum ForumError`, `pub type ForumResult<T>`
 - `pub mod locale` — хелперы `resolve_translation`, `resolve_body`, `available_locales`
 
+## Topic и reply deletion semantics
+- `TopicService::delete` и `ReplyService::delete` используют soft-delete через статус `deleted` и сохраняют строки/связанные данные.
+- Удалённые topics скрыты из обычных topic/reply read-path; moderation/admin может получить их через explicit `status=all` и восстановить topic через `restore_topic`.
+- Физический purge не входит в runtime delete contract и будет отдельной CLI maintenance operation.
+
 ## DTO изменения (актуально)
 ### TopicResponse
 - Добавлены: `requested_locale: String`, `effective_locale: String`, `available_locales: Vec<String>`, `slug: String`, `author_id: Option<Uuid>`, `vote_score: i32`, `current_user_vote: Option<i32>`, `is_subscribed: bool`, `solution_reply_id: Option<Uuid>`
@@ -63,7 +68,7 @@
 Публикует форумные доменные события через outbox pipeline:
 - `ForumTopicCreated` — при создании темы
 - `ForumTopicReplied` — при добавлении ответа
-- `ForumTopicStatusChanged` — при изменении статуса темы (close/archive)
+- `ForumTopicStatusChanged` — при изменении статуса темы (close/archive/delete/restore)
 - `ForumTopicPinned` — при закреплении/откреплении темы
 - `ForumReplyStatusChanged` — при модерации ответа (approve/reject/hide)
 
