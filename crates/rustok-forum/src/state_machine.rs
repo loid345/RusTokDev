@@ -40,6 +40,7 @@ pub enum TopicStatus {
     Open,
     Closed,
     Archived,
+    Deleted,
 }
 
 impl TopicStatus {
@@ -73,6 +74,10 @@ impl TopicStatus {
                 | (Self::Closed, Self::Open)
                 | (Self::Closed, Self::Archived)
                 | (Self::Archived, Self::Open)
+                | (Self::Open, Self::Deleted)
+                | (Self::Closed, Self::Deleted)
+                | (Self::Archived, Self::Deleted)
+                | (Self::Deleted, Self::Open)
         )
     }
 
@@ -267,6 +272,7 @@ mod tests {
             TopicStatus::Open,
             TopicStatus::Closed,
             TopicStatus::Archived,
+            TopicStatus::Deleted,
         ] {
             let s = status.as_str();
             assert_eq!(TopicStatus::from_str_value(s), Some(status));
@@ -287,6 +293,11 @@ mod tests {
         assert!(TopicStatus::Closed.can_transition_to(&TopicStatus::Archived));
         // Archived → Open (reopen)
         assert!(TopicStatus::Archived.can_transition_to(&TopicStatus::Open));
+        // Any live topic can be soft-deleted; deleted topics can be restored.
+        assert!(TopicStatus::Open.can_transition_to(&TopicStatus::Deleted));
+        assert!(TopicStatus::Closed.can_transition_to(&TopicStatus::Deleted));
+        assert!(TopicStatus::Archived.can_transition_to(&TopicStatus::Deleted));
+        assert!(TopicStatus::Deleted.can_transition_to(&TopicStatus::Open));
     }
 
     #[test]
@@ -297,6 +308,8 @@ mod tests {
         assert!(!TopicStatus::Archived.can_transition_to(&TopicStatus::Archived));
         // Archived → Closed is invalid (must reopen first)
         assert!(!TopicStatus::Archived.can_transition_to(&TopicStatus::Closed));
+        assert!(!TopicStatus::Deleted.can_transition_to(&TopicStatus::Closed));
+        assert!(!TopicStatus::Deleted.can_transition_to(&TopicStatus::Archived));
     }
 
     #[test]
