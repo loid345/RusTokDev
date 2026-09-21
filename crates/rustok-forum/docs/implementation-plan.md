@@ -55,6 +55,7 @@
 - [x] усилить steady-state concurrency: атомарные user-stat counters, сериализация solution/topic/category writes и patch-updates без stale state;
 - [x] удерживать REST permission-denied semantics синхронными с документированным разделением `401/403`;
 - [x] удерживать service-level RBAC и public visibility покрытыми regression tests;
+- [x] завершить admin moderation surface поверх existing REST moderation endpoints без отдельного state/workspace rewrite;
 - [x] продолжать выносить тяжёлые derived metrics в отдельные read-model flows только при реальном runtime pressure.
 
 ### 3. Operability
