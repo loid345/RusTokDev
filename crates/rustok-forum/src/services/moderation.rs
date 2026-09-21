@@ -268,11 +268,17 @@ impl ModerationService {
         topic_id: Uuid,
         security: SecurityContext,
     ) -> ForumResult<()> {
-        let topic_service = TopicService::new(self.db.clone(), self.event_bus.clone());
-        let topic = topic_service.find_topic(tenant_id, topic_id).await?;
+        let txn = self.db.begin().await?;
+        let topic_snapshot = TopicService::find_topic_in_tx(&txn, tenant_id, topic_id).await?;
+        CategoryService::find_category_for_update_in_tx(
+            &txn,
+            tenant_id,
+            topic_snapshot.category_id,
+        )
+        .await?;
+        let topic = TopicService::find_topic_for_update_in_tx(&txn, tenant_id, topic_id).await?;
         enforce_solution_scope(&security, topic.author_id)?;
 
-        let txn = self.db.begin().await?;
         let solution_author_id = if let Some(solution) =
             forum_solution::Entity::find_by_id(topic_id)
                 .one(&txn)
