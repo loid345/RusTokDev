@@ -199,6 +199,88 @@ async fn mark_and_clear_solution_updates_topic_and_reply_read_paths() {
     assert!(!reply_after_clear.is_solution);
 }
 
+
+#[tokio::test]
+async fn deleting_solution_reply_from_deleted_topic_clears_solution_link() {
+    let (db, event_bus, _events, tenant_id) = setup().await;
+    let category_service = CategoryService::new(db.clone());
+    let topic_service = TopicService::new(db.clone(), event_bus.clone());
+    let reply_service = ReplyService::new(db.clone(), event_bus.clone());
+    let moderation_service = ModerationService::new(db, event_bus);
+
+    let admin = SecurityContext::new(UserRole::Admin, Some(Uuid::new_v4()));
+    let manager = SecurityContext::new(UserRole::Manager, Some(Uuid::new_v4()));
+    let customer = SecurityContext::new(UserRole::Customer, Some(Uuid::new_v4()));
+
+    let category = create_category(&category_service, tenant_id, admin, false).await;
+    let topic = topic_service
+        .create(
+            tenant_id,
+            customer.clone(),
+            CreateTopicInput {
+                locale: "en".to_string(),
+                category_id: category.id,
+                title: "Deleted solution topic".to_string(),
+                slug: Some("deleted-solution-topic".to_string()),
+                body: "Body".to_string(),
+                body_format: "markdown".to_string(),
+                content_json: None,
+                metadata: serde_json::json!({}),
+                tags: vec![],
+                channel_slugs: None,
+            },
+        )
+        .await
+        .expect("topic should be created");
+    let reply = reply_service
+        .create(
+            tenant_id,
+            customer.clone(),
+            topic.id,
+            CreateReplyInput {
+                locale: "en".to_string(),
+                content: "Accepted answer".to_string(),
+                content_format: "markdown".to_string(),
+                content_json: None,
+                parent_reply_id: None,
+            },
+        )
+        .await
+        .expect("reply should be created");
+
+    moderation_service
+        .mark_solution(tenant_id, topic.id, reply.id, manager.clone())
+        .await
+        .expect("reply should become a solution");
+
+    topic_service
+        .delete(tenant_id, topic.id, customer.clone())
+        .await
+        .expect("topic should be soft-deleted");
+
+    reply_service
+        .delete(tenant_id, reply.id, customer)
+        .await
+        .expect("solution reply should be soft-deleted");
+
+    let deleted_topic = topic_service
+        .get(tenant_id, manager.clone(), topic.id, "en")
+        .await
+        .expect("moderator should load deleted topic");
+    assert_eq!(deleted_topic.solution_reply_id, None);
+
+    moderation_service
+        .restore_topic(tenant_id, topic.id, manager.clone())
+        .await
+        .expect("topic should be restorable");
+
+    let restored_topic = topic_service
+        .get(tenant_id, manager, topic.id, "en")
+        .await
+        .expect("restored topic should load");
+    assert_eq!(restored_topic.solution_reply_id, None);
+}
+
 #[tokio::test]
 async fn pending_reply_cannot_be_marked_as_solution() {
     let (db, event_bus, _events, tenant_id) = setup().await;
