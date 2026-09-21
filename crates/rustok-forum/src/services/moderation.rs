@@ -16,7 +16,7 @@ use crate::error::ForumError;
 use crate::error::ForumResult;
 use crate::services::rbac::{enforce_owned_scope, enforce_scope};
 use crate::services::user_stats::UserStatsService;
-use crate::services::{ReplyService, TopicService};
+use crate::services::{CategoryService, ReplyService, TopicService};
 use crate::state_machine::{ReplyStatus, TopicStatus};
 
 pub struct ModerationService {
@@ -318,6 +318,22 @@ impl ModerationService {
         let new_status = target.as_str().to_string();
 
         ReplyService::set_status_in_tx(&txn, tenant_id, reply_id, &new_status).await?;
+
+        let was_public = current == ReplyStatus::Approved;
+        let is_public = target == ReplyStatus::Approved;
+        if was_public != is_public {
+            let topic = TopicService::find_topic_in_tx(&txn, tenant_id, topic_id).await?;
+            let public_delta = if is_public { 1 } else { -1 };
+            TopicService::adjust_reply_count_in_tx(&txn, tenant_id, topic_id, public_delta).await?;
+            CategoryService::adjust_counters_in_tx(
+                &txn,
+                tenant_id,
+                topic.category_id,
+                0,
+                public_delta,
+            )
+            .await?;
+        }
 
         // A reply can be a solution only while it is approved. If moderation
         // moves it away from approved, remove the stale solution in the same

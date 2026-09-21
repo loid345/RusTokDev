@@ -534,6 +534,7 @@ impl TopicService {
             forum_reply::Entity::find()
                 .filter(forum_reply::Column::TenantId.eq(tenant_id))
                 .filter(forum_reply::Column::TopicId.eq(topic_id))
+                .filter(forum_reply::Column::Status.eq(crate::constants::reply_status::APPROVED))
                 .order_by_desc(forum_reply::Column::CreatedAt)
                 .one(txn)
                 .await?

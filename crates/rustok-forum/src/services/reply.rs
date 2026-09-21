@@ -97,18 +97,19 @@ impl ReplyService {
         let position = Self::next_position_in_tx(&txn, topic_id).await?;
         let reply_id = Uuid::new_v4();
         let now = Utc::now();
+        let reply_status = if category.moderated {
+            reply_status::PENDING
+        } else {
+            reply_status::APPROVED
+        };
+        let is_public_reply = reply_status == reply_status::APPROVED;
         forum_reply::ActiveModel {
             id: Set(reply_id),
             tenant_id: Set(tenant_id),
             topic_id: Set(topic_id),
             author_id: Set(security.user_id),
             parent_reply_id: Set(input.parent_reply_id),
-            status: Set(if category.moderated {
-                reply_status::PENDING
-            } else {
-                reply_status::APPROVED
-            }
-            .to_string()),
+            status: Set(reply_status.to_string()),
             position: Set(position),
             created_at: Set(now.into()),
             updated_at: Set(now.into()),
@@ -128,8 +129,10 @@ impl ReplyService {
         .insert(&txn)
         .await?;
 
-        let topic = TopicService::adjust_reply_count_in_tx(&txn, tenant_id, topic_id, 1).await?;
-        CategoryService::adjust_counters_in_tx(&txn, tenant_id, topic.category_id, 0, 1).await?;
+        if is_public_reply {
+            TopicService::adjust_reply_count_in_tx(&txn, tenant_id, topic_id, 1).await?;
+            CategoryService::adjust_counters_in_tx(&txn, tenant_id, topic.category_id, 0, 1).await?;
+        }
         UserStatsService::adjust_reply_count_in_tx(&txn, tenant_id, security.user_id, 1).await?;
 
         self.event_bus
@@ -264,9 +267,11 @@ impl ReplyService {
         forum_reply::Entity::delete_by_id(reply_id)
             .exec(&txn)
             .await?;
-        let topic =
-            TopicService::adjust_reply_count_in_tx(&txn, tenant_id, reply.topic_id, -1).await?;
-        CategoryService::adjust_counters_in_tx(&txn, tenant_id, topic.category_id, 0, -1).await?;
+        if reply.status == reply_status::APPROVED {
+            let topic =
+                TopicService::adjust_reply_count_in_tx(&txn, tenant_id, reply.topic_id, -1).await?;
+            CategoryService::adjust_counters_in_tx(&txn, tenant_id, topic.category_id, 0, -1).await?;
+        }
         UserStatsService::adjust_reply_count_in_tx(&txn, tenant_id, reply.author_id, -1).await?;
         if solution_removed {
             UserStatsService::adjust_solution_count_in_tx(&txn, tenant_id, reply.author_id, -1)
