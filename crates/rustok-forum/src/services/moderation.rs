@@ -319,6 +319,29 @@ impl ModerationService {
 
         ReplyService::set_status_in_tx(&txn, tenant_id, reply_id, &new_status).await?;
 
+        // A reply can be a solution only while it is approved. If moderation
+        // moves it away from approved, remove the stale solution in the same
+        // transaction and keep the author's solution stats consistent.
+        if current == ReplyStatus::Approved && target != ReplyStatus::Approved {
+            let solution = forum_solution::Entity::find_by_id(topic_id)
+                .one(&txn)
+                .await?;
+            if solution.is_some_and(|solution| solution.reply_id == reply_id) {
+                forum_solution::Entity::delete_many()
+                    .filter(forum_solution::Column::TopicId.eq(topic_id))
+                    .filter(forum_solution::Column::ReplyId.eq(reply_id))
+                    .exec(&txn)
+                    .await?;
+                UserStatsService::adjust_solution_count_in_tx(
+                    &txn,
+                    tenant_id,
+                    reply.author_id,
+                    -1,
+                )
+                .await?;
+            }
+        }
+
         self.event_bus
             .publish_in_tx(
                 &txn,
