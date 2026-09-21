@@ -53,8 +53,10 @@
 
 - [x] расширять moderation/read-model guarantees только через forum-owned services;
 - [x] усилить steady-state concurrency: атомарные user-stat counters, сериализация solution/topic/category writes и patch-updates без stale state;
+- [x] сериализовать solution marking с lifecycle через `category -> topic -> reply` и исключить tenant-bypass в topic/reply moderation helpers;
 - [x] удерживать REST permission-denied semantics синхронными с документированным разделением `401/403`;
 - [x] удерживать service-level RBAC и public visibility покрытыми regression tests;
+- [x] поддерживать явное очищение nullable category fields через пустое значение в update contract;
 - [x] завершить admin moderation surface поверх existing REST moderation endpoints без отдельного state/workspace rewrite;
 - [x] продолжать выносить тяжёлые derived metrics в отдельные read-model flows только при реальном runtime pressure.
 
