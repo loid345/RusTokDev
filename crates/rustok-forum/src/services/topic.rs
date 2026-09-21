@@ -574,12 +574,10 @@ impl TopicService {
         topic_id: Uuid,
         is_pinned: bool,
     ) -> ForumResult<()> {
-        let mut active = forum_topic::ActiveModel {
-            id: Set(topic_id),
-            is_pinned: Set(is_pinned),
-            updated_at: Set(Utc::now().into()),
-            ..Default::default()
-        };
+        let topic = Self::find_topic_for_update_in_tx(txn, tenant_id, topic_id).await?;
+        let mut active: forum_topic::ActiveModel = topic.into();
+        active.is_pinned = Set(is_pinned);
+        active.updated_at = Set(Utc::now().into());
         active.update(txn).await?;
         Ok(())
     }
@@ -590,12 +588,10 @@ impl TopicService {
         topic_id: Uuid,
         is_locked: bool,
     ) -> ForumResult<()> {
-        let mut active = forum_topic::ActiveModel {
-            id: Set(topic_id),
-            is_locked: Set(is_locked),
-            updated_at: Set(Utc::now().into()),
-            ..Default::default()
-        };
+        let topic = Self::find_topic_for_update_in_tx(txn, tenant_id, topic_id).await?;
+        let mut active: forum_topic::ActiveModel = topic.into();
+        active.is_locked = Set(is_locked);
+        active.updated_at = Set(Utc::now().into());
         active.update(txn).await?;
         Ok(())
     }
@@ -606,12 +602,10 @@ impl TopicService {
         topic_id: Uuid,
         status: &str,
     ) -> ForumResult<()> {
-        let mut active = forum_topic::ActiveModel {
-            id: Set(topic_id),
-            status: Set(status.to_string()),
-            updated_at: Set(Utc::now().into()),
-            ..Default::default()
-        };
+        let topic = Self::find_topic_for_update_in_tx(txn, tenant_id, topic_id).await?;
+        let mut active: forum_topic::ActiveModel = topic.into();
+        active.status = Set(status.to_string());
+        active.updated_at = Set(Utc::now().into());
         active.update(txn).await?;
         Ok(())
     }
