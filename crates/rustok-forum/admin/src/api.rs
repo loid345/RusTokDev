@@ -403,6 +403,54 @@ pub async fn fetch_replies(
     .await
 }
 
+pub async fn moderate_topic(
+    token: Option<String>,
+    tenant_slug: Option<String>,
+    topic_id: String,
+    action: &str,
+) -> Result<(), ApiError> {
+    let (method, suffix) = match action {
+        "pin" | "close" | "reopen" | "archive" => (Method::POST, action),
+        "unpin" => (Method::DELETE, "pin"),
+        "lock" => (Method::POST, "lock"),
+        "unlock" => (Method::DELETE, "lock"),
+        _ => return Err(format!("Unsupported topic moderation action: {action}")),
+    };
+
+    request_empty(
+        method,
+        format!("/topics/{topic_id}/{suffix}").as_str(),
+        token,
+        tenant_slug,
+        None,
+        None::<()>,
+    )
+    .await
+}
+
+pub async fn moderate_reply(
+    token: Option<String>,
+    tenant_slug: Option<String>,
+    topic_id: String,
+    reply_id: String,
+    action: &str,
+) -> Result<(), ApiError> {
+    match action {
+        "approve" | "reject" | "hide" => {}
+        _ => return Err(format!("Unsupported reply moderation action: {action}")),
+    }
+
+    request_empty(
+        Method::POST,
+        format!("/topics/{topic_id}/replies/{reply_id}/{action}").as_str(),
+        token,
+        tenant_slug,
+        None,
+        None::<()>,
+    )
+    .await
+}
+
 fn optional_text(value: &str) -> Option<&str> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
