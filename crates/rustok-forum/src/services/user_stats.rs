@@ -1,5 +1,5 @@
 use chrono::Utc;
-use sea_orm::sea_query::{Expr, Func, OnConflict};
+use sea_orm::sea_query::{Expr, ExprTrait, Func, OnConflict};
 use sea_orm::{
     ActiveValue::Set, DatabaseConnection, DatabaseTransaction, EntityTrait,
 };
