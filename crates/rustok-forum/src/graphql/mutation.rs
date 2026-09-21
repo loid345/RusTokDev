@@ -126,6 +126,7 @@ impl ForumMutation {
         id: Uuid,
     ) -> Result<bool> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_forum_permission(
@@ -196,6 +197,7 @@ impl ForumMutation {
         category_id: Uuid,
     ) -> Result<GqlForumCategory> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let auth = require_forum_permission(
             ctx,
@@ -287,6 +289,7 @@ impl ForumMutation {
         locale: Option<String>,
     ) -> Result<GqlForumTopic> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_forum_permission(
@@ -330,6 +333,7 @@ impl ForumMutation {
         input: CreateForumReplyInput,
     ) -> Result<GqlForumReply> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_forum_permission(
@@ -437,6 +441,7 @@ impl ForumMutation {
         locale: Option<String>,
     ) -> Result<GqlForumTopic> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_forum_permission(
@@ -481,6 +486,7 @@ impl ForumMutation {
         locale: Option<String>,
     ) -> Result<GqlForumReply> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_forum_permission(
@@ -541,6 +547,7 @@ impl ForumMutation {
         locale: Option<String>,
     ) -> Result<GqlForumReply> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_forum_permission(
@@ -650,6 +657,7 @@ impl ForumMutation {
         locale: Option<String>,
     ) -> Result<GqlForumTopic> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_forum_permission(
@@ -696,6 +704,7 @@ impl ForumMutation {
         input: CreateForumCategoryInput,
     ) -> Result<GqlForumCategory> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let auth = require_forum_permission(
             ctx,
