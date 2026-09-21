@@ -878,10 +878,6 @@ async fn ensure_public_forum_channel_enabled(
     )
 }
 
-fn is_public_request(ctx: &Context<'_>) -> bool {
-    ctx.data_opt::<AuthContext>().is_none()
-}
-
 fn public_channel_slug(ctx: &Context<'_>) -> Option<String> {
     ctx.data_opt::<RequestContext>()
         .and_then(|rc| rc.channel_slug.clone())
