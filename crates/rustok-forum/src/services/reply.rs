@@ -351,7 +351,15 @@ impl ReplyService {
             }
         }
 
-        UserStatsService::adjust_reply_count_in_tx(&txn, tenant_id, reply.author_id, -1).await?;
+        if topic.status != topic_status::DELETED {
+            UserStatsService::adjust_reply_count_in_tx(
+                &txn,
+                tenant_id,
+                reply.author_id,
+                -1,
+            )
+            .await?;
+        }
 
         if solution_removed {
             forum_solution::Entity::delete_many()
@@ -359,13 +367,15 @@ impl ReplyService {
                 .filter(forum_solution::Column::ReplyId.eq(reply_id))
                 .exec(&txn)
                 .await?;
-            UserStatsService::adjust_solution_count_in_tx(
-                &txn,
-                tenant_id,
-                reply.author_id,
-                -1,
-            )
-            .await?;
+            if topic.status != topic_status::DELETED {
+                UserStatsService::adjust_solution_count_in_tx(
+                    &txn,
+                    tenant_id,
+                    reply.author_id,
+                    -1,
+                )
+                .await?;
+            }
         }
 
         self.event_bus
