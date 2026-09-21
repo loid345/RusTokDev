@@ -40,6 +40,12 @@ fn can_view_all_reply_statuses(security: &SecurityContext) -> bool {
     )
 }
 
+fn can_view_reply(security: &SecurityContext, reply: &forum_reply::Model) -> bool {
+    can_view_all_reply_statuses(security)
+        || reply.status == reply_status::APPROVED
+        || security.user_id == reply.author_id
+}
+
 impl ReplyService {
     pub fn new(db: DatabaseConnection, event_bus: TransactionalEventBus) -> Self {
         Self { db, event_bus }
@@ -168,7 +174,7 @@ impl ReplyService {
         let locale = normalize_locale(locale)?;
         let fallback_locale = fallback_locale.map(normalize_locale).transpose()?;
         let reply = self.find_reply(tenant_id, reply_id).await?;
-        if !can_view_all_reply_statuses(&security) && reply.status != reply_status::APPROVED {
+        if !can_view_reply(&security, &reply) {
             return Err(ForumError::ReplyNotFound(reply_id));
         }
         let bodies = self.load_bodies(reply_id).await?;
