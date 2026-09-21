@@ -110,6 +110,7 @@
   "forum.render.close": "Закрыть",
   "forum.render.reopen": "Открыть снова",
   "forum.render.archive": "Архивировать",
+  "forum.render.restore": "Восстановить",
   "forum.render.approve": "Одобрить",
   "forum.render.reject": "Отклонить",
   "forum.render.hide": "Скрыть",
