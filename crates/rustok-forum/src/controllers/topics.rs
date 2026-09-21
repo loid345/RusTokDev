@@ -270,6 +270,41 @@ pub async fn reopen_topic(
 
 #[utoipa::path(
     post,
+    path = "/api/forum/topics/{topic_id}/restore",
+    tag = "forum",
+    params(("topic_id" = Uuid, Path, description = "Topic ID")),
+    responses(
+        (status = 200, description = "Topic restored", body = TopicResponse),
+        (status = 400, description = "Invalid status transition"),
+        (status = 404, description = "Topic not found"),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden")
+    )
+)]
+pub async fn restore_topic(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    request_context: RequestContext,
+    Path(topic_id): Path<Uuid>,
+) -> Result<Json<TopicResponse>> {
+    ensure_forum_permission(
+        &auth,
+        &[Permission::FORUM_TOPICS_MODERATE],
+        "Permission denied: forum_topics:moderate required",
+    )?;
+    ModerationService::new(
+        ctx.db.clone(),
+        transactional_event_bus_from_context(&ctx),
+    )
+    .restore_topic(tenant.id, topic_id, auth.security_context())
+    .await
+    .map_err(map_forum_error)?;
+    load_topic_after_moderation(&ctx, &tenant, &auth, &request_context, topic_id).await
+}
+
+#[utoipa::path(
+    post,
     path = "/api/forum/topics/{topic_id}/archive",
     tag = "forum",
     params(("topic_id" = Uuid, Path, description = "Topic ID")),
