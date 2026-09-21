@@ -1916,6 +1916,7 @@ fn render_topic_feed(
     let close_label = t(locale.as_deref(), "forum.render.close", "Close");
     let reopen_label = t(locale.as_deref(), "forum.render.reopen", "Reopen");
     let archive_label = t(locale.as_deref(), "forum.render.archive", "Archive");
+    let restore_label = t(locale.as_deref(), "forum.render.restore", "Restore");
     match forum_admin_collection_state(result) {
         ForumAdminCollectionState::Empty => view! { <div class="mt-6 rounded-[1.5rem] border border-dashed border-border p-8 text-sm text-muted-foreground">{no_topics_label}</div> }.into_any(),
         ForumAdminCollectionState::Ready(items) => view! {
@@ -1989,6 +1990,16 @@ fn render_topic_feed(
                                             disabled=vm.is_busy
                                         >
                                             {reopen_label.clone()}
+                                        </button>
+                                    }.into_any(),
+                                    "deleted" => view! {
+                                        <button
+                                            type="button"
+                                            class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action)
+                                            on:click={ let item_id = item_id.clone(); move |_| on_moderate.run((item_id.clone(), "restore".to_string())) }
+                                            disabled=vm.is_busy
+                                        >
+                                            {restore_label.clone()}
                                         </button>
                                     }.into_any(),
                                     _ => view! {}.into_any(),
