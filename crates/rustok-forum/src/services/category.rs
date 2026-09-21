@@ -2,7 +2,7 @@ use chrono::Utc;
 use flex::delete_attached_localized_values;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, DatabaseTransaction,
-    EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, TransactionTrait,
+    EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, QuerySelect, TransactionTrait,
 };
 use std::collections::HashMap;
 use tracing::instrument;
@@ -236,6 +236,7 @@ impl CategoryService {
             .ok_or(ForumError::CategoryNotFound(category_id))?;
 
         let txn = self.db.begin().await?;
+        CategoryService::find_category_for_update_in_tx(&txn, tenant_id, category_id).await?;
         let topics = forum_topic::Entity::find()
             .filter(forum_topic::Column::TenantId.eq(tenant_id))
             .filter(forum_topic::Column::CategoryId.eq(category_id))
@@ -427,6 +428,19 @@ impl CategoryService {
             .one(txn)
             .await?;
         existing.ok_or(ForumError::CategoryNotFound(category_id))
+    }
+
+    pub(crate) async fn find_category_for_update_in_tx(
+        txn: &DatabaseTransaction,
+        tenant_id: Uuid,
+        category_id: Uuid,
+    ) -> ForumResult<forum_category::Model> {
+        forum_category::Entity::find_by_id(category_id)
+            .filter(forum_category::Column::TenantId.eq(tenant_id))
+            .lock_exclusive()
+            .one(txn)
+            .await?
+            .ok_or(ForumError::CategoryNotFound(category_id))
     }
 
     pub(crate) async fn adjust_counters_in_tx(

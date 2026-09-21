@@ -104,7 +104,7 @@ impl TopicService {
             .await?;
 
         let txn = self.db.begin().await?;
-        CategoryService::ensure_exists_in_tx(&txn, tenant_id, input.category_id).await?;
+        CategoryService::find_category_for_update_in_tx(&txn, tenant_id, input.category_id).await?;
 
         let now = Utc::now();
         let topic_id = Uuid::new_v4();

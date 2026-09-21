@@ -62,9 +62,16 @@ impl ReplyService {
         enforce_scope(&security, Resource::ForumReplies, Action::Create)?;
         let locale = normalize_locale(&input.locale)?;
         let txn = self.db.begin().await?;
-        let topic = TopicService::find_topic_for_update_in_tx(&txn, tenant_id, topic_id).await?;
-        let category =
-            CategoryService::find_category_in_tx(&txn, tenant_id, topic.category_id).await?;
+        let topic_snapshot =
+            TopicService::find_topic_in_tx(&txn, tenant_id, topic_id).await?;
+        let category = CategoryService::find_category_for_update_in_tx(
+            &txn,
+            tenant_id,
+            topic_snapshot.category_id,
+        )
+        .await?;
+        let topic =
+            TopicService::find_topic_for_update_in_tx(&txn, tenant_id, topic_id).await?;
 
         if topic.status == topic_status::CLOSED {
             return Err(ForumError::TopicClosed);
@@ -260,6 +267,16 @@ impl ReplyService {
             reply.author_id,
         )?;
         let txn = self.db.begin().await?;
+        let topic_snapshot =
+            TopicService::find_topic_in_tx(&txn, tenant_id, reply.topic_id).await?;
+        CategoryService::find_category_for_update_in_tx(
+            &txn,
+            tenant_id,
+            topic_snapshot.category_id,
+        )
+        .await?;
+        let topic =
+            TopicService::find_topic_for_update_in_tx(&txn, tenant_id, reply.topic_id).await?;
         let solution_removed = forum_solution::Entity::find_by_id(reply.topic_id)
             .one(&txn)
             .await?
@@ -268,8 +285,7 @@ impl ReplyService {
             .exec(&txn)
             .await?;
         if reply.status == reply_status::APPROVED {
-            let topic =
-                TopicService::adjust_reply_count_in_tx(&txn, tenant_id, reply.topic_id, -1).await?;
+            TopicService::adjust_reply_count_in_tx(&txn, tenant_id, reply.topic_id, -1).await?;
             CategoryService::adjust_counters_in_tx(&txn, tenant_id, topic.category_id, 0, -1).await?;
         }
         UserStatsService::adjust_reply_count_in_tx(&txn, tenant_id, reply.author_id, -1).await?;
