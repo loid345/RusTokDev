@@ -18,6 +18,7 @@ forum-owned persistence и должен оставаться самостоят�
 - forum widget contract freeze surfaces: `ForumWidgetContractService`, REST endpoints `/api/forum/widgets/catalog` + `/api/forum/widgets/validate`, GraphQL query `forumWidgetCatalog`;
 - tag attachments через `forum_topic_tags` при shared vocabulary в `rustok-taxonomy`;
 - visibility, moderation и user-facing derived fields в forum read/write contracts;
+- deletion is soft by default for topics and replies; deleted topics are hidden from regular reads, can be restored by moderation, and physical purge is deferred to a future CLI.
 - REST transport сохраняет различие между `401 Unauthorized` и `403 Forbidden` для forum authentication и permission failures.
 
 ## Интеграция
