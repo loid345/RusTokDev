@@ -283,16 +283,17 @@ impl ReplyService {
         reply_id: Uuid,
         security: SecurityContext,
     ) -> ForumResult<()> {
-        let reply = self.find_reply(tenant_id, reply_id).await?;
+        let txn = self.db.begin().await?;
+        let reply_snapshot = Self::find_reply_in_tx(&txn, tenant_id, reply_id).await?;
         enforce_owned_scope(
             &security,
             Resource::ForumReplies,
             Action::Delete,
-            reply.author_id,
+            reply_snapshot.author_id,
         )?;
-        let txn = self.db.begin().await?;
+
         let topic_snapshot =
-            TopicService::find_topic_in_tx(&txn, tenant_id, reply.topic_id).await?;
+            TopicService::find_topic_in_tx(&txn, tenant_id, reply_snapshot.topic_id).await?;
         CategoryService::find_category_for_update_in_tx(
             &txn,
             tenant_id,
@@ -300,27 +301,83 @@ impl ReplyService {
         )
         .await?;
         let topic =
-            TopicService::find_topic_for_update_in_tx(&txn, tenant_id, reply.topic_id).await?;
+            TopicService::find_topic_for_update_in_tx(&txn, tenant_id, reply_snapshot.topic_id).await?;
+        let reply = Self::find_reply_for_update_in_tx(&txn, tenant_id, reply_id).await?;
+
+        let current = crate::state_machine::ReplyStatus::from_str_value(&reply.status)
+            .ok_or_else(|| {
+                ForumError::Validation(format!("Unknown reply status: {}", reply.status))
+            })?;
+        current.validate_transition(&crate::state_machine::ReplyStatus::Deleted)?;
+
         let solution_removed = forum_solution::Entity::find_by_id(reply.topic_id)
             .one(&txn)
             .await?
             .is_some_and(|solution| solution.reply_id == reply_id);
-        forum_reply::Entity::delete_by_id(reply_id)
-            .exec(&txn)
-            .await?;
-        if reply.status == reply_status::APPROVED {
+
+        if !Self::set_status_if_current_in_tx(
+            &txn,
+            tenant_id,
+            reply_id,
+            current.as_str(),
+            reply_status::DELETED,
+        )
+        .await?
+        {
+            return Err(ForumError::Validation(
+                "Reply status changed concurrently; retry deletion",
+            ));
+        }
+
+        if current == crate::state_machine::ReplyStatus::Approved {
             TopicService::adjust_reply_count_in_tx(&txn, tenant_id, reply.topic_id, -1).await?;
-            CategoryService::adjust_counters_in_tx(&txn, tenant_id, topic.category_id, 0, -1).await?;
-        }
-        UserStatsService::adjust_reply_count_in_tx(&txn, tenant_id, reply.author_id, -1).await?;
-        if solution_removed {
-            UserStatsService::adjust_solution_count_in_tx(&txn, tenant_id, reply.author_id, -1)
+            if topic.status != topic_status::DELETED {
+                CategoryService::adjust_counters_in_tx(
+                    &txn,
+                    tenant_id,
+                    topic.category_id,
+                    0,
+                    -1,
+                )
                 .await?;
+            }
         }
+
+        UserStatsService::adjust_reply_count_in_tx(&txn, tenant_id, reply.author_id, -1).await?;
+
+        if solution_removed {
+            forum_solution::Entity::delete_many()
+                .filter(forum_solution::Column::TopicId.eq(reply.topic_id))
+                .filter(forum_solution::Column::ReplyId.eq(reply_id))
+                .exec(&txn)
+                .await?;
+            UserStatsService::adjust_solution_count_in_tx(
+                &txn,
+                tenant_id,
+                reply.author_id,
+                -1,
+            )
+            .await?;
+        }
+
+        self.event_bus
+            .publish_in_tx(
+                &txn,
+                tenant_id,
+                security.user_id,
+                DomainEvent::ForumReplyStatusChanged {
+                    reply_id,
+                    topic_id: reply.topic_id,
+                    old_status: current.as_str().to_string(),
+                    new_status: reply_status::DELETED.to_string(),
+                    moderator_id: security.user_id,
+                },
+            )
+            .await?;
+
         txn.commit().await?;
         Ok(())
     }
-
     #[instrument(skip(self, security))]
     pub async fn list_for_topic(
         &self,
