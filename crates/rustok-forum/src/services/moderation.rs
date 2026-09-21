@@ -303,8 +303,16 @@ impl ModerationService {
         target: ReplyStatus,
     ) -> ForumResult<()> {
         let txn = self.db.begin().await?;
+        let topic_snapshot = TopicService::find_topic_in_tx(&txn, tenant_id, topic_id).await?;
+        CategoryService::find_category_for_update_in_tx(
+            &txn,
+            tenant_id,
+            topic_snapshot.category_id,
+        )
+        .await?;
+        let topic = TopicService::find_topic_for_update_in_tx(&txn, tenant_id, topic_id).await?;
         let reply = ReplyService::find_reply_in_tx(&txn, tenant_id, reply_id).await?;
-        if reply.topic_id != topic_id {
+        if reply.topic_id != topic.id {
             return Err(ForumError::Validation(
                 "Reply belongs to another topic".to_string(),
             ));
