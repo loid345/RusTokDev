@@ -148,7 +148,7 @@ impl CategoryService {
         enforce_scope(&security, Resource::ForumCategories, Action::Update)?;
         let locale = normalize_locale(&input.locale)?;
         let txn = self.db.begin().await?;
-        let category = CategoryService::find_category_for_update_in_tx(
+        CategoryService::find_category_for_update_in_tx(
             &txn,
             tenant_id,
             category_id,
