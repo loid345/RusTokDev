@@ -304,6 +304,11 @@ impl ModerationService {
     ) -> ForumResult<()> {
         let txn = self.db.begin().await?;
         let reply = ReplyService::find_reply_in_tx(&txn, tenant_id, reply_id).await?;
+        if reply.topic_id != topic_id {
+            return Err(ForumError::Validation(
+                "Reply belongs to another topic".to_string(),
+            ));
+        }
         let current = ReplyStatus::from_str_value(&reply.status).ok_or_else(|| {
             crate::error::ForumError::Validation(format!("Unknown reply status: {}", reply.status))
         })?;
@@ -342,7 +347,9 @@ impl ModerationService {
     ) -> ForumResult<()> {
         let topic_service = TopicService::new(self.db.clone(), self.event_bus.clone());
         let topic = topic_service.find_topic(tenant_id, topic_id).await?;
-        let current = TopicStatus::from_str_value(&topic.status).unwrap_or(TopicStatus::Open);
+        let current = TopicStatus::from_str_value(&topic.status).ok_or_else(|| {
+            ForumError::Validation(format!("Unknown topic status: {}", topic.status))
+        })?;
         current.validate_transition(&target)?;
 
         let old_status = current.as_str().to_string();

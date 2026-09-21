@@ -1,7 +1,8 @@
 use chrono::Utc;
+use flex::delete_attached_localized_values;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, DatabaseTransaction,
-    EntityTrait, PaginatorTrait, QueryFilter, QueryOrder,
+    EntityTrait, PaginatorTrait, QueryFilter, QueryOrder, TransactionTrait,
 };
 use std::collections::HashMap;
 use tracing::instrument;
@@ -13,10 +14,13 @@ use rustok_content::{
 use rustok_core::{Action, Resource, SecurityContext};
 
 use crate::dto::{CategoryListItem, CategoryResponse, CreateCategoryInput, UpdateCategoryInput};
-use crate::entities::{forum_category, forum_category_translation};
+use crate::entities::{
+    forum_category, forum_category_translation, forum_reply, forum_solution, forum_topic,
+};
 use crate::error::{ForumError, ForumResult};
 use crate::services::rbac::enforce_scope;
 use crate::services::subscription::SubscriptionService;
+use crate::services::user_stats::UserStatsService;
 
 pub struct CategoryService {
     db: DatabaseConnection,
@@ -217,14 +221,67 @@ impl CategoryService {
             .await?
             .ok_or(ForumError::CategoryNotFound(category_id))?;
 
+        let txn = self.db.begin().await?;
+        let topics = forum_topic::Entity::find()
+            .filter(forum_topic::Column::TenantId.eq(tenant_id))
+            .filter(forum_topic::Column::CategoryId.eq(category_id))
+            .all(&txn)
+            .await?;
+
+        // Category deletion cascades topics/replies in the database. Mirror the explicit
+        // topic deletion path first so derived user stats and Flex localized values do
+        // not become stale/orphaned.
+        for topic in topics {
+            let reply_author_ids = forum_reply::Entity::find()
+                .filter(forum_reply::Column::TenantId.eq(tenant_id))
+                .filter(forum_reply::Column::TopicId.eq(topic.id))
+                .all(&txn)
+                .await?
+                .into_iter()
+                .map(|reply| reply.author_id)
+                .collect::<Vec<_>>();
+
+            let solution_author_id = if let Some(solution) =
+                forum_solution::Entity::find_by_id(topic.id).one(&txn).await?
+            {
+                forum_reply::Entity::find_by_id(solution.reply_id)
+                    .filter(forum_reply::Column::TenantId.eq(tenant_id))
+                    .one(&txn)
+                    .await?
+                    .and_then(|reply| reply.author_id)
+            } else {
+                None
+            };
+
+            UserStatsService::decrement_topic_thread_in_tx(
+                &txn,
+                tenant_id,
+                topic.author_id,
+                &reply_author_ids,
+                solution_author_id,
+            )
+            .await?;
+
+            delete_attached_localized_values(&txn, tenant_id, "topic", topic.id)
+                .await
+                .map_err(|error| match error {
+                    rustok_core::field_schema::FlexError::Database(message) => {
+                        ForumError::Database(sea_orm::DbErr::Custom(message))
+                    }
+                    other => ForumError::Validation(other.to_string()),
+                })?;
+        }
+
         forum_category_translation::Entity::delete_many()
             .filter(forum_category_translation::Column::CategoryId.eq(category_id))
-            .exec(&self.db)
+            .exec(&txn)
             .await?;
 
         forum_category::Entity::delete_by_id(category.id)
-            .exec(&self.db)
+            .exec(&txn)
             .await?;
+
+        txn.commit().await?;
         Ok(())
     }
 

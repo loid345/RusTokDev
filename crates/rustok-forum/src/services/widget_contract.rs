@@ -98,6 +98,11 @@ fn validate_topic_list_props(
     issues: &mut Vec<ForumWidgetValidationIssue>,
 ) {
     let object = expect_object(props, "props", issues);
+    reject_additional_properties(
+        object,
+        &["category_id", "page", "per_page", "include_pinned", "sort"],
+        issues,
+    );
 
     validate_optional_uuid(
         object,
@@ -129,6 +134,7 @@ fn validate_topic_detail_props(
     issues: &mut Vec<ForumWidgetValidationIssue>,
 ) {
     let object = expect_object(props, "props", issues);
+    reject_additional_properties(object, &["topic_id", "include_replies", "locale"], issues);
 
     validate_required_uuid(
         object,
@@ -147,6 +153,7 @@ fn validate_reply_stream_props(
     issues: &mut Vec<ForumWidgetValidationIssue>,
 ) {
     let object = expect_object(props, "props", issues);
+    reject_additional_properties(object, &["topic_id", "page", "per_page", "approved_only"], issues);
 
     validate_required_uuid(
         object,
@@ -174,6 +181,26 @@ fn expect_object<'a>(
                 "Widget props payload must be a JSON object",
             ));
             None
+        }
+    }
+}
+
+fn reject_additional_properties(
+    object: Option<&Map<String, Value>>,
+    allowed: &[&str],
+    issues: &mut Vec<ForumWidgetValidationIssue>,
+) {
+    let Some(object) = object else {
+        return;
+    };
+
+    for field in object.keys() {
+        if !allowed.contains(&field.as_str()) {
+            issues.push(validation_issue(
+                field,
+                "additional_property",
+                "Property is not allowed by the widget schema",
+            ));
         }
     }
 }
@@ -269,7 +296,19 @@ fn validate_u64_with_bounds(
         return;
     };
 
-    let value = object.get(field).and_then(Value::as_u64).unwrap_or(default);
+    let Some(raw_value) = object.get(field) else {
+        normalized.insert(field.to_string(), Value::from(default));
+        return;
+    };
+    let Some(value) = raw_value.as_u64() else {
+        issues.push(validation_issue(
+            field,
+            "invalid_type",
+            "Field must be a non-negative integer",
+        ));
+        normalized.insert(field.to_string(), Value::from(default));
+        return;
+    };
     if value < min || value > max {
         issues.push(validation_issue(
             field,
@@ -324,7 +363,15 @@ fn validate_optional_locale(
         return;
     };
 
-    let Some(raw) = object.get(field).and_then(Value::as_str) else {
+    let Some(raw_value) = object.get(field) else {
+        return;
+    };
+    let Some(raw) = raw_value.as_str() else {
+        issues.push(validation_issue(
+            field,
+            "invalid_type",
+            "Locale must be a string",
+        ));
         return;
     };
 
@@ -355,7 +402,16 @@ fn validate_optional_string_enum(
         return;
     };
 
-    let Some(raw) = object.get(field).and_then(Value::as_str) else {
+    let Some(raw_value) = object.get(field) else {
+        normalized.insert(field.to_string(), Value::String(default.to_string()));
+        return;
+    };
+    let Some(raw) = raw_value.as_str() else {
+        issues.push(validation_issue(
+            field,
+            "invalid_type",
+            "Field must be a string",
+        ));
         normalized.insert(field.to_string(), Value::String(default.to_string()));
         return;
     };

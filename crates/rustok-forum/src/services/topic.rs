@@ -527,7 +527,18 @@ impl TopicService {
         let topic = Self::find_topic_in_tx(txn, tenant_id, topic_id).await?;
         let mut active: forum_topic::ActiveModel = topic.clone().into();
         active.reply_count = Set((topic.reply_count + delta).max(0));
-        active.last_reply_at = Set(Some(Utc::now().into()));
+
+        // Recompute activity from the remaining replies. Deleting the latest reply
+        // must not make the topic look newly active.
+        active.last_reply_at = Set(
+            forum_reply::Entity::find()
+                .filter(forum_reply::Column::TenantId.eq(tenant_id))
+                .filter(forum_reply::Column::TopicId.eq(topic_id))
+                .order_by_desc(forum_reply::Column::CreatedAt)
+                .one(txn)
+                .await?
+                .map(|reply| reply.created_at),
+        );
         active.updated_at = Set(Utc::now().into());
         active.update(txn).await?;
         Ok(topic)

@@ -57,6 +57,9 @@ impl ReplyService {
         if topic.status == topic_status::ARCHIVED {
             return Err(ForumError::TopicArchived);
         }
+        if topic.is_locked {
+            return Err(ForumError::TopicLocked);
+        }
 
         let prepared_body = prepare_content_payload(
             Some(&input.content_format),
