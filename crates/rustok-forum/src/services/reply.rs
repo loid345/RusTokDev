@@ -213,14 +213,6 @@ impl ReplyService {
         input: UpdateReplyInput,
     ) -> ForumResult<ReplyResponse> {
         let locale = normalize_locale(&input.locale)?;
-        let existing = self.find_reply(tenant_id, reply_id).await?;
-        enforce_owned_scope(
-            &security,
-            Resource::ForumReplies,
-            Action::Update,
-            existing.author_id,
-        )?;
-
         if input.content.is_none() && input.content_json.is_none() && input.content_format.is_none()
         {
             return self.get(tenant_id, security, reply_id, &locale).await;
@@ -236,6 +228,26 @@ impl ReplyService {
         .map_err(ForumError::Validation)?;
 
         let txn = self.db.begin().await?;
+        let reply_snapshot = Self::find_reply_in_tx(&txn, tenant_id, reply_id).await?;
+        let topic_snapshot =
+            TopicService::find_topic_in_tx(&txn, tenant_id, reply_snapshot.topic_id).await?;
+        CategoryService::find_category_for_update_in_tx(
+            &txn,
+            tenant_id,
+            topic_snapshot.category_id,
+        )
+        .await?;
+        let topic =
+            TopicService::find_topic_for_update_in_tx(&txn, tenant_id, reply_snapshot.topic_id)
+                .await?;
+        let existing = Self::find_reply_for_update_in_tx(&txn, tenant_id, reply_id).await?;
+        enforce_owned_scope(
+            &security,
+            Resource::ForumReplies,
+            Action::Update,
+            existing.author_id,
+        )?;
+
         self.upsert_body_in_tx(
             &txn,
             reply_id,
@@ -470,6 +482,19 @@ impl ReplyService {
         reply_id: Uuid,
     ) -> ForumResult<forum_reply::Model> {
         Self::find_reply_in_conn(txn, tenant_id, reply_id).await
+    }
+
+    pub(crate) async fn find_reply_for_update_in_tx(
+        txn: &DatabaseTransaction,
+        tenant_id: Uuid,
+        reply_id: Uuid,
+    ) -> ForumResult<forum_reply::Model> {
+        forum_reply::Entity::find_by_id(reply_id)
+            .filter(forum_reply::Column::TenantId.eq(tenant_id))
+            .lock_exclusive()
+            .one(txn)
+            .await?
+            .ok_or(ForumError::ReplyNotFound(reply_id))
     }
 
     async fn find_reply_in_conn(
