@@ -237,9 +237,8 @@ impl ReplyService {
             topic_snapshot.category_id,
         )
         .await?;
-        let topic =
-            TopicService::find_topic_for_update_in_tx(&txn, tenant_id, reply_snapshot.topic_id)
-                .await?;
+        TopicService::find_topic_for_update_in_tx(&txn, tenant_id, reply_snapshot.topic_id)
+            .await?;
         let existing = Self::find_reply_for_update_in_tx(&txn, tenant_id, reply_id).await?;
         enforce_owned_scope(
             &security,
