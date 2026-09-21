@@ -1991,7 +1991,7 @@ fn render_topic_feed(
                                             {reopen_label.clone()}
                                         </button>
                                     }.into_any(),
-                                    _ => ().into_any(),
+                                    _ => view! {}.into_any(),
                                 }}
                                 {(!matches!(vm.status.as_str(), "archived")).then(|| view! {
                                     <button
