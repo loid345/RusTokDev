@@ -466,11 +466,7 @@ impl CategoryService {
         topic_delta: i32,
         reply_delta: i32,
     ) -> ForumResult<()> {
-        let category = forum_category::Entity::find_by_id(category_id)
-            .filter(forum_category::Column::TenantId.eq(tenant_id))
-            .one(txn)
-            .await?
-            .ok_or(ForumError::CategoryNotFound(category_id))?;
+        let category = Self::find_category_for_update_in_tx(txn, tenant_id, category_id).await?;
 
         let mut active: forum_category::ActiveModel = category.clone().into();
         active.topic_count = Set((category.topic_count + topic_delta).max(0));
