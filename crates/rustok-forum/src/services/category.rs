@@ -42,6 +42,20 @@ impl CategoryService {
         validate_category_name(&input.name)?;
         let locale = normalize_locale(&input.locale)?;
         let slug = normalize_required_slug(&input.slug)?;
+
+        if let Some(parent_id) = input.parent_id {
+            let parent_exists = forum_category::Entity::find_by_id(parent_id)
+                .filter(forum_category::Column::TenantId.eq(tenant_id))
+                .one(&self.db)
+                .await?
+                .is_some();
+            if !parent_exists {
+                return Err(ForumError::Validation(
+                    "Parent category does not belong to the current tenant".to_string(),
+                ));
+            }
+        }
+
         let now = Utc::now();
         let id = Uuid::new_v4();
 
