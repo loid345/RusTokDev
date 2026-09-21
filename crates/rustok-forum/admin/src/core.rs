@@ -650,12 +650,14 @@ pub enum ForumAdminBusyAction {
     Edit,
     Save,
     Delete,
+    Moderate,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ForumAdminBusySurface {
     Category,
     Topic,
+    Reply,
 }
 
 impl ForumAdminBusySurface {
@@ -663,6 +665,7 @@ impl ForumAdminBusySurface {
         match self {
             Self::Category => "category",
             Self::Topic => "topic",
+            Self::Reply => "reply",
         }
     }
 }
@@ -673,6 +676,7 @@ impl ForumAdminBusyAction {
             Self::Edit => "edit",
             Self::Save => "save",
             Self::Delete => "delete",
+            Self::Moderate => "moderate",
         }
     }
 }
