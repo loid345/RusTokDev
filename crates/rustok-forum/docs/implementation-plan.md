@@ -52,6 +52,8 @@
 ### 2. Product hardening
 
 - [x] расширять moderation/read-model guarantees только через forum-owned services;
+- [x] harden steady-state lifecycle concurrency: atomic user-stat counters, serialized solution/topic/category writes, and stale-state-safe patch updates;
+- [x] keep REST permission-denied semantics aligned with the documented 401/403 split;
 - [x] удерживать service-level RBAC и public visibility покрытыми regression tests;
 - [x] продолжать выносить тяжёлые derived metrics в отдельные read-model flows только при реальном runtime pressure.
 
