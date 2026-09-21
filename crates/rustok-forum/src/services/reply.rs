@@ -245,8 +245,11 @@ impl ReplyService {
         )
         .await?;
 
-        let mut active: forum_reply::ActiveModel = existing.into();
-        active.updated_at = Set(Utc::now().into());
+        let mut active = forum_reply::ActiveModel {
+            id: Set(reply_id),
+            updated_at: Set(Utc::now().into()),
+            ..Default::default()
+        };
         active.update(&txn).await?;
         txn.commit().await?;
         self.get(tenant_id, security, reply_id, &locale).await
