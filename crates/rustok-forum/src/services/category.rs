@@ -164,10 +164,10 @@ impl CategoryService {
             active.position = Set(position);
         }
         if let Some(icon) = input.icon {
-            active.icon = Set(icon);
+            active.icon = Set(normalize_optional_category_value(icon));
         }
         if let Some(color) = input.color {
-            active.color = Set(color);
+            active.color = Set(normalize_optional_category_value(color));
         }
         if let Some(moderated) = input.moderated {
             active.moderated = Set(moderated);
@@ -200,7 +200,7 @@ impl CategoryService {
                     changed = true;
                 }
                 if let Some(description) = input.description {
-                    active.description = Set(description);
+                    active.description = Set(normalize_optional_category_value(description));
                     changed = true;
                 }
                 if changed {
@@ -226,7 +226,11 @@ impl CategoryService {
                     locale: Set(locale.clone()),
                     name: Set(name),
                     slug: Set(slug),
-                    description: Set(input.description),
+                    description: Set(
+                        input
+                            .description
+                            .map(normalize_optional_category_value),
+                    ),
                 }
                 .insert(&txn)
                 .await?;
@@ -552,6 +556,14 @@ fn to_category_response(
         reply_count: category.reply_count,
         moderated: category.moderated,
         is_subscribed,
+    }
+}
+
+fn normalize_optional_category_value(value: String) -> Option<String> {
+    if value.trim().is_empty() {
+        None
+    } else {
+        Some(value)
     }
 }
 
