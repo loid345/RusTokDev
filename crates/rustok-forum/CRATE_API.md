@@ -94,5 +94,5 @@
 
 ### Ошибки / коды отказов
 - Публичные `*Error`/`*Result` типы модуля определяют контракт отказов и не должны терять семантику при маппинге в HTTP/GraphQL/CLI.
-- REST permission failures are exposed as `403 Forbidden`; missing/invalid authentication remains `401 Unauthorized`, resource absence remains `404`, and domain validation remains `400`.
+- REST permission failures возвращаются как `403 Forbidden`; отсутствие/ошибка аутентификации остаётся `401 Unauthorized`, отсутствие ресурса — `404`, domain validation — `400`.
 - Для validation/auth/conflict/not-found сценариев должен сохраняться устойчивый error-class, используемый тестами и адаптерами.
