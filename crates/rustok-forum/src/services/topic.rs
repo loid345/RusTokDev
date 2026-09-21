@@ -466,6 +466,10 @@ impl TopicService {
             Some("all") => {
                 enforce_scope(&security, Resource::ForumTopics, Action::Moderate)?;
             }
+            Some(status) if status == topic_status::DELETED => {
+                enforce_scope(&security, Resource::ForumTopics, Action::Moderate)?;
+                select = select.filter(forum_topic::Column::Status.eq(status));
+            }
             Some(status) => {
                 select = select.filter(forum_topic::Column::Status.eq(status));
             }
