@@ -1,4 +1,4 @@
-use super::map_forum_error;
+use super::{forum_forbidden, map_forum_error};
 use axum::{
     extract::{Path, State},
     Json,
@@ -46,7 +46,7 @@ fn ensure_forum_permission(
     message: &str,
 ) -> Result<()> {
     if !has_any_effective_permission(&auth.permissions, permissions) {
-        return Err(Error::Unauthorized(message.to_string()));
+        return Err(forum_forbidden(message));
     }
 
     Ok(())
