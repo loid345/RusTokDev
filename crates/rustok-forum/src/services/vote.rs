@@ -44,6 +44,9 @@ impl VoteService {
         validate_vote_value(value)?;
 
         let topic = self.find_topic(tenant_id, topic_id).await?;
+        if topic.status == topic_status::DELETED {
+            return Err(ForumError::TopicDeleted);
+        }
         if topic.status == topic_status::ARCHIVED {
             return Err(ForumError::Validation(
                 "Archived topics cannot receive votes".to_string(),
@@ -66,7 +69,10 @@ impl VoteService {
     ) -> ForumResult<()> {
         enforce_scope(&security, Resource::ForumTopics, Action::Read)?;
         let user_id = require_authenticated_user(&security)?;
-        self.find_topic(tenant_id, topic_id).await?;
+        let topic = self.find_topic(tenant_id, topic_id).await?;
+        if topic.status == topic_status::DELETED {
+            return Err(ForumError::TopicDeleted);
+        }
 
         let txn = self.db.begin().await?;
         forum_topic_vote::Entity::delete_many()
