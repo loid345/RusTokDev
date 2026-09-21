@@ -47,7 +47,7 @@ pub enum TopicStatus {
 }
 
 impl TopicStatus {
-    /// Parse a topic status from a string value (from metadata).
+    /// Parse a topic status from the persisted database value.
     pub fn from_str_value(s: &str) -> Option<Self> {
         match s {
             topic_status::OPEN => Some(Self::Open),
@@ -58,7 +58,7 @@ impl TopicStatus {
         }
     }
 
-    /// Convert to string value for storage in metadata.
+    /// Convert to the persisted database string value.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Open => topic_status::OPEN,
@@ -134,7 +134,7 @@ impl ReplyStatus {
         }
     }
 
-    /// Convert to string for metadata storage.
+    /// Convert to the persisted database string value.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Pending => reply_status::PENDING,
