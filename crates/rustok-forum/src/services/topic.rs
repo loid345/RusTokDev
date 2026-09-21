@@ -346,6 +346,8 @@ impl TopicService {
             topic.author_id,
         )?;
         let txn = self.db.begin().await?;
+        CategoryService::find_category_for_update_in_tx(&txn, tenant_id, topic.category_id).await?;
+        let topic = Self::find_topic_for_update_in_tx(&txn, tenant_id, topic_id).await?;
         let reply_author_ids = forum_reply::Entity::find()
             .filter(forum_reply::Column::TenantId.eq(tenant_id))
             .filter(forum_reply::Column::TopicId.eq(topic_id))
