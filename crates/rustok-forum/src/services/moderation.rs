@@ -394,6 +394,9 @@ impl ModerationService {
         )
         .await?;
         let topic = TopicService::find_topic_for_update_in_tx(&txn, tenant_id, topic_id).await?;
+        if topic.status == crate::constants::topic_status::DELETED {
+            return Err(ForumError::TopicDeleted);
+        }
         enforce_solution_scope(&security, topic.author_id)?;
 
         let solution_author_id = if let Some(solution) =
@@ -535,6 +538,9 @@ impl ModerationService {
         let current = TopicStatus::from_str_value(&topic.status).ok_or_else(|| {
             ForumError::Validation(format!("Unknown topic status: {}", topic.status))
         })?;
+        if current == TopicStatus::Deleted {
+            return Err(ForumError::TopicDeleted);
+        }
         current.validate_transition(&target)?;
 
         let old_status = current.as_str().to_string();
