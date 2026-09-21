@@ -391,6 +391,11 @@ impl TopicService {
             .map(|reply| reply.author_id)
             .collect::<Vec<_>>();
 
+        let mut deletion_active: forum_topic::ActiveModel = topic.clone().into();
+        deletion_active.deleted_from_status = Set(Some(current.as_str().to_string()));
+        deletion_active.updated_at = Set(Utc::now().into());
+        deletion_active.update(&txn).await?;
+
         if !Self::set_status_if_current_in_tx(
             &txn,
             tenant_id,
