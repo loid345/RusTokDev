@@ -97,3 +97,23 @@ pub async fn fetch_replies(
 ) -> Result<Vec<ReplyListItem>, ApiError> {
     api::fetch_replies(token, tenant_slug, topic_id, locale).await
 }
+
+
+pub async fn moderate_topic(
+    token: Option<String>,
+    tenant_slug: Option<String>,
+    topic_id: String,
+    action: &str,
+) -> Result<(), ApiError> {
+    api::moderate_topic(token, tenant_slug, topic_id, action).await
+}
+
+pub async fn moderate_reply(
+    token: Option<String>,
+    tenant_slug: Option<String>,
+    topic_id: String,
+    reply_id: String,
+    action: &str,
+) -> Result<(), ApiError> {
+    api::moderate_reply(token, tenant_slug, topic_id, reply_id, action).await
+}
