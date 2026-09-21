@@ -185,6 +185,87 @@ impl ModerationService {
     }
 
     #[instrument(skip(self, security))]
+    pub async fn restore_topic(
+        &self,
+        tenant_id: Uuid,
+        topic_id: Uuid,
+        security: SecurityContext,
+    ) -> ForumResult<()> {
+        enforce_scope(&security, Resource::ForumTopics, Action::Moderate)?;
+        let txn = self.db.begin().await?;
+
+        let topic_snapshot = TopicService::find_topic_in_tx(&txn, tenant_id, topic_id).await?;
+        CategoryService::find_category_for_update_in_tx(
+            &txn,
+            tenant_id,
+            topic_snapshot.category_id,
+        )
+        .await?;
+        let topic = TopicService::find_topic_for_update_in_tx(&txn, tenant_id, topic_id).await?;
+        let current = TopicStatus::from_str_value(&topic.status).ok_or_else(|| {
+            ForumError::Validation(format!("Unknown topic status: {}", topic.status))
+        })?;
+        current.validate_transition(&TopicStatus::Open)?;
+
+        if !TopicService::set_status_if_current_in_tx(
+            &txn,
+            tenant_id,
+            topic_id,
+            current.as_str(),
+            TopicStatus::Open.as_str(),
+        )
+        .await?
+        {
+            return Err(ForumError::Validation(
+                "Topic status changed concurrently; retry restore",
+            ));
+        }
+
+        let solution_author_id = if let Some(solution) =
+            forum_solution::Entity::find_by_id(topic_id).one(&txn).await?
+        {
+            let reply = ReplyService::find_reply_in_tx(&txn, tenant_id, solution.reply_id).await?;
+            (reply.status == reply_status::APPROVED).then_some(reply.author_id).flatten()
+        } else {
+            None
+        };
+
+        CategoryService::adjust_counters_in_tx(
+            &txn,
+            tenant_id,
+            topic.category_id,
+            1,
+            topic.reply_count,
+        )
+        .await?;
+        UserStatsService::adjust_topic_count_in_tx(&txn, tenant_id, topic.author_id, 1).await?;
+        UserStatsService::adjust_solution_count_in_tx(
+            &txn,
+            tenant_id,
+            solution_author_id,
+            1,
+        )
+        .await?;
+
+        self.event_bus
+            .publish_in_tx(
+                &txn,
+                tenant_id,
+                security.user_id,
+                DomainEvent::ForumTopicStatusChanged {
+                    topic_id,
+                    old_status: current.as_str().to_string(),
+                    new_status: TopicStatus::Open.as_str().to_string(),
+                    moderator_id: security.user_id,
+                },
+            )
+            .await?;
+
+        txn.commit().await?;
+        Ok(())
+    }
+
+    #[instrument(skip(self, security))]
     pub async fn archive_topic(
         &self,
         tenant_id: Uuid,
