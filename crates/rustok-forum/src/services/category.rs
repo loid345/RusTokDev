@@ -270,6 +270,7 @@ impl CategoryService {
             let reply_author_ids = forum_reply::Entity::find()
                 .filter(forum_reply::Column::TenantId.eq(tenant_id))
                 .filter(forum_reply::Column::TopicId.eq(topic.id))
+                .filter(forum_reply::Column::Status.ne(crate::constants::reply_status::DELETED))
                 .all(&txn)
                 .await?
                 .into_iter()
@@ -288,14 +289,16 @@ impl CategoryService {
                 None
             };
 
-            UserStatsService::decrement_topic_thread_in_tx(
-                &txn,
-                tenant_id,
-                topic.author_id,
-                &reply_author_ids,
-                solution_author_id,
-            )
-            .await?;
+            if topic.status != crate::constants::topic_status::DELETED {
+                UserStatsService::decrement_topic_thread_in_tx(
+                    &txn,
+                    tenant_id,
+                    topic.author_id,
+                    &reply_author_ids,
+                    solution_author_id,
+                )
+                .await?;
+            }
 
             delete_attached_localized_values(&txn, tenant_id, "topic", topic.id)
                 .await
