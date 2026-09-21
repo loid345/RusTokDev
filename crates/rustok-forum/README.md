@@ -18,6 +18,7 @@
 - Own forum topic donor payload in `forum_topics.metadata`, including the live attached-mode
   Flex integration for locale-aware custom fields through parallel localized records.
 - Apply module-owned reply lifecycle rules, including pending replies for moderated categories and approved-only public storefront reads.
+- Topic and reply deletion is soft-delete by default (`deleted` status); moderation can restore topics, while physical purge is reserved for a future CLI maintenance operation.
 - Own forum storage tables for categories, topics, translations, replies, and channel access.
 - Expose shared multilingual contract fields on forum read surfaces:
   `requested_locale`, `effective_locale`, and `available_locales`.
