@@ -204,11 +204,19 @@ impl ModerationService {
         reply_id: Uuid,
         security: SecurityContext,
     ) -> ForumResult<()> {
-        let topic_service = TopicService::new(self.db.clone(), self.event_bus.clone());
-        let reply_service = ReplyService::new(self.db.clone(), self.event_bus.clone());
-        let topic = topic_service.find_topic(tenant_id, topic_id).await?;
+        let txn = self.db.begin().await?;
+
+        let topic_snapshot = TopicService::find_topic_in_tx(&txn, tenant_id, topic_id).await?;
+        CategoryService::find_category_for_update_in_tx(
+            &txn,
+            tenant_id,
+            topic_snapshot.category_id,
+        )
+        .await?;
+        let topic = TopicService::find_topic_for_update_in_tx(&txn, tenant_id, topic_id).await?;
         enforce_solution_scope(&security, topic.author_id)?;
-        let reply = reply_service.find_reply(tenant_id, reply_id).await?;
+
+        let reply = ReplyService::find_reply_for_update_in_tx(&txn, tenant_id, reply_id).await?;
         if reply.topic_id != topic_id {
             return Err(ForumError::Validation(
                 "Reply belongs to another topic".to_string(),
@@ -220,7 +228,6 @@ impl ModerationService {
             ));
         }
 
-        let txn = self.db.begin().await?;
         let previous_solution_reply_id = forum_solution::Entity::find_by_id(topic_id)
             .one(&txn)
             .await?
@@ -233,6 +240,7 @@ impl ModerationService {
             } else {
                 None
             };
+
         forum_solution::Entity::delete_many()
             .filter(forum_solution::Column::TopicId.eq(topic_id))
             .exec(&txn)
@@ -246,6 +254,7 @@ impl ModerationService {
         }
         .insert(&txn)
         .await?;
+
         if previous_solution_reply_id != Some(reply_id) {
             UserStatsService::adjust_solution_count_in_tx(
                 &txn,
@@ -257,6 +266,7 @@ impl ModerationService {
             UserStatsService::adjust_solution_count_in_tx(&txn, tenant_id, reply.author_id, 1)
                 .await?;
         }
+
         txn.commit().await?;
         Ok(())
     }
