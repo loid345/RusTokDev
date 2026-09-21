@@ -30,6 +30,7 @@ fn topic_status_values() {
     assert_eq!(topic_status::OPEN, "open");
     assert_eq!(topic_status::CLOSED, "closed");
     assert_eq!(topic_status::ARCHIVED, "archived");
+    assert_eq!(topic_status::DELETED, "deleted");
 }
 
 #[test]
