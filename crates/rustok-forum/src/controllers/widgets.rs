@@ -3,6 +3,8 @@ use loco_rs::{app::AppContext, Error, Result};
 use rustok_api::{has_any_effective_permission, AuthContext};
 use rustok_core::Permission;
 
+use super::forum_forbidden;
+
 use crate::{
     ForumWidgetCatalogResponse, ForumWidgetContractService, ForumWidgetPropsValidationResponse,
     ValidateForumWidgetPropsInput,
@@ -70,7 +72,7 @@ fn ensure_forum_permission(
     message: &str,
 ) -> Result<()> {
     if !has_any_effective_permission(&auth.permissions, permissions) {
-        return Err(Error::Unauthorized(message.to_string()));
+        return Err(forum_forbidden(message));
     }
 
     Ok(())
