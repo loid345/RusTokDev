@@ -7,7 +7,7 @@ Leptos admin UI package for the `rustok-forum` module.
 - Exposes the forum admin root view used by `apps/admin`.
 - Keeps forum-specific admin UX inside the module package.
 - Participates in the manifest-driven UI composition path through `rustok-module.toml`.
-- Owns a real REST-backed admin slice for category/topic CRUD, reply previews, and topic/reply moderation actions (pin/unpin, lock/unlock, close/reopen/archive, approve/reject/hide).
+- Owns a real REST-backed admin slice for category/topic CRUD, reply previews, and topic/reply moderation actions (pin/unpin, lock/unlock, close/reopen/archive/restore, approve/reject/hide).
 - Presents the admin workflow as a NodeBB-inspired moderation workspace with category rail, topic feed, and thread inspector.
 - Ships package-owned `admin/locales/en.json` and `admin/locales/ru.json` bundles declared through `[provides.admin_ui.i18n]`.
 - Embeds owner-side SEO panels for forum categories and topics through `rustok-seo-admin-support`.
