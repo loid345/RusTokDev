@@ -469,13 +469,11 @@ impl ForumQuery {
             Err(err) => return Err(async_graphql::Error::new(err.to_string())),
         };
 
-        if is_public_request(ctx)
-            && (topic.status != crate::constants::topic_status::OPEN
-                || !is_topic_visible_for_channel(
-                    &topic.channel_slugs,
-                    public_channel_slug(ctx).as_deref(),
-                ))
-        {
+        if !is_storefront_topic_visible(
+            &topic.status,
+            &topic.channel_slugs,
+            public_channel_slug(ctx).as_deref(),
+        ) {
             return Ok(None);
         }
 
