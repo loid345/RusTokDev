@@ -266,6 +266,9 @@ impl TopicService {
             Action::Update,
             topic.author_id,
         )?;
+        if topic.status == topic_status::DELETED {
+            return Err(ForumError::TopicDeleted);
+        }
         let prepared_custom_fields = if let Some(metadata) = input.metadata.clone() {
             Some(
                 self.prepare_topic_custom_fields_for_update(
