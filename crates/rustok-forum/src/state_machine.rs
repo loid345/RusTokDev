@@ -81,6 +81,8 @@ impl TopicStatus {
                 | (Self::Closed, Self::Deleted)
                 | (Self::Archived, Self::Deleted)
                 | (Self::Deleted, Self::Open)
+                | (Self::Deleted, Self::Closed)
+                | (Self::Deleted, Self::Archived)
         )
     }
 
@@ -301,6 +303,8 @@ mod tests {
         assert!(TopicStatus::Closed.can_transition_to(&TopicStatus::Deleted));
         assert!(TopicStatus::Archived.can_transition_to(&TopicStatus::Deleted));
         assert!(TopicStatus::Deleted.can_transition_to(&TopicStatus::Open));
+        assert!(TopicStatus::Deleted.can_transition_to(&TopicStatus::Closed));
+        assert!(TopicStatus::Deleted.can_transition_to(&TopicStatus::Archived));
     }
 
     #[test]
