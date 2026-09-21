@@ -148,6 +148,16 @@ pub fn ForumAdmin() -> impl IntoView {
         "forum.error.deleteTopic",
         "Failed to delete topic",
     );
+    let moderate_topic_error = t(
+        ui_locale.as_deref(),
+        "forum.error.moderateTopic",
+        "Failed to moderate topic",
+    );
+    let moderate_reply_error = t(
+        ui_locale.as_deref(),
+        "forum.error.moderateReply",
+        "Failed to moderate reply",
+    );
 
     let form_error_labels = ForumAdminFormErrorLabels {
         category_required: category_required_error.clone(),
@@ -601,6 +611,69 @@ pub fn ForumAdmin() -> impl IntoView {
         });
     });
 
+    let moderate_topic = {
+        let moderate_topic_error = moderate_topic_error.clone();
+        Callback::new(move |(topic_id, action): (String, String)| {
+            let token_value = token.get_untracked();
+            let tenant_value = tenant.get_untracked();
+            set_error.set(None);
+            set_busy_key.set(Some(forum_admin_busy_key(
+                ForumAdminBusySurface::Topic,
+                ForumAdminBusyAction::Moderate,
+                Some(topic_id.as_str()),
+            )));
+            spawn_local(async move {
+                match transport::moderate_topic(
+                    token_value,
+                    tenant_value,
+                    topic_id,
+                    action.as_str(),
+                )
+                .await
+                {
+                    Ok(()) => set_refresh_nonce.update(|value| *value += 1),
+                    Err(err) => set_error.set(Some(forum_admin_transport_error_message(
+                        moderate_topic_error.as_str(),
+                        err,
+                    ))),
+                }
+                set_busy_key.set(None);
+            });
+        })
+    };
+
+    let moderate_reply = {
+        let moderate_reply_error = moderate_reply_error.clone();
+        Callback::new(move |(topic_id, reply_id, action): (String, String, String)| {
+            let token_value = token.get_untracked();
+            let tenant_value = tenant.get_untracked();
+            set_error.set(None);
+            set_busy_key.set(Some(forum_admin_busy_key(
+                ForumAdminBusySurface::Reply,
+                ForumAdminBusyAction::Moderate,
+                Some(reply_id.as_str()),
+            )));
+            spawn_local(async move {
+                match transport::moderate_reply(
+                    token_value,
+                    tenant_value,
+                    topic_id,
+                    reply_id,
+                    action.as_str(),
+                )
+                .await
+                {
+                    Ok(()) => set_refresh_nonce.update(|value| *value += 1),
+                    Err(err) => set_error.set(Some(forum_admin_transport_error_message(
+                        moderate_reply_error.as_str(),
+                        err,
+                    ))),
+                }
+                set_busy_key.set(None);
+            });
+        })
+    };
+
     let topic_count = move || result_item_count(topics.get());
     let category_count = move || result_item_count(categories.get());
     let reply_preview_count = move || result_item_count(replies.get());
@@ -748,6 +821,8 @@ pub fn ForumAdmin() -> impl IntoView {
                         set_filter_category_id=set_topic_filter_category_id
                         on_edit=open_topic
                         on_delete=delete_topic
+                        on_moderate_topic=moderate_topic
+                        on_moderate_reply=moderate_reply
                         on_submit=submit_topic
                         on_reset=reset_topic
                     />
