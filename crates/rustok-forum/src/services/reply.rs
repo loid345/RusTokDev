@@ -62,7 +62,7 @@ impl ReplyService {
         enforce_scope(&security, Resource::ForumReplies, Action::Create)?;
         let locale = normalize_locale(&input.locale)?;
         let txn = self.db.begin().await?;
-        let topic = TopicService::find_topic_in_tx(&txn, tenant_id, topic_id).await?;
+        let topic = TopicService::find_topic_for_update_in_tx(&txn, tenant_id, topic_id).await?;
         let category =
             CategoryService::find_category_in_tx(&txn, tenant_id, topic.category_id).await?;
 

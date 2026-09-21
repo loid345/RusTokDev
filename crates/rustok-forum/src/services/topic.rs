@@ -26,7 +26,7 @@ use sea_orm::{
     ActiveModelTrait,
     ActiveValue::Set,
     ColumnTrait, Condition, DatabaseConnection, DatabaseTransaction, EntityTrait, PaginatorTrait,
-    QueryFilter, QueryOrder, Select, TransactionTrait,
+    QueryFilter, QueryOrder, QuerySelect, Select, TransactionTrait,
 };
 use serde_json::Value;
 use tracing::instrument;
@@ -513,6 +513,19 @@ impl TopicService {
     ) -> ForumResult<forum_topic::Model> {
         forum_topic::Entity::find_by_id(topic_id)
             .filter(forum_topic::Column::TenantId.eq(tenant_id))
+            .one(txn)
+            .await?
+            .ok_or(ForumError::TopicNotFound(topic_id))
+    }
+
+    pub(crate) async fn find_topic_for_update_in_tx(
+        txn: &DatabaseTransaction,
+        tenant_id: Uuid,
+        topic_id: Uuid,
+    ) -> ForumResult<forum_topic::Model> {
+        forum_topic::Entity::find_by_id(topic_id)
+            .filter(forum_topic::Column::TenantId.eq(tenant_id))
+            .lock_exclusive()
             .one(txn)
             .await?
             .ok_or(ForumError::TopicNotFound(topic_id))
