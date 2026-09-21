@@ -40,6 +40,7 @@ impl ForumQuery {
         #[graphql(default)] pagination: PaginationInput,
     ) -> Result<ForumCategoryConnection> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let auth = require_forum_permission(
             ctx,
@@ -104,6 +105,7 @@ impl ForumQuery {
         #[graphql(default)] pagination: PaginationInput,
     ) -> Result<ForumTopicConnection> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_forum_permission(
@@ -186,6 +188,7 @@ impl ForumQuery {
         #[graphql(default)] pagination: PaginationInput,
     ) -> Result<ForumReplyConnection> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_forum_permission(
@@ -265,6 +268,7 @@ impl ForumQuery {
         user_id: Uuid,
     ) -> Result<GqlForumUserStats> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let auth = require_forum_permission(
             ctx,
@@ -597,6 +601,16 @@ impl ForumQuery {
             limit,
         ))
     }
+}
+
+fn require_forum_tenant(ctx: &Context<'_>, requested_tenant_id: Uuid) -> Result<Uuid> {
+    let tenant = ctx.data::<TenantContext>()?;
+    if tenant.id != requested_tenant_id {
+        return Err(<FieldError as GraphQLError>::permission_denied(
+            "Tenant context does not match the requested forum tenant",
+        ));
+    }
+    Ok(tenant.id)
 }
 
 fn require_forum_permission(

@@ -30,6 +30,7 @@ impl ForumMutation {
         input: CreateForumTopicInput,
     ) -> Result<GqlForumTopic> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_forum_permission(
@@ -79,6 +80,7 @@ impl ForumMutation {
         input: UpdateForumTopicInput,
     ) -> Result<GqlForumTopic> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_forum_permission(
@@ -147,6 +149,7 @@ impl ForumMutation {
         category_id: Uuid,
     ) -> Result<GqlForumCategory> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let auth = require_forum_permission(
             ctx,
@@ -240,6 +243,7 @@ impl ForumMutation {
         locale: Option<String>,
     ) -> Result<GqlForumTopic> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_forum_permission(
@@ -389,6 +393,7 @@ impl ForumMutation {
         locale: Option<String>,
     ) -> Result<GqlForumTopic> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_forum_permission(
@@ -597,6 +602,7 @@ impl ForumMutation {
         locale: Option<String>,
     ) -> Result<GqlForumTopic> {
         require_module_enabled(ctx, MODULE_SLUG).await?;
+        let tenant_id = require_forum_tenant(ctx, tenant_id)?;
         let db = ctx.data::<DatabaseConnection>()?;
         let event_bus = ctx.data::<TransactionalEventBus>()?;
         let auth = require_forum_permission(
@@ -732,6 +738,18 @@ impl ForumMutation {
             is_subscribed: category.is_subscribed,
         })
     }
+}
+
+fn require_forum_tenant(ctx: &Context<'_>, requested_tenant_id: Uuid) -> Result<Uuid> {
+    let tenant = ctx
+        .data::<rustok_api::TenantContext>()
+        .map_err(|_| <FieldError as GraphQLError>::unauthenticated())?;
+    if tenant.id != requested_tenant_id {
+        return Err(<FieldError as GraphQLError>::permission_denied(
+            "Tenant context does not match the requested forum tenant",
+        ));
+    }
+    Ok(tenant.id)
 }
 
 fn require_forum_permission(
