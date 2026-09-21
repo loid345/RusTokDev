@@ -187,6 +187,14 @@ impl ReplyService {
         let locale = normalize_locale(locale)?;
         let fallback_locale = fallback_locale.map(normalize_locale).transpose()?;
         let reply = self.find_reply(tenant_id, reply_id).await?;
+        let topic = TopicService::new(self.db.clone(), self.event_bus.clone())
+            .find_topic(tenant_id, reply.topic_id)
+            .await?;
+        if topic.status == topic_status::DELETED
+            && !can_view_all_reply_statuses(&security)
+        {
+            return Err(ForumError::ReplyNotFound(reply_id));
+        }
         if !can_view_reply(&security, &reply) {
             return Err(ForumError::ReplyNotFound(reply_id));
         }
@@ -407,6 +415,15 @@ impl ReplyService {
         let locale = normalize_locale(&locale)?;
         let fallback_locale = fallback_locale.map(normalize_locale).transpose()?;
 
+        let topic = TopicService::new(self.db.clone(), self.event_bus.clone())
+            .find_topic(tenant_id, topic_id)
+            .await?;
+        if topic.status == topic_status::DELETED
+            && !can_view_all_reply_statuses(&security)
+        {
+            return Err(ForumError::TopicNotFound(topic_id));
+        }
+
         let statuses = (!can_view_all_reply_statuses(&security))
             .then_some(&PUBLIC_REPLY_STATUSES[..]);
         let (replies, total) = self
@@ -497,6 +514,16 @@ impl ReplyService {
             .unwrap_or_else(|| PLATFORM_FALLBACK_LOCALE.to_string());
         let locale = normalize_locale(&locale)?;
         let fallback_locale = fallback_locale.map(normalize_locale).transpose()?;
+
+        let topic = TopicService::new(self.db.clone(), self.event_bus.clone())
+            .find_topic(tenant_id, topic_id)
+            .await?;
+        if topic.status == topic_status::DELETED
+            && !can_view_all_reply_statuses(&security)
+        {
+            return Err(ForumError::TopicNotFound(topic_id));
+        }
+
         let effective_statuses = statuses.or_else(|| {
             (!can_view_all_reply_statuses(&security)).then_some(&PUBLIC_REPLY_STATUSES[..])
         });
