@@ -12,6 +12,7 @@ pub struct Model {
     pub author_id: Option<Uuid>,
     pub status: String,
     pub metadata: Json,
+    pub deleted_from_status: Option<String>,
     pub is_pinned: bool,
     pub is_locked: bool,
     pub reply_count: i32,
