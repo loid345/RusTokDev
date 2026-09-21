@@ -277,13 +277,18 @@ impl TopicService {
         let txn = self.db.begin().await?;
         let normalized_tags = input.tags.as_ref().map(|tags| normalize_tags(tags));
 
-        let mut active: forum_topic::ActiveModel = topic.into();
-        active.updated_at = Set(Utc::now().into());
+        let mut active = forum_topic::ActiveModel {
+            id: Set(topic_id),
+            updated_at: Set(Utc::now().into()),
+            ..Default::default()
+        };
         if let Some(prepared_custom_fields) = prepared_custom_fields.as_ref() {
-            active.metadata = Set(prepared_custom_fields
-                .metadata
-                .clone()
-                .unwrap_or_else(|| serde_json::json!({})));
+            active.metadata = Set(
+                prepared_custom_fields
+                    .metadata
+                    .clone()
+                    .unwrap_or_else(|| serde_json::json!({})),
+            );
         }
         active.update(&txn).await?;
 
@@ -927,7 +932,10 @@ impl TopicService {
 
         match existing {
             Some(existing) => {
-                let mut active: forum_topic_translation::ActiveModel = existing.into();
+                let mut active = forum_topic_translation::ActiveModel {
+                    id: Set(existing.id),
+                    ..Default::default()
+                };
                 if let Some(title) = title {
                     validate_topic_title(&title)?;
                     active.title = Set(title);
