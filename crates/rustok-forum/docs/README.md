@@ -14,7 +14,7 @@ forum-owned persistence и должен оставаться самостоят�
 
 - `CategoryService`, `TopicService`, `ReplyService`, `ModerationService`;
 - forum-owned storage для categories, topics, replies, votes, solutions, subscriptions и user stats;
-- transport surfaces: GraphQL, REST, Leptos admin/storefront packages;
+- transport surfaces: GraphQL, REST, Leptos admin/storefront packages; admin UI exposes the module-owned topic/reply moderation actions through the existing REST moderation contract.
 - forum widget contract freeze surfaces: `ForumWidgetContractService`, REST endpoints `/api/forum/widgets/catalog` + `/api/forum/widgets/validate`, GraphQL query `forumWidgetCatalog`;
 - tag attachments через `forum_topic_tags` при shared vocabulary в `rustok-taxonomy`;
 - visibility, moderation и user-facing derived fields в forum read/write contracts;
