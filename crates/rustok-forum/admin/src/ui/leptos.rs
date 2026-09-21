@@ -912,6 +912,8 @@ fn CategoriesPage(
     set_moderated: WriteSignal<bool>,
     on_edit: Callback<String>,
     on_delete: Callback<String>,
+    on_moderate_topic: Callback<(String, String)>,
+    on_moderate_reply: Callback<(String, String, String)>,
     on_submit: impl Fn(SubmitEvent) + 'static,
     on_reset: Callback<()>,
 ) -> impl IntoView {
@@ -1564,7 +1566,15 @@ fn TopicsPage(
                         </button>
                     </div>
                     <Suspense fallback=move || view! { <div class="mt-6 h-72 animate-pulse rounded-[1.5rem] bg-muted"></div> }>
-                        {move || topics.get().map(|result| render_topic_feed(result, editing_id.get(), busy_key.get(), on_edit, on_delete, topic_feed_locale.clone()))}
+                        {move || topics.get().map(|result| render_topic_feed(
+                            result,
+                            editing_id.get(),
+                            busy_key.get(),
+                            on_edit,
+                            on_delete,
+                            on_moderate_topic,
+                            topic_feed_locale.clone(),
+                        ))}
                     </Suspense>
                 </section>
             </div>
@@ -1713,7 +1723,12 @@ fn TopicsPage(
                         </span>
                     </div>
                     <Suspense fallback=move || view! { <div class="mt-6 h-40 animate-pulse rounded-[1.5rem] bg-muted"></div> }>
-                        {move || replies.get().map(|result| render_reply_stack(result, replies_locale.clone()))}
+                        {move || replies.get().map(|result| render_reply_stack(
+                            result,
+                            busy_key.get(),
+                            on_moderate_reply,
+                            replies_locale.clone(),
+                        ))}
                     </Suspense>
                 </section>
 
