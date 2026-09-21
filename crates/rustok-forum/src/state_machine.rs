@@ -17,7 +17,8 @@
 ///  │ Archived │─── reopen() ──→ Open
 ///  └──────────┘
 ///
-///  Open ──── archive() ──→ Archived
+///  Open/Closed/Archived ──── delete() ──→ Deleted
+///  Deleted ──── restore() ──→ Open
 /// ```
 ///
 /// Allowed transitions:
@@ -26,6 +27,8 @@
 /// - Closed   → Open     (reopen)
 /// - Closed   → Archived (archive)
 /// - Archived → Open     (reopen)
+/// - Open/Closed/Archived → Deleted (soft-delete)
+/// - Deleted → Open (restore)
 use std::fmt;
 
 use crate::constants::{reply_status, topic_status};
