@@ -1,5 +1,5 @@
 use chrono::Utc;
-use sea_orm::sea_query::{Expr, ExprTrait, Func, OnConflict};
+use sea_orm::sea_query::{Expr, ExprTrait, OnConflict};
 use sea_orm::{
     ActiveValue::Set, DatabaseConnection, DatabaseTransaction, EntityTrait,
 };
@@ -113,26 +113,31 @@ impl UserStatsService {
             .values([
                 (
                     forum_user_stat::Column::TopicCount,
-                    Func::greatest([
-                        topic_value.add(topic_delta).into(),
-                        Expr::val(0).into(),
-                    ])
+                    Expr::case(
+                        topic_value.add(topic_delta).lt(0),
+                        Expr::val(0),
+                    )
+                    .finally(Expr::col(forum_user_stat::Column::TopicCount).add(topic_delta))
                     .into(),
                 ),
                 (
                     forum_user_stat::Column::ReplyCount,
-                    Func::greatest([
-                        reply_value.add(reply_delta).into(),
-                        Expr::val(0).into(),
-                    ])
+                    Expr::case(
+                        reply_value.add(reply_delta).lt(0),
+                        Expr::val(0),
+                    )
+                    .finally(Expr::col(forum_user_stat::Column::ReplyCount).add(reply_delta))
                     .into(),
                 ),
                 (
                     forum_user_stat::Column::SolutionCount,
-                    Func::greatest([
-                        solution_value.add(solution_delta).into(),
-                        Expr::val(0).into(),
-                    ])
+                    Expr::case(
+                        solution_value.add(solution_delta).lt(0),
+                        Expr::val(0),
+                    )
+                    .finally(
+                        Expr::col(forum_user_stat::Column::SolutionCount).add(solution_delta),
+                    )
                     .into(),
                 ),
                 (
