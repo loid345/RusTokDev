@@ -640,6 +640,9 @@ impl TopicService {
         is_pinned: bool,
     ) -> ForumResult<()> {
         let topic = Self::find_topic_for_update_in_tx(txn, tenant_id, topic_id).await?;
+        if topic.status == crate::constants::topic_status::DELETED {
+            return Err(ForumError::TopicDeleted);
+        }
         let mut active: forum_topic::ActiveModel = topic.into();
         active.is_pinned = Set(is_pinned);
         active.updated_at = Set(Utc::now().into());
@@ -654,6 +657,9 @@ impl TopicService {
         is_locked: bool,
     ) -> ForumResult<()> {
         let topic = Self::find_topic_for_update_in_tx(txn, tenant_id, topic_id).await?;
+        if topic.status == crate::constants::topic_status::DELETED {
+            return Err(ForumError::TopicDeleted);
+        }
         let mut active: forum_topic::ActiveModel = topic.into();
         active.is_locked = Set(is_locked);
         active.updated_at = Set(Utc::now().into());
