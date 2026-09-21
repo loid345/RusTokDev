@@ -110,6 +110,7 @@
   "forum.render.close": "Close",
   "forum.render.reopen": "Reopen",
   "forum.render.archive": "Archive",
+  "forum.render.restore": "Restore",
   "forum.render.approve": "Approve",
   "forum.render.reject": "Reject",
   "forum.render.hide": "Hide",
