@@ -491,9 +491,12 @@ impl ReplyService {
         status: &str,
     ) -> ForumResult<forum_reply::Model> {
         let reply = Self::find_reply_in_tx(txn, tenant_id, reply_id).await?;
-        let mut active: forum_reply::ActiveModel = reply.clone().into();
-        active.status = Set(status.to_string());
-        active.updated_at = Set(Utc::now().into());
+        let mut active = forum_reply::ActiveModel {
+            id: Set(reply_id),
+            status: Set(status.to_string()),
+            updated_at: Set(Utc::now().into()),
+            ..Default::default()
+        };
         active.update(txn).await?;
         Ok(reply)
     }
