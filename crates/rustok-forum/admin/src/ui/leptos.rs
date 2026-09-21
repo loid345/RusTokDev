@@ -1892,6 +1892,7 @@ fn render_topic_feed(
     busy_key: Option<String>,
     on_edit: Callback<String>,
     on_delete: Callback<String>,
+    on_moderate: Callback<(String, String)>,
     locale: Option<String>,
 ) -> AnyView {
     let no_topics_label = t(locale.as_deref(), "forum.render.noTopics", "No topics yet.");
@@ -1908,6 +1909,13 @@ fn render_topic_feed(
     };
     let replies_label = t(locale.as_deref(), "forum.render.replies", "Replies");
     let delete_label = t(locale.as_deref(), "forum.render.delete", "Delete");
+    let pin_label = t(locale.as_deref(), "forum.render.pin", "Pin");
+    let unpin_label = t(locale.as_deref(), "forum.render.unpin", "Unpin");
+    let lock_label = t(locale.as_deref(), "forum.render.lock", "Lock");
+    let unlock_label = t(locale.as_deref(), "forum.render.unlock", "Unlock");
+    let close_label = t(locale.as_deref(), "forum.render.close", "Close");
+    let reopen_label = t(locale.as_deref(), "forum.render.reopen", "Reopen");
+    let archive_label = t(locale.as_deref(), "forum.render.archive", "Archive");
     match forum_admin_collection_state(result) {
         ForumAdminCollectionState::Empty => view! { <div class="mt-6 rounded-[1.5rem] border border-dashed border-border p-8 text-sm text-muted-foreground">{no_topics_label}</div> }.into_any(),
         ForumAdminCollectionState::Ready(items) => view! {
@@ -1942,6 +1950,59 @@ fn render_topic_feed(
                             </div>
                             <div class="mt-5 flex flex-wrap gap-2">
                                 <button type="button" class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action) on:click={ let item_id = item_id.clone(); move |_| on_edit.run(item_id.clone()) } disabled=vm.is_busy>{vm.action_label.clone()}</button>
+                                <button
+                                    type="button"
+                                    class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action)
+                                    on:click={ let item_id = item_id.clone(); let action = if vm.pinned { "unpin" } else { "pin" }; move |_| on_moderate.run((item_id.clone(), action.to_string())) }
+                                    disabled=vm.is_busy
+                                >
+                                    {if vm.pinned { unpin_label.clone() } else { pin_label.clone() }}
+                                </button>
+                                <button
+                                    type="button"
+                                    class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action)
+                                    on:click={ let item_id = item_id.clone(); let action = if vm.locked { "unlock" } else { "lock" }; move |_| on_moderate.run((item_id.clone(), action.to_string())) }
+                                    disabled=vm.is_busy
+                                >
+                                    {if vm.locked { unlock_label.clone() } else { lock_label.clone() }}
+                                </button>
+                                {match vm.status.as_str() {
+                                    "open" | "closed" => {
+                                        let action = if vm.status == "open" { "close" } else { "reopen" };
+                                        let label = if vm.status == "open" { close_label.clone() } else { reopen_label.clone() };
+                                        view! {
+                                            <button
+                                                type="button"
+                                                class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action)
+                                                on:click={ let item_id = item_id.clone(); let action = action.to_string(); move |_| on_moderate.run((item_id.clone(), action.clone())) }
+                                                disabled=vm.is_busy
+                                            >
+                                                {label}
+                                            </button>
+                                        }.into_any()
+                                    }
+                                    "archived" => view! {
+                                        <button
+                                            type="button"
+                                            class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action)
+                                            on:click={ let item_id = item_id.clone(); move |_| on_moderate.run((item_id.clone(), "reopen".to_string())) }
+                                            disabled=vm.is_busy
+                                        >
+                                            {reopen_label.clone()}
+                                        </button>
+                                    }.into_any(),
+                                    _ => ().into_any(),
+                                }}
+                                {(!matches!(vm.status.as_str(), "archived")).then(|| view! {
+                                    <button
+                                        type="button"
+                                        class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action)
+                                        on:click={ let item_id = item_id.clone(); move |_| on_moderate.run((item_id.clone(), "archive".to_string())) }
+                                        disabled=vm.is_busy
+                                    >
+                                        {archive_label.clone()}
+                                    </button>
+                                })}
                                 <button type="button" class=forum_admin_action_button_class(ForumAdminActionButtonKind::Delete) on:click={ let item_id = item_id.clone(); move |_| on_delete.run(item_id.clone()) } disabled=vm.is_busy>{delete_label.clone()}</button>
                             </div>
                         </article>
@@ -1955,6 +2016,8 @@ fn render_topic_feed(
 
 fn render_reply_stack(
     result: Result<Vec<ReplyListItem>, String>,
+    busy_key: Option<String>,
+    on_moderate: Callback<(String, String, String)>,
     locale: Option<String>,
 ) -> AnyView {
     let empty_label = t(
@@ -1962,12 +2025,19 @@ fn render_reply_stack(
         "forum.render.openTopicForReplies",
         "Open a topic card to preview replies.",
     );
+    let approve_label = t(locale.as_deref(), "forum.render.approve", "Approve");
+    let reject_label = t(locale.as_deref(), "forum.render.reject", "Reject");
+    let hide_label = t(locale.as_deref(), "forum.render.hide", "Hide");
     match forum_admin_collection_state(result) {
         ForumAdminCollectionState::Empty => view! { <div class="mt-6 rounded-[1.5rem] border border-dashed border-border p-6 text-sm text-muted-foreground">{empty_label}</div> }.into_any(),
         ForumAdminCollectionState::Ready(items) => view! {
             <div class="mt-6 space-y-3">
                 {items.into_iter().map(|item| {
                     let vm = reply_card_view_model(&item);
+                    let is_busy = busy_key
+                        .as_deref()
+                        .map(|value| value.rsplit(':').next() == Some(item.id.as_str()))
+                        .unwrap_or(false);
                     view! {
                         <article class="rounded-[1.35rem] border border-border bg-background p-4">
                             <div class="flex items-center justify-between gap-3">
@@ -1975,6 +2045,56 @@ fn render_reply_stack(
                                 <span class="text-[11px] font-semibold uppercase tracking-[0.22em] text-muted-foreground">{vm.effective_locale.clone()}</span>
                             </div>
                             <p class="mt-3 text-sm leading-6 text-muted-foreground">{vm.content_preview.clone()}</p>
+                            <div class="mt-4 flex flex-wrap gap-2">
+                                {if matches!(item.status.as_str(), "pending" | "rejected" | "hidden" | "flagged") {
+                                    Some(view! {
+                                        <button
+                                            type="button"
+                                            class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action)
+                                            on:click={
+                                                let topic_id = item.topic_id.clone();
+                                                let reply_id = item.id.clone();
+                                                move |_| on_moderate.run((topic_id.clone(), reply_id.clone(), "approve".to_string()))
+                                            }
+                                            disabled=is_busy
+                                        >
+                                            {approve_label.clone()}
+                                        </button>
+                                    })
+                                } else { None }}
+                                {if matches!(item.status.as_str(), "pending" | "approved" | "flagged") {
+                                    Some(view! {
+                                        <button
+                                            type="button"
+                                            class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action)
+                                            on:click={
+                                                let topic_id = item.topic_id.clone();
+                                                let reply_id = item.id.clone();
+                                                move |_| on_moderate.run((topic_id.clone(), reply_id.clone(), "reject".to_string()))
+                                            }
+                                            disabled=is_busy
+                                        >
+                                            {reject_label.clone()}
+                                        </button>
+                                    })
+                                } else { None }}
+                                {if matches!(item.status.as_str(), "pending" | "approved" | "flagged") {
+                                    Some(view! {
+                                        <button
+                                            type="button"
+                                            class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action)
+                                            on:click={
+                                                let topic_id = item.topic_id.clone();
+                                                let reply_id = item.id.clone();
+                                                move |_| on_moderate.run((topic_id.clone(), reply_id.clone(), "hide".to_string()))
+                                            }
+                                            disabled=is_busy
+                                        >
+                                            {hide_label.clone()}
+                                        </button>
+                                    })
+                                } else { None }}
+                            </div>
                         </article>
                     }
                 }).collect_view()}
