@@ -544,8 +544,11 @@ impl TopicService {
         topic_id: Uuid,
         delta: i32,
     ) -> ForumResult<forum_topic::Model> {
-        let topic = Self::find_topic_in_tx(txn, tenant_id, topic_id).await?;
-        let mut active: forum_topic::ActiveModel = topic.clone().into();
+        let topic = Self::find_topic_for_update_in_tx(txn, tenant_id, topic_id).await?;
+        let mut active = forum_topic::ActiveModel {
+            id: Set(topic_id),
+            ..Default::default()
+        };
         active.reply_count = Set((topic.reply_count + delta).max(0));
 
         // Recompute activity from the remaining replies. Deleting the latest reply
@@ -571,10 +574,12 @@ impl TopicService {
         topic_id: Uuid,
         is_pinned: bool,
     ) -> ForumResult<()> {
-        let topic = Self::find_topic_in_tx(txn, tenant_id, topic_id).await?;
-        let mut active: forum_topic::ActiveModel = topic.into();
-        active.is_pinned = Set(is_pinned);
-        active.updated_at = Set(Utc::now().into());
+        let mut active = forum_topic::ActiveModel {
+            id: Set(topic_id),
+            is_pinned: Set(is_pinned),
+            updated_at: Set(Utc::now().into()),
+            ..Default::default()
+        };
         active.update(txn).await?;
         Ok(())
     }
@@ -585,10 +590,12 @@ impl TopicService {
         topic_id: Uuid,
         is_locked: bool,
     ) -> ForumResult<()> {
-        let topic = Self::find_topic_in_tx(txn, tenant_id, topic_id).await?;
-        let mut active: forum_topic::ActiveModel = topic.into();
-        active.is_locked = Set(is_locked);
-        active.updated_at = Set(Utc::now().into());
+        let mut active = forum_topic::ActiveModel {
+            id: Set(topic_id),
+            is_locked: Set(is_locked),
+            updated_at: Set(Utc::now().into()),
+            ..Default::default()
+        };
         active.update(txn).await?;
         Ok(())
     }
@@ -599,10 +606,12 @@ impl TopicService {
         topic_id: Uuid,
         status: &str,
     ) -> ForumResult<()> {
-        let topic = Self::find_topic_in_tx(txn, tenant_id, topic_id).await?;
-        let mut active: forum_topic::ActiveModel = topic.into();
-        active.status = Set(status.to_string());
-        active.updated_at = Set(Utc::now().into());
+        let mut active = forum_topic::ActiveModel {
+            id: Set(topic_id),
+            status: Set(status.to_string()),
+            updated_at: Set(Utc::now().into()),
+            ..Default::default()
+        };
         active.update(txn).await?;
         Ok(())
     }
