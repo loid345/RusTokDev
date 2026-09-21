@@ -2,14 +2,21 @@
 use loco_rs::Error;
 
 use crate::ForumError;
-use axum::routing::get;
-use loco_rs::controller::Routes;
+use axum::{http::StatusCode, routing::get};
+use loco_rs::controller::{ErrorDetail, Routes};
 
 pub mod categories;
 pub mod replies;
 pub mod topics;
 pub mod users;
 pub mod widgets;
+
+pub(crate) fn forum_forbidden(message: &str) -> Error {
+    Error::CustomError(
+        StatusCode::FORBIDDEN,
+        ErrorDetail::new("forbidden".to_string(), message.to_string()),
+    )
+}
 
 pub(crate) fn map_forum_error(error: ForumError) -> Error {
     match error {
@@ -18,7 +25,7 @@ pub(crate) fn map_forum_error(error: ForumError) -> Error {
         | ForumError::ReplyNotFound(_)
         | ForumError::SolutionNotFound(_) => Error::NotFound,
         ForumError::Database(_) | ForumError::Internal(_) => Error::InternalServerError,
-        ForumError::Forbidden(message) => Error::Unauthorized(message),
+        ForumError::Forbidden(message) => forum_forbidden(&message),
         other => Error::BadRequest(other.to_string()),
     }
 }
