@@ -97,19 +97,19 @@ impl ReplyService {
         let position = Self::next_position_in_tx(&txn, topic_id).await?;
         let reply_id = Uuid::new_v4();
         let now = Utc::now();
-        let reply_status = if category.moderated {
+        let status = if category.moderated {
             reply_status::PENDING
         } else {
             reply_status::APPROVED
         };
-        let is_public_reply = reply_status == reply_status::APPROVED;
+        let is_public_reply = status == reply_status::APPROVED;
         forum_reply::ActiveModel {
             id: Set(reply_id),
             tenant_id: Set(tenant_id),
             topic_id: Set(topic_id),
             author_id: Set(security.user_id),
             parent_reply_id: Set(input.parent_reply_id),
-            status: Set(reply_status.to_string()),
+            status: Set(status.to_string()),
             position: Set(position),
             created_at: Set(now.into()),
             updated_at: Set(now.into()),
