@@ -187,6 +187,49 @@ async fn user_stats_track_topic_reply_and_solution_lifecycle() {
         .expect("reply author stats after delete should load");
     assert_eq!(reply_author_after_delete.reply_count, 0);
     assert_eq!(reply_author_after_delete.solution_count, 0);
+
+    let restore_admin = SecurityContext::new(UserRole::Admin, Some(Uuid::new_v4()));
+    moderation_service
+        .restore_topic(tenant_id, topic.id, restore_admin.clone())
+        .await
+        .expect("deleted topic should be restorable");
+
+    let topic_author_after_restore = stats_service
+        .get(
+            tenant_id,
+            restore_admin.clone(),
+            topic_author.user_id.expect("topic author id"),
+        )
+        .await
+        .expect("topic author stats after restore should load");
+    assert_eq!(topic_author_after_restore.topic_count, 1);
+
+    let reply_author_after_restore = stats_service
+        .get(
+            tenant_id,
+            restore_admin.clone(),
+            reply_author.user_id.expect("reply author id"),
+        )
+        .await
+        .expect("reply author stats after restore should load");
+    assert_eq!(reply_author_after_restore.reply_count, 1);
+    assert_eq!(reply_author_after_restore.solution_count, 1);
+
+    let restored_topics = topic_service
+        .list(
+            tenant_id,
+            topic_author,
+            rustok_forum::ListTopicsFilter {
+                category_id: Some(category.id),
+                status: None,
+                locale: Some("en".to_string()),
+                page: 1,
+                per_page: 20,
+            },
+        )
+        .await
+        .expect("restored topic should be visible again");
+    assert_eq!(restored_topics.1, 1);
 }
 
 #[tokio::test]
