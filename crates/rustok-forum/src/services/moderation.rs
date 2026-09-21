@@ -210,21 +210,24 @@ impl ModerationService {
                 "Only deleted topics can be restored",
             ));
         }
-        current.validate_transition(&TopicStatus::Open)?;
 
-        if !TopicService::set_status_if_current_in_tx(
-            &txn,
-            tenant_id,
-            topic_id,
-            current.as_str(),
-            TopicStatus::Open.as_str(),
-        )
-        .await?
-        {
+        let target_status = topic
+            .deleted_from_status
+            .as_deref()
+            .and_then(TopicStatus::from_str_value)
+            .unwrap_or(TopicStatus::Open);
+        if target_status == TopicStatus::Deleted {
             return Err(ForumError::Validation(
-                "Topic status changed concurrently; retry restore",
+                "Deleted topic cannot be restored to deleted status",
             ));
         }
+        current.validate_transition(&target_status)?;
+
+        let mut restore_active: crate::entities::forum_topic::ActiveModel = topic.clone().into();
+        restore_active.status = Set(target_status.as_str().to_string());
+        restore_active.deleted_from_status = Set(None);
+        restore_active.updated_at = Set(Utc::now().into());
+        restore_active.update(&txn).await?;
 
         let solution_author_id = if let Some(solution) =
             forum_solution::Entity::find_by_id(topic_id).one(&txn).await?
@@ -275,7 +278,7 @@ impl ModerationService {
                 DomainEvent::ForumTopicStatusChanged {
                     topic_id,
                     old_status: current.as_str().to_string(),
-                    new_status: TopicStatus::Open.as_str().to_string(),
+                    new_status: target_status.as_str().to_string(),
                     moderator_id: security.user_id,
                 },
             )
