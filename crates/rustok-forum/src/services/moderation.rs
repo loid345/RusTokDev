@@ -317,7 +317,19 @@ impl ModerationService {
         let old_status = current.as_str().to_string();
         let new_status = target.as_str().to_string();
 
-        ReplyService::set_status_in_tx(&txn, tenant_id, reply_id, &new_status).await?;
+        if !ReplyService::set_status_if_current_in_tx(
+            &txn,
+            tenant_id,
+            reply_id,
+            current.as_str(),
+            &new_status,
+        )
+        .await?
+        {
+            return Err(ForumError::Validation(
+                "Reply status changed concurrently; retry moderation",
+            ));
+        }
 
         let was_public = current == ReplyStatus::Approved;
         let is_public = target == ReplyStatus::Approved;
@@ -395,7 +407,19 @@ impl ModerationService {
         let new_status = target.as_str().to_string();
 
         let txn = self.db.begin().await?;
-        TopicService::set_status_in_tx(&txn, tenant_id, topic_id, &new_status).await?;
+        if !TopicService::set_status_if_current_in_tx(
+            &txn,
+            tenant_id,
+            topic_id,
+            current.as_str(),
+            &new_status,
+        )
+        .await?
+        {
+            return Err(ForumError::Validation(
+                "Topic status changed concurrently; retry moderation",
+            ));
+        }
         self.event_bus
             .publish_in_tx(
                 &txn,

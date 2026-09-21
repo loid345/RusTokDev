@@ -479,6 +479,30 @@ impl ReplyService {
         Ok(reply)
     }
 
+    pub(crate) async fn set_status_if_current_in_tx(
+        txn: &DatabaseTransaction,
+        tenant_id: Uuid,
+        reply_id: Uuid,
+        expected_status: &str,
+        status: &str,
+    ) -> ForumResult<bool> {
+        let result = forum_reply::Entity::update_many()
+            .filter(forum_reply::Column::TenantId.eq(tenant_id))
+            .filter(forum_reply::Column::Id.eq(reply_id))
+            .filter(forum_reply::Column::Status.eq(expected_status))
+            .col_expr(
+                forum_reply::Column::Status,
+                sea_orm::sea_query::Expr::value(status.to_string()),
+            )
+            .col_expr(
+                forum_reply::Column::UpdatedAt,
+                sea_orm::sea_query::Expr::value(Utc::now().into()),
+            )
+            .exec(txn)
+            .await?;
+        Ok(result.rows_affected == 1)
+    }
+
     async fn load_bodies(&self, reply_id: Uuid) -> ForumResult<Vec<forum_reply_body::Model>> {
         Ok(forum_reply_body::Entity::find()
             .filter(forum_reply_body::Column::ReplyId.eq(reply_id))

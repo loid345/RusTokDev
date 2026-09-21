@@ -587,6 +587,30 @@ impl TopicService {
         Ok(())
     }
 
+    pub(crate) async fn set_status_if_current_in_tx(
+        txn: &DatabaseTransaction,
+        tenant_id: Uuid,
+        topic_id: Uuid,
+        expected_status: &str,
+        status: &str,
+    ) -> ForumResult<bool> {
+        let result = forum_topic::Entity::update_many()
+            .filter(forum_topic::Column::TenantId.eq(tenant_id))
+            .filter(forum_topic::Column::Id.eq(topic_id))
+            .filter(forum_topic::Column::Status.eq(expected_status))
+            .col_expr(
+                forum_topic::Column::Status,
+                sea_orm::sea_query::Expr::value(status.to_string()),
+            )
+            .col_expr(
+                forum_topic::Column::UpdatedAt,
+                sea_orm::sea_query::Expr::value(Utc::now().into()),
+            )
+            .exec(txn)
+            .await?;
+        Ok(result.rows_affected == 1)
+    }
+
     async fn load_translations(
         &self,
         topic_id: Uuid,
