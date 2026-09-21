@@ -151,16 +151,19 @@ impl CategoryService {
             .await?
             .ok_or(ForumError::CategoryNotFound(category_id))?;
 
-        let mut active: forum_category::ActiveModel = category.into();
-        active.updated_at = Set(Utc::now().into());
+        let mut active = forum_category::ActiveModel {
+            id: Set(category_id),
+            updated_at: Set(Utc::now().into()),
+            ..Default::default()
+        };
         if let Some(position) = input.position {
             active.position = Set(position);
         }
-        if input.icon.is_some() {
-            active.icon = Set(input.icon);
+        if let Some(icon) = input.icon {
+            active.icon = Set(icon);
         }
-        if input.color.is_some() {
-            active.color = Set(input.color);
+        if let Some(color) = input.color {
+            active.color = Set(color);
         }
         if let Some(moderated) = input.moderated {
             active.moderated = Set(moderated);
@@ -175,22 +178,30 @@ impl CategoryService {
 
         match existing_translation {
             Some(existing_translation) => {
-                let mut active: forum_category_translation::ActiveModel =
-                    existing_translation.into();
+                let mut active = forum_category_translation::ActiveModel {
+                    id: Set(existing_translation.id),
+                    ..Default::default()
+                };
+                let mut changed = false;
                 if let Some(name) = input.name {
                     validate_category_name(&name)?;
                     active.name = Set(name.clone());
                     if input.slug.is_none() {
                         active.slug = Set(normalize_slug(&name));
                     }
+                    changed = true;
                 }
                 if let Some(slug) = input.slug.as_deref() {
                     active.slug = Set(normalize_required_slug(slug)?);
+                    changed = true;
                 }
-                if input.description.is_some() {
-                    active.description = Set(input.description);
+                if let Some(description) = input.description {
+                    active.description = Set(description);
+                    changed = true;
                 }
-                active.update(&self.db).await?;
+                if changed {
+                    active.update(&self.db).await?;
+                }
             }
             None => {
                 let name = input.name.ok_or_else(|| {
