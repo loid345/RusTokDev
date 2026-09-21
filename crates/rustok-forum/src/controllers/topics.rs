@@ -114,6 +114,182 @@ pub async fn list_topics(
     Ok(Json(topics))
 }
 
+
+async fn load_topic_after_moderation(
+    ctx: &AppContext,
+    tenant: &TenantContext,
+    auth: &AuthContext,
+    request_context: &RequestContext,
+    topic_id: Uuid,
+) -> Result<Json<TopicResponse>> {
+    let service = TopicService::new(ctx.db.clone(), transactional_event_bus_from_context(ctx));
+    let topic = service
+        .get_with_locale_fallback(
+            tenant.id,
+            auth.security_context(),
+            topic_id,
+            request_context.locale.as_str(),
+            Some(tenant.default_locale.as_str()),
+        )
+        .await
+        .map_err(map_forum_error)?;
+    Ok(Json(topic))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/forum/topics/{topic_id}/pin",
+    tag = "forum",
+    params(("topic_id" = Uuid, Path, description = "Topic ID")),
+    responses((status = 200, description = "Topic pinned", body = TopicResponse), (status = 404, description = "Topic not found"), (status = 401, description = "Unauthorized"), (status = 403, description = "Forbidden"))
+)]
+pub async fn pin_topic(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    request_context: RequestContext,
+    Path(topic_id): Path<Uuid>,
+) -> Result<Json<TopicResponse>> {
+    ensure_forum_permission(&auth, &[Permission::FORUM_TOPICS_MODERATE], "Permission denied: forum_topics:moderate required")?;
+    ModerationService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx))
+        .pin_topic(tenant.id, topic_id, auth.security_context())
+        .await
+        .map_err(map_forum_error)?;
+    load_topic_after_moderation(&ctx, &tenant, &auth, &request_context, topic_id).await
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/forum/topics/{topic_id}/pin",
+    tag = "forum",
+    params(("topic_id" = Uuid, Path, description = "Topic ID")),
+    responses((status = 200, description = "Topic unpinned", body = TopicResponse), (status = 404, description = "Topic not found"), (status = 401, description = "Unauthorized"), (status = 403, description = "Forbidden"))
+)]
+pub async fn unpin_topic(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    request_context: RequestContext,
+    Path(topic_id): Path<Uuid>,
+) -> Result<Json<TopicResponse>> {
+    ensure_forum_permission(&auth, &[Permission::FORUM_TOPICS_MODERATE], "Permission denied: forum_topics:moderate required")?;
+    ModerationService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx))
+        .unpin_topic(tenant.id, topic_id, auth.security_context())
+        .await
+        .map_err(map_forum_error)?;
+    load_topic_after_moderation(&ctx, &tenant, &auth, &request_context, topic_id).await
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/forum/topics/{topic_id}/lock",
+    tag = "forum",
+    params(("topic_id" = Uuid, Path, description = "Topic ID")),
+    responses((status = 200, description = "Topic locked", body = TopicResponse), (status = 404, description = "Topic not found"), (status = 401, description = "Unauthorized"), (status = 403, description = "Forbidden"))
+)]
+pub async fn lock_topic(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    request_context: RequestContext,
+    Path(topic_id): Path<Uuid>,
+) -> Result<Json<TopicResponse>> {
+    ensure_forum_permission(&auth, &[Permission::FORUM_TOPICS_MODERATE], "Permission denied: forum_topics:moderate required")?;
+    ModerationService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx))
+        .lock_topic(tenant.id, topic_id, auth.security_context())
+        .await
+        .map_err(map_forum_error)?;
+    load_topic_after_moderation(&ctx, &tenant, &auth, &request_context, topic_id).await
+}
+
+#[utoipa::path(
+    delete,
+    path = "/api/forum/topics/{topic_id}/lock",
+    tag = "forum",
+    params(("topic_id" = Uuid, Path, description = "Topic ID")),
+    responses((status = 200, description = "Topic unlocked", body = TopicResponse), (status = 404, description = "Topic not found"), (status = 401, description = "Unauthorized"), (status = 403, description = "Forbidden"))
+)]
+pub async fn unlock_topic(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    request_context: RequestContext,
+    Path(topic_id): Path<Uuid>,
+) -> Result<Json<TopicResponse>> {
+    ensure_forum_permission(&auth, &[Permission::FORUM_TOPICS_MODERATE], "Permission denied: forum_topics:moderate required")?;
+    ModerationService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx))
+        .unlock_topic(tenant.id, topic_id, auth.security_context())
+        .await
+        .map_err(map_forum_error)?;
+    load_topic_after_moderation(&ctx, &tenant, &auth, &request_context, topic_id).await
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/forum/topics/{topic_id}/close",
+    tag = "forum",
+    params(("topic_id" = Uuid, Path, description = "Topic ID")),
+    responses((status = 200, description = "Topic closed", body = TopicResponse), (status = 400, description = "Invalid status transition"), (status = 404, description = "Topic not found"), (status = 401, description = "Unauthorized"), (status = 403, description = "Forbidden"))
+)]
+pub async fn close_topic(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    request_context: RequestContext,
+    Path(topic_id): Path<Uuid>,
+) -> Result<Json<TopicResponse>> {
+    ensure_forum_permission(&auth, &[Permission::FORUM_TOPICS_MODERATE], "Permission denied: forum_topics:moderate required")?;
+    ModerationService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx))
+        .close_topic(tenant.id, topic_id, auth.security_context())
+        .await
+        .map_err(map_forum_error)?;
+    load_topic_after_moderation(&ctx, &tenant, &auth, &request_context, topic_id).await
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/forum/topics/{topic_id}/reopen",
+    tag = "forum",
+    params(("topic_id" = Uuid, Path, description = "Topic ID")),
+    responses((status = 200, description = "Topic reopened", body = TopicResponse), (status = 400, description = "Invalid status transition"), (status = 404, description = "Topic not found"), (status = 401, description = "Unauthorized"), (status = 403, description = "Forbidden"))
+)]
+pub async fn reopen_topic(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    request_context: RequestContext,
+    Path(topic_id): Path<Uuid>,
+) -> Result<Json<TopicResponse>> {
+    ensure_forum_permission(&auth, &[Permission::FORUM_TOPICS_MODERATE], "Permission denied: forum_topics:moderate required")?;
+    ModerationService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx))
+        .reopen_topic(tenant.id, topic_id, auth.security_context())
+        .await
+        .map_err(map_forum_error)?;
+    load_topic_after_moderation(&ctx, &tenant, &auth, &request_context, topic_id).await
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/forum/topics/{topic_id}/archive",
+    tag = "forum",
+    params(("topic_id" = Uuid, Path, description = "Topic ID")),
+    responses((status = 200, description = "Topic archived", body = TopicResponse), (status = 400, description = "Invalid status transition"), (status = 404, description = "Topic not found"), (status = 401, description = "Unauthorized"), (status = 403, description = "Forbidden"))
+)]
+pub async fn archive_topic(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    request_context: RequestContext,
+    Path(topic_id): Path<Uuid>,
+) -> Result<Json<TopicResponse>> {
+    ensure_forum_permission(&auth, &[Permission::FORUM_TOPICS_MODERATE], "Permission denied: forum_topics:moderate required")?;
+    ModerationService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx))
+        .archive_topic(tenant.id, topic_id, auth.security_context())
+        .await
+        .map_err(map_forum_error)?;
+    load_topic_after_moderation(&ctx, &tenant, &auth, &request_context, topic_id).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::{clamp_per_page, PaginationParams};

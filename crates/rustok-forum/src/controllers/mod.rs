@@ -52,6 +52,20 @@ pub fn routes() -> Routes {
                 .delete(topics::delete_topic),
         )
         .add(
+            "/topics/{topic_id}/pin",
+            axum::routing::post(topics::pin_topic).delete(topics::unpin_topic),
+        )
+        .add(
+            "/topics/{topic_id}/lock",
+            axum::routing::post(topics::lock_topic).delete(topics::unlock_topic),
+        )
+        .add("/topics/{topic_id}/close", axum::routing::post(topics::close_topic))
+        .add("/topics/{topic_id}/reopen", axum::routing::post(topics::reopen_topic))
+        .add(
+            "/topics/{topic_id}/archive",
+            axum::routing::post(topics::archive_topic),
+        )
+        .add(
             "/topics/{topic_id}/solution/{reply_id}",
             axum::routing::post(topics::mark_topic_solution),
         )
@@ -74,6 +88,18 @@ pub fn routes() -> Routes {
         .add(
             "/topics/{id}/replies",
             get(replies::list_replies).post(replies::create_reply),
+        )
+        .add(
+            "/topics/{topic_id}/replies/{reply_id}/approve",
+            axum::routing::post(replies::approve_reply),
+        )
+        .add(
+            "/topics/{topic_id}/replies/{reply_id}/reject",
+            axum::routing::post(replies::reject_reply),
+        )
+        .add(
+            "/topics/{topic_id}/replies/{reply_id}/hide",
+            axum::routing::post(replies::hide_reply),
         )
         .add(
             "/replies/{id}",

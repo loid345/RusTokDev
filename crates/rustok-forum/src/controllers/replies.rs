@@ -15,7 +15,7 @@ use std::time::Instant;
 use uuid::Uuid;
 
 use crate::{
-    CreateReplyInput, ListRepliesFilter, ReplyListItem, ReplyResponse, ReplyService,
+    CreateReplyInput, ListRepliesFilter, ModerationService, ReplyListItem, ReplyResponse, ReplyService,
     UpdateReplyInput, VoteService,
 };
 
@@ -84,6 +84,94 @@ pub async fn list_replies(
     );
 
     Ok(Json(replies))
+}
+
+
+async fn load_reply_after_moderation(
+    ctx: &AppContext,
+    tenant: &TenantContext,
+    auth: &AuthContext,
+    request_context: &RequestContext,
+    reply_id: Uuid,
+) -> Result<Json<ReplyResponse>> {
+    let service = ReplyService::new(ctx.db.clone(), transactional_event_bus_from_context(ctx));
+    let reply = service
+        .get_with_locale_fallback(
+            tenant.id,
+            auth.security_context(),
+            reply_id,
+            request_context.locale.as_str(),
+            Some(tenant.default_locale.as_str()),
+        )
+        .await
+        .map_err(map_forum_error)?;
+    Ok(Json(reply))
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/forum/topics/{topic_id}/replies/{reply_id}/approve",
+    tag = "forum",
+    params(("topic_id" = Uuid, Path, description = "Topic ID"), ("reply_id" = Uuid, Path, description = "Reply ID")),
+    responses((status = 200, description = "Reply approved", body = ReplyResponse), (status = 400, description = "Invalid status transition"), (status = 404, description = "Reply not found"), (status = 401, description = "Unauthorized"), (status = 403, description = "Forbidden"))
+)]
+pub async fn approve_reply(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    request_context: RequestContext,
+    Path((topic_id, reply_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<ReplyResponse>> {
+    ensure_forum_permission(&auth, &[Permission::FORUM_REPLIES_MODERATE], "Permission denied: forum_replies:moderate required")?;
+    ModerationService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx))
+        .approve_reply(tenant.id, reply_id, topic_id, auth.security_context())
+        .await
+        .map_err(map_forum_error)?;
+    load_reply_after_moderation(&ctx, &tenant, &auth, &request_context, reply_id).await
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/forum/topics/{topic_id}/replies/{reply_id}/reject",
+    tag = "forum",
+    params(("topic_id" = Uuid, Path, description = "Topic ID"), ("reply_id" = Uuid, Path, description = "Reply ID")),
+    responses((status = 200, description = "Reply rejected", body = ReplyResponse), (status = 400, description = "Invalid status transition"), (status = 404, description = "Reply not found"), (status = 401, description = "Unauthorized"), (status = 403, description = "Forbidden"))
+)]
+pub async fn reject_reply(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    request_context: RequestContext,
+    Path((topic_id, reply_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<ReplyResponse>> {
+    ensure_forum_permission(&auth, &[Permission::FORUM_REPLIES_MODERATE], "Permission denied: forum_replies:moderate required")?;
+    ModerationService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx))
+        .reject_reply(tenant.id, reply_id, topic_id, auth.security_context())
+        .await
+        .map_err(map_forum_error)?;
+    load_reply_after_moderation(&ctx, &tenant, &auth, &request_context, reply_id).await
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/forum/topics/{topic_id}/replies/{reply_id}/hide",
+    tag = "forum",
+    params(("topic_id" = Uuid, Path, description = "Topic ID"), ("reply_id" = Uuid, Path, description = "Reply ID")),
+    responses((status = 200, description = "Reply hidden", body = ReplyResponse), (status = 400, description = "Invalid status transition"), (status = 404, description = "Reply not found"), (status = 401, description = "Unauthorized"), (status = 403, description = "Forbidden"))
+)]
+pub async fn hide_reply(
+    State(ctx): State<AppContext>,
+    tenant: TenantContext,
+    auth: AuthContext,
+    request_context: RequestContext,
+    Path((topic_id, reply_id)): Path<(Uuid, Uuid)>,
+) -> Result<Json<ReplyResponse>> {
+    ensure_forum_permission(&auth, &[Permission::FORUM_REPLIES_MODERATE], "Permission denied: forum_replies:moderate required")?;
+    ModerationService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx))
+        .hide_reply(tenant.id, reply_id, topic_id, auth.security_context())
+        .await
+        .map_err(map_forum_error)?;
+    load_reply_after_moderation(&ctx, &tenant, &auth, &request_context, reply_id).await
 }
 
 #[cfg(test)]
