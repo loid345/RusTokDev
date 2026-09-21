@@ -1955,22 +1955,26 @@ fn render_topic_feed(
                             </div>
                             <div class="mt-5 flex flex-wrap gap-2">
                                 <button type="button" class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action) on:click={ let item_id = item_id.clone(); move |_| on_edit.run(item_id.clone()) } disabled=vm.is_busy>{vm.action_label.clone()}</button>
-                                <button
-                                    type="button"
-                                    class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action)
-                                    on:click={ let item_id = item_id.clone(); let action = if vm.pinned { "unpin" } else { "pin" }; move |_| on_moderate.run((item_id.clone(), action.to_string())) }
-                                    disabled=vm.is_busy
-                                >
-                                    {if vm.pinned { unpin_label.clone() } else { pin_label.clone() }}
-                                </button>
-                                <button
-                                    type="button"
-                                    class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action)
-                                    on:click={ let item_id = item_id.clone(); let action = if vm.locked { "unlock" } else { "lock" }; move |_| on_moderate.run((item_id.clone(), action.to_string())) }
-                                    disabled=vm.is_busy
-                                >
-                                    {if vm.locked { unlock_label.clone() } else { lock_label.clone() }}
-                                </button>
+                                {(!matches!(vm.status.as_str(), "deleted")).then(|| view! {
+                                    <button
+                                        type="button"
+                                        class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action)
+                                        on:click={ let item_id = item_id.clone(); let action = if vm.pinned { "unpin" } else { "pin" }; move |_| on_moderate.run((item_id.clone(), action.to_string())) }
+                                        disabled=vm.is_busy
+                                    >
+                                        {if vm.pinned { unpin_label.clone() } else { pin_label.clone() }}
+                                    </button>
+                                })}
+                                {(!matches!(vm.status.as_str(), "deleted")).then(|| view! {
+                                    <button
+                                        type="button"
+                                        class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action)
+                                        on:click={ let item_id = item_id.clone(); let action = if vm.locked { "unlock" } else { "lock" }; move |_| on_moderate.run((item_id.clone(), action.to_string())) }
+                                        disabled=vm.is_busy
+                                    >
+                                        {if vm.locked { unlock_label.clone() } else { lock_label.clone() }}
+                                    </button>
+                                })}
                                 {match vm.status.as_str() {
                                     "open" | "closed" => {
                                         let action = if vm.status == "open" { "close" } else { "reopen" };
