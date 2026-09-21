@@ -295,6 +295,9 @@ impl ModerationService {
         )
         .await?;
         let topic = TopicService::find_topic_for_update_in_tx(&txn, tenant_id, topic_id).await?;
+        if topic.status == crate::constants::topic_status::DELETED {
+            return Err(ForumError::TopicDeleted);
+        }
         enforce_solution_scope(&security, topic.author_id)?;
 
         let reply = ReplyService::find_reply_for_update_in_tx(&txn, tenant_id, reply_id).await?;
@@ -408,6 +411,9 @@ impl ModerationService {
         )
         .await?;
         let topic = TopicService::find_topic_for_update_in_tx(&txn, tenant_id, topic_id).await?;
+        if topic.status == crate::constants::topic_status::DELETED {
+            return Err(ForumError::TopicDeleted);
+        }
         let reply = ReplyService::find_reply_in_tx(&txn, tenant_id, reply_id).await?;
         if reply.topic_id != topic.id {
             return Err(ForumError::Validation(
