@@ -162,6 +162,11 @@ async fn user_stats_track_topic_reply_and_solution_lifecycle() {
         .expect("reply author stats after solution should load");
     assert_eq!(reply_author_after_solution.solution_count, 1);
 
+    moderation_service
+        .close_topic(tenant_id, topic.id, admin.clone())
+        .await
+        .expect("topic should close before soft-delete");
+
     topic_service
         .delete(tenant_id, topic.id, admin.clone())
         .await
@@ -193,6 +198,17 @@ async fn user_stats_track_topic_reply_and_solution_lifecycle() {
         .restore_topic(tenant_id, topic.id, restore_admin.clone())
         .await
         .expect("deleted topic should be restorable");
+
+    let restored_topic = topic_service
+        .get(
+            tenant_id,
+            restore_admin.clone(),
+            topic.id,
+            "en",
+        )
+        .await
+        .expect("restored topic should load");
+    assert_eq!(restored_topic.status, "closed");
 
     let topic_author_after_restore = stats_service
         .get(
