@@ -11,7 +11,7 @@ use rustok_events::DomainEvent;
 use rustok_outbox::TransactionalEventBus;
 
 use crate::constants::reply_status;
-use crate::entities::forum_solution;
+use crate::entities::{forum_reply, forum_solution};
 use crate::error::ForumError;
 use crate::error::ForumResult;
 use crate::services::rbac::{enforce_owned_scope, enforce_scope};
@@ -234,6 +234,12 @@ impl ModerationService {
         } else {
             None
         };
+        let reply_author_ids = forum_reply::Entity::find()
+            .filter(forum_reply::Column::TenantId.eq(tenant_id))
+            .filter(forum_reply::Column::TopicId.eq(topic_id))
+            .filter(forum_reply::Column::Status.ne(reply_status::DELETED))
+            .all(&txn)
+            .await?;
 
         CategoryService::adjust_counters_in_tx(
             &txn,
@@ -251,6 +257,15 @@ impl ModerationService {
             1,
         )
         .await?;
+        for reply in reply_author_ids {
+            UserStatsService::adjust_reply_count_in_tx(
+                &txn,
+                tenant_id,
+                reply.author_id,
+                1,
+            )
+            .await?;
+        }
 
         self.event_bus
             .publish_in_tx(
