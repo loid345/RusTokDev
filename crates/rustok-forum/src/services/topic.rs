@@ -253,7 +253,8 @@ impl TopicService {
         input: UpdateTopicInput,
     ) -> ForumResult<TopicResponse> {
         let locale = normalize_locale(&input.locale)?;
-        let topic = self.find_topic(tenant_id, topic_id).await?;
+        let txn = self.db.begin().await?;
+        let topic = Self::find_topic_for_update_in_tx(&txn, tenant_id, topic_id).await?;
         enforce_owned_scope(
             &security,
             Resource::ForumTopics,
@@ -274,7 +275,6 @@ impl TopicService {
         } else {
             None
         };
-        let txn = self.db.begin().await?;
         let normalized_tags = input.tags.as_ref().map(|tags| normalize_tags(tags));
 
         let mut active = forum_topic::ActiveModel {
