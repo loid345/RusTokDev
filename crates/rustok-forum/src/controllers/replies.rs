@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     Json,
 };
-use loco_rs::{app::AppContext, Error, Result};
+use loco_rs::{app::AppContext, Result};
 use rustok_api::{
     has_any_effective_permission, loco::transactional_event_bus_from_context, AuthContext,
     RequestContext, TenantContext,
