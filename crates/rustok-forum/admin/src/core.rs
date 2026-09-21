@@ -973,7 +973,7 @@ pub fn topic_status_class(status: &str) -> &'static str {
     match status.to_ascii_lowercase().as_str() {
         "published" | "active" | "open" => "success",
         "draft" | "pending" => "warning",
-        "archived" | "closed" => "muted",
+        "archived" | "closed" | "deleted" => "muted",
         _ => "default",
     }
 }
