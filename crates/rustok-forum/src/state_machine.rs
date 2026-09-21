@@ -49,6 +49,7 @@ impl TopicStatus {
             topic_status::OPEN => Some(Self::Open),
             topic_status::CLOSED => Some(Self::Closed),
             topic_status::ARCHIVED => Some(Self::Archived),
+            topic_status::DELETED => Some(Self::Deleted),
             _ => None,
         }
     }
@@ -59,6 +60,7 @@ impl TopicStatus {
             Self::Open => topic_status::OPEN,
             Self::Closed => topic_status::CLOSED,
             Self::Archived => topic_status::ARCHIVED,
+            Self::Deleted => topic_status::DELETED,
         }
     }
 
