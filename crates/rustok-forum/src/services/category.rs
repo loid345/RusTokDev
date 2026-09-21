@@ -43,13 +43,14 @@ impl CategoryService {
         let locale = normalize_locale(&input.locale)?;
         let slug = normalize_required_slug(&input.slug)?;
 
+        let txn = self.db.begin().await?;
         if let Some(parent_id) = input.parent_id {
-            let parent_exists = forum_category::Entity::find_by_id(parent_id)
+            if forum_category::Entity::find_by_id(parent_id)
                 .filter(forum_category::Column::TenantId.eq(tenant_id))
-                .one(&self.db)
+                .one(&txn)
                 .await?
-                .is_some();
-            if !parent_exists {
+                .is_none()
+            {
                 return Err(ForumError::Validation(
                     "Parent category does not belong to the current tenant".to_string(),
                 ));
@@ -72,7 +73,7 @@ impl CategoryService {
             created_at: Set(now.into()),
             updated_at: Set(now.into()),
         }
-        .insert(&self.db)
+        .insert(&txn)
         .await?;
 
         forum_category_translation::ActiveModel {
@@ -84,9 +85,10 @@ impl CategoryService {
             slug: Set(slug),
             description: Set(input.description),
         }
-        .insert(&self.db)
+        .insert(&txn)
         .await?;
 
+        txn.commit().await?;
         self.get(tenant_id, security, id, &locale).await
     }
 
@@ -145,11 +147,13 @@ impl CategoryService {
     ) -> ForumResult<CategoryResponse> {
         enforce_scope(&security, Resource::ForumCategories, Action::Update)?;
         let locale = normalize_locale(&input.locale)?;
-        let category = forum_category::Entity::find_by_id(category_id)
-            .filter(forum_category::Column::TenantId.eq(tenant_id))
-            .one(&self.db)
-            .await?
-            .ok_or(ForumError::CategoryNotFound(category_id))?;
+        let txn = self.db.begin().await?;
+        let category = CategoryService::find_category_for_update_in_tx(
+            &txn,
+            tenant_id,
+            category_id,
+        )
+        .await?;
 
         let mut active = forum_category::ActiveModel {
             id: Set(category_id),
@@ -168,12 +172,12 @@ impl CategoryService {
         if let Some(moderated) = input.moderated {
             active.moderated = Set(moderated);
         }
-        active.update(&self.db).await?;
+        active.update(&txn).await?;
 
         let existing_translation = forum_category_translation::Entity::find()
             .filter(forum_category_translation::Column::CategoryId.eq(category_id))
             .filter(forum_category_translation::Column::Locale.eq(&locale))
-            .one(&self.db)
+            .one(&txn)
             .await?;
 
         match existing_translation {
@@ -200,7 +204,7 @@ impl CategoryService {
                     changed = true;
                 }
                 if changed {
-                    active.update(&self.db).await?;
+                    active.update(&txn).await?;
                 }
             }
             None => {
@@ -224,11 +228,12 @@ impl CategoryService {
                     slug: Set(slug),
                     description: Set(input.description),
                 }
-                .insert(&self.db)
+                .insert(&txn)
                 .await?;
             }
         }
 
+        txn.commit().await?;
         self.get(tenant_id, security, category_id, &locale).await
     }
 
