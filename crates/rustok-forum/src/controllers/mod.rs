@@ -1,3 +1,7 @@
+
+use loco_rs::Error;
+
+use crate::ForumError;
 use axum::routing::get;
 use loco_rs::controller::Routes;
 
@@ -6,6 +10,18 @@ pub mod replies;
 pub mod topics;
 pub mod users;
 pub mod widgets;
+
+pub(crate) fn map_forum_error(error: ForumError) -> Error {
+    match error {
+        ForumError::CategoryNotFound(_)
+        | ForumError::TopicNotFound(_)
+        | ForumError::ReplyNotFound(_)
+        | ForumError::SolutionNotFound(_) => Error::NotFound,
+        ForumError::Database(_) | ForumError::Internal(_) => Error::InternalServerError,
+        ForumError::Forbidden(message) => Error::Unauthorized(message),
+        other => Error::BadRequest(other.to_string()),
+    }
+}
 
 pub fn routes() -> Routes {
     Routes::new()

@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::Utc;
+use sea_orm::sea_query::OnConflict;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, DatabaseTransaction,
     EntityTrait, QueryFilter, TransactionTrait,
@@ -236,34 +237,28 @@ impl VoteService {
         user_id: Uuid,
         value: i32,
     ) -> ForumResult<()> {
-        let existing = forum_topic_vote::Entity::find()
-            .filter(forum_topic_vote::Column::TenantId.eq(tenant_id))
-            .filter(forum_topic_vote::Column::TopicId.eq(topic_id))
-            .filter(forum_topic_vote::Column::UserId.eq(user_id))
-            .one(txn)
-            .await?;
         let now = Utc::now();
-
-        match existing {
-            Some(existing) => {
-                let mut active: forum_topic_vote::ActiveModel = existing.into();
-                active.value = Set(value);
-                active.updated_at = Set(now.into());
-                active.update(txn).await?;
-            }
-            None => {
-                forum_topic_vote::ActiveModel {
-                    topic_id: Set(topic_id),
-                    user_id: Set(user_id),
-                    tenant_id: Set(tenant_id),
-                    value: Set(value),
-                    created_at: Set(now.into()),
-                    updated_at: Set(now.into()),
-                }
-                .insert(txn)
-                .await?;
-            }
-        }
+        forum_topic_vote::Entity::insert(forum_topic_vote::ActiveModel {
+            topic_id: Set(topic_id),
+            user_id: Set(user_id),
+            tenant_id: Set(tenant_id),
+            value: Set(value),
+            created_at: Set(now.into()),
+            updated_at: Set(now.into()),
+        })
+        .on_conflict(
+            OnConflict::columns([
+                forum_topic_vote::Column::TopicId,
+                forum_topic_vote::Column::UserId,
+            ])
+            .update_columns([
+                forum_topic_vote::Column::Value,
+                forum_topic_vote::Column::UpdatedAt,
+            ])
+            .to_owned(),
+        )
+        .exec(txn)
+        .await?;
 
         Ok(())
     }
@@ -276,34 +271,28 @@ impl VoteService {
         user_id: Uuid,
         value: i32,
     ) -> ForumResult<()> {
-        let existing = forum_reply_vote::Entity::find()
-            .filter(forum_reply_vote::Column::TenantId.eq(tenant_id))
-            .filter(forum_reply_vote::Column::ReplyId.eq(reply_id))
-            .filter(forum_reply_vote::Column::UserId.eq(user_id))
-            .one(txn)
-            .await?;
         let now = Utc::now();
-
-        match existing {
-            Some(existing) => {
-                let mut active: forum_reply_vote::ActiveModel = existing.into();
-                active.value = Set(value);
-                active.updated_at = Set(now.into());
-                active.update(txn).await?;
-            }
-            None => {
-                forum_reply_vote::ActiveModel {
-                    reply_id: Set(reply_id),
-                    user_id: Set(user_id),
-                    tenant_id: Set(tenant_id),
-                    value: Set(value),
-                    created_at: Set(now.into()),
-                    updated_at: Set(now.into()),
-                }
-                .insert(txn)
-                .await?;
-            }
-        }
+        forum_reply_vote::Entity::insert(forum_reply_vote::ActiveModel {
+            reply_id: Set(reply_id),
+            user_id: Set(user_id),
+            tenant_id: Set(tenant_id),
+            value: Set(value),
+            created_at: Set(now.into()),
+            updated_at: Set(now.into()),
+        })
+        .on_conflict(
+            OnConflict::columns([
+                forum_reply_vote::Column::ReplyId,
+                forum_reply_vote::Column::UserId,
+            ])
+            .update_columns([
+                forum_reply_vote::Column::Value,
+                forum_reply_vote::Column::UpdatedAt,
+            ])
+            .to_owned(),
+        )
+        .exec(txn)
+        .await?;
 
         Ok(())
     }

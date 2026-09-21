@@ -464,7 +464,9 @@ impl ReplyService {
         let mut query = forum_reply::Entity::find()
             .filter(forum_reply::Column::TenantId.eq(tenant_id))
             .filter(forum_reply::Column::TopicId.eq(topic_id))
-            .order_by_asc(forum_reply::Column::Position);
+            .order_by_asc(forum_reply::Column::Position)
+            .order_by_asc(forum_reply::Column::CreatedAt)
+            .order_by_asc(forum_reply::Column::Id);
 
         if let Some(statuses) = statuses {
             let normalized_statuses: Vec<String> = statuses

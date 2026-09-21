@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::Utc;
+use sea_orm::sea_query::OnConflict;
 use sea_orm::{
     ActiveModelTrait, ActiveValue::Set, ColumnTrait, DatabaseConnection, EntityTrait, QueryFilter,
     TransactionTrait,
@@ -37,23 +38,24 @@ impl SubscriptionService {
         self.find_category(tenant_id, category_id).await?;
 
         let txn = self.db.begin().await?;
-        let existing = forum_category_subscription::Entity::find()
-            .filter(forum_category_subscription::Column::TenantId.eq(tenant_id))
-            .filter(forum_category_subscription::Column::CategoryId.eq(category_id))
-            .filter(forum_category_subscription::Column::UserId.eq(user_id))
-            .one(&txn)
-            .await?;
-
-        if existing.is_none() {
+        forum_category_subscription::Entity::insert(
             forum_category_subscription::ActiveModel {
                 category_id: Set(category_id),
                 user_id: Set(user_id),
                 tenant_id: Set(tenant_id),
                 created_at: Set(Utc::now().into()),
-            }
-            .insert(&txn)
-            .await?;
-        }
+            },
+        )
+        .on_conflict(
+            OnConflict::columns([
+                forum_category_subscription::Column::CategoryId,
+                forum_category_subscription::Column::UserId,
+            ])
+            .do_nothing()
+            .to_owned(),
+        )
+        .exec(&txn)
+        .await?;
 
         txn.commit().await?;
         Ok(())
@@ -93,23 +95,24 @@ impl SubscriptionService {
         self.find_topic(tenant_id, topic_id).await?;
 
         let txn = self.db.begin().await?;
-        let existing = forum_topic_subscription::Entity::find()
-            .filter(forum_topic_subscription::Column::TenantId.eq(tenant_id))
-            .filter(forum_topic_subscription::Column::TopicId.eq(topic_id))
-            .filter(forum_topic_subscription::Column::UserId.eq(user_id))
-            .one(&txn)
-            .await?;
-
-        if existing.is_none() {
+        forum_topic_subscription::Entity::insert(
             forum_topic_subscription::ActiveModel {
                 topic_id: Set(topic_id),
                 user_id: Set(user_id),
                 tenant_id: Set(tenant_id),
                 created_at: Set(Utc::now().into()),
-            }
-            .insert(&txn)
-            .await?;
-        }
+            },
+        )
+        .on_conflict(
+            OnConflict::columns([
+                forum_topic_subscription::Column::TopicId,
+                forum_topic_subscription::Column::UserId,
+            ])
+            .do_nothing()
+            .to_owned(),
+        )
+        .exec(&txn)
+        .await?;
 
         txn.commit().await?;
         Ok(())

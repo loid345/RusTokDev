@@ -1,3 +1,4 @@
+use super::map_forum_error;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -93,7 +94,7 @@ pub async fn list_topics(
             Some(tenant.default_locale.as_str()),
         )
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     metrics::record_read_path_query(
         "http",
         "forum.list_topics",
@@ -176,7 +177,7 @@ pub async fn get_topic(
             Some(tenant.default_locale.as_str()),
         )
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(Json(topic))
 }
 
@@ -208,7 +209,7 @@ pub async fn create_topic(
     let topic = service
         .create(tenant.id, auth.security_context(), input)
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok((StatusCode::CREATED, Json(topic)))
 }
 
@@ -242,7 +243,7 @@ pub async fn update_topic(
     let topic = service
         .update(tenant.id, id, auth.security_context(), input)
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(Json(topic))
 }
 
@@ -274,7 +275,7 @@ pub async fn delete_topic(
     service
         .delete(tenant.id, id, auth.security_context())
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -313,7 +314,7 @@ pub async fn mark_topic_solution(
     moderation
         .mark_solution(tenant.id, topic_id, reply_id, auth.security_context())
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
 
     let service = TopicService::new(ctx.db.clone(), event_bus);
     let topic = service
@@ -325,7 +326,7 @@ pub async fn mark_topic_solution(
             Some(tenant.default_locale.as_str()),
         )
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(Json(topic))
 }
 
@@ -361,7 +362,7 @@ pub async fn clear_topic_solution(
     moderation
         .clear_solution(tenant.id, topic_id, auth.security_context())
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
 
     let service = TopicService::new(ctx.db.clone(), event_bus);
     let topic = service
@@ -373,7 +374,7 @@ pub async fn clear_topic_solution(
             Some(tenant.default_locale.as_str()),
         )
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(Json(topic))
 }
 
@@ -407,7 +408,7 @@ pub async fn set_topic_vote(
     VoteService::new(ctx.db.clone())
         .set_topic_vote(tenant.id, topic_id, auth.security_context(), value)
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
 
     let service = TopicService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let topic = service
@@ -419,7 +420,7 @@ pub async fn set_topic_vote(
             Some(tenant.default_locale.as_str()),
         )
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(Json(topic))
 }
 
@@ -450,7 +451,7 @@ pub async fn clear_topic_vote(
     VoteService::new(ctx.db.clone())
         .clear_topic_vote(tenant.id, topic_id, auth.security_context())
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
 
     let service = TopicService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let topic = service
@@ -462,7 +463,7 @@ pub async fn clear_topic_vote(
             Some(tenant.default_locale.as_str()),
         )
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(Json(topic))
 }
 
@@ -493,7 +494,7 @@ pub async fn subscribe_topic(
     SubscriptionService::new(ctx.db.clone())
         .set_topic_subscription(tenant.id, topic_id, auth.security_context())
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
 
     let service = TopicService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let topic = service
@@ -505,7 +506,7 @@ pub async fn subscribe_topic(
             Some(tenant.default_locale.as_str()),
         )
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(Json(topic))
 }
 
@@ -536,7 +537,7 @@ pub async fn unsubscribe_topic(
     SubscriptionService::new(ctx.db.clone())
         .clear_topic_subscription(tenant.id, topic_id, auth.security_context())
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
 
     let service = TopicService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let topic = service
@@ -548,7 +549,7 @@ pub async fn unsubscribe_topic(
             Some(tenant.default_locale.as_str()),
         )
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(Json(topic))
 }
 

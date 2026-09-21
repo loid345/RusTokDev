@@ -1,3 +1,4 @@
+use super::map_forum_error;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -65,7 +66,7 @@ pub async fn list_replies(
             Some(tenant.default_locale.as_str()),
         )
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     metrics::record_read_path_query(
         "http",
         "forum.list_replies",
@@ -139,7 +140,7 @@ pub async fn get_reply(
             Some(tenant.default_locale.as_str()),
         )
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(Json(reply))
 }
 
@@ -173,7 +174,7 @@ pub async fn create_reply(
     let reply = service
         .create(tenant.id, auth.security_context(), topic_id, input)
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok((StatusCode::CREATED, Json(reply)))
 }
 
@@ -207,7 +208,7 @@ pub async fn update_reply(
     let reply = service
         .update(tenant.id, id, auth.security_context(), input)
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(Json(reply))
 }
 
@@ -239,7 +240,7 @@ pub async fn delete_reply(
     service
         .delete(tenant.id, id, auth.security_context())
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -273,7 +274,7 @@ pub async fn set_reply_vote(
     VoteService::new(ctx.db.clone())
         .set_reply_vote(tenant.id, reply_id, auth.security_context(), value)
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
 
     let service = ReplyService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let reply = service
@@ -285,7 +286,7 @@ pub async fn set_reply_vote(
             Some(tenant.default_locale.as_str()),
         )
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(Json(reply))
 }
 
@@ -316,7 +317,7 @@ pub async fn clear_reply_vote(
     VoteService::new(ctx.db.clone())
         .clear_reply_vote(tenant.id, reply_id, auth.security_context())
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
 
     let service = ReplyService::new(ctx.db.clone(), transactional_event_bus_from_context(&ctx));
     let reply = service
@@ -328,7 +329,7 @@ pub async fn clear_reply_vote(
             Some(tenant.default_locale.as_str()),
         )
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(Json(reply))
 }
 

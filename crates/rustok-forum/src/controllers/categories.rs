@@ -1,3 +1,4 @@
+use super::map_forum_error;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
@@ -68,7 +69,7 @@ pub async fn list_categories(
             Some(tenant.default_locale.as_str()),
         )
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     metrics::record_read_path_query(
         "http",
         "forum.list_categories",
@@ -130,7 +131,7 @@ pub async fn get_category(
             Some(tenant.default_locale.as_str()),
         )
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(Json(category))
 }
 
@@ -162,7 +163,7 @@ pub async fn create_category(
     let category = service
         .create(tenant.id, auth.security_context(), input)
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok((StatusCode::CREATED, Json(category)))
 }
 
@@ -196,7 +197,7 @@ pub async fn update_category(
     let category = service
         .update(tenant.id, id, auth.security_context(), input)
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(Json(category))
 }
 
@@ -228,7 +229,7 @@ pub async fn delete_category(
     service
         .delete(tenant.id, id, auth.security_context())
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -259,7 +260,7 @@ pub async fn subscribe_category(
     SubscriptionService::new(ctx.db.clone())
         .set_category_subscription(tenant.id, id, auth.security_context())
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
 
     let category = CategoryService::new(ctx.db.clone())
         .get_with_locale_fallback(
@@ -270,7 +271,7 @@ pub async fn subscribe_category(
             Some(tenant.default_locale.as_str()),
         )
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(Json(category))
 }
 
@@ -301,7 +302,7 @@ pub async fn unsubscribe_category(
     SubscriptionService::new(ctx.db.clone())
         .clear_category_subscription(tenant.id, id, auth.security_context())
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
 
     let category = CategoryService::new(ctx.db.clone())
         .get_with_locale_fallback(
@@ -312,7 +313,7 @@ pub async fn unsubscribe_category(
             Some(tenant.default_locale.as_str()),
         )
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(Json(category))
 }
 

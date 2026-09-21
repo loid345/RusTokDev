@@ -1,3 +1,4 @@
+use super::map_forum_error;
 use axum::{
     extract::{Path, State},
     Json,
@@ -35,7 +36,7 @@ pub async fn get_user_stats(
     let stats = UserStatsService::new(ctx.db.clone())
         .get(tenant.id, auth.security_context(), user_id)
         .await
-        .map_err(|err| Error::BadRequest(err.to_string()))?;
+        .map_err(map_forum_error)?;
     Ok(Json(stats))
 }
 
