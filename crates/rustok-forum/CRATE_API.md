@@ -4,6 +4,9 @@
 `constants`, `controllers`, `dto`, `entities`, `error`, `graphql`, `locale`, `services`.
 
 ## Основные публичные типы и сигнатуры
+## Update semantics
+- При обновлении категории `description`, `icon` и `color` передача пустой строки означает явное очищение nullable-поля; отсутствие поля по-прежнему означает «не менять».
+
 - `pub struct ForumModule`
 - `pub struct CategoryService`, `TopicService`, `ReplyService`, `ModerationService`, `SubscriptionService`, `UserStatsService`, `VoteService`
 - `pub mod graphql` -> `ForumQuery`, `ForumMutation`
