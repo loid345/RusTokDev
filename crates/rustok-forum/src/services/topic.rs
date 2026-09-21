@@ -343,28 +343,27 @@ impl TopicService {
         topic_id: Uuid,
         security: SecurityContext,
     ) -> ForumResult<()> {
-        let topic = self.find_topic(tenant_id, topic_id).await?;
+        let txn = self.db.begin().await?;
+        let topic_snapshot = Self::find_topic_in_tx(&txn, tenant_id, topic_id).await?;
         enforce_owned_scope(
             &security,
             Resource::ForumTopics,
             Action::Delete,
-            topic.author_id,
+            topic_snapshot.author_id,
         )?;
-        let txn = self.db.begin().await?;
-        CategoryService::find_category_for_update_in_tx(&txn, tenant_id, topic.category_id).await?;
+        CategoryService::find_category_for_update_in_tx(
+            &txn,
+            tenant_id,
+            topic_snapshot.category_id,
+        )
+        .await?;
         let topic = Self::find_topic_for_update_in_tx(&txn, tenant_id, topic_id).await?;
-        let reply_author_ids = forum_reply::Entity::find()
-            .filter(forum_reply::Column::TenantId.eq(tenant_id))
-            .filter(forum_reply::Column::TopicId.eq(topic_id))
-            .all(&txn)
-            .await?
-            .into_iter()
-            .map(|reply| reply.author_id)
-            .collect::<Vec<_>>();
+        let current = crate::state_machine::TopicStatus::from_str_value(&topic.status)
+            .ok_or_else(|| ForumError::Validation(format!("Unknown topic status: {}", topic.status)))?;
+        current.validate_transition(&crate::state_machine::TopicStatus::Deleted)?;
+
         let solution_author_id = if let Some(solution) =
-            forum_solution::Entity::find_by_id(topic_id)
-                .one(&txn)
-                .await?
+            forum_solution::Entity::find_by_id(topic_id).one(&txn).await?
         {
             forum_reply::Entity::find_by_id(solution.reply_id)
                 .filter(forum_reply::Column::TenantId.eq(tenant_id))
@@ -374,12 +373,21 @@ impl TopicService {
         } else {
             None
         };
-        forum_topic::Entity::delete_by_id(topic_id)
-            .exec(&txn)
-            .await?;
-        delete_attached_localized_values(&txn, tenant_id, "topic", topic_id)
-            .await
-            .map_err(map_flex_cleanup_error)?;
+
+        if !Self::set_status_if_current_in_tx(
+            &txn,
+            tenant_id,
+            topic_id,
+            current.as_str(),
+            crate::constants::topic_status::DELETED,
+        )
+        .await?
+        {
+            return Err(ForumError::Validation(
+                "Topic status changed concurrently; retry deletion",
+            ));
+        }
+
         CategoryService::adjust_counters_in_tx(
             &txn,
             tenant_id,
@@ -388,18 +396,32 @@ impl TopicService {
             -topic.reply_count,
         )
         .await?;
-        UserStatsService::decrement_topic_thread_in_tx(
+        UserStatsService::adjust_topic_count_in_tx(&txn, tenant_id, topic.author_id, -1).await?;
+        UserStatsService::adjust_solution_count_in_tx(
             &txn,
             tenant_id,
-            topic.author_id,
-            &reply_author_ids,
             solution_author_id,
+            -1,
         )
         .await?;
+
+        self.event_bus
+            .publish_in_tx(
+                &txn,
+                tenant_id,
+                security.user_id,
+                DomainEvent::ForumTopicStatusChanged {
+                    topic_id,
+                    old_status: current.as_str().to_string(),
+                    new_status: crate::constants::topic_status::DELETED.to_string(),
+                    moderator_id: security.user_id,
+                },
+            )
+            .await?;
+
         txn.commit().await?;
         Ok(())
     }
-
     #[instrument(skip(self, security))]
     pub async fn list(
         &self,
