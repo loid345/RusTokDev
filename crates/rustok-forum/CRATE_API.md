@@ -18,6 +18,7 @@
 ## Topic и reply deletion semantics
 - `TopicService::delete` и `ReplyService::delete` используют soft-delete через статус `deleted` и сохраняют строки/связанные данные.
 - Удалённые topics скрыты из обычных topic/reply read-path; moderation/admin может получить их через explicit `status=all` и восстановить topic через `restore_topic`.
+- При soft-delete сохраняется предыдущее live-состояние (`open`/`closed`/`archived`); restore возвращает именно это состояние.
 - Физический purge не входит в runtime delete contract и будет отдельной CLI maintenance operation.
 
 ## DTO изменения (актуально)
@@ -37,7 +38,7 @@
 - Пагинация ответов: `page`, `per_page`, `locale`
 ### ModerationService
 - Сигнатуры `approve_reply`, `reject_reply`, `hide_reply`, `pin_topic`, `unpin_topic` теперь принимают `tenant_id: Uuid`
-- `close_topic`, `archive_topic` теперь принимают `tenant_id: Uuid`
+- `close_topic`, `archive_topic`, `restore_topic` принимают `tenant_id: Uuid`
 - Добавлены `mark_solution(tenant_id, topic_id, reply_id, security)` и `clear_solution(tenant_id, topic_id, security)`
 ### VoteService
 - Добавлены `set_topic_vote(tenant_id, topic_id, security, value)` и `clear_topic_vote(tenant_id, topic_id, security)`
