@@ -49,7 +49,7 @@
   a permission-aware `SecurityContext` into forum services.
 - Forum services now re-validate category/topic/reply/moderation permissions locally, so
   transport bugs can no longer bypass forum mutation or moderation policy. REST permission
-  failures preserve `403 Forbidden`, while unauthenticated access remains `401 Unauthorized`.
+  failures сохраняют `403 Forbidden`, а unauthenticated access остаётся `401 Unauthorized`.
 - Topic solution marking now lives in forum-owned services and transport adapters; only
   approved replies can become solutions, and the read-path exposes `solution_reply_id`
   on topics plus `is_solution` on replies.
