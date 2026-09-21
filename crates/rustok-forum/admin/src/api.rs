@@ -286,7 +286,7 @@ pub async fn fetch_topics(
     locale: String,
     category_id: Option<String>,
 ) -> Result<Vec<TopicListItem>, ApiError> {
-    let mut path = format!("/topics?locale={locale}&page=1&per_page=50");
+    let mut path = format!("/topics?locale={locale}&status=all&page=1&per_page=50");
     if let Some(value) = category_id.filter(|value| !value.trim().is_empty()) {
         path.push_str("&category_id=");
         path.push_str(value.as_str());
