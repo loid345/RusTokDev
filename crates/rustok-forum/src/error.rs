@@ -30,6 +30,9 @@ pub enum ForumError {
     #[error("Topic is archived")]
     TopicArchived,
 
+    #[error("Topic is deleted")]
+    TopicDeleted,
+
     #[error("Topic is locked")]
     TopicLocked,
 
