@@ -104,6 +104,12 @@ fn forum_error_display_topic_archived() {
 }
 
 #[test]
+fn forum_error_display_topic_deleted() {
+    let err = ForumError::TopicDeleted;
+    assert_eq!(err.to_string(), "Topic is deleted");
+}
+
+#[test]
 fn forum_error_display_validation() {
     let err = ForumError::Validation("title is required".to_string());
     let msg = err.to_string();
