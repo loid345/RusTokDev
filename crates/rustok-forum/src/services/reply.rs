@@ -79,6 +79,9 @@ impl ReplyService {
         if topic.status == topic_status::ARCHIVED {
             return Err(ForumError::TopicArchived);
         }
+        if topic.status == topic_status::DELETED {
+            return Err(ForumError::TopicDeleted);
+        }
         if topic.is_locked {
             return Err(ForumError::TopicLocked);
         }
@@ -237,8 +240,15 @@ impl ReplyService {
             topic_snapshot.category_id,
         )
         .await?;
-        TopicService::find_topic_for_update_in_tx(&txn, tenant_id, reply_snapshot.topic_id)
-            .await?;
+        let topic = TopicService::find_topic_for_update_in_tx(
+            &txn,
+            tenant_id,
+            reply_snapshot.topic_id,
+        )
+        .await?;
+        if topic.status == topic_status::DELETED {
+            return Err(ForumError::TopicDeleted);
+        }
         let existing = Self::find_reply_for_update_in_tx(&txn, tenant_id, reply_id).await?;
         enforce_owned_scope(
             &security,
