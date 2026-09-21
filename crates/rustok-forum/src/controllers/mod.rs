@@ -73,6 +73,10 @@ pub fn routes() -> Routes {
             axum::routing::post(topics::archive_topic),
         )
         .add(
+            "/topics/{topic_id}/restore",
+            axum::routing::post(topics::restore_topic),
+        )
+        .add(
             "/topics/{topic_id}/solution/{reply_id}",
             axum::routing::post(topics::mark_topic_solution),
         )
