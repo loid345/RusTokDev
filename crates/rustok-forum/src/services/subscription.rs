@@ -92,7 +92,9 @@ impl SubscriptionService {
     ) -> ForumResult<()> {
         enforce_scope(&security, Resource::ForumTopics, Action::Read)?;
         let user_id = require_authenticated_user(&security)?;
-        self.find_topic(tenant_id, topic_id).await?;
+        if self.find_topic(tenant_id, topic_id).await?.status == crate::constants::topic_status::DELETED {
+            return Err(ForumError::TopicDeleted);
+        }
 
         let txn = self.db.begin().await?;
         forum_topic_subscription::Entity::insert(
@@ -127,7 +129,9 @@ impl SubscriptionService {
     ) -> ForumResult<()> {
         enforce_scope(&security, Resource::ForumTopics, Action::Read)?;
         let user_id = require_authenticated_user(&security)?;
-        self.find_topic(tenant_id, topic_id).await?;
+        if self.find_topic(tenant_id, topic_id).await?.status == crate::constants::topic_status::DELETED {
+            return Err(ForumError::TopicDeleted);
+        }
 
         let txn = self.db.begin().await?;
         forum_topic_subscription::Entity::delete_many()
