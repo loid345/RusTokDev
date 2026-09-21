@@ -205,6 +205,11 @@ impl ModerationService {
         let current = TopicStatus::from_str_value(&topic.status).ok_or_else(|| {
             ForumError::Validation(format!("Unknown topic status: {}", topic.status))
         })?;
+        if current != TopicStatus::Deleted {
+            return Err(ForumError::Validation(
+                "Only deleted topics can be restored",
+            ));
+        }
         current.validate_transition(&TopicStatus::Open)?;
 
         if !TopicService::set_status_if_current_in_tx(
