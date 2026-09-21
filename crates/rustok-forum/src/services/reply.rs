@@ -11,7 +11,7 @@ use uuid::Uuid;
 use rustok_content::{
     normalize_locale_code, resolve_by_locale_with_fallback, PLATFORM_FALLBACK_LOCALE,
 };
-use rustok_core::{prepare_content_payload, Action, Resource, SecurityContext};
+use rustok_core::{prepare_content_payload, Action, PermissionScope, Resource, SecurityContext};
 use rustok_events::DomainEvent;
 use rustok_outbox::TransactionalEventBus;
 
@@ -29,6 +29,15 @@ use crate::services::{CategoryService, TopicService};
 pub struct ReplyService {
     db: DatabaseConnection,
     event_bus: TransactionalEventBus,
+}
+
+const PUBLIC_REPLY_STATUSES: [&str; 1] = [reply_status::APPROVED];
+
+fn can_view_all_reply_statuses(security: &SecurityContext) -> bool {
+    !matches!(
+        security.get_scope(Resource::ForumReplies, Action::Moderate),
+        PermissionScope::None
+    )
 }
 
 impl ReplyService {
@@ -159,6 +168,9 @@ impl ReplyService {
         let locale = normalize_locale(locale)?;
         let fallback_locale = fallback_locale.map(normalize_locale).transpose()?;
         let reply = self.find_reply(tenant_id, reply_id).await?;
+        if !can_view_all_reply_statuses(&security) && reply.status != reply_status::APPROVED {
+            return Err(ForumError::ReplyNotFound(reply_id));
+        }
         let bodies = self.load_bodies(reply_id).await?;
         let solution_reply_id = self
             .load_solution_reply_id_for_topic(reply.topic_id)
@@ -287,8 +299,16 @@ impl ReplyService {
         let locale = normalize_locale(&locale)?;
         let fallback_locale = fallback_locale.map(normalize_locale).transpose()?;
 
+        let statuses = (!can_view_all_reply_statuses(&security))
+            .then_some(&PUBLIC_REPLY_STATUSES[..]);
         let (replies, total) = self
-            .fetch_reply_page(tenant_id, topic_id, filter.page, filter.per_page, None)
+            .fetch_reply_page(
+                tenant_id,
+                topic_id,
+                filter.page,
+                filter.per_page,
+                statuses,
+            )
             .await?;
         let solution_reply_id = self.load_solution_reply_id_for_topic(topic_id).await?;
         let reply_ids: Vec<Uuid> = replies.iter().map(|reply| reply.id).collect();
@@ -369,8 +389,17 @@ impl ReplyService {
             .unwrap_or_else(|| PLATFORM_FALLBACK_LOCALE.to_string());
         let locale = normalize_locale(&locale)?;
         let fallback_locale = fallback_locale.map(normalize_locale).transpose()?;
+        let effective_statuses = statuses.or_else(|| {
+            (!can_view_all_reply_statuses(&security)).then_some(&PUBLIC_REPLY_STATUSES[..])
+        });
         let (replies, total) = self
-            .fetch_reply_page(tenant_id, topic_id, filter.page, filter.per_page, statuses)
+            .fetch_reply_page(
+                tenant_id,
+                topic_id,
+                filter.page,
+                filter.per_page,
+                effective_statuses,
+            )
             .await?;
         let solution_reply_id = self.load_solution_reply_id_for_topic(topic_id).await?;
         let reply_ids: Vec<Uuid> = replies.iter().map(|reply| reply.id).collect();
