@@ -410,7 +410,7 @@ pub async fn moderate_topic(
     action: &str,
 ) -> Result<(), ApiError> {
     let (method, suffix) = match action {
-        "pin" | "close" | "reopen" | "archive" => (Method::POST, action),
+        "pin" | "close" | "reopen" | "archive" | "restore" => (Method::POST, action),
         "unpin" => (Method::DELETE, "pin"),
         "lock" => (Method::POST, "lock"),
         "unlock" => (Method::DELETE, "lock"),
