@@ -1,6 +1,7 @@
 use chrono::Utc;
+use sea_orm::sea_query::{Expr, Func, OnConflict};
 use sea_orm::{
-    ActiveModelTrait, ActiveValue::Set, DatabaseConnection, DatabaseTransaction, EntityTrait,
+    ActiveValue::Set, DatabaseConnection, DatabaseTransaction, EntityTrait,
 };
 use tracing::instrument;
 use uuid::Uuid;
@@ -91,48 +92,58 @@ impl UserStatsService {
         };
 
         let now = Utc::now();
-        let existing = forum_user_stat::Entity::find_by_id((tenant_id, user_id))
-            .one(txn)
-            .await?;
+        let topic_value = Expr::col(forum_user_stat::Column::TopicCount);
+        let reply_value = Expr::col(forum_user_stat::Column::ReplyCount);
+        let solution_value = Expr::col(forum_user_stat::Column::SolutionCount);
 
-        match existing {
-            Some(existing) => {
-                let mut active: forum_user_stat::ActiveModel = existing.into();
-                let current_topic = match active.topic_count.clone() {
-                    sea_orm::ActiveValue::Set(value) => value,
-                    sea_orm::ActiveValue::Unchanged(value) => value,
-                    sea_orm::ActiveValue::NotSet => 0,
-                };
-                let current_reply = match active.reply_count.clone() {
-                    sea_orm::ActiveValue::Set(value) => value,
-                    sea_orm::ActiveValue::Unchanged(value) => value,
-                    sea_orm::ActiveValue::NotSet => 0,
-                };
-                let current_solution = match active.solution_count.clone() {
-                    sea_orm::ActiveValue::Set(value) => value,
-                    sea_orm::ActiveValue::Unchanged(value) => value,
-                    sea_orm::ActiveValue::NotSet => 0,
-                };
-                active.topic_count = Set((current_topic + topic_delta).max(0));
-                active.reply_count = Set((current_reply + reply_delta).max(0));
-                active.solution_count = Set((current_solution + solution_delta).max(0));
-                active.updated_at = Set(now.into());
-                active.update(txn).await?;
-            }
-            None => {
-                forum_user_stat::ActiveModel {
-                    tenant_id: Set(tenant_id),
-                    user_id: Set(user_id),
-                    topic_count: Set(topic_delta.max(0)),
-                    reply_count: Set(reply_delta.max(0)),
-                    solution_count: Set(solution_delta.max(0)),
-                    created_at: Set(now.into()),
-                    updated_at: Set(now.into()),
-                }
-                .insert(txn)
-                .await?;
-            }
-        }
+        forum_user_stat::Entity::insert(forum_user_stat::ActiveModel {
+            tenant_id: Set(tenant_id),
+            user_id: Set(user_id),
+            topic_count: Set(topic_delta.max(0)),
+            reply_count: Set(reply_delta.max(0)),
+            solution_count: Set(solution_delta.max(0)),
+            created_at: Set(now.into()),
+            updated_at: Set(now.into()),
+        })
+        .on_conflict(
+            OnConflict::columns([
+                forum_user_stat::Column::TenantId,
+                forum_user_stat::Column::UserId,
+            ])
+            .values([
+                (
+                    forum_user_stat::Column::TopicCount,
+                    Func::greatest([
+                        topic_value.add(topic_delta).into(),
+                        Expr::val(0).into(),
+                    ])
+                    .into(),
+                ),
+                (
+                    forum_user_stat::Column::ReplyCount,
+                    Func::greatest([
+                        reply_value.add(reply_delta).into(),
+                        Expr::val(0).into(),
+                    ])
+                    .into(),
+                ),
+                (
+                    forum_user_stat::Column::SolutionCount,
+                    Func::greatest([
+                        solution_value.add(solution_delta).into(),
+                        Expr::val(0).into(),
+                    ])
+                    .into(),
+                ),
+                (
+                    forum_user_stat::Column::UpdatedAt,
+                    Expr::val(now).into(),
+                ),
+            ])
+            .to_owned(),
+        )
+        .exec(txn)
+        .await?;
 
         Ok(())
     }
