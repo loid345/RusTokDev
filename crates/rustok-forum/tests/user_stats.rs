@@ -55,6 +55,116 @@ async fn setup() -> (
     (db, event_bus, receiver, Uuid::new_v4())
 }
 
+
+#[tokio::test]
+async fn deleting_category_with_soft_deleted_topic_does_not_double_decrement_stats() {
+    let (db, event_bus, _events, tenant_id) = setup().await;
+    let category_service = CategoryService::new(db.clone());
+    let topic_service = TopicService::new(db.clone(), event_bus.clone());
+    let reply_service = ReplyService::new(db.clone(), event_bus.clone());
+    let moderation_service = ModerationService::new(db.clone(), event_bus.clone());
+    let stats_service = UserStatsService::new(db);
+
+    let admin = SecurityContext::new(UserRole::Admin, Some(Uuid::new_v4()));
+    let topic_author = SecurityContext::new(UserRole::Customer, Some(Uuid::new_v4()));
+    let reply_author = SecurityContext::new(UserRole::Customer, Some(Uuid::new_v4()));
+
+    let category = category_service
+        .create(
+            tenant_id,
+            admin.clone(),
+            CreateCategoryInput {
+                locale: "en".to_string(),
+                name: "Disposable".to_string(),
+                slug: "disposable".to_string(),
+                description: None,
+                icon: None,
+                color: None,
+                parent_id: None,
+                position: Some(0),
+                moderated: false,
+            },
+        )
+        .await
+        .expect("category should be created");
+
+    let topic = topic_service
+        .create(
+            tenant_id,
+            topic_author.clone(),
+            CreateTopicInput {
+                locale: "en".to_string(),
+                category_id: category.id,
+                title: "Disposable topic".to_string(),
+                slug: Some("disposable-topic".to_string()),
+                body: "Body".to_string(),
+                body_format: "markdown".to_string(),
+                content_json: None,
+                metadata: serde_json::json!({}),
+                tags: vec![],
+                channel_slugs: None,
+            },
+        )
+        .await
+        .expect("topic should be created");
+
+    let reply = reply_service
+        .create(
+            tenant_id,
+            reply_author.clone(),
+            topic.id,
+            CreateReplyInput {
+                locale: "en".to_string(),
+                content: "Answer".to_string(),
+                content_format: "markdown".to_string(),
+                content_json: None,
+                parent_reply_id: None,
+            },
+        )
+        .await
+        .expect("reply should be created");
+
+    moderation_service
+        .mark_solution(tenant_id, topic.id, reply.id, admin.clone())
+        .await
+        .expect("reply should be marked as solution");
+
+    topic_service
+        .delete(tenant_id, topic.id, topic_author.clone())
+        .await
+        .expect("topic should be soft-deleted");
+
+    let topic_author_after_delete = stats_service
+        .get(tenant_id, admin.clone(), topic_author.user_id.expect("topic author id"))
+        .await
+        .expect("topic author stats should load");
+    let reply_author_after_delete = stats_service
+        .get(tenant_id, admin.clone(), reply_author.user_id.expect("reply author id"))
+        .await
+        .expect("reply author stats should load");
+    assert_eq!(topic_author_after_delete.topic_count, 0);
+    assert_eq!(reply_author_after_delete.reply_count, 0);
+    assert_eq!(reply_author_after_delete.solution_count, 0);
+
+    category_service
+        .delete(tenant_id, category.id, admin.clone())
+        .await
+        .expect("category should be deleted");
+
+    let topic_author_after_category_delete = stats_service
+        .get(tenant_id, admin.clone(), topic_author.user_id.expect("topic author id"))
+        .await
+        .expect("topic author stats should remain readable");
+    let reply_author_after_category_delete = stats_service
+        .get(tenant_id, admin, reply_author.user_id.expect("reply author id"))
+        .await
+        .expect("reply author stats should remain readable");
+
+    assert_eq!(topic_author_after_category_delete.topic_count, 0);
+    assert_eq!(reply_author_after_category_delete.reply_count, 0);
+    assert_eq!(reply_author_after_category_delete.solution_count, 0);
+}
+
 #[tokio::test]
 async fn user_stats_track_topic_reply_and_solution_lifecycle() {
     let (db, event_bus, _events, tenant_id) = setup().await;
