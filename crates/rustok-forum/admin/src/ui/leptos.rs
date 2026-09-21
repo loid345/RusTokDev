@@ -1828,10 +1828,28 @@ fn render_category_grid(
                                 </div>
                                 <div class="mt-5 flex flex-wrap gap-2">
                                     {(!matches!(vm.status.as_str(), "deleted")).then(|| view! {
-                                    <button type="button" class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action) on:click={ let item_id = item_id.clone(); move |_| on_edit.run(item_id.clone()) } disabled=vm.is_busy>{vm.action_label.clone()}</button>
+                                    {(!matches!(vm.status.as_str(), "deleted")).then(|| view! {
+                                    <button
+                                        type="button"
+                                        class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action)
+                                        on:click={ let item_id = item_id.clone(); move |_| on_edit.run(item_id.clone()) }
+                                        disabled=vm.is_busy
+                                    >
+                                        {vm.action_label.clone()}
+                                    </button>
+                                })}
                                 })}
                                     {(!matches!(vm.status.as_str(), "deleted")).then(|| view! {
-                                    <button type="button" class=forum_admin_action_button_class(ForumAdminActionButtonKind::Delete) on:click={ let item_id = item_id.clone(); move |_| on_delete.run(item_id.clone()) } disabled=vm.is_busy>{delete_label.clone()}</button>
+                                    {(!matches!(vm.status.as_str(), "deleted")).then(|| view! {
+                                    <button
+                                        type="button"
+                                        class=forum_admin_action_button_class(ForumAdminActionButtonKind::Delete)
+                                        on:click={ let item_id = item_id.clone(); move |_| on_delete.run(item_id.clone()) }
+                                        disabled=vm.is_busy
+                                    >
+                                        {delete_label.clone()}
+                                    </button>
+                                })}
                                 })}
                                 </div>
                             </div>
@@ -2012,7 +2030,7 @@ fn render_topic_feed(
                                     }.into_any(),
                                     _ => view! {}.into_any(),
                                 }}
-                                {(!matches!(vm.status.as_str(), "archived")).then(|| view! {
+                                {(!matches!(vm.status.as_str(), "archived" | "deleted")).then(|| view! {
                                     <button
                                         type="button"
                                         class=forum_admin_action_button_class(ForumAdminActionButtonKind::Action)
