@@ -17,7 +17,8 @@ forum-owned persistence и должен оставаться самостоят�
 - transport surfaces: GraphQL, REST, Leptos admin/storefront packages;
 - forum widget contract freeze surfaces: `ForumWidgetContractService`, REST endpoints `/api/forum/widgets/catalog` + `/api/forum/widgets/validate`, GraphQL query `forumWidgetCatalog`;
 - tag attachments через `forum_topic_tags` при shared vocabulary в `rustok-taxonomy`;
-- visibility, moderation и user-facing derived fields в forum read/write contracts.
+- visibility, moderation и user-facing derived fields в forum read/write contracts;
+- REST transport preserves the distinction between `401 Unauthorized` and `403 Forbidden` for forum authentication and permission failures.
 
 ## Интеграция
 
