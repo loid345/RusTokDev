@@ -381,6 +381,15 @@ impl TopicService {
         } else {
             None
         };
+        let reply_author_ids = forum_reply::Entity::find()
+            .filter(forum_reply::Column::TenantId.eq(tenant_id))
+            .filter(forum_reply::Column::TopicId.eq(topic_id))
+            .filter(forum_reply::Column::Status.ne(crate::constants::reply_status::DELETED))
+            .all(&txn)
+            .await?
+            .into_iter()
+            .map(|reply| reply.author_id)
+            .collect::<Vec<_>>();
 
         if !Self::set_status_if_current_in_tx(
             &txn,
@@ -405,6 +414,15 @@ impl TopicService {
         )
         .await?;
         UserStatsService::adjust_topic_count_in_tx(&txn, tenant_id, topic.author_id, -1).await?;
+        for reply_author_id in reply_author_ids {
+            UserStatsService::adjust_reply_count_in_tx(
+                &txn,
+                tenant_id,
+                reply_author_id,
+                -1,
+            )
+            .await?;
+        }
         UserStatsService::adjust_solution_count_in_tx(
             &txn,
             tenant_id,
