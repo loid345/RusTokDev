@@ -58,6 +58,7 @@
 - [x] удерживать service-level RBAC и public visibility покрытыми regression tests;
 - [x] поддерживать явное очищение nullable category fields через пустое значение в update contract;
 - [x] завершить admin moderation surface поверх existing REST moderation endpoints без отдельного state/workspace rewrite;
+- [x] перевести topic/reply delete в soft-delete, добавить topic restore в moderation/admin и оставить физический purge отдельной будущей CLI-операцией;
 - [x] продолжать выносить тяжёлые derived metrics в отдельные read-model flows только при реальном runtime pressure.
 
 ### 3. Operability
