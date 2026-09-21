@@ -204,6 +204,11 @@ impl TopicService {
         let locale = normalize_locale(locale)?;
         let fallback_locale = fallback_locale.map(normalize_locale).transpose()?;
         let topic = self.find_topic(tenant_id, topic_id).await?;
+        if topic.status == topic_status::DELETED
+            && enforce_scope(&security, Resource::ForumTopics, Action::Moderate).is_err()
+        {
+            return Err(ForumError::TopicNotFound(topic_id));
+        }
         let translations = self.load_translations(topic_id).await?;
         let channel_slugs = self.load_channel_slugs(topic_id).await?;
         let metadata = self
@@ -454,8 +459,16 @@ impl TopicService {
         if let Some(category_id) = filter.category_id {
             select = select.filter(forum_topic::Column::CategoryId.eq(category_id));
         }
-        if let Some(status) = filter.status {
-            select = select.filter(forum_topic::Column::Status.eq(status));
+        match filter.status.as_deref() {
+            Some("all") => {
+                enforce_scope(&security, Resource::ForumTopics, Action::Moderate)?;
+            }
+            Some(status) => {
+                select = select.filter(forum_topic::Column::Status.eq(status));
+            }
+            None => {
+                select = select.filter(forum_topic::Column::Status.ne(topic_status::DELETED));
+            }
         }
 
         let paginator = select
